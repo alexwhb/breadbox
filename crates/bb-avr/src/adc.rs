@@ -373,20 +373,13 @@ impl Avr {
     }
     pub(crate) fn adc_peek_h(&self) -> u8 {
         let d = self.adc.data & 0x3FF;
+        // Differential results are 10-bit two's complement (sign in bit 9); ADCH bits 7:2
+        // read as zero when right-adjusted.
         if self.adc_left() {
             (d >> 2) as u8
         } else {
-            // Differential results are sign-extended into ADCH.
-            let v = (d >> 8) as u8;
-            if d & 0x200 != 0 && self.adc_is_diff() {
-                v | 0xFC
-            } else {
-                v
-            }
+            (d >> 8) as u8
         }
-    }
-    fn adc_is_diff(&self) -> bool {
-        matches!(self.adc_select(), AdcSel::Diff { .. })
     }
     pub(crate) fn adc_read_l(&mut self) -> u8 {
         self.adc.locked = true;

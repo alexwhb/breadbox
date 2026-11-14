@@ -296,3 +296,29 @@ pub fn run_for(avr: &mut Avr, cycles: u64, events: &mut Vec<PinEvent>) {
     let until = avr.cycle() + cycles;
     run_until(avr, until, &mut (), events);
 }
+
+/// Runs until a complete line starting with `prefix` has been printed on USART `n`; returns it.
+pub fn run_until_line(
+    avr: &mut Avr,
+    n: usize,
+    prefix: &str,
+    limit_ms: f64,
+    out: &mut String,
+    events: &mut Vec<PinEvent>,
+) -> String {
+    let limit = avr.cycle() + ms(limit_ms);
+    loop {
+        if let Some(i) = out.rfind(prefix)
+            && let Some(end) = out[i..].find("\r\n")
+        {
+            return out[i..i + end].to_string();
+        }
+        let until = (avr.cycle() + ms(0.5)).min(limit);
+        run_until(avr, until, &mut (), events);
+        out.push_str(&usart_text(avr, n));
+        assert!(
+            avr.cycle() < limit,
+            "timed out waiting for a line {prefix:?}; got {out:?}"
+        );
+    }
+}

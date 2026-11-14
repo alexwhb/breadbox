@@ -129,3 +129,45 @@ fn mcus_run_in_parallel_threads() {
     assert_eq!(ea, eb);
     assert_eq!(usart_text(&mut a, 0), usart_text(&mut b, 0));
 }
+
+#[test]
+fn mega_timer5_int3_differential_adc_serial3() {
+    let mut avr = load("mega_extras", "mega");
+    let (a0, a1, a9) = (Pin::new('F', 0), Pin::new('F', 1), Pin::new('K', 1));
+    avr.set_pin_voltage(a0, 3.0);
+    avr.set_pin_voltage(a1, 2.9);
+    avr.set_pin_voltage(a9, 1.25);
+    let d18 = Pin::new('D', 3);
+    avr.set_pin_input(d18, Some(false));
+    let mut ev = Vec::new();
+    let mut out = String::new();
+    let line = run_until_line(&mut avr, 0, "d10=", 100.0, &mut out, &mut ev);
+    // ADC0-ADC1 at gain 1: 0.1 V · 512 / 5 V = 10.24 → 10; ADC1-ADC0 at gain 10: -1 V → -102.4 → -103.
+    assert_eq!(line, "d10=10 d01x10=-103 a9=256");
+    let s3 = run_until_line(&mut avr, 3, "serial3", 50.0, &mut String::new(), &mut ev);
+    assert_eq!(s3, "serial3");
+    // INT3 (D18) rising edges.
+    let t = avr.cycle() + 1_000;
+    for k in 0..3u64 {
+        avr.schedule_pin_input(d18, Some(true), t + k * 4_000);
+        avr.schedule_pin_input(d18, Some(false), t + k * 4_000 + 2_000);
+    }
+    run_until_line(&mut avr, 0, "rises=3", 50.0, &mut out, &mut ev);
+    // Timer5 phase-correct PWM at 490 Hz on PL5/PL4/PL3 (D44/45/46).
+    run_for(&mut avr, ms(30.0), &mut ev);
+    for (pin, ocr) in [
+        (Pin::new('L', 5), 64u64),
+        (Pin::new('L', 4), 128),
+        (Pin::new('L', 3), 192),
+    ] {
+        let e: Vec<(u64, bool)> = edges(&ev, pin)
+            .into_iter()
+            .filter(|x| x.0 > ms(10.0))
+            .collect();
+        let rises: Vec<u64> = e.iter().filter(|x| x.1).map(|x| x.0).collect();
+        assert_eq!(rises[2] - rises[1], 510 * 64, "{pin}");
+        let r = rises[1];
+        let f = e.iter().find(|x| !x.1 && x.0 > r).unwrap().0;
+        assert_eq!(f - r, 2 * ocr * 64, "{pin} duty");
+    }
+}
