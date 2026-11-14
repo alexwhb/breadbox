@@ -131,8 +131,9 @@ against ngspice-47 golden data (checked in; `scripts/regen-spice-golden.sh` rege
   makes 1 µs quanta cheap: 490 Hz PWM into RC + LED for 1 s = **38 ms (26× real time)**; static
   circuits cost nothing per advance; settled circuits stop stepping.
 - `SPICE-8` **done** — `Netlist::to_spice_text()` / `Session::to_spice_text()` (ngspice runs
-  the output; ports → V+R/I, ext() → .param), CSV (mag/phase, dB/phase, re/im), ASCII rawfile
-  write + read.
+  the output; ports → V+R/I, ext() → .param; Breadbox-only cards such as `.step`, `.mc`,
+  multi-`.temp`, `.dc` over a `.param` are written as `*!bb <card>` — a comment for ngspice,
+  read back by bb-spice), CSV (mag/phase, dB/phase, re/im), ASCII rawfile write + read.
 - Tests: 47 unit (parser, expressions incl. AD gradients, LU, waveforms, every model's DC
   Jacobian vs finite differences and AC vs transient charge Jacobian, temperature formulas),
   21 analysis (convergence aids + diagnostics, Schmitt/latch, MC statistics with fixed seed,

@@ -5,6 +5,9 @@ use crate::expr::{BinOp, Expr};
 use crate::meas::{Edge, MeasKind, StatFunc, Trigger};
 use std::path::Path;
 
+/// Prefix of Breadbox-only cards in exported netlists (a comment for other simulators).
+pub const BB_DIRECTIVE: &str = "*!bb ";
+
 /// Reads `.include`/`.lib` files (path → text); lets the app serve files from memory.
 pub type IncludeLoader = Arc<dyn Fn(&Path) -> std::io::Result<String> + Send + Sync>;
 
@@ -105,8 +108,14 @@ fn logical_lines(text: &str, file: Option<Arc<str>>, first_is_title: bool) -> (S
             title = raw.trim().to_string();
             continue;
         }
-        let lead = raw.len() - raw.trim_start().len();
-        let t = raw.trim_start();
+        let mut lead = raw.len() - raw.trim_start().len();
+        let mut t = raw.trim_start();
+        // `*!bb <card>`: a Breadbox-only directive written by the exporter so that ngspice
+        // (which sees a comment) still runs the file
+        if let Some(rest) = t.strip_prefix(BB_DIRECTIVE) {
+            lead += BB_DIRECTIVE.len();
+            t = rest;
+        }
         if t.is_empty() || t.starts_with('*') {
             continue;
         }

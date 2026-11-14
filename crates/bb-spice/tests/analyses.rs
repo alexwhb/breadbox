@@ -432,3 +432,25 @@ fn noise_contributions_per_source() {
     let expect = (4.0 * 1.380649e-23 * 300.15 * 5e3 * 9e3f64).sqrt();
     assert!((t - expect).abs() < 1e-3 * expect, "{t} vs {expect}");
 }
+
+#[test]
+fn breadbox_extensions_export_as_directives() {
+    let text = "ext\n.param lux=180 r1v=10k\nV1 vcc 0 5\nRLDR vcc a1 {350k*pwr(lux,-0.7)}\nR1 a1 0 {r1v}\n.dc lux 1 10k dec 10\n.dc V1 0 5 1\n.step param r1v list 4.7k 10k\n.mc 5 tol=5% seed=3\n.temp 0 50\n.op\n.end\n";
+    let nl = Netlist::parse(text).unwrap();
+    let out = nl.to_spice_text();
+    for card in [
+        "*!bb .dc lux",
+        "*!bb .step param r1v",
+        "*!bb .mc 5",
+        "*!bb .temp 0 50",
+    ] {
+        assert!(out.contains(card), "missing `{card}` in\n{out}");
+    }
+    assert!(out.contains("\n.dc v1 0 5 1\n"), "{out}");
+    // round trip keeps the extensions
+    let back = Netlist::parse(&out).unwrap();
+    assert_eq!(back.steps.len(), 1);
+    assert!(back.mc.is_some());
+    assert_eq!(back.temps, vec![0.0, 50.0]);
+    assert_eq!(back.analyses.len(), 3);
+}

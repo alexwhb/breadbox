@@ -4,8 +4,9 @@
 //!   variables); values come from the map passed to [`netlist_to_text_with`].
 //! * Breadbox ports become an equivalent `V` + series `R` (Thevenin/pull), an `I` source, or a
 //!   high-value leakage `R` (Hi-Z), each preceded by a `* breadbox port` comment.
-//! * `.step` and `.mc` are written as-is (Breadbox/LTspice extensions; ngspice ignores them with
-//!   a warning).
+//! * Breadbox-only cards — `.step`, `.mc`, several `.temp` values, `.dc` over a `.param` or with
+//!   dec/oct/list spacing — are written as `*!bb <card>`: a comment for ngspice (so the file
+//!   still runs there), read back as the card by bb-spice.
 
 use super::*;
 use crate::expr::{Expr, fmt_g};
@@ -183,9 +184,11 @@ pub fn netlist_to_text_with(nl: &Netlist, ext: &HashMap<String, f64>) -> String 
         let _ = writeln!(o, "{line}");
     }
     if !nl.temps.is_empty() {
+        // ngspice accepts a single .temp; several values are a Breadbox temperature loop
+        let prefix = if nl.temps.len() > 1 { BB_DIRECTIVE } else { "" };
         let _ = writeln!(
             o,
-            ".temp {}",
+            "{prefix}.temp {}",
             nl.temps
                 .iter()
                 .map(|t| fmt_g(*t))
@@ -203,7 +206,12 @@ pub fn netlist_to_text_with(nl: &Netlist, ext: &HashMap<String, f64>) -> String 
         }
     }
     for (a, _) in &nl.analyses {
-        let _ = writeln!(o, "{}", analysis_text(a));
+        let prefix = if ngspice_can_run(nl, a) {
+            ""
+        } else {
+            BB_DIRECTIVE
+        };
+        let _ = writeln!(o, "{prefix}{}", analysis_text(a));
     }
     for s in &nl.steps {
         let var = match &s.var {
@@ -213,7 +221,7 @@ pub fn netlist_to_text_with(nl: &Netlist, ext: &HashMap<String, f64>) -> String 
         };
         let _ = writeln!(
             o,
-            ".step {var} list {}",
+            "{BB_DIRECTIVE}.step {var} list {}",
             s.values
                 .iter()
                 .map(|v| fmt_g(*v))
@@ -222,7 +230,7 @@ pub fn netlist_to_text_with(nl: &Netlist, ext: &HashMap<String, f64>) -> String 
         );
     }
     if let Some(mc) = &nl.mc {
-        let mut line = format!(".mc {}", mc.runs);
+        let mut line = format!("{BB_DIRECTIVE}.mc {}", mc.runs);
         if let Some(t) = mc.tol {
             let _ = write!(line, " tol={}%", fmt_g(t * 100.0));
         }
@@ -505,6 +513,29 @@ pub(crate) fn element_text(el: &ElementCard) -> String {
                 }
             }
         }
+    }
+}
+
+/// Whether ngspice can run an analysis card as written (its `.dc` only sweeps sources, `temp` and
+/// resistors linearly).
+fn ngspice_can_run(nl: &Netlist, a: &Analysis) -> bool {
+    match a {
+        Analysis::Dc(sweeps) => sweeps.iter().all(|s| {
+            let linear = matches!(s.kind, SweepKind::Lin { .. } | SweepKind::LinPoints(_));
+            let var_ok = match &s.var {
+                SweepVar::Temp => true,
+                SweepVar::Param(_) => false,
+                SweepVar::Name(n) => nl.top.elements.iter().any(|e| {
+                    &e.name == n
+                        && matches!(
+                            e.kind,
+                            ElemKind::Vsource(_) | ElemKind::Isource(_) | ElemKind::Resistor { .. }
+                        )
+                }),
+            };
+            linear && var_ok
+        }),
+        _ => true,
     }
 }
 

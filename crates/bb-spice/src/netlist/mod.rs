@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-pub use parse::ParseOptions;
+pub use parse::{BB_DIRECTIVE, IncludeLoader, ParseOptions};
 
 /// Which kind of value an element parameter holds.
 pub type ParamList = Vec<(String, Expr)>;

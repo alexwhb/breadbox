@@ -131,7 +131,9 @@ this is the contract other crates code against.
   warnings`). A `Plot { kind: PlotKind, vectors }` holds named vectors (`v(out)`, `i(v1)`,
   `i(d1)`, scale first: `time` / `frequency` / sweep); `McResults::distribution("v(a1)")` gives
   `Distribution { mean, sigma, min, max, values }` + `histogram(bins)`. Export: `export::
-  {plot_to_csv, results_to_raw, read_raw}` and `Netlist::to_spice_text()` (ngspice-compatible).
+  {plot_to_csv, results_to_raw, read_raw}` and `Netlist::to_spice_text()` (ngspice-compatible;
+  Breadbox-only cards — `.step`, `.mc`, multi-`.temp`, `.dc` over a `.param` — are written as
+  `*!bb <card>`, a comment for ngspice that bb-spice parses back).
 - **Breadbox parts as subcircuits** (`XJ1 VCC 0 A0 CAPSOIL vwc=42`, `XU1 … ATMEGA328P
   fw=garden-node.hex`): an unknown subcircuit is a clean `SimError::Elaboration` naming the
   instance and line. Register parts with `Netlist::add_library(Arc<Library>)`
