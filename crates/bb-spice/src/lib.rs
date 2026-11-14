@@ -67,7 +67,7 @@
 //!   AM), E F G H (linear, `POLY(n)`, `VALUE=`, `TABLE`), B sources, S/W switches with
 //!   hysteresis, D, Q (Gummel-Poon), M (level 1 + Meyer; other levels fall back with a
 //!   warning), J, T (lossless), X, and co-simulation ports. Models follow ngspice's equations
-//!   (see [`devices`]), including temperature scaling.
+//!   (`src/devices/`), including temperature scaling.
 //! * **Analyses** (SPICE-3): `.op`, `.dc` (source, element, `.param`, temperature; lin/dec/oct/
 //!   list; two nested), `.tran` (LTE-controlled trapezoidal / Gear-2 / backward Euler,
 //!   breakpoints, `uic`, `tmax`), `.ac`, `.noise`, `.tf`, `.step` (nested), `.mc`
@@ -94,9 +94,9 @@
 
 pub(crate) mod analysis;
 pub mod builder;
-pub mod devices;
+pub(crate) mod devices;
 pub mod elab;
-pub mod engine;
+pub(crate) mod engine;
 pub mod error;
 pub mod export;
 pub mod expr;
@@ -106,7 +106,7 @@ pub mod netlist;
 pub mod results;
 mod run;
 pub mod session;
-pub mod tran;
+pub(crate) mod tran;
 
 pub use builder::{CircuitBuilder, ElementRef, SourceDef};
 pub use elab::{Circuit, Method, SimOptions};

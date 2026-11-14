@@ -97,8 +97,6 @@ pub struct Ckt {
     pub temp: f64,
     /// External variable values (indexed by the engine's ext table).
     pub ext: Vec<f64>,
-    /// Max breakpoint-limited step a device asked for during this load (switches, T-lines).
-    pub step_limit: f64,
 }
 
 impl Ckt {
@@ -134,7 +132,6 @@ impl Ckt {
             opts,
             temp,
             ext: Vec::new(),
-            step_limit: f64::INFINITY,
         }
     }
 
@@ -148,30 +145,12 @@ impl Ckt {
         self.rhs[i] += v;
     }
 
-    /// Node/branch value from the current iterate.
-    #[inline]
-    pub fn v(&self, i: usize) -> f64 {
-        self.x[i]
-    }
-
     /// Records that the calling device has not converged (limiting was active, state changed).
     pub fn nonconverged(&mut self) {
         self.noncon += 1;
         if self.noncon_devs.len() < 16 && !self.noncon_devs.contains(&self.cur_dev) {
             self.noncon_devs.push(self.cur_dev);
         }
-    }
-
-    pub fn is_dc(&self) -> bool {
-        self.mode == Mode::Dc
-    }
-    pub fn is_tran(&self) -> bool {
-        self.mode == Mode::Tran
-    }
-
-    /// Thermal voltage kT/q at the circuit temperature.
-    pub fn vt(&self) -> f64 {
-        KB * self.temp / Q
     }
 
     /// Computes the integration coefficients for the current step (SPICE `NIcomCof`).
@@ -274,10 +253,8 @@ impl Ckt {
 /// Small-signal (AC) stamping context.
 pub struct AcCtx<'a> {
     pub mat: &'a mut Matrix<C64>,
-    pub rhs: &'a mut [C64],
     pub omega: f64,
-    /// Operating point.
-    pub x: &'a [f64],
+    /// Device states at the operating point.
     pub st: &'a [f64],
 }
 
@@ -559,9 +536,6 @@ impl ParamMap {
     }
     pub fn or(&self, keys: &[&str], default: f64) -> f64 {
         self.get(keys).unwrap_or(default)
-    }
-    pub fn has(&self, keys: &[&str]) -> bool {
-        self.get(keys).is_some()
     }
     pub fn set(&mut self, key: &str, v: f64) {
         if let Some(e) = self.vals.iter_mut().rev().find(|(n, _)| n == key) {

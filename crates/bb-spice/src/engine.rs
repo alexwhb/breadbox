@@ -280,23 +280,6 @@ impl Engine {
         self.dev_index.get(&name.to_ascii_lowercase()).copied()
     }
 
-    pub fn device(&self, i: usize) -> &Device {
-        &self.devices[i]
-    }
-
-    pub fn device_mut(&mut self, i: usize) -> &mut Device {
-        &mut self.devices[i]
-    }
-
-    /// Current solution vector (index 0 = ground).
-    pub fn solution(&self) -> &[f64] {
-        &self.ck.x
-    }
-
-    pub fn ext_slot(&self, name: &str) -> Option<usize> {
-        self.ext_index.get(name).copied()
-    }
-
     /// Sets the circuit temperature (°C) and updates temperature-dependent parameters.
     pub fn set_temperature(&mut self, temp_c: f64) {
         self.ck.opts.temp = temp_c;
@@ -702,16 +685,6 @@ impl Engine {
         }
         self.ck.srcfact = 1.0;
         Ok(())
-    }
-
-    /// Value of a node voltage in the current solution.
-    pub fn voltage(&self, node: usize) -> f64 {
-        self.ck.x[node]
-    }
-
-    /// Main current of a device in the current solution.
-    pub fn device_current(&self, i: usize) -> Option<f64> {
-        self.devices[i].current(&self.ck)
     }
 
     /// Rotates the state history after an accepted time point (state0 is kept as a copy).

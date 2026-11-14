@@ -413,3 +413,22 @@ fn design_netlist_runs_with_registered_parts() {
         "{summary}"
     );
 }
+
+#[test]
+fn noise_contributions_per_source() {
+    // equal resistors in a divider contribute equally; total = √(sum of squares)
+    let r = run(
+        "t\nVIN in 0 DC 0 AC 1\nR1 in out 10k\nR2 out 0 10k\n.noise v(out) VIN lin 10 1k 10k\n",
+    );
+    let p = r.plot(PlotKind::NoiseTotal).unwrap();
+    let (a, b, t) = (
+        p.value("onoise_r1").unwrap(),
+        p.value("onoise_r2").unwrap(),
+        p.value("onoise_total").unwrap(),
+    );
+    assert!((a - b).abs() < 1e-6 * a);
+    assert!((t - (a * a + b * b).sqrt()).abs() < 1e-9 * t);
+    // 4kT·(R1||R2) over 9 kHz: √(4·1.380649e-23·300.15·5k·9k)
+    let expect = (4.0 * 1.380649e-23 * 300.15 * 5e3 * 9e3f64).sqrt();
+    assert!((t - expect).abs() < 1e-3 * expect, "{t} vs {expect}");
+}

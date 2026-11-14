@@ -151,15 +151,6 @@ impl Stepper {
         }
     }
 
-    /// Marks a discontinuity at the current time: restart with order 1 and a small step.
-    pub fn discontinuity(&mut self, e: &mut Engine) {
-        self.at_bp = true;
-        self.order = 1;
-        self.delta = self.delta.min(self.tmax) / 10.0;
-        self.delta = self.delta.max(self.delmin * 2.0);
-        self.x_acc.copy_from_slice(&e.ck.x);
-    }
-
     /// Takes one accepted step that does not go beyond `limit`. Returns the new time.
     pub fn step(&mut self, e: &mut Engine, limit: f64) -> Result<f64, SimError> {
         let itl4 = e.ck.opts.itl4.max(3);

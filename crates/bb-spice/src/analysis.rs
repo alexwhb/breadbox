@@ -288,9 +288,7 @@ impl AcSystem {
         self.mat.clear();
         let mut ac = AcCtx {
             mat: &mut self.mat,
-            rhs: &mut self.rhs,
             omega,
-            x: &e.ck.x,
             st: &e.ck.st[0],
         };
         for d in &e.devices {
@@ -494,8 +492,13 @@ pub(crate) fn noise(
     // integrated noise (power-law integration per source, like ngspice)
     let mut out_tot = 0.0;
     let mut in_tot = 0.0;
-    for dens in &per_src {
-        out_tot += powerlaw_integral(&freqs, dens);
+    let mut contributions: Vec<(String, f64)> = Vec::new();
+    for (k, dens) in per_src.iter().enumerate() {
+        let part = powerlaw_integral(&freqs, dens);
+        out_tot += part;
+        if let Some(src) = srcs.get(k) {
+            contributions.push((src.name.clone(), part));
+        }
         // input-referred: ngspice scales each interval by the gain at its upper end
         for i in 1..freqs.len().min(dens.len()) {
             let g = gains[i];
@@ -515,6 +518,15 @@ pub(crate) fn noise(
         Quantity::Noise,
         vec![in_tot.sqrt()],
     ));
+    // per-source integrated output noise (V rms), largest first — the "who is noisy" table
+    contributions.sort_by(|a, b| b.1.total_cmp(&a.1));
+    for (name, part) in contributions {
+        p2.push(Vector::real(
+            format!("onoise_{name}"),
+            Quantity::Noise,
+            vec![part.sqrt()],
+        ));
+    }
     Ok((p1, p2))
 }
 

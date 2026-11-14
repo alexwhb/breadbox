@@ -91,11 +91,6 @@ impl Bsrc {
             });
         }
     }
-
-    /// True if the last evaluation produced NaN/∞.
-    pub fn is_bad(&self) -> bool {
-        self.bad
-    }
 }
 
 impl Dev for Bsrc {
