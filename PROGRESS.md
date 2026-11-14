@@ -128,7 +128,7 @@ against ngspice-47 golden data (checked in; `scripts/regen-spice-golden.sh` rege
 - `SPICE-7` **done** — `Session`: ports (`PinDrive`), `ext()`, `set_param`, Schmitt watches
   with interpolated crossing times, `advance_until_crossing`, `op()` re-solve at
   discontinuities, snapshot/restore, add_port mid-run. Speculative stepping + interpolation
-  makes 1 µs quanta cheap: 490 Hz PWM into RC + LED for 1 s = **38 ms (26× real time)**; static
+  makes 1 µs quanta cheap: 490 Hz PWM into RC + LED for 1 s = **31–38 ms (26–32× real time)**; static
   circuits cost nothing per advance; settled circuits stop stepping.
 - `SPICE-8` **done** — `Netlist::to_spice_text()` / `Session::to_spice_text()` (ngspice runs
   the output; ports → V+R/I, ext() → .param; Breadbox-only cards such as `.step`, `.mc`,
@@ -154,5 +154,8 @@ Notes / deviations:
   current are not modelled (unknown params warn). `.save` is accepted but all vectors are kept.
 - `Session::current()` of charge-storing devices (C, D, Q, M, J) is the latest accepted point's
   value, not interpolated (branch, resistor and port currents are interpolated).
+- For `scripts/test-all.sh` (not created yet): `cargo test -p bb-spice` (unit + 47-circuit
+  reference suite + session + robustness) and `cargo test -p bb-spice --release --test perf --
+  --ignored` (TEST-6 / SPICE-5 / SPICE-7 budgets).
 - Debug helpers: `cargo run -p bb-spice --example spice -- file.cir`, `--example refdiff --
   <ref> <vector> <level>`, `--example dcdiff -- <ref>`, `--example export_cir -- file.cir`.
