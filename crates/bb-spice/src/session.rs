@@ -168,7 +168,7 @@ impl Session {
     }
 
     pub fn with_options(netlist: &Netlist, opts: SessionOptions) -> Result<Session, SimError> {
-        if !(opts.max_step > 0.0) {
+        if opts.max_step.is_nan() || opts.max_step <= 0.0 {
             return Err(SimError::invalid("max_step must be positive"));
         }
         let ext_values = HashMap::new();
@@ -232,11 +232,11 @@ impl Session {
         // port drives set before the start are an event at t = 0
         st.dirty = false;
         for p in &st.ports {
-            if let Device::Port(d) = &mut e.devices[p.dev] {
-                if d.drive != p.drive {
-                    d.drive = p.drive;
-                    st.dirty = true;
-                }
+            if let Device::Port(d) = &mut e.devices[p.dev]
+                && d.drive != p.drive
+            {
+                d.drive = p.drive;
+                st.dirty = true;
             }
         }
         if !(!e.reactive && !e.time_varying) {
@@ -410,10 +410,10 @@ impl Session {
         p.drive = drive;
         // before the first solve the operating point uses the netlist's declared drives, and
         // changes become an event at t = 0 (applied in `ensure_started`)
-        if self.s.started {
-            if let Device::Port(d) = &mut self.s.engine.devices[p.dev] {
-                d.drive = drive;
-            }
+        if self.s.started
+            && let Device::Port(d) = &mut self.s.engine.devices[p.dev]
+        {
+            d.drive = drive;
         }
         self.s.dirty = true;
     }
@@ -480,7 +480,7 @@ impl Session {
         if n == 0 {
             return Err(SimError::invalid("cannot watch ground"));
         }
-        if !(lo <= hi) {
+        if lo.is_nan() || hi.is_nan() || lo > hi {
             return Err(SimError::invalid("watch thresholds must satisfy lo <= hi"));
         }
         let v = if self.s.started { self.x_at(n) } else { 0.0 };
@@ -594,28 +594,26 @@ impl Session {
                 }
             }
             seg_crossings.sort_by(|a, b| a.0.total_cmp(&b.0));
-            if first_only {
-                if let Some(&(tc, _, _)) = seg_crossings.first() {
-                    // keep only crossings at the first time, then stop
-                    for (tcc, k, high) in seg_crossings.iter().copied() {
-                        if tcc > tc {
-                            break;
-                        }
-                        self.s.watches[k].high = high;
-                        out.push(Crossing {
-                            watch: WatchId(k),
-                            time: tcc,
-                            rising: high,
-                        });
+            if first_only && let Some(&(tc, _, _)) = seg_crossings.first() {
+                // keep only crossings at the first time, then stop
+                for (tcc, k, high) in seg_crossings.iter().copied() {
+                    if tcc > tc {
+                        break;
                     }
-                    // values at tc
-                    let frac = if tp > t0 { (tc - t0) / (tp - t0) } else { 1.0 };
-                    for (k, w) in self.s.watches.iter_mut().enumerate() {
-                        w.last_v += (vals[k] - w.last_v) * frac;
-                    }
-                    stop = Some(tc);
-                    break 'outer;
+                    self.s.watches[k].high = high;
+                    out.push(Crossing {
+                        watch: WatchId(k),
+                        time: tcc,
+                        rising: high,
+                    });
                 }
+                // values at tc
+                let frac = if tp > t0 { (tc - t0) / (tp - t0) } else { 1.0 };
+                for (k, w) in self.s.watches.iter_mut().enumerate() {
+                    w.last_v += (vals[k] - w.last_v) * frac;
+                }
+                stop = Some(tc);
+                break 'outer;
             }
             for (tc, k, high) in seg_crossings {
                 self.s.watches[k].high = high;
@@ -992,14 +990,14 @@ fn build_engine(
 fn collect_ports(nl: &Netlist, e: &Engine) -> Vec<PortInfo> {
     let mut v = Vec::new();
     for el in &nl.top.elements {
-        if let ElemKind::Port { drive } = el.kind {
-            if let Some(dev) = e.device_index(&el.name) {
-                v.push(PortInfo {
-                    name: el.name.clone(),
-                    dev,
-                    drive,
-                });
-            }
+        if let ElemKind::Port { drive } = el.kind
+            && let Some(dev) = e.device_index(&el.name)
+        {
+            v.push(PortInfo {
+                name: el.name.clone(),
+                dev,
+                drive,
+            });
         }
     }
     v

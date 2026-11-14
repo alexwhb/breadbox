@@ -1,11 +1,11 @@
 //! Running a netlist's analyses: `.step` / multi-`.temp` loops, `.mc`, `.meas`.
 
 use crate::analysis::{self, SweepTarget};
-use crate::devices::{Dev, Device};
-use crate::elab::{self, Circuit, ElabOptions, ElementKind, McCtx, McRng};
+use crate::devices::Device;
+use crate::elab::{self, Circuit, ElabOptions, McCtx, McRng};
 use crate::engine::Engine;
 use crate::error::{Diagnostic, SimError};
-use crate::netlist::{Analysis, MeasSpec, Netlist, SweepKind, SweepVar};
+use crate::netlist::{Analysis, MeasSpec, Netlist, SweepVar};
 use crate::results::{McResults, MeasResult, Plot, PlotKind, Results, Run, SolveStats};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -152,62 +152,62 @@ impl Netlist {
             done += 1;
             progress(opts, done, total);
         }
-        if let Some(mc) = &self.mc {
-            if !opts.skip_mc {
-                let mut mcr = McResults {
-                    runs: Vec::new(),
-                    seed: mc.seed,
+        if let Some(mc) = &self.mc
+            && !opts.skip_mc
+        {
+            let mut mcr = McResults {
+                runs: Vec::new(),
+                seed: mc.seed,
+            };
+            let wanted: Vec<String> = if mc.analyses.is_empty() {
+                vec!["op".into()]
+            } else {
+                mc.analyses.clone()
+            };
+            for k in 0..mc.runs {
+                check_cancel(opts)?;
+                let seed = mc
+                    .seed
+                    .wrapping_mul(0x9E37_79B9_7F4A_7C15)
+                    .wrapping_add(k as u64 + 1);
+                let eo = ElabOptions {
+                    mc: Some(McCtx {
+                        rng: McRng::new(seed),
+                        tol: mc.tol,
+                        dist: mc.dist,
+                    }),
+                    ..Default::default()
                 };
-                let wanted: Vec<String> = if mc.analyses.is_empty() {
-                    vec!["op".into()]
-                } else {
-                    mc.analyses.clone()
+                let c = elab::elaborate(self, eo.clone())?;
+                let mut run = Run {
+                    label: format!("mc run {}", k + 1),
+                    ..Default::default()
                 };
-                for k in 0..mc.runs {
-                    check_cancel(opts)?;
-                    let seed = mc
-                        .seed
-                        .wrapping_mul(0x9E37_79B9_7F4A_7C15)
-                        .wrapping_add(k as u64 + 1);
-                    let eo = ElabOptions {
-                        mc: Some(McCtx {
-                            rng: McRng::new(seed),
-                            tol: mc.tol,
-                            dist: mc.dist,
-                        }),
-                        ..Default::default()
+                for w in &wanted {
+                    let a = if w == "op" {
+                        Some(Analysis::Op)
+                    } else {
+                        self.analyses
+                            .iter()
+                            .map(|(a, _)| a)
+                            .find(|a| a.keyword() == w)
+                            .cloned()
                     };
-                    let c = elab::elaborate(self, eo.clone())?;
-                    let mut run = Run {
-                        label: format!("mc run {}", k + 1),
-                        ..Default::default()
+                    let Some(a) = a else {
+                        return Err(SimError::elab(
+                            &mc.span,
+                            format!(".mc analysis={w}: no such analysis in the netlist"),
+                        ));
                     };
-                    for w in &wanted {
-                        let a = if w == "op" {
-                            Some(Analysis::Op)
-                        } else {
-                            self.analyses
-                                .iter()
-                                .map(|(a, _)| a)
-                                .find(|a| a.keyword() == w)
-                                .cloned()
-                        };
-                        let Some(a) = a else {
-                            return Err(SimError::elab(
-                                &mc.span,
-                                format!(".mc analysis={w}: no such analysis in the netlist"),
-                            ));
-                        };
-                        run.plots
-                            .extend(run_one(self, &c, &a, &mut acc, opts, &eo)?);
-                    }
-                    run.measures = self.measures_for(&run.plots);
-                    mcr.runs.push(run);
-                    done += 1;
-                    progress(opts, done, total);
+                    run.plots
+                        .extend(run_one(self, &c, &a, &mut acc, opts, &eo)?);
                 }
-                results.mc = Some(mcr);
+                run.measures = self.measures_for(&run.plots);
+                mcr.runs.push(run);
+                done += 1;
+                progress(opts, done, total);
             }
+            results.mc = Some(mcr);
         }
         results.stats = SolveStats {
             elapsed: start.elapsed(),
@@ -468,25 +468,11 @@ fn dc_param_sweep(
         }
     }
     let o = outputs.ok_or_else(|| SimError::invalid("empty DC sweep"))?;
-    let q = if matches!(inner.kind, SweepKind::List(_)) {
-        crate::results::Quantity::Other
-    } else {
-        crate::results::Quantity::Other
-    };
-    Ok(o.into_plot(
+    let q = crate::results::Quantity::Other;
+    Ok(o.to_plot(
         PlotKind::Dc,
         &nl.title,
         Some(crate::results::Vector::real(name_of(inner), q, scale)),
         data,
     ))
-}
-
-/// Helper used by the Pro screen: element kinds that can be swept in `.dc`.
-pub fn sweepable(c: &Circuit, name: &str) -> bool {
-    c.element(name).is_some_and(|e| {
-        matches!(
-            e.kind,
-            ElementKind::Vsource(_) | ElementKind::Isource(_) | ElementKind::Resistor { .. }
-        )
-    })
 }

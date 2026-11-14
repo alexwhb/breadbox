@@ -30,8 +30,8 @@ impl Outputs {
             quantities: Vec::new(),
             src: Vec::new(),
         };
-        for i in 1..=e.n_nodes {
-            o.names.push(format!("v({})", e.node_names[i]));
+        for (i, name) in e.node_names.iter().enumerate().take(e.n_nodes + 1).skip(1) {
+            o.names.push(format!("v({name})"));
             o.quantities.push(Quantity::Voltage);
             o.src.push(Src::X(i));
         }
@@ -59,7 +59,7 @@ impl Outputs {
         }
     }
 
-    pub fn into_plot(
+    pub fn to_plot(
         &self,
         kind: PlotKind,
         title: &str,
@@ -94,7 +94,7 @@ pub(crate) fn op(e: &mut Engine, title: &str) -> Result<Plot, SimError> {
     let o = Outputs::new(e);
     let mut data = vec![Vec::new(); o.names.len()];
     o.sample(e, &mut data);
-    Ok(o.into_plot(PlotKind::Op, title, None, data))
+    Ok(o.to_plot(PlotKind::Op, title, None, data))
 }
 
 /// How a DC sweep variable is applied to an engine that already exists.
@@ -140,7 +140,7 @@ pub(crate) fn dc_sweep(
         SweepTarget::Source(_) => Quantity::Voltage,
         SweepTarget::Param(..) => Quantity::Other,
     };
-    Ok(o.into_plot(
+    Ok(o.to_plot(
         PlotKind::Dc,
         title,
         Some(Vector::real(inner.2.clone(), q, scale)),
@@ -266,7 +266,7 @@ pub(crate) fn tran(
         }
     }
     let scale = Vector::real("time", Quantity::Time, times);
-    Ok((o.into_plot(PlotKind::Tran, title, Some(scale), data), st))
+    Ok((o.to_plot(PlotKind::Tran, title, Some(scale), data), st))
 }
 
 /// Small-signal matrix helper.
@@ -339,9 +339,9 @@ pub(crate) fn ac(e: &mut Engine, title: &str, sweep: &Sweep) -> Result<Plot, Sim
         }
         sys.rhs[0] = C64::default();
         sys.mat.solve(&mut sys.rhs);
-        for k in 0..o.names.len() {
+        for (k, column) in data.iter_mut().enumerate() {
             if let Some(i) = o.x_index(k) {
-                data[k].push(sys.rhs[i]);
+                column.push(sys.rhs[i]);
             }
         }
     }

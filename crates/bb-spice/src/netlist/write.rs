@@ -77,10 +77,10 @@ fn collect_ext(nl: &Netlist) -> Vec<String> {
     let mut names = Vec::new();
     let mut add = |e: &Expr| {
         e.visit(&mut |n| {
-            if let Expr::Ext(x) = n {
-                if !names.contains(x) {
-                    names.push(x.clone());
-                }
+            if let Expr::Ext(x) = n
+                && !names.contains(x)
+            {
+                names.push(x.clone());
             }
         })
     };

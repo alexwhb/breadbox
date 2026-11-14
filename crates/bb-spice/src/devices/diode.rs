@@ -162,11 +162,11 @@ impl Diode {
         if let Some(bv) = md.bv {
             let bv = bv.abs();
             let mut cbv = md.ibv * self.area;
-            let xbv;
-            if cbv < self.t_is * bv / vt {
+
+            let xbv = if cbv < self.t_is * bv / vt {
                 cbv = self.t_is * bv / vt;
                 let _ = cbv;
-                xbv = bv;
+                bv
             } else {
                 let tol = 1e-3 * cbv;
                 let mut x = bv - self.vtebrk * (1.0 + cbv / self.t_is).ln();
@@ -177,8 +177,8 @@ impl Diode {
                         break;
                     }
                 }
-                xbv = x;
-            }
+                x
+            };
             self.t_bv = xbv;
         }
     }

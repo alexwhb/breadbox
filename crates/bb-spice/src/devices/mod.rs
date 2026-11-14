@@ -252,7 +252,7 @@ impl Ckt {
                 break;
             }
             for i in 0..j {
-                dt[i] = dt[i + 1] + dt[i];
+                dt[i] += dt[i + 1];
             }
         }
         let factor = match (self.method, order) {
@@ -482,6 +482,7 @@ macro_rules! devices {
     ($($v:ident($t:ty)),* $(,)?) => {
         /// All device implementations.
         #[derive(Debug, Clone)]
+        #[allow(clippy::large_enum_variant)]
         pub enum Device { $($v($t)),* }
 
         macro_rules! dispatch {

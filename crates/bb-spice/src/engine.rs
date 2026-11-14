@@ -559,6 +559,10 @@ impl Engine {
             }
         }
         if self.ck.opts.gmin_steps > 0 {
+            log::debug!(
+                "{analysis}: plain Newton failed ({}); trying gmin stepping",
+                self.last_fail
+            );
             aids.push("gmin stepping".to_string());
             self.counters.conv_aids += 1;
             self.ck.x.copy_from_slice(&x_start);
@@ -571,6 +575,7 @@ impl Engine {
             }
         }
         if self.ck.opts.src_steps > 0 {
+            log::debug!("{analysis}: trying source stepping");
             aids.push("source stepping".to_string());
             self.counters.conv_aids += 1;
             self.ck.x.iter_mut().for_each(|v| *v = 0.0);
@@ -826,10 +831,10 @@ impl Builder<'_> {
                     .as_ref()
                     .map(|m| self.model_params(m, idx))
                     .unwrap_or_default();
-                if let Some(cm) = mp.get(&["c", "cap"]) {
-                    if cv == 0.0 {
-                        cv = cm;
-                    }
+                if let Some(cm) = mp.get(&["c", "cap"])
+                    && cv == 0.0
+                {
+                    cv = cm;
                 }
                 let tc1 = self
                     .opt(params, "tc1", idx)

@@ -182,11 +182,11 @@ impl Dev for Tline {
     fn accept(&mut self, ck: &Ckt) {
         let v = self.port_values(&ck.x);
         let t = if ck.mode == Mode::Dc { 0.0 } else { ck.time };
-        if let Some(last) = self.hist.last() {
-            if t <= last[0] {
-                // re-accept at the same time (discontinuity re-solve): replace
-                self.hist.pop();
-            }
+        if let Some(last) = self.hist.last()
+            && t <= last[0]
+        {
+            // re-accept at the same time (discontinuity re-solve): replace
+            self.hist.pop();
         }
         self.hist.push([t, v[0], v[1], v[2], v[3]]);
         // corner detection → breakpoint one delay later

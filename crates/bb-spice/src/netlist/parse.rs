@@ -5,6 +5,9 @@ use crate::expr::{BinOp, Expr};
 use crate::meas::{Edge, MeasKind, StatFunc, Trigger};
 use std::path::Path;
 
+/// Reads `.include`/`.lib` files (path → text); lets the app serve files from memory.
+pub type IncludeLoader = Arc<dyn Fn(&Path) -> std::io::Result<String> + Send + Sync>;
+
 /// Options for [`Netlist::parse_with`].
 #[derive(Clone)]
 pub struct ParseOptions {
@@ -17,7 +20,7 @@ pub struct ParseOptions {
     /// Libraries to resolve unknown subcircuits/models.
     pub libraries: Vec<Arc<Library>>,
     /// Custom include loader (path → text). Defaults to reading the file system.
-    pub loader: Option<Arc<dyn Fn(&Path) -> std::io::Result<String> + Send + Sync>>,
+    pub loader: Option<IncludeLoader>,
 }
 
 impl Default for ParseOptions {
@@ -111,14 +114,14 @@ fn logical_lines(text: &str, file: Option<Arc<str>>, first_is_title: bool) -> (S
         if body.trim().is_empty() {
             continue;
         }
-        if let Some(rest) = body.strip_prefix('+') {
-            if let Some(last) = lines.last_mut() {
-                let off = last.text.len() + 1;
-                last.text.push(' ');
-                last.segs.push((off, lineno, lead as u32 + 2));
-                last.text.push_str(rest.trim_end());
-                continue;
-            }
+        if let Some(rest) = body.strip_prefix('+')
+            && let Some(last) = lines.last_mut()
+        {
+            let off = last.text.len() + 1;
+            last.text.push(' ');
+            last.segs.push((off, lineno, lead as u32 + 2));
+            last.text.push_str(rest.trim_end());
+            continue;
         }
         lines.push(Line {
             text: body.trim_end().to_string(),
@@ -389,10 +392,10 @@ fn parse_expr_at(line: &Line, t: &Tok, text: &str) -> Result<Expr, ParseError> {
     };
     // percentage values (tol=5%)
     let txt = text.trim();
-    if let Some(p) = txt.strip_suffix('%') {
-        if let Ok(e) = Expr::parse(p) {
-            return Ok(Expr::Binary(BinOp::Div, Box::new(e), Box::new(Expr::Num(100.0))).fold());
-        }
+    if let Some(p) = txt.strip_suffix('%')
+        && let Ok(e) = Expr::parse(p)
+    {
+        return Ok(Expr::Binary(BinOp::Div, Box::new(e), Box::new(Expr::Num(100.0))).fold());
     }
     Expr::parse(text).map_err(|e| {
         ParseError::new(
@@ -744,14 +747,14 @@ impl<'o> State<'o> {
             } else if t.kind == TK::Word && kw == "ac" && !cur.at_kv() {
                 cur.next();
                 spec.ac_mag = Some(Expr::Num(1.0));
-                if let Some(n) = cur.peek() {
-                    if Cur::is_value_tok(n) {
-                        spec.ac_mag = Some(cur.value("AC magnitude")?);
-                        if let Some(n) = cur.peek() {
-                            if Cur::is_value_tok(n) {
-                                spec.ac_phase = Some(cur.value("AC phase")?);
-                            }
-                        }
+                if let Some(n) = cur.peek()
+                    && Cur::is_value_tok(n)
+                {
+                    spec.ac_mag = Some(cur.value("AC magnitude")?);
+                    if let Some(n) = cur.peek()
+                        && Cur::is_value_tok(n)
+                    {
+                        spec.ac_phase = Some(cur.value("AC phase")?);
                     }
                 }
             } else if t.kind == TK::Word
@@ -761,12 +764,11 @@ impl<'o> State<'o> {
                 )
             {
                 cur.next();
-                if kw == "pwl" {
-                    if let Some(f) = cur.peek() {
-                        if f.is_word("file") {
-                            return Err(cur.err("PWL file= is not supported; inline the points"));
-                        }
-                    }
+                if kw == "pwl"
+                    && let Some(f) = cur.peek()
+                    && f.is_word("file")
+                {
+                    return Err(cur.err("PWL file= is not supported; inline the points"));
                 }
                 let args = self.wave_args(cur)?;
                 let need = |n: usize, what: &str| -> Result<(), ParseError> {
@@ -1109,10 +1111,11 @@ impl<'o> State<'o> {
         }
         let model = cur.word("model name")?.lower();
         let mut area = None;
-        if let Some(t) = cur.peek() {
-            if Cur::is_value_tok(t) && c0 != 'm' {
-                area = Some(cur.value("area")?);
-            }
+        if let Some(t) = cur.peek()
+            && Cur::is_value_tok(t)
+            && c0 != 'm'
+        {
+            area = Some(cur.value("area")?);
         }
         let (params, flags) = self.params(cur, &["off"])?;
         let off = !flags.is_empty();
@@ -1147,10 +1150,10 @@ impl<'o> State<'o> {
             t4.lower()
         };
         let mut area = None;
-        if let Some(t) = cur.peek() {
-            if Cur::is_value_tok(t) {
-                area = Some(cur.value("area")?);
-            }
+        if let Some(t) = cur.peek()
+            && Cur::is_value_tok(t)
+        {
+            area = Some(cur.value("area")?);
         }
         let (params, flags) = self.params(cur, &["off"])?;
         Ok(ElementCard {
@@ -1903,10 +1906,10 @@ impl<'o> State<'o> {
             "param" => SweepVar::Param(cur.word("parameter name")?.lower()),
             n => SweepVar::Name(n.to_string()),
         };
-        if let SweepVar::Name(n) = &var {
-            if n == "temper" {
-                var = SweepVar::Temp;
-            }
+        if let SweepVar::Name(n) = &var
+            && n == "temper"
+        {
+            var = SweepVar::Temp;
         }
         if matches!(cur.peek(), Some(p) if p.is_word("list")) {
             cur.next();
@@ -1924,10 +1927,11 @@ impl<'o> State<'o> {
         let start = self.num(cur, "start value")?;
         let stop = self.num(cur, "stop value")?;
         let mut post_kind = None;
-        if let Some(p) = cur.peek() {
-            if matches!(p.lower().as_str(), "lin" | "dec" | "oct") && p.kind == TK::Word {
-                post_kind = Some(cur.next().unwrap().lower());
-            }
+        if let Some(p) = cur.peek()
+            && matches!(p.lower().as_str(), "lin" | "dec" | "oct")
+            && p.kind == TK::Word
+        {
+            post_kind = Some(cur.next().unwrap().lower());
         }
         let inc = self.num(cur, "increment")?;
         let kind = match pre_kind.or(post_kind).as_deref() {
@@ -1972,10 +1976,11 @@ impl<'o> State<'o> {
         } else {
             let start = self.num(cur, "start")?;
             let stop = self.num(cur, "stop")?;
-            if let Some(p) = cur.peek() {
-                if p.kind == TK::Word && matches!(p.lower().as_str(), "lin" | "dec" | "oct") {
-                    kind_kw = Some(cur.next().unwrap().lower());
-                }
+            if let Some(p) = cur.peek()
+                && p.kind == TK::Word
+                && matches!(p.lower().as_str(), "lin" | "dec" | "oct")
+            {
+                kind_kw = Some(cur.next().unwrap().lower());
             }
             let inc = self.num(cur, "increment")?;
             let kind = match kind_kw.as_deref() {
@@ -2597,17 +2602,17 @@ V1 1 0 1
 
     #[test]
     fn include_and_lib_sections() {
-        let loader: Arc<dyn Fn(&Path) -> std::io::Result<String> + Send + Sync> =
-            Arc::new(|p: &Path| {
-                Ok(match p.file_name().unwrap().to_str().unwrap() {
-                    "parts.inc" => {
-                        ".model dfast d(is=1e-15)\n.subckt buf a b\nR1 a b 1\n.ends\n".to_string()
-                    }
-                    "lib.lib" => ".lib typ\n.param rv=1k\n.endl\n.lib slow\n.param rv=2k\n.endl\n"
-                        .to_string(),
-                    _ => return Err(std::io::Error::new(std::io::ErrorKind::NotFound, "nope")),
-                })
-            });
+        let loader: IncludeLoader = Arc::new(|p: &Path| {
+            Ok(match p.file_name().unwrap().to_str().unwrap() {
+                "parts.inc" => {
+                    ".model dfast d(is=1e-15)\n.subckt buf a b\nR1 a b 1\n.ends\n".to_string()
+                }
+                "lib.lib" => {
+                    ".lib typ\n.param rv=1k\n.endl\n.lib slow\n.param rv=2k\n.endl\n".to_string()
+                }
+                _ => return Err(std::io::Error::new(std::io::ErrorKind::NotFound, "nope")),
+            })
+        });
         let opts = ParseOptions {
             loader: Some(loader),
             ..ParseOptions::default()

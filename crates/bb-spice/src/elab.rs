@@ -428,10 +428,6 @@ impl Circuit {
         let l = name.to_ascii_lowercase();
         self.elements.iter().find(|e| e.name == l)
     }
-    pub(crate) fn element_index(&self, name: &str) -> Option<usize> {
-        let l = name.to_ascii_lowercase();
-        self.elements.iter().position(|e| e.name == l)
-    }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -533,25 +529,23 @@ pub(crate) fn inline_funcs(
         return Err("function definitions are recursive".into());
     }
     e.rewrite(&mut |n| {
-        if let Expr::UserCall(name, args) = n {
-            if let Some(f) = funcs.get(name) {
-                if f.args.len() != args.len() {
-                    return Err(format!(
-                        "function `{name}` expects {} argument(s), got {}",
-                        f.args.len(),
-                        args.len()
-                    ));
-                }
-                let body = f.body.rewrite(&mut |b| {
-                    Ok(match b {
-                        Expr::Ident(id) => {
-                            f.args.iter().position(|a| a == id).map(|i| args[i].clone())
-                        }
-                        _ => None,
-                    })
-                })?;
-                return inline_funcs(&body, funcs, depth + 1).map(Some);
+        if let Expr::UserCall(name, args) = n
+            && let Some(f) = funcs.get(name)
+        {
+            if f.args.len() != args.len() {
+                return Err(format!(
+                    "function `{name}` expects {} argument(s), got {}",
+                    f.args.len(),
+                    args.len()
+                ));
             }
+            let body = f.body.rewrite(&mut |b| {
+                Ok(match b {
+                    Expr::Ident(id) => f.args.iter().position(|a| a == id).map(|i| args[i].clone()),
+                    _ => None,
+                })
+            })?;
+            return inline_funcs(&body, funcs, depth + 1).map(Some);
         }
         Ok(None)
     })
@@ -683,11 +677,11 @@ impl<'n> Elab<'n> {
         // Evaluate in order; allow forward references by retrying unresolved ones.
         let mut pending: Vec<&(String, Expr, Span)> = Vec::new();
         for d in defs {
-            if let Some(v) = self.opts.params.get(&d.0) {
-                if env.parent.is_none() {
-                    env.params.insert(d.0.clone(), *v);
-                    continue;
-                }
+            if let Some(v) = self.opts.params.get(&d.0)
+                && env.parent.is_none()
+            {
+                env.params.insert(d.0.clone(), *v);
+                continue;
             }
             pending.push(d);
         }
@@ -1190,7 +1184,7 @@ impl<'n> Elab<'n> {
                 }
                 ElemKind::Coupling { inductors, k } => {
                     let kv = cst!(k, "coupling");
-                    if !(kv.abs() <= 1.0) {
+                    if kv.is_nan() || kv.abs() > 1.0 {
                         return Err(SimError::elab(
                             span,
                             format!(
@@ -1432,13 +1426,13 @@ impl<'n> Elab<'n> {
                             ),
                         ));
                     }
-                    if let Some(l) = m.get("level").and_then(|v| v.constant()) {
-                        if l != 1.0 {
-                            self.warnings.push(Diagnostic::warning(
+                    if let Some(l) = m.get("level").and_then(|v| v.constant())
+                        && l != 1.0
+                    {
+                        self.warnings.push(Diagnostic::warning(
                                 span.clone(),
                                 format!("`{}`: MOSFET level {l} is simulated with the level-1 (Shichman-Hodges) model", card.name),
                             ));
-                        }
                     }
                     let params = inst_params(self, &[])?;
                     ElementKind::Mosfet {
@@ -1463,7 +1457,7 @@ impl<'n> Elab<'n> {
                             .unwrap_or(0.25);
                         nl / f
                     };
-                    if !(td > 0.0) || !(z0 > 0.0) {
+                    if td.is_nan() || z0.is_nan() || td <= 0.0 || z0 <= 0.0 {
                         return Err(SimError::elab(
                             span,
                             format!("`{}`: Z0 and TD must be positive", card.name),

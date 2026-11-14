@@ -208,6 +208,11 @@ impl Stepper {
                 Err(f) => {
                     self.rejected += 1;
                     self.cuts += 1;
+                    log::trace!(
+                        "t = {:.6e}: Newton failed, cutting step {:.3e}",
+                        self.time,
+                        self.delta
+                    );
                     e.ck.x.copy_from_slice(&self.x_acc);
                     let old = self.delta;
                     self.delta /= 8.0;

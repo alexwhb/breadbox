@@ -144,29 +144,29 @@ fn eval_point(
             if args.len() == 1 && matches!(f.as_str(), "db" | "mag" | "ph" | "real" | "imag") =>
         {
             if let Some(name) = probe_name(&args[0]) {
-                if let Expr::Volt(a, Some(b)) = &args[0] {
-                    if plot.vector(&name).is_none() {
-                        // complex difference
-                        let va = plot
-                            .vector(&format!("v({a})"))
-                            .ok_or_else(|| format!("no vector `v({a})`"))?
-                            .complex_at(i);
-                        let vb = if b == "0" {
-                            Default::default()
-                        } else {
-                            plot.vector(&format!("v({b})"))
-                                .ok_or_else(|| format!("no vector `v({b})`"))?
-                                .complex_at(i)
-                        };
-                        let d = va - vb;
-                        return Ok(match f.as_str() {
-                            "db" => 20.0 * d.abs().log10(),
-                            "ph" => d.arg().to_degrees(),
-                            "real" => d.re,
-                            "imag" => d.im,
-                            _ => d.abs(),
-                        });
-                    }
+                if let Expr::Volt(a, Some(b)) = &args[0]
+                    && plot.vector(&name).is_none()
+                {
+                    // complex difference
+                    let va = plot
+                        .vector(&format!("v({a})"))
+                        .ok_or_else(|| format!("no vector `v({a})`"))?
+                        .complex_at(i);
+                    let vb = if b == "0" {
+                        Default::default()
+                    } else {
+                        plot.vector(&format!("v({b})"))
+                            .ok_or_else(|| format!("no vector `v({b})`"))?
+                            .complex_at(i)
+                    };
+                    let d = va - vb;
+                    return Ok(match f.as_str() {
+                        "db" => 20.0 * d.abs().log10(),
+                        "ph" => d.arg().to_degrees(),
+                        "real" => d.re,
+                        "imag" => d.im,
+                        _ => d.abs(),
+                    });
                 }
                 return vector_value(plot, &name, i, f);
             }
@@ -272,9 +272,9 @@ fn pick(cross: &[(f64, i32)], edge: Edge) -> Option<f64> {
         Edge::Rise(n) => filt(1).nth(n.max(1) - 1),
         Edge::Fall(n) => filt(-1).nth(n.max(1) - 1),
         Edge::Cross(n) => filt(0).nth(n.max(1) - 1),
-        Edge::RiseLast => filt(1).last(),
-        Edge::FallLast => filt(-1).last(),
-        Edge::CrossLast => filt(0).last(),
+        Edge::RiseLast => filt(1).next_back(),
+        Edge::FallLast => filt(-1).next_back(),
+        Edge::CrossLast => filt(0).next_back(),
     }
 }
 

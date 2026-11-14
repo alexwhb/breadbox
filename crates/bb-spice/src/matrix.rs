@@ -396,10 +396,8 @@ impl<T: Scalar> Matrix<T> {
             return self.factor_dense();
         }
         let reuse = matches!(&self.factor, Factor::Sparse(s) if s.valid);
-        if reuse {
-            if self.refactor_sparse() {
-                return Ok(());
-            }
+        if reuse && self.refactor_sparse() {
+            return Ok(());
         }
         self.order_sparse()?;
         if self.refactor_sparse() {
@@ -530,10 +528,10 @@ impl<T: Scalar> Matrix<T> {
                     // column max over active rows
                     let mut cmax = 0.0f64;
                     for &r in &colrows[c] {
-                        if row_active[r as usize] {
-                            if let Some(v) = rows[r as usize].iter().find(|e| e.0 as usize == c) {
-                                cmax = cmax.max(v.1.mag());
-                            }
+                        if row_active[r as usize]
+                            && let Some(v) = rows[r as usize].iter().find(|e| e.0 as usize == c)
+                        {
+                            cmax = cmax.max(v.1.mag());
                         }
                     }
                     if cmax <= self.pivot_abs {
@@ -661,8 +659,8 @@ impl<T: Scalar> Matrix<T> {
         row_ptr.push(0u32);
         // U patterns (cols > k) per finished row, for merging.
         let mut upat: Vec<Vec<u32>> = Vec::with_capacity(n);
-        for k in 0..n {
-            let mut set: BTreeSet<u32> = orig_rows[k].iter().copied().collect();
+        for (k, orig) in orig_rows.iter().enumerate() {
+            let mut set: BTreeSet<u32> = orig.iter().copied().collect();
             set.insert(k as u32);
             let mut cursor: Option<u32> = set.iter().next().copied();
             while let Some(j) = cursor {
@@ -750,7 +748,7 @@ impl<T: Scalar> Matrix<T> {
             // relative test would need the reduced column, which the row-wise refactorisation
             // never forms; Newton's convergence test guards accuracy instead.
             let piv = f.lu[d].mag();
-            if !(piv > self.pivot_abs) || !piv.is_finite() {
+            if piv.is_nan() || piv <= self.pivot_abs || !piv.is_finite() {
                 f.valid = false;
                 return false;
             }

@@ -4,7 +4,7 @@
 //! backward-Euler step `h`).
 
 use crate::analysis::AcSystem;
-use crate::devices::{Dev, Init, Mode};
+use crate::devices::{Init, Mode};
 use crate::elab::Method;
 use crate::engine::Engine;
 use crate::netlist::Netlist;
@@ -104,9 +104,9 @@ fn check_ac_vs_tran(text: &str) {
     let _ = sys.load(&e, omega);
     let n = e.n();
     let mut y = vec![vec![crate::matrix::C64::default(); n + 1]; n + 1];
-    for s in 1..e.pattern.len() {
+    for (s, v) in sys.mat.vals.iter().enumerate().skip(1) {
         let (r, c) = e.pattern.position(crate::matrix::Slot(s as u32));
-        y[r][c] += sys.mat.vals[s];
+        y[r][c] += *v;
     }
     // transient BE step of size h from the operating point
     let h = 1e-12;
@@ -115,8 +115,8 @@ fn check_ac_vs_tran(text: &str) {
     e.ck.delta_old = [h; 4];
     e.ck.order = 1;
     e.ck.compute_coeffs();
-    for k in 1..4 {
-        e.ck.st[k].copy_from_slice(&st0);
+    for st in e.ck.st.iter_mut().skip(1) {
+        st.copy_from_slice(&st0);
     }
     e.ck.st[0].copy_from_slice(&st0);
     e.ck.init = Init::Float;
@@ -193,9 +193,7 @@ fn bjt_all_regions() {
         "bjt ac\nVB b0 0 DC 0.75\nRB b0 b 1k\nVC c0 0 DC 3\nRC c0 c 1k\nQ1 c b 0 s qn\nVS s 0 DC -2\n{NPN}"
     ));
     // PNP mirror
-    let t = format!(
-        "pnp\nVE e 0 DC 5\nVB b 0 DC 4.2\nVC c 0 DC 1\nQ1 c b e qp\n.model qp PNP(IS=1e-15 BF=80 VAF=40 RB=10 CJE=1p CJC=1p TF=1n)\n"
-    );
+    let t = "pnp\nVE e 0 DC 5\nVB b 0 DC 4.2\nVC c 0 DC 1\nQ1 c b e qp\n.model qp PNP(IS=1e-15 BF=80 VAF=40 RB=10 CJE=1p CJC=1p TF=1n)\n".to_string();
     check_dc_jacobian(&t, &[]);
     check_ac_vs_tran(&t);
 }
