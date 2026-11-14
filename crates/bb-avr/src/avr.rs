@@ -623,14 +623,15 @@ impl Avr {
     }
 
     /// Executes exactly one instruction (or one interrupt entry), regardless of breakpoints.
+    /// A sleeping / halted core is advanced until it executes something, at most one simulated
+    /// second.
     pub fn step_instruction(&mut self, io: &mut dyn AvrIo) -> StopReason {
         let saved = self.dbg.step.take();
         let skip = self.dbg.bp_skip;
         self.dbg.bp_skip = Some(self.pc);
         self.dbg.step = Some(StepFilter::Instructions(1));
         let base = self.cycle;
-        let mut r = self.run(NEVER, io);
-        // Sleeping / halted cores make no progress; bound the attempt.
+        let mut r = self.run(base.saturating_add(self.cfg.f_cpu), io);
         if r == StopReason::ReachedCycle || self.cycle == base {
             r = StopReason::StepDone;
         }

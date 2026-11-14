@@ -1104,3 +1104,17 @@ fn disassembly() {
     assert_eq!(a.instruction_at(2).to_string(), "out 0x05, r16");
     assert_eq!(a.instruction_at(4).to_string(), "rjmp .-2");
 }
+
+#[test]
+fn step_instruction_on_a_sleeping_core_is_bounded() {
+    // Power-down with interrupts disabled: nothing can wake it.
+    let mut a = cpu(&[ldi(16, 0x05), out(0x33, 16), SLEEP, NOP]);
+    for _ in 0..3 {
+        step(&mut a);
+    }
+    assert_eq!(a.sleep_mode(), Some(bb_avr::SleepMode::PowerDown));
+    let c0 = a.cycle();
+    assert_eq!(a.step_instruction(&mut ()), StopReason::StepDone);
+    assert!(a.cycle() <= c0 + 16_000_000, "advanced at most one second");
+    assert_eq!(a.sleep_mode(), Some(bb_avr::SleepMode::PowerDown));
+}

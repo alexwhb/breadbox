@@ -32,7 +32,7 @@ arduino-cli-compiled firmware (26 sketches, fixtures checked in; `scripts/build-
 rebuilds them).
 
 - `MCU-1` **done** — ATmega328P + ATmega2560 core (3-byte PC, EIND/EIJMP/EICALL, RAMPZ/ELPM),
-  every opcode with datasheet cycles/flags, pre-decoded flash. 35 instruction tests (carry/borrow
+  every opcode with datasheet cycles/flags, pre-decoded flash. 36 instruction tests (carry/borrow
   chains, Z propagation, MUL/MULS/MULSU/FMUL*, LPM/ELPM/SPM incl. page erase/write + signature,
   skips over 2-word opcodes, SLEEP/WDR/BREAK, SEI/RETI one-instruction rule, 4/5-cycle
   interrupt response, faults).
@@ -61,7 +61,7 @@ rebuilds them).
   `Avr` accessors. UI is phase 4.
 - `MCU-7` **done** (engine side) — independent instances: 4 MCUs interleaved in lockstep and 4
   parallel threads match solo runs bit-for-bit; two AVRs talk I²C (Wire master ↔ Wire slave).
-- Tests: bb-avr 75 (+1 perf, ignored), bb-firmware 20 (+1 network install, ignored);
+- Tests: bb-avr 76 (+1 perf, ignored), bb-firmware 20 (+1 network install, ignored);
   clippy `-D warnings` + fmt clean.
 
 Deviations / notes:
