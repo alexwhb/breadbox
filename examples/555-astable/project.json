@@ -1,0 +1,421 @@
+{
+  "format": "breadbox/1",
+  "name": "555-astable",
+  "mode": "playground",
+  "description": "The classic 555 blinker: R1 1k, R2 10k, C1 47 µF → ~1.4 Hz.",
+  "parts": [
+    {
+      "id": "bt1",
+      "ref": "BT1",
+      "part": "battery_pack",
+      "props": {
+        "kind": "9v"
+      },
+      "bench": {
+        "x": 0.0,
+        "y": 4.0
+      },
+      "schematic": {
+        "x": 10.0,
+        "y": 10.0
+      }
+    },
+    {
+      "id": "bb1",
+      "ref": "BB1",
+      "part": "breadboard_400",
+      "bench": {
+        "x": 12.0,
+        "y": 2.0
+      }
+    },
+    {
+      "id": "u1",
+      "ref": "U1",
+      "part": "ne555",
+      "bench": {
+        "x": 22.0,
+        "y": 10.0
+      },
+      "schematic": {
+        "x": 10.0,
+        "y": 22.0
+      }
+    },
+    {
+      "id": "r1",
+      "ref": "R1",
+      "part": "resistor",
+      "props": {
+        "resistance": 1000.0
+      },
+      "bench": {
+        "x": 18.0,
+        "y": 6.0,
+        "leads": {
+          "1": [
+            0.0,
+            0.0
+          ],
+          "2": [
+            5.0,
+            0.0
+          ]
+        }
+      },
+      "schematic": {
+        "x": 10.0,
+        "y": 34.0
+      }
+    },
+    {
+      "id": "r2",
+      "ref": "R2",
+      "part": "resistor",
+      "props": {
+        "resistance": 10000.0
+      },
+      "bench": {
+        "x": 23.0,
+        "y": 7.0,
+        "leads": {
+          "1": [
+            0.0,
+            0.0
+          ],
+          "2": [
+            4.0,
+            0.0
+          ]
+        }
+      },
+      "schematic": {
+        "x": 10.0,
+        "y": 46.0
+      }
+    },
+    {
+      "id": "c1",
+      "ref": "C1",
+      "part": "capacitor_electrolytic",
+      "props": {
+        "capacitance": 0.000047
+      },
+      "bench": {
+        "x": 27.0,
+        "y": 17.0,
+        "leads": {
+          "minus": [
+            1.0,
+            0.0
+          ],
+          "plus": [
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "schematic": {
+        "x": 10.0,
+        "y": 58.0
+      }
+    },
+    {
+      "id": "r3",
+      "ref": "R3",
+      "part": "resistor",
+      "props": {
+        "resistance": 470.0
+      },
+      "bench": {
+        "x": 24.0,
+        "y": 14.0,
+        "leads": {
+          "1": [
+            0.0,
+            0.0
+          ],
+          "2": [
+            8.0,
+            0.0
+          ]
+        }
+      },
+      "schematic": {
+        "x": 10.0,
+        "y": 70.0
+      }
+    },
+    {
+      "id": "d1",
+      "ref": "D1",
+      "part": "led",
+      "props": {
+        "color": "green"
+      },
+      "bench": {
+        "x": 32.0,
+        "y": 15.0,
+        "leads": {
+          "a": [
+            0.0,
+            0.0
+          ],
+          "k": [
+            1.0,
+            0.0
+          ]
+        }
+      },
+      "schematic": {
+        "x": 26.0,
+        "y": 10.0
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "a": {
+        "part": "bt1",
+        "pin": "plus"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "t+1"
+      },
+      "color": "red"
+    },
+    {
+      "id": "w2",
+      "a": {
+        "part": "bt1",
+        "pin": "minus"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "t-1"
+      },
+      "color": "black"
+    },
+    {
+      "id": "w3",
+      "a": {
+        "part": "bb1",
+        "pin": "j10"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "b-8"
+      },
+      "color": "black"
+    },
+    {
+      "id": "w4",
+      "a": {
+        "part": "bb1",
+        "pin": "a10"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "t+8"
+      },
+      "color": "red"
+    },
+    {
+      "id": "w5",
+      "a": {
+        "part": "bb1",
+        "pin": "j13"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "b+10"
+      },
+      "color": "red"
+    },
+    {
+      "id": "w6",
+      "a": {
+        "part": "bb1",
+        "pin": "b+2"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "t+2"
+      },
+      "color": "red"
+    },
+    {
+      "id": "w7",
+      "a": {
+        "part": "bb1",
+        "pin": "b-2"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "t-2"
+      },
+      "color": "black"
+    },
+    {
+      "id": "w8",
+      "a": {
+        "part": "bb1",
+        "pin": "b6"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "t+5"
+      },
+      "color": "red"
+    },
+    {
+      "id": "w9",
+      "a": {
+        "part": "bb1",
+        "pin": "c15"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "c12"
+      },
+      "color": "green"
+    },
+    {
+      "id": "w10",
+      "a": {
+        "part": "bb1",
+        "pin": "d12"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "i11"
+      },
+      "color": "green"
+    },
+    {
+      "id": "w11",
+      "a": {
+        "part": "bb1",
+        "pin": "h15"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "h11"
+      },
+      "color": "green"
+    },
+    {
+      "id": "w12",
+      "a": {
+        "part": "bb1",
+        "pin": "j17"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "b-14"
+      },
+      "color": "black"
+    },
+    {
+      "id": "w13",
+      "a": {
+        "part": "bb1",
+        "pin": "i16"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "i17"
+      },
+      "color": "black"
+    },
+    {
+      "id": "w14",
+      "a": {
+        "part": "bb1",
+        "pin": "j21"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "b-18"
+      },
+      "color": "black"
+    }
+  ],
+  "schematic": {},
+  "pcb": {},
+  "world": {
+    "seed": 1,
+    "time_warp": 1.0,
+    "noise": true,
+    "air": {
+      "temp_c": 21.0,
+      "rh": 45.0,
+      "pressure_pa": 101325.0,
+      "diurnal": false,
+      "temp_swing_c": 5.0,
+      "rh_swing": 15.0
+    },
+    "light": {
+      "mode": "manual",
+      "ambient_lux": 180.0,
+      "location": {
+        "name": "Ashland, OR",
+        "lat": 42.1946,
+        "lon": -122.7095,
+        "utc_offset_h": -8.0
+      },
+      "start": {
+        "year": 2026,
+        "month": 6,
+        "day": 21,
+        "hour": 8.0
+      },
+      "cloud_cover": 0.2,
+      "indoor_fraction": 0.01,
+      "indoor": true
+    },
+    "pots": [],
+    "objects": [],
+    "timelines": [],
+    "scripts": [],
+    "vars": {}
+  },
+  "probes": [
+    {
+      "id": "probe1",
+      "label": "Timing cap",
+      "target": {
+        "part": "bb1",
+        "pin": "c12"
+      },
+      "quantity": "voltage",
+      "pinned": [
+        14.0,
+        0.0
+      ]
+    },
+    {
+      "id": "probe2",
+      "label": "555 out",
+      "target": {
+        "part": "bb1",
+        "pin": "f12"
+      },
+      "quantity": "frequency",
+      "pinned": [
+        28.0,
+        0.0
+      ]
+    }
+  ],
+  "instruments": [],
+  "spice": {},
+  "settings": {
+    "seed": 1,
+    "sync_quantum_us": 1.0,
+    "speed": 1.0,
+    "stop_after_s": 0.0
+  }
+}

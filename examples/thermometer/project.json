@@ -1,0 +1,427 @@
+{
+  "format": "breadbox/1",
+  "name": "thermometer",
+  "mode": "playground",
+  "description": "TMP36 on A0, temperature on a 16×2 LCD (LiquidCrystal).",
+  "parts": [
+    {
+      "id": "u1",
+      "ref": "U1",
+      "part": "uno",
+      "bench": {
+        "x": 0.0,
+        "y": 4.0
+      },
+      "schematic": {
+        "x": 10.0,
+        "y": 10.0
+      },
+      "firmware": {
+        "sketch": "firmware/U1/thermometer"
+      }
+    },
+    {
+      "id": "bb1",
+      "ref": "BB1",
+      "part": "breadboard_830",
+      "bench": {
+        "x": 32.0,
+        "y": 2.0
+      }
+    },
+    {
+      "id": "u2",
+      "ref": "U2",
+      "part": "tmp36",
+      "bench": {
+        "x": 36.0,
+        "y": 10.0
+      },
+      "schematic": {
+        "x": 26.0,
+        "y": 10.0
+      }
+    },
+    {
+      "id": "lcd1",
+      "ref": "LCD1",
+      "part": "lcd_1602",
+      "bench": {
+        "x": 40.0,
+        "y": 24.0
+      },
+      "schematic": {
+        "x": 26.0,
+        "y": 22.0
+      }
+    },
+    {
+      "id": "r1",
+      "ref": "R1",
+      "part": "resistor",
+      "props": {
+        "resistance": 1000.0
+      },
+      "bench": {
+        "x": 52.0,
+        "y": 17.0,
+        "leads": {
+          "1": [
+            0.0,
+            0.0
+          ],
+          "2": [
+            4.0,
+            0.0
+          ]
+        }
+      },
+      "schematic": {
+        "x": 26.0,
+        "y": 34.0
+      }
+    },
+    {
+      "id": "r2",
+      "ref": "R2",
+      "part": "resistor",
+      "props": {
+        "resistance": 220.0
+      },
+      "bench": {
+        "x": 60.0,
+        "y": 17.0,
+        "leads": {
+          "1": [
+            0.0,
+            0.0
+          ],
+          "2": [
+            4.0,
+            0.0
+          ]
+        }
+      },
+      "schematic": {
+        "x": 26.0,
+        "y": 46.0
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "a": {
+        "part": "u1",
+        "pin": "5V"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "t+1"
+      },
+      "color": "red"
+    },
+    {
+      "id": "w2",
+      "a": {
+        "part": "u1",
+        "pin": "GND"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "t-1"
+      },
+      "color": "black"
+    },
+    {
+      "id": "w3",
+      "a": {
+        "part": "bb1",
+        "pin": "a4"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "t+4"
+      },
+      "color": "red"
+    },
+    {
+      "id": "w4",
+      "a": {
+        "part": "bb1",
+        "pin": "a6"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "t-5"
+      },
+      "color": "black"
+    },
+    {
+      "id": "w5",
+      "a": {
+        "part": "bb1",
+        "pin": "a5"
+      },
+      "b": {
+        "part": "u1",
+        "pin": "A0"
+      },
+      "color": "yellow"
+    },
+    {
+      "id": "w6",
+      "a": {
+        "part": "lcd1",
+        "pin": "RS"
+      },
+      "b": {
+        "part": "u1",
+        "pin": "D12"
+      },
+      "color": "blue"
+    },
+    {
+      "id": "w7",
+      "a": {
+        "part": "lcd1",
+        "pin": "E"
+      },
+      "b": {
+        "part": "u1",
+        "pin": "D11"
+      },
+      "color": "blue"
+    },
+    {
+      "id": "w8",
+      "a": {
+        "part": "lcd1",
+        "pin": "D4"
+      },
+      "b": {
+        "part": "u1",
+        "pin": "D5"
+      },
+      "color": "blue"
+    },
+    {
+      "id": "w9",
+      "a": {
+        "part": "lcd1",
+        "pin": "D5"
+      },
+      "b": {
+        "part": "u1",
+        "pin": "D4"
+      },
+      "color": "blue"
+    },
+    {
+      "id": "w10",
+      "a": {
+        "part": "lcd1",
+        "pin": "D6"
+      },
+      "b": {
+        "part": "u1",
+        "pin": "D3"
+      },
+      "color": "blue"
+    },
+    {
+      "id": "w11",
+      "a": {
+        "part": "lcd1",
+        "pin": "D7"
+      },
+      "b": {
+        "part": "u1",
+        "pin": "D2"
+      },
+      "color": "blue"
+    },
+    {
+      "id": "w12",
+      "a": {
+        "part": "lcd1",
+        "pin": "VSS"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "t-20"
+      },
+      "color": "black"
+    },
+    {
+      "id": "w13",
+      "a": {
+        "part": "lcd1",
+        "pin": "RW"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "t-21"
+      },
+      "color": "black"
+    },
+    {
+      "id": "w14",
+      "a": {
+        "part": "lcd1",
+        "pin": "VDD"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "t+20"
+      },
+      "color": "red"
+    },
+    {
+      "id": "w15",
+      "a": {
+        "part": "lcd1",
+        "pin": "V0"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "f20"
+      },
+      "color": "green"
+    },
+    {
+      "id": "w16",
+      "a": {
+        "part": "bb1",
+        "pin": "f24"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "b-20"
+      },
+      "color": "black"
+    },
+    {
+      "id": "w17",
+      "a": {
+        "part": "bb1",
+        "pin": "f28"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "b+24"
+      },
+      "color": "red"
+    },
+    {
+      "id": "w18",
+      "a": {
+        "part": "lcd1",
+        "pin": "A"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "f32"
+      },
+      "color": "red"
+    },
+    {
+      "id": "w19",
+      "a": {
+        "part": "lcd1",
+        "pin": "K"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "b-26"
+      },
+      "color": "black"
+    },
+    {
+      "id": "w20",
+      "a": {
+        "part": "bb1",
+        "pin": "t+40"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "b+40"
+      },
+      "color": "red"
+    },
+    {
+      "id": "w21",
+      "a": {
+        "part": "bb1",
+        "pin": "t-40"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "b-40"
+      },
+      "color": "black"
+    }
+  ],
+  "schematic": {},
+  "pcb": {},
+  "world": {
+    "seed": 1,
+    "time_warp": 1.0,
+    "noise": true,
+    "air": {
+      "temp_c": 21.0,
+      "rh": 45.0,
+      "pressure_pa": 101325.0,
+      "diurnal": false,
+      "temp_swing_c": 5.0,
+      "rh_swing": 15.0
+    },
+    "light": {
+      "mode": "manual",
+      "ambient_lux": 180.0,
+      "location": {
+        "name": "Ashland, OR",
+        "lat": 42.1946,
+        "lon": -122.7095,
+        "utc_offset_h": -8.0
+      },
+      "start": {
+        "year": 2026,
+        "month": 6,
+        "day": 21,
+        "hour": 8.0
+      },
+      "cloud_cover": 0.2,
+      "indoor_fraction": 0.01,
+      "indoor": true
+    },
+    "pots": [],
+    "objects": [],
+    "timelines": [],
+    "scripts": [],
+    "vars": {}
+  },
+  "probes": [
+    {
+      "id": "probe1",
+      "label": "TMP36 → A0",
+      "target": {
+        "part": "u2",
+        "pin": "VOUT"
+      },
+      "quantity": "voltage",
+      "pinned": [
+        36.0,
+        0.0
+      ]
+    }
+  ],
+  "instruments": [],
+  "spice": {},
+  "settings": {
+    "seed": 1,
+    "sync_quantum_us": 1.0,
+    "speed": 1.0,
+    "stop_after_s": 0.0
+  }
+}

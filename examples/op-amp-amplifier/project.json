@@ -1,0 +1,264 @@
+{
+  "format": "breadbox/1",
+  "name": "op-amp-amplifier",
+  "mode": "pro",
+  "description": "Non-inverting amplifier, gain 11, TL072 on ±12 V.",
+  "parts": [
+    {
+      "id": "vin",
+      "ref": "VIN",
+      "part": "vsource",
+      "props": {
+        "spec": "SIN(0 0.5 1k) AC 1"
+      },
+      "schematic": {
+        "x": 6.0,
+        "y": 20.0
+      }
+    },
+    {
+      "id": "vp",
+      "ref": "VP",
+      "part": "vsource",
+      "props": {
+        "spec": "DC 12"
+      },
+      "schematic": {
+        "x": 50.0,
+        "y": 10.0
+      }
+    },
+    {
+      "id": "vn",
+      "ref": "VN",
+      "part": "vsource",
+      "props": {
+        "spec": "DC 12"
+      },
+      "schematic": {
+        "x": 56.0,
+        "y": 10.0
+      }
+    },
+    {
+      "id": "u1",
+      "ref": "U1",
+      "part": "opamp_tl072",
+      "schematic": {
+        "x": 24.0,
+        "y": 20.0
+      }
+    },
+    {
+      "id": "r1",
+      "ref": "R1",
+      "part": "resistor",
+      "props": {
+        "resistance": 1000.0
+      },
+      "schematic": {
+        "x": 16.0,
+        "y": 34.0
+      }
+    },
+    {
+      "id": "r2",
+      "ref": "R2",
+      "part": "resistor",
+      "props": {
+        "resistance": 10000.0
+      },
+      "schematic": {
+        "x": 30.0,
+        "y": 34.0
+      }
+    },
+    {
+      "id": "rl",
+      "ref": "RL",
+      "part": "resistor",
+      "props": {
+        "resistance": 10000.0
+      },
+      "schematic": {
+        "x": 40.0,
+        "y": 26.0,
+        "rot": 90.0
+      }
+    }
+  ],
+  "wires": [],
+  "schematic": {
+    "labels": [
+      {
+        "id": "nl1",
+        "name": "IN",
+        "x": 6.0,
+        "y": 17.0
+      },
+      {
+        "id": "nl2",
+        "name": "0",
+        "x": 6.0,
+        "y": 23.0
+      },
+      {
+        "id": "nl3",
+        "name": "VCC",
+        "x": 50.0,
+        "y": 7.0
+      },
+      {
+        "id": "nl4",
+        "name": "0",
+        "x": 50.0,
+        "y": 13.0
+      },
+      {
+        "id": "nl5",
+        "name": "0",
+        "x": 56.0,
+        "y": 7.0
+      },
+      {
+        "id": "nl6",
+        "name": "VEE",
+        "x": 56.0,
+        "y": 13.0
+      },
+      {
+        "id": "nl7",
+        "name": "IN",
+        "x": 19.0,
+        "y": 19.5
+      },
+      {
+        "id": "nl8",
+        "name": "FB",
+        "x": 19.0,
+        "y": 18.5
+      },
+      {
+        "id": "nl9",
+        "name": "OUT",
+        "x": 29.0,
+        "y": 18.5
+      },
+      {
+        "id": "nl10",
+        "name": "VCC",
+        "x": 23.0,
+        "y": 15.5
+      },
+      {
+        "id": "nl11",
+        "name": "VEE",
+        "x": 22.0,
+        "y": 15.5
+      },
+      {
+        "id": "nl12",
+        "name": "0",
+        "x": 19.0,
+        "y": 20.5
+      },
+      {
+        "id": "nl13",
+        "name": "OUT2",
+        "x": 19.0,
+        "y": 21.5
+      },
+      {
+        "id": "nl14",
+        "name": "OUT2",
+        "x": 29.0,
+        "y": 19.5
+      },
+      {
+        "id": "nl15",
+        "name": "0",
+        "x": 13.0,
+        "y": 34.0
+      },
+      {
+        "id": "nl16",
+        "name": "FB",
+        "x": 19.0,
+        "y": 34.0
+      },
+      {
+        "id": "nl17",
+        "name": "FB",
+        "x": 27.0,
+        "y": 34.0
+      },
+      {
+        "id": "nl18",
+        "name": "OUT",
+        "x": 33.0,
+        "y": 34.0
+      },
+      {
+        "id": "nl19",
+        "name": "OUT",
+        "x": 40.0,
+        "y": 23.0
+      },
+      {
+        "id": "nl20",
+        "name": "0",
+        "x": 40.0,
+        "y": 29.0
+      }
+    ]
+  },
+  "pcb": {},
+  "world": {
+    "seed": 1,
+    "time_warp": 1.0,
+    "noise": true,
+    "air": {
+      "temp_c": 21.0,
+      "rh": 45.0,
+      "pressure_pa": 101325.0,
+      "diurnal": false,
+      "temp_swing_c": 5.0,
+      "rh_swing": 15.0
+    },
+    "light": {
+      "mode": "manual",
+      "ambient_lux": 180.0,
+      "location": {
+        "name": "Ashland, OR",
+        "lat": 42.1946,
+        "lon": -122.7095,
+        "utc_offset_h": -8.0
+      },
+      "start": {
+        "year": 2026,
+        "month": 6,
+        "day": 21,
+        "hour": 8.0
+      },
+      "cloud_cover": 0.2,
+      "indoor_fraction": 0.01,
+      "indoor": true
+    },
+    "pots": [],
+    "objects": [],
+    "timelines": [],
+    "scripts": [],
+    "vars": {}
+  },
+  "probes": [],
+  "instruments": [],
+  "spice": {
+    "directives": ".tran 10u 5m\n.ac dec 20 10 10Meg\n.op\n"
+  },
+  "settings": {
+    "seed": 1,
+    "sync_quantum_us": 1.0,
+    "speed": 1.0,
+    "stop_after_s": 0.0
+  }
+}
