@@ -290,3 +290,9 @@ pub fn run_until_text(
         );
     }
 }
+
+/// Runs `cycles` more cycles with no analog IO, collecting pin events.
+pub fn run_for(avr: &mut Avr, cycles: u64, events: &mut Vec<PinEvent>) {
+    let until = avr.cycle() + cycles;
+    run_until(avr, until, &mut (), events);
+}
