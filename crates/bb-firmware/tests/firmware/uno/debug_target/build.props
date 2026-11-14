@@ -1,0 +1,3 @@
+compiler.c.extra_flags=-Og -fno-lto
+compiler.cpp.extra_flags=-Og -fno-lto
+compiler.c.elf.extra_flags=-Og -fno-lto

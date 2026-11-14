@@ -7,3 +7,14 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+bb-core = { workspace = true }
+bb-avr = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }
+gimli = { version = "0.34.0", default-features = false, features = ["read", "std", "endian-reader"] }
+object = { version = "0.41.0", default-features = false, features = ["read_core", "elf", "std", "compression"] }
+ureq = "3.5.2"
+flate2 = "1.1.11"
+tar = "0.4.46"

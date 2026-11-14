@@ -6,7 +6,8 @@
 #     → crates/<crate>/tests/fixtures/<sketch>.<board>.hex / .elf
 #
 # <board> is uno | nano | mega. An optional `build.flags` file in a sketch folder adds
-# arduino-cli compile flags (e.g. --optimize-for-debug).
+# arduino-cli compile flags; an optional `build.props` file adds one `--build-property` per line
+# (e.g. `compiler.cpp.extra_flags=-Og -fno-lto` for debugger fixtures).
 #
 # On Apple Silicon without Rosetta the Arduino-shipped avr-gcc 7.3.0 and ctags (x86_64) can't
 # run; the script then uses native replacements (see bb-firmware's Toolchain::native_overrides):
@@ -100,6 +101,11 @@ for crate in bb-avr bb-firmware; do
         flags=()
         if [ -f "$dir/build.flags" ]; then
             read -r -a flags < "$dir/build.flags"
+        fi
+        if [ -f "$dir/build.props" ]; then
+            while IFS= read -r prop || [ -n "$prop" ]; do
+                [ -n "$prop" ] && flags+=(--build-property "$prop")
+            done < "$dir/build.props"
         fi
         bp="$BUILD_ROOT/$crate-$board-$name"
         echo "== $crate: $name ($fqbn) ${flags[*]:-}"
