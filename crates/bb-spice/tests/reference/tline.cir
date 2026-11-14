@@ -1,0 +1,8 @@
+lossless transmission line with mismatched load (tran, ac)
+V1 in 0 PULSE(0 1 1n 0.5n 0.5n 10n 40n) AC 1
+Rs in a 50
+T1 a 0 b 0 Z0=75 TD=3n
+RL b 0 200
+.tran 0.05n 60n
+.ac lin 50 1meg 400meg
+.end

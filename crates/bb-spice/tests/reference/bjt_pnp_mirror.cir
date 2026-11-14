@@ -1,0 +1,12 @@
+PNP current mirror with emitter degeneration (op, dc)
+VCC vcc 0 DC 10
+RE1 vcc e1 100
+RE2 vcc e2 100
+Q1 b b e1 qp
+Q2 out b e2 qp
+RREF b 0 10k
+VOUT out 0 DC 2
+.model qp PNP(IS=1e-14 BF=80 VAF=40 BR=3 IKF=0.05 RB=10)
+.op
+.dc VOUT 0 9 0.25
+.end

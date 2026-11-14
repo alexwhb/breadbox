@@ -1,0 +1,18 @@
+measurements on an RC response (tran, meas)
+V1 in 0 PULSE(0 5 100u 1u 1u 500u 1m)
+R1 in out 1k
+C1 out 0 100n
+.tran 1u 2m
+.meas tran vavg avg v(out) from=0.2m to=0.6m
+.meas tran vrms rms v(out) from=0 to=1m
+.meas tran vpp pp v(out) from=0 to=2m
+.meas tran vmax max v(out)
+.meas tran vmin min v(out) from=0.7m to=1m
+.meas tran vat find v(out) at=0.3m
+.meas tran trise when v(out)=2.5 rise=1
+.meas tran tfall when v(out)=2.5 fall=1
+.meas tran tdel trig v(in) val=2.5 rise=1 targ v(out) val=2.5 rise=1
+.meas tran vwhen find v(in) when v(out)=4 cross=1
+.meas tran q integ i(V1) from=0.1m to=0.6m
+.meas tran dv deriv v(out) at=0.15m
+.end

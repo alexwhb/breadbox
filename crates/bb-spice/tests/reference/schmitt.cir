@@ -1,0 +1,14 @@
+emitter-coupled BJT Schmitt trigger driven by a triangle (tran, hard convergence)
+VCC vcc 0 DC 5
+VIN in 0 PWL(0 0 1m 5 2m 0)
+RB in b1 1k
+RC1 vcc c1 2.2k
+R12 c1 b2 4.7k
+R2G b2 0 10k
+RC2 vcc out 1k
+RE e 0 470
+Q1 c1 b1 e qn
+Q2 out b2 e qn
+.model qn NPN(IS=1e-15 BF=100 VAF=50 CJE=2p CJC=1p TF=0.5n)
+.tran 2u 2m
+.end

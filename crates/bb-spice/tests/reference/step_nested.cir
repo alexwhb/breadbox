@@ -1,0 +1,24 @@
+nested .step over two parameters (step, op)
+.param ra=1k rb=1k
+V1 in 0 DC 3
+R1 in mid {ra}
+R2 mid 0 {rb}
+D1 mid 0 dd
+.model dd D(IS=1e-14 N=1.2)
+.step param ra list 1k 3k
+.step param rb list 500 2k 8k
+.op
+.control
+set filetype=ascii
+set appendwrite
+foreach a 1k 3k
+  foreach b 500 2k 8k
+    alterparam ra = $a
+    alterparam rb = $b
+    reset
+    op
+    write golden.raw
+  end
+end
+.endc
+.end

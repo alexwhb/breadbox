@@ -1,0 +1,7 @@
+BJT output characteristics, full Gummel-Poon (nested dc)
+VCE c 0 DC 0
+IB 0 b DC 10u
+Q1 c b 0 qgp
+.model qgp NPN(IS=1e-15 BF=150 NF=1.01 VAF=60 IKF=0.1 ISE=1e-14 NE=1.6 BR=4 NR=1.02 VAR=20 IKR=0.05 ISC=1e-13 NC=1.8 RB=50 IRB=1m RBM=10 RE=0.5 RC=2 CJE=10p VJE=0.8 MJE=0.4 CJC=5p VJC=0.6 MJC=0.35 TF=0.4n TR=10n XTB=1.6)
+.dc VCE 0 5 0.1 IB 10u 50u 10u
+.end

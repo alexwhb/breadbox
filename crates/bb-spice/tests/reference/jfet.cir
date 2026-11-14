@@ -1,0 +1,12 @@
+JFET output curves and self-bias point (dc, op)
+VDS d 0 DC 0
+VGS g 0 DC 0
+J1 d g 0 jmod
+VDD vdd 0 DC 15
+RD vdd d2 2.2k
+J2 d2 0 s2 jmod
+RS s2 0 470
+.model jmod NJF(VTO=-2.5 BETA=1.3m LAMBDA=0.02 RD=5 RS=5 IS=1e-14 CGS=3p CGD=2p B=0.9)
+.op
+.dc VDS 0 10 0.25 VGS -2 0 0.5
+.end

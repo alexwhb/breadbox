@@ -1,0 +1,11 @@
+NMOS common-source amplifier (op, ac)
+VDD vdd 0 DC 5
+VIN in 0 DC 1.6 AC 1
+RS in g 1k
+RD vdd d 4.7k
+M1 d g 0 0 namp L=1u W=20u
+CL d 0 1p
+.model namp NMOS(VTO=0.9 KP=120u LAMBDA=0.03 TOX=15n CGSO=0.3n CGDO=0.3n CGBO=0.1n CBD=20f CBS=20f)
+.op
+.ac dec 10 1k 10g
+.end

@@ -1,0 +1,21 @@
+behavioural sources with functions (dc)
+V1 x 0 DC 0
+R1 x 0 1k
+B1 b1 0 V=abs(v(x))+sqrt(abs(v(x))+1)
+R2 b1 0 1k
+B2 b2 0 V=exp(v(x))-ln(v(x)+3)+log10(v(x)+4)
+R3 b2 0 1k
+B3 b3 0 V=sin(v(x))*cos(v(x)/2)+tanh(v(x))+atan(v(x))
+R4 b3 0 1k
+B4 b4 0 V=v(x) > 0.2 ? min(v(x),0.5) : max(v(x),-0.4)
+R5 b4 0 1k
+B5 0 b5 I=1m*pow(v(x)+2,2)+0.2m*uramp(v(x))
+R6 b5 0 1k
+B6 b6 0 V=pwr(v(x)+2,1.5)*0.3 + sinh(v(x)/2) - cosh(v(x)/3)
+R7 b6 0 1k
+B7 b7 0 V=i(V2)*1k + 0.5*v(b1)
+V2 b1 b1s 0
+R8 b1s 0 2k
+R9 b7 0 1k
+.dc V1 -1 1 0.05
+.end

@@ -1,0 +1,27 @@
+* garden-node (from the Pro screen) with the MCU replaced by sources
+V1    VCC 0  DC 5
+RLDR  VCC A1 {RL}
+R1    A1  0  {R1v}
+XJ1   VCC 0  A0 CAPSOIL vwc=42
+R2    D9  N1 220
+D1    N1  0  LED_AMBER
+R3    D8  N2 330
+D2    N2  0  LED_RED
+* MCU pins: PWM on D9 (490 Hz, 47.8 %), D8 low
+VD9   D9 0 PULSE(0 5 0 1u 1u 0.97449m 2.04082m)
+VD8   D8 0 DC 0
+.subckt CAPSOIL vcc gnd out params: vwc=30
+Bs  s gnd V=v(vcc,gnd)*(0.62 - {vwc}*0.0055)
+Rs  s out 1k
+Cs  out gnd 100n
+.ends
+* GL5528: R = 350k * lux^-0.7
+.param lux=180 RL={350k*pwr(lux,-0.7)}
+.param R1v=10k
+.model LED_AMBER D(Is=1e-19 N=1.8 Rs=6)
+.model LED_RED   D(Is=1e-18 N=1.9 Rs=5)
+.tran 0 10m 0 1u
+.dc   lux 1 10k dec 40
+.step param R1v list 4.7k 10k 22k
+.op
+.end

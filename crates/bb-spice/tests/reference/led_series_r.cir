@@ -1,0 +1,11 @@
+LEDs with series resistors from the garden-node design (dc)
+V1 vcc 0 DC 5
+R2 vcc n1 220
+D1 n1 0 LED_AMBER
+R3 vcc n2 330
+D2 n2 0 LED_RED
+.model LED_AMBER D(Is=1e-19 N=1.8 Rs=6)
+.model LED_RED D(Is=1e-18 N=1.9 Rs=5)
+.op
+.dc V1 0 5 0.05
+.end

@@ -1,0 +1,9 @@
+NMOS low-side switch with gate drive and Meyer capacitances (tran)
+VDD vdd 0 DC 5
+VG g 0 PULSE(0 5 50n 10n 10n 300n 600n)
+RG g gi 100
+RL vdd d 1k
+M1 d gi 0 0 nsw L=2u W=100u
+.model nsw NMOS(LEVEL=1 VTO=1.5 KP=50u GAMMA=0.5 PHI=0.7 LAMBDA=0.02 TOX=20n CGSO=0.5n CGDO=0.5n CJ=0.3m CJSW=0.4n PB=0.8 MJ=0.5 MJSW=0.33)
+.tran 1n 1.2u
+.end

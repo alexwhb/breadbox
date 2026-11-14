@@ -1,0 +1,8 @@
+series RLC step response with Gear integration (tran)
+V1 in 0 PULSE(0 1 10u 1n 1n 1 2)
+R1 in a 50
+L1 a b 1m
+C1 b 0 100n
+.options method=gear
+.tran 0.2u 400u
+.end

@@ -1,0 +1,20 @@
+nested subcircuits with parameters and a global node (op)
+.global vref
+.subckt cell a b params: r=1k
+R1 a mid {r}
+R2 mid b {2*r}
+Rv mid vref {r*5}
+.ends cell
+.subckt pair x y params: rp=1k
+Xa x m cell r={rp}
+Xb m y cell r={rp*2}
+Cdummy m 0 1p
+.ends pair
+VREF vref 0 DC 1.2
+V1 in 0 DC 5
+X1 in out pair rp=2k
+X2 out 0 pair
+.param scale=3
+R9 out 0 {scale*1k}
+.op
+.end

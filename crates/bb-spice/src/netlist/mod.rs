@@ -677,3 +677,8 @@ impl Netlist {
         m
     }
 }
+
+/// Nominal values of top-level `.param`s.
+pub(crate) fn top_params(nl: &Netlist) -> HashMap<String, f64> {
+    parse::top_param_values(&nl.top, nl)
+}

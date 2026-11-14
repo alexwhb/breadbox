@@ -1,0 +1,14 @@
+voltage and current controlled switches with hysteresis (tran)
+VC c 0 PWL(0 0 1m 2 2m 0 3m 2 4m 0)
+S1 a 0 c 0 swh
+V1 v 0 DC 5
+R1 v a 1k
+VI i 0 PWL(0 0 2m 2m 4m 0)
+Rsense i ii 1
+Vs ii 0 DC 0
+W1 b 0 Vs csh
+R2 v b 2k
+.model swh SW(VT=1 VH=0.25 RON=10 ROFF=1meg)
+.model csh CSW(IT=1m IH=0.2m RON=5 ROFF=100k)
+.tran 2u 4m
+.end

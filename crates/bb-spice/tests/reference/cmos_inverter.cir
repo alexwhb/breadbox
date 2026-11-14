@@ -1,0 +1,11 @@
+CMOS inverter transfer curve and transient (dc, tran)
+VDD vdd 0 DC 3.3
+VIN in 0 DC 0 PULSE(0 3.3 1n 0.5n 0.5n 10n 20n)
+MP out in vdd vdd pm L=1u W=20u AD=40p AS=40p PD=24u PS=24u
+MN out in 0 0 nm L=1u W=10u AD=20p AS=20p PD=14u PS=14u
+CL out 0 50f
+.model nm NMOS(VTO=0.7 KP=110u GAMMA=0.4 LAMBDA=0.04 PHI=0.7 TOX=9n CJ=0.5m MJ=0.5 CJSW=0.3n MJSW=0.33 CGSO=0.2n CGDO=0.2n)
+.model pm PMOS(VTO=-0.8 KP=40u GAMMA=0.5 LAMBDA=0.05 PHI=0.7 TOX=9n CJ=0.6m MJ=0.5 CJSW=0.35n MJSW=0.33 CGSO=0.2n CGDO=0.2n)
+.dc VIN 0 3.3 0.05
+.tran 0.02n 40n
+.end

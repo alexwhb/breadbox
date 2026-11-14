@@ -1,0 +1,10 @@
+transformer with coupled inductors (tran, ac)
+V1 in 0 DC 0 SIN(0 1 10k) AC 1
+R1 in p 10
+L1 p 0 1m
+L2 s 0 4m
+K1 L1 L2 0.95
+R2 s 0 200
+.tran 1u 400u
+.ac dec 10 100 1meg
+.end

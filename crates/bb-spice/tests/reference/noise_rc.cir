@@ -1,0 +1,7 @@
+thermal noise of a resistive divider with a capacitor (noise)
+VIN in 0 DC 0 AC 1
+R1 in out 10k
+R2 out 0 10k
+C1 out 0 10n
+.noise v(out) VIN dec 10 10 1meg
+.end

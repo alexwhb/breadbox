@@ -1,0 +1,7 @@
+series RLC step response, underdamped (tran, trapezoidal)
+V1 in 0 PULSE(0 1 10u 1n 1n 1 2)
+R1 in a 20
+L1 a b 1m
+C1 b 0 100n
+.tran 0.2u 400u
+.end

@@ -1,0 +1,31 @@
+Title: nested subcircuits with parameters and a global node (op)
+Date: (golden)
+Command: ngspice-47, Build 
+Plotname: Operating Point
+Flags: real
+No. Variables: 11
+No. Points: 1
+Variables:
+	0	v(vref)	voltage
+	1	v(in)	voltage
+	2	v(x1.xa.mid)	voltage
+	3	v(x1.m)	voltage
+	4	v(x1.xb.mid)	voltage
+	5	v(out)	voltage
+	6	v(x2.xa.mid)	voltage
+	7	v(x2.m)	voltage
+	8	v(x2.xb.mid)	voltage
+	9	i(v1)	current
+	10	i(vref)	current
+Values:
+0		1.2000000000e+00
+	5.0000000000e+00
+	3.9829242728e+00
+	3.0619425276e+00
+	2.1409607823e+00
+	6.7538160470e-01
+	7.1731140906e-01
+	6.0809558142e-01
+	4.9887975378e-01
+	-5.0853786360e-04
+	1.5869072359e-04

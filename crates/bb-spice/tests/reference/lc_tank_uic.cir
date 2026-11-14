@@ -1,0 +1,6 @@
+LC tank ringing from initial conditions (tran uic)
+L1 a 0 100u IC=0
+C1 a 0 1u IC=1
+R1 a 0 1k
+.tran 0.1u 200u uic
+.end

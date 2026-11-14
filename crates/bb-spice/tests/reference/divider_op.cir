@@ -1,0 +1,10 @@
+resistive divider with current source (op, tf)
+V1 in 0 DC 5
+R1 in mid 1k
+R2 mid out 2.2k
+R3 out 0 4.7k
+R4 mid 0 10k
+I1 0 out 100u
+.op
+.tf v(out) V1
+.end

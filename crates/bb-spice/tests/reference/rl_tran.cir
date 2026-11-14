@@ -1,0 +1,7 @@
+RL circuit with pulse (tran)
+V1 in 0 PULSE(0 2 0 1u 1u 50u 100u)
+R1 in a 100
+L1 a out 10m
+R2 out 0 50
+.tran 0.5u 300u
+.end

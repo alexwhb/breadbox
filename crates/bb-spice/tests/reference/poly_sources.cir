@@ -1,0 +1,17 @@
+POLY controlled sources (dc)
+V1 in 0 DC 0
+V2 in2 0 DC 0.5
+R1 in 0 1k
+R2 in2 0 1k
+E1 e 0 POLY(1) in 0 0.1 2 0.5
+Re e 0 1k
+G1 0 g POLY(2) in 0 in2 0 0 1m 2m 0.5m 0.2m 0.1m
+Rg g 0 1k
+Vs in s 0
+Rs s 0 2k
+F1 0 f POLY(1) Vs 0 2 100
+Rf f 0 1k
+H1 h 0 POLY(1) Vs 0.1 1k 1e5
+Rh h 0 1k
+.dc V1 -1 1 0.1
+.end

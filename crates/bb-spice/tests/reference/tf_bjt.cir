@@ -1,0 +1,9 @@
+DC transfer function of an emitter follower (tf)
+VCC vcc 0 DC 10
+VIN in 0 DC 3
+RB in b 10k
+Q1 vcc b e qn
+RE e 0 2k
+.model qn NPN(IS=1e-15 BF=120 VAF=80 RB=50)
+.tf v(e) VIN
+.end

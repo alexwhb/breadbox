@@ -1,0 +1,11 @@
+diode clipper (tran)
+V1 in 0 SIN(0 5 1k)
+R1 in out 1k
+D1 out a dclip
+V2 a 0 DC 2
+D2 b out dclip
+V3 0 b DC 1
+R2 out 0 100k
+.model dclip D(IS=2.52n RS=0.568 N=1.752 CJO=4p M=0.4 TT=20n)
+.tran 5u 3m
+.end

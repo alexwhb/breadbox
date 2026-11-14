@@ -1,0 +1,8 @@
+behavioural source of time (tran)
+B1 a 0 V=2*sin(2*3.14159265*1k*time)*exp(-time/2m) + (time > 1m ? 1 : 0)
+R1 a b 1k
+C1 b 0 100n
+B2 c 0 I=v(b)*1m
+R2 c 0 1k
+.tran 10u 3m
+.end

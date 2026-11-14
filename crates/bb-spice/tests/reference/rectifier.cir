@@ -1,0 +1,8 @@
+half-wave rectifier with filter capacitor (tran)
+V1 in 0 SIN(0 10 50)
+D1 in out d1n4007
+C1 out 0 100u
+R1 out 0 1k
+.model d1n4007 D(IS=7.02767n RS=0.0341512 N=1.80803 EG=1.05743 XTI=5 BV=1000 IBV=0.1 CJO=1e-11 VJ=0.7 M=0.5 FC=0.5 TT=1e-7)
+.tran 50u 60m
+.end

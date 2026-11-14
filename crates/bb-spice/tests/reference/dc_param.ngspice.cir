@@ -1,0 +1,7 @@
+DC sweep over a .param (ngspice equivalent: lux = 10^(v(k)/10) swept linearly in k)
+Vk k 0 DC 0
+V1 vcc 0 DC 5
+BRLDR vcc a1 I=v(vcc,a1)/(350k*pwr(pow(10,v(k)/10),-0.7))
+R1 a1 0 10k
+.dc Vk 0 40 1
+.end

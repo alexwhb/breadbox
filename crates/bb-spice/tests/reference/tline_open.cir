@@ -1,0 +1,7 @@
+transmission line specified by F and NL, open-ended stub (tran)
+V1 in 0 PULSE(0 2 0 1n 1n 20n 60n)
+Rs in a 50
+T1 a 0 b 0 Z0=50 F=100meg NL=0.25
+Rload b 0 1meg
+.tran 0.1n 80n
+.end

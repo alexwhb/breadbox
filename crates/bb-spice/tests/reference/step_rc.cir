@@ -1,0 +1,22 @@
+.step of a parameter over an RC filter (step, tran, op)
+.param rval=1k
+V1 in 0 PULSE(0 1 10u 1u 1u 200u 400u)
+R1 in out {rval}
+C1 out 0 47n
+R2 out 0 10k
+.step param rval list 1k 2.2k 4.7k
+.op
+.tran 1u 400u
+.control
+set filetype=ascii
+set appendwrite
+foreach v 1k 2.2k 4.7k
+  alterparam rval = $v
+  reset
+  op
+  write golden.raw
+  tran 1u 400u
+  write golden.raw
+end
+.endc
+.end

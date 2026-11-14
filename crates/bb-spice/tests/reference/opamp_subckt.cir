@@ -1,0 +1,17 @@
+inverting amplifier with a two-pole op-amp macro-model subcircuit (ac, tran)
+.subckt opamp inp inn out params: gain=100k gbw=1meg
+Rin inp inn 1meg
+E1 n1 0 inp inn {gain}
+R1 n1 n2 1k
+C1 n2 0 {gain/(2*3.14159265*gbw*1k)}
+E2 n3 0 n2 0 1
+R2 n3 out 50
+.ends opamp
+VIN in 0 DC 0 AC 1 SIN(0 0.1 10k)
+R1 in inv 1k
+R2 inv out 10k
+X1 0 inv out opamp gain=200k gbw=3meg
+RL out 0 2k
+.ac dec 10 100 10meg
+.tran 0.5u 300u
+.end

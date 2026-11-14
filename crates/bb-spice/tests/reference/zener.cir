@@ -1,0 +1,7 @@
+zener diode in breakdown (dc)
+V1 in 0 DC 0
+R1 in k 100
+D1 0 k dz
+.model dz D(IS=1e-14 N=1 RS=1 BV=5.1 IBV=5m)
+.dc V1 -2 12 0.1
+.end

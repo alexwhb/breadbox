@@ -1,0 +1,8 @@
+diode forward voltage and resistor tempco vs temperature (dc temp)
+I1 0 a DC 1m
+D1 a 0 dtemp
+I2 0 b DC 1m
+R1 b 0 1k tc1=3m tc2=1e-5
+.model dtemp D(IS=1e-15 N=1.05 EG=1.11 XTI=3 RS=1 CJO=1p)
+.dc temp -40 125 5
+.end

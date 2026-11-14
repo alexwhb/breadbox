@@ -1,0 +1,9 @@
+initial conditions without UIC and nodesets (tran)
+V1 in 0 DC 2
+R1 in a 1k
+C1 a 0 1u
+R2 a 0 1k
+.ic v(a)=0.2
+.nodeset v(a)=0.9
+.tran 10u 5m
+.end

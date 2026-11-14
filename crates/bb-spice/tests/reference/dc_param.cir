@@ -1,0 +1,7 @@
+DC sweep over a .param (LDR divider vs light), logarithmic (dc param)
+.param lux=180 RL={350k*pwr(lux,-0.7)}
+V1 vcc 0 DC 5
+RLDR vcc a1 {RL}
+R1 a1 0 10k
+.dc lux 1 10k dec 10
+.end

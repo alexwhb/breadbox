@@ -1,0 +1,17 @@
+linear controlled sources E F G H (op, dc)
+V1 in 0 DC 1
+R1 in a 1k
+R2 a 0 2k
+E1 e 0 a 0 3
+Re e 0 10k
+G1 0 g a 0 2m
+Rg g 0 1k
+Vsense a s 0
+Rs s 0 500
+F1 0 f Vsense 4
+Rf f 0 1k
+H1 h 0 Vsense 2k
+Rh h 0 10k
+.op
+.dc V1 -2 2 0.25
+.end

@@ -1,0 +1,9 @@
+BJT saturating switch with excess phase and TF bias dependence (tran)
+VCC vcc 0 DC 5
+VIN in 0 PULSE(0 5 20n 5n 5n 200n 400n)
+RB in b 2.2k
+RC vcc c 470
+Q1 c b 0 qsw
+.model qsw NPN(IS=1e-15 BF=100 BR=2 VAF=50 RB=20 RC=1 RE=0.2 CJE=8p VJE=0.75 MJE=0.33 CJC=4p VJC=0.75 MJC=0.33 XCJC=0.8 TF=0.5n XTF=3 VTF=5 ITF=0.2 PTF=20 TR=40n)
+.tran 0.5n 800n
+.end

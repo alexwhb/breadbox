@@ -117,6 +117,8 @@ pub enum Wave {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Source {
     pub dc: Value,
+    /// Whether a DC value was given explicitly (otherwise `.op` uses the waveform at t=0).
+    pub dc_given: bool,
     pub ac_mag: f64,
     pub ac_phase_deg: f64,
     pub wave: Option<Wave>,
@@ -1622,6 +1624,7 @@ impl<'n> Elab<'n> {
         // a waveform's t=0 value is the DC value when no DC value is given
         Ok(Source {
             dc,
+            dc_given: s.dc.is_some(),
             ac_mag,
             ac_phase_deg,
             wave,
