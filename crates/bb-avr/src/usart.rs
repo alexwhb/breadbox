@@ -65,6 +65,8 @@ pub(crate) struct Usart {
     pub gated: bool,
     pub gated_at: u64,
     pub clk_shift: u8,
+    /// Baud generator reload (UBRRnL write / reset): the TX clock grid is anchored here.
+    pub brr_epoch: u64,
 }
 
 impl Usart {
@@ -93,6 +95,7 @@ impl Usart {
             gated: false,
             gated_at: 0,
             clk_shift: 0,
+            brr_epoch: 0,
         }
     }
 
@@ -124,6 +127,7 @@ impl Usart {
             gated: false,
             gated_at: 0,
             clk_shift: 0,
+            brr_epoch: 0,
         };
     }
 
@@ -227,12 +231,23 @@ impl Avr {
         }
         let Some(data) = u.udr_tx.take() else { return };
         u.clk_shift = self.sys.clk_shift;
-        let f = u.build_frame(data, at);
+        // The transmitter is clocked by the free-running baud generator: a frame starts on the
+        // next TX clock edge (frames written back-to-back stay on the same grid).
+        let bit = u.bit_cycles().max(1);
+        let epoch = u.brr_epoch.min(at);
+        let start = epoch + (at - epoch).div_ceil(bit) * bit;
+        let f = u.build_frame(data, start);
         u.tx = Some(f);
         let wf = u.waveform;
-        let pin = u.d.tx;
-        if wf {
+        if wf && start == at {
+            let pin = u.d.tx;
             self.set_override_level(pin, false, at);
+            if let Some(f) = &mut self.usarts[i].tx {
+                f.next_bit = 1;
+            }
+        } else if let Some(f) = &mut self.usarts[i].tx {
+            // Start bit is emitted by the event at `start`.
+            f.next_bit = 0;
         }
         self.usart_update_irq(i);
     }
@@ -546,6 +561,7 @@ impl Avr {
             UReg::BrrL => {
                 let u = &mut self.usarts[i];
                 u.ubrr = (u.ubrr & 0x0F00) | v as u16;
+                u.brr_epoch = now;
             }
             UReg::BrrH => {
                 let u = &mut self.usarts[i];
