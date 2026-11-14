@@ -52,6 +52,8 @@ pub(crate) struct TcpEnd {
     rto: f64,
     rto_gen: u64,
     retries: u32,
+    /// Handshake complete for this end.
+    est: bool,
     pub alive: bool,
     /// The owner has been told the connection is over.
     notified: bool,
@@ -76,23 +78,16 @@ impl TcpEnd {
             rto: INIT_RTO,
             rto_gen: 0,
             retries: 0,
+            est: false,
             alive: true,
             notified: false,
         }
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ConnState {
-    SynSent,
-    SynRcvd,
-    Established,
-}
-
 #[derive(Debug, Clone)]
 pub(crate) struct TcpConn {
     pub ends: [TcpEnd; 2],
-    pub state: ConnState,
     /// Gateway service port, if end 1 is the gateway.
     pub service: Option<u16>,
     /// Station listener that accepts end 1.
@@ -138,7 +133,7 @@ impl Network {
         let mut b = TcpEnd::new(Host::Gateway, dst, 0);
         b.alive = false;
         b.notified = true;
-        self.conns.insert(c, TcpConn { ends: [a, b], state: ConnState::SynSent, service: None, listener: None });
+        self.conns.insert(c, TcpConn { ends: [a, b], service: None, listener: None });
         self.queue_seg(c, 0, Vec::new(), true, false);
         Ok(sock)
     }
@@ -157,7 +152,7 @@ impl Network {
         self.sync(now);
         let s = self.sockets.get(&sock).ok_or(NetError::NoSocket)?;
         let SockKind::Tcp { conn: Some(c), end } = s.kind else { return Err(NetError::NotConnected) };
-        let ok = self.conns.get(&c).is_some_and(|k| k.state == ConnState::Established && !k.ends[end].fin_sent && k.ends[end].alive);
+        let ok = self.conns.get(&c).is_some_and(|k| k.ends[end].est && !k.ends[end].fin_sent && k.ends[end].alive);
         if !ok {
             return Err(NetError::NotConnected);
         }
@@ -178,7 +173,7 @@ impl Network {
         match self.sockets.get(&sock).map(|s| &s.kind) {
             Some(SockKind::Tcp { conn: Some(c), end }) => match self.conns.get(c) {
                 Some(k) if !k.ends[*end].alive => TcpState::Closed,
-                Some(k) if k.state == ConnState::Established => TcpState::Established,
+                Some(k) if k.ends[*end].est => TcpState::Established,
                 Some(_) => TcpState::Connecting,
                 None => TcpState::Closed,
             },
@@ -297,7 +292,7 @@ impl Network {
 
     /// Writes application data from `end` (split into MSS-sized segments).
     pub(crate) fn tcp_write_end(&mut self, c: ConnId, end: usize, data: &[u8]) {
-        let ok = self.conns.get(&c).is_some_and(|k| k.state == ConnState::Established && !k.ends[end].fin_sent && k.ends[end].alive);
+        let ok = self.conns.get(&c).is_some_and(|k| k.ends[end].est && !k.ends[end].fin_sent && k.ends[end].alive);
         if !ok {
             return;
         }
@@ -309,7 +304,7 @@ impl Network {
     /// Graceful close from `end` (FIN after queued data). The owner is not notified.
     pub(crate) fn tcp_close_end(&mut self, c: ConnId, end: usize) {
         let Some(k) = self.conns.get_mut(&c) else { return };
-        let established = k.state == ConnState::Established;
+        let established = k.ends[end].est;
         let e = &mut k.ends[end];
         e.notified = true;
         let sock = e.sock.take();
@@ -359,10 +354,10 @@ impl Network {
     fn kill_end(&mut self, c: ConnId, i: usize, reason: CloseReason) {
         let Some(k) = self.conns.get(&c) else { return };
         let notify = !k.ends[i].notified;
-        let failed = k.state != ConnState::Established && i == 0;
-        let (host, sock, state, service) = (k.ends[i].host, k.ends[i].sock, k.state, k.service);
+        let failed = !k.ends[i].est && i == 0;
+        let (host, sock, est, service) = (k.ends[i].host, k.ends[i].sock, k.ends[i].est, k.service);
         if notify {
-            self.notify_closed(c, i, host, sock, state, service, reason, failed);
+            self.notify_closed(c, i, host, sock, est, service, reason, failed);
         }
         if let Some(k) = self.conns.get_mut(&c) {
             let e = &mut k.ends[i];
@@ -378,7 +373,7 @@ impl Network {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn notify_closed(&mut self, c: ConnId, i: usize, host: Host, sock: Option<SockId>, state: ConnState, service: Option<u16>, reason: CloseReason, failed: bool) {
+    fn notify_closed(&mut self, c: ConnId, i: usize, host: Host, sock: Option<SockId>, est: bool, service: Option<u16>, reason: CloseReason, failed: bool) {
         match host {
             Host::Station(s) => {
                 if let Some(sock) = sock {
@@ -390,7 +385,7 @@ impl Network {
                 }
             }
             Host::Gateway => {
-                if state == ConnState::Established
+                if est
                     && let Some(port) = service
                 {
                     self.service_closed(c, port);
@@ -449,7 +444,6 @@ impl Network {
                 e.rcv_nxt = seq.wrapping_add(1);
                 e.syn_rcvd = true;
                 k.ends[r] = e;
-                k.state = ConnState::SynRcvd;
                 match listener {
                     Listener::Service(port) => k.service = Some(port),
                     Listener::Socket(s) => k.listener = Some(s),
@@ -469,7 +463,7 @@ impl Network {
             return;
         }
         if flags & RST != 0 {
-            let reason = if self.conns[&c].state == ConnState::Established { CloseReason::Reset } else { CloseReason::Refused };
+            let reason = if self.conns[&c].ends[r].est { CloseReason::Reset } else { CloseReason::Refused };
             self.kill_end(c, r, reason);
             return;
         }
@@ -483,7 +477,7 @@ impl Network {
             if !e.syn_rcvd {
                 e.syn_rcvd = true;
                 e.rcv_nxt = seq.wrapping_add(1);
-                k.state = ConnState::Established;
+                e.est = true;
                 if let (Host::Station(s), Some(sock)) = (e.host, e.sock) {
                     self.push_event(s, NetEvent::TcpConnected { sock });
                 }
@@ -588,8 +582,8 @@ impl Network {
         }
         // Passive open completes when our SYN is acknowledged.
         let Some(k) = self.conns.get_mut(&c) else { return };
-        if syn_acked && k.state == ConnState::SynRcvd && r == 1 {
-            k.state = ConnState::Established;
+        if syn_acked && !k.ends[r].est && r == 1 {
+            k.ends[r].est = true;
             let (service, listener, remote, host) = (k.service, k.listener, k.ends[0].addr, k.ends[1].host);
             if let Some(port) = service {
                 self.service_open(c, port);
@@ -623,8 +617,8 @@ impl Network {
         let Some(k) = self.conns.get(&c) else { return };
         let e = &k.ends[r];
         if !e.notified {
-            let (host, sock, state, service) = (e.host, e.sock, k.state, k.service);
-            self.notify_closed(c, r, host, sock, state, service, CloseReason::PeerClosed, false);
+            let (host, sock, est, service) = (e.host, e.sock, e.est, k.service);
+            self.notify_closed(c, r, host, sock, est, service, CloseReason::PeerClosed, false);
         }
         self.tcp_close_end(c, r);
     }

@@ -33,6 +33,7 @@ use thiserror::Error;
 pub use services::{HttpRequest, HttpResponse};
 use services::{DhcpClient, DhcpServer, HttpSession};
 use tcp::TcpConn;
+pub use tcp::TcpState;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct StationId(pub u32);
