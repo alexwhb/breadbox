@@ -80,7 +80,7 @@ fi
 BUILD_ROOT="$ROOT/target/test-firmware-build"
 mkdir -p "$BUILD_ROOT"
 count=0
-for crate in bb-avr bb-firmware; do
+for crate in bb-avr bb-firmware bb-radio; do
     FW="$ROOT/crates/$crate/tests/firmware"
     OUT="$ROOT/crates/$crate/tests/fixtures"
     [ -d "$FW" ] || continue
@@ -114,5 +114,31 @@ for crate in bb-avr bb-firmware; do
         cp "$bp/$name.ino.elf" "$OUT/$name.$board.elf"
         count=$((count + 1))
     done
+done
+# Example projects: examples/<project>/firmware/<MCU ref>/<sketch>/ with a sketch.yaml naming the
+# board (`default_fqbn: arduino:avr:uno`). Host-emulated boards (breadbox:host:*) are compiled by
+# bb-firmware's HostBoard at run time, not here. Fixtures → examples/fixtures/<sketch>.<board>.*
+EX_OUT="$ROOT/examples/fixtures"
+for dir in "$ROOT"/examples/*/firmware/*/*/; do
+    dir="${dir%/}"
+    [ -f "$dir/sketch.yaml" ] || continue
+    name="$(basename "$dir")"
+    if [ -n "$FILTER" ] && [[ "$name" != *"$FILTER"* ]]; then
+        continue
+    fi
+    fqbn="$(sed -n 's/^default_fqbn: *//p' "$dir/sketch.yaml" | tr -d '[:space:]')"
+    case "$fqbn" in
+        arduino:avr:uno) board=uno ;;
+        arduino:avr:nano*) board=nano ;;
+        arduino:avr:mega*) board=mega ;;
+        *) continue ;;
+    esac
+    mkdir -p "$EX_OUT"
+    bp="$BUILD_ROOT/examples-$board-$name"
+    echo "== example: $name ($fqbn)"
+    arduino-cli compile --fqbn "$fqbn" --build-path "$bp" "${PROPS[@]}" "$dir" | grep -E "^(Sketch uses|Global variables)" || true
+    cp "$bp/$name.ino.hex" "$EX_OUT/$name.$board.hex"
+    cp "$bp/$name.ino.elf" "$EX_OUT/$name.$board.elf"
+    count=$((count + 1))
 done
 echo "built $count sketches"

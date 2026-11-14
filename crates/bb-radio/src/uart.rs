@@ -296,6 +296,17 @@ impl UartDecoder {
         self.find_start().is_some()
     }
 
+    /// When the frame in progress will be decided (its last stop-bit sample point). A
+    /// co-simulator stops the transmitting MCU there so the byte reaches the module at its
+    /// exact time and the module's answer is never scheduled in the MCU's past.
+    pub fn next_decision(&self) -> Option<SimTime> {
+        let i = self.find_start()?;
+        let start = self.edges[i].0;
+        let cfg = self.config;
+        let k = cfg.frame_bits() - 1;
+        Some(SimTime::from_ps((start.as_ps() as f64 + cfg.bit_ps() / 2.0 + cfg.bit_ps() * k as f64).round() as u64))
+    }
+
     fn level_at(&self, t: SimTime) -> bool {
         let i = self.edges.partition_point(|&(et, _)| et <= t);
         if i == 0 {
