@@ -687,7 +687,7 @@ mod tests {
         assert_eq!(decode(0x9006, 0, true), Op::Elpm { d: 0 });
         assert_eq!(decode(0x8180, 0, false), Op::LddZ { d: 24, q: 0 });
         assert_eq!(decode(0xA18D, 0, false), Op::LddY { d: 24, q: 37 });
-        assert_eq!(decode(0x9631, 0, false), Op::Adiw { d: 26, k: 1 });
+        assert_eq!(decode(0x9631, 0, false), Op::Adiw { d: 30, k: 1 });
         assert_eq!(decode(0x0110, 0, false), Op::Movw { d: 2, r: 0 });
         assert_eq!(decode(0xFFFF, 0, false), Op::Invalid { opcode: 0xFFFF });
         assert!(is_two_word(0x9100));
