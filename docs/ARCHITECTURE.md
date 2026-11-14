@@ -134,22 +134,87 @@ u8)>`). `bb-radio` never depends on `bb-sim`.
 
 ## 5. MCU boundary (`bb-avr`, `bb-firmware`)
 
-- `Avr::new(Mcu::Atmega328p { f_cpu })`, `load_hex(&str)`, `load_elf(&[u8])`, `reset(cause)`.
-- `run(&mut self, until_cycle: u64, io: &mut dyn AvrIo) -> StopReason` where `StopReason` ∈
-  {ReachedCycle, PinChange, AdcSampleNeeded{channel}, Breakpoint{pc}, Sleep, Watch, Fault}.
-  The emulator stops *early* on externally visible events so `bb-sim` can keep the analog side
-  exact. `AvrIo` supplies pin input levels/voltages and ADC sample voltages on request.
-- Pin state API: per-pin `(ddr, port, pullup_enabled, output_compare_override)` → `PinDrive`
-  conversion lives in `bb-sim` (electrical model) — `bb-avr` reports logical state only.
-- USART bytes are also observable directly (`take_usart_tx()`) for fast-path serial monitoring,
-  while the TX pin still toggles for anything wired to it.
-- Debug: `set_breakpoint(pc)`, `step_instruction()`, registers/SREG/SP/PC, memory read/write,
-  cycle counter, `call_stack()` (best-effort).
-- `bb-firmware`: `Toolchain::detect()/install(progress)`, `compile(sketch_dir, fqbn) ->
-  BuildOutput {elf, hex, size_report, diagnostics}`, `DebugInfo::from_elf()` (line table both
-  directions, functions, globals/locals with simple types), `HostBoard::spawn(...)` for
-  ESP32/Pico API-level emulation (child process, length-prefixed binary pipe protocol, lock-step
-  on time: the child blocks in `delay()/millis()/yield()` until the sim grants time).
+**Core (`bb-avr`).** One `Avr` per MCU; instances are independent, `Send` and `Clone` (a clone
+is a snapshot). Time is counted in oscillator cycles (`cycle()`); `time()` converts to
+`SimTime` exactly at 16 MHz.
+
+- Construction / firmware: `Avr::new(AvrConfig::new(Mcu::Atmega328p))` (`f_cpu`, `stop_on`,
+  `bootloader` hand-off emulation, `vcc` + `bod_level`, start-up delays, `adc_noise_lsb` +
+  `seed`, `shadow_stack`), `Avr::with_mcu(mcu)`. `flash(&FirmwareImage)`, `load_hex(&str)`,
+  `load_elf(&[u8])` program flash (+ `.eeprom`) and reset; EEPROM contents are kept.
+  `reset(ResetCause)`, `set_reset_pin(low)`, `set_vcc(v)` (brown-out / power-on reset),
+  `set_aref(v)`, `set_temperature(°C)`.
+- `run(&mut self, until_cycle: u64, io: &mut dyn AvrIo) -> StopReason`, where `StopReason` ∈
+  {`ReachedCycle`, `PinChange`, `AdcSampleNeeded{pin, cycle}`, `Breakpoint{pc}`,
+  `Watchpoint{addr, write, pc}`, `Break{pc}`, `StepDone`, `Sleep{mode}`, `Reset{cause}`,
+  `Paused`, `Fault{kind, pc}`}. The core stops *early* on externally visible events (which
+  ones: `StopOn`), at the next instruction boundary; it may overshoot `until_cycle` by up to one
+  instruction. Peripherals are event driven (no per-cycle ticking).
+- Outputs: `take_pin_events() -> Vec<PinEvent { cycle, pin, state }>` with exact cycle stamps
+  (`PinState::Input { pullup }` / `Output { high }` — logical only; the Thevenin/pull-up
+  electrical model lives in `bb-sim`). `pin_info(pin) -> PinInfo { ddr, port, pullup, owner,
+  state, level, external }` (`owner`: GPIO / OC timer channel / USART / SPI / TWI).
+- Inputs are *pushed*: `set_pin_input(pin, Some(level))` = resolved line level seen by the
+  input buffer (the co-sim includes the MCU's own drive in its solution; `None` = disconnected,
+  the pin then reads its own drive/pull-up). `schedule_pin_input(pin, level, at_cycle)` applies a
+  change at an exact future cycle (UART frames from devices, test stimuli).
+  `set_pin_voltage(pin, v)` feeds the analog comparator and is the ADC fallback.
+- `AvrIo` (pulled): `adc_sample(pin, cycle) -> Option<f64>` at the exact sample-and-hold
+  instant; `None` falls back to the pushed voltage, else `run` returns `AdcSampleNeeded` —
+  advance the analog side to `cycle`, call `supply_adc_sample(v)`, run again.
+  `spi_exchange(mosi, cycle) -> u8` is the byte-level SPI fast path (with
+  `set_spi_waveform(false)`). `()` implements `AvrIo` with defaults.
+- USART fast paths: `take_usart_tx(n) -> Vec<UsartByte { cycle, data }>` (serial monitor),
+  `usart_inject(n, bytes)` (typed input, correctly timed frames), `set_usart_waveform(n, false)`
+  (TX pin stays idle — use when nothing is wired to TX), `usart_baud(n)`. The TX pin still
+  carries the exact bit waveform by default.
+- Debug: `set_breakpoint(byte_addr)` / `clear_breakpoint` / `breakpoints()`,
+  `set_step_filter(Some(StepFilter::{Instructions(n), OutOfRanges{..}, Return{depth}}))`,
+  `step_instruction(io)`, `request_pause()`, `add_watchpoint(..)`, `call_stack() ->
+  &[CallFrame]` (exact shadow stack maintained by CALL/RET/interrupts), `pc()` (byte address),
+  `sp()`, `sreg()`, `reg(n)`, `rampz()`, `eind()`, `peek/poke(addr)`, `sram()`, `flash_bytes()`,
+  `eeprom()`, `io_registers() -> Vec<(name, addr, value)>`, `instruction_at(pc)` (disassembly
+  via `Display`), `instructions()`, `last_reset_cause()`, `sleep_mode()`, `in_reset()`.
+
+**Toolchain + debugging (`bb-firmware`).**
+
+- `Toolchain::detect()` (env `BREADBOX_ARDUINO_CLI`, `PATH`, Homebrew, app-support dir) →
+  `{ arduino_cli, cli_version, source, avr_core_version, avr_gcc_version, overrides }`;
+  `ready()`, `compiler_label()` ("avr-gcc 7.3.0"). `Toolchain::install(dir, progress)` =
+  `install_cli` (download + extract + private `arduino-cli.yaml`) + `install_core`.
+  `lib_search/lib_install/lib_list`. On Apple Silicon without Rosetta the bundled x86_64
+  avr-gcc/ctags cannot run: `NativeOverrides` (native avr-gcc from Homebrew `osx-cross`, native
+  Arduino ctags under `toolchain/native/`) are passed as build properties automatically.
+- `Toolchain::compile(sketch_dir, &CompileOptions { fqbn, debug, build_dir, warnings,
+  properties }) -> BuildOutput { success, elf, hex, size: Option<SizeReport>, diagnostics,
+  log, build_dir, duration, banner }`. Per-sketch cache dir under
+  `~/Library/Caches/Breadbox/builds` (fast re-verify). `debug: true` builds `-Og -fno-lto` for
+  source-level debugging. `Diagnostic { file, tab, line, column, severity, message, excerpt,
+  context }` is mapped back to the sketch's tabs (`.ino.cpp` `#line` remapping).
+  `SizeReport::arduino_lines()` reproduces arduino-cli's text; `display_lines()` adds thousands
+  separators (design); `problems()` gives the low-memory / too-big messages.
+  `BuildOutput::image()` → `bb_avr::FirmwareImage`; `output_lines()` for the output panel.
+- `DebugInfo::from_elf(&[u8])`: `line_addresses(file, line)` (breakpoint PCs, next line with
+  code), `location(pc)`, `line_ranges(pc)`, `is_statement_start(pc)`, `function_at(pc)`,
+  `function_name(pc)` (DWARF or symbol), `globals`, `symbols`, types, CFI (`cfi_at`, `unwind`),
+  `read_variable(..) -> VarValue { name, type_name, value: Value, address, location }`.
+- `Debugger::new(Arc<DebugInfo>)` is a policy layer over an `Avr` driven by someone else:
+  `add_breakpoint(&mut avr, file, line, HitCondition::{Always, Equals(n), AtLeast(n),
+  Every(n)})`, `on_stop(&mut avr, &StopReason) -> Decision::{Continue, Pause(PauseInfo)}` for
+  *every* stop, `step_over/step_into/step_out/step_instruction/pause`, `call_stack`, `locals(avr,
+  frame)`, `globals`, `read(avr, name, frame)`, `rebind(new_info, avr)` after re-flash,
+  `run_until_pause` for standalone use.
+- `Board::{all, by_id, by_fqbn}`: UNO R3 / Nano / Mega 2560 — FQBN, MCU, Arduino pin ↔ port/bit,
+  ADC channel, PWM timer/channel/frequency, attachInterrupt number, bus pins, LED_BUILTIN,
+  serial ports, header layouts.
+- `HostBoard::spawn(...)` for ESP32/Pico API-level emulation (`MCU-6`) is phase 3.
+
+Co-simulation recipe (`bb-sim`): run each MCU to the quantum end; on `PinChange` read the
+events (exact cycles) and update the analog drives at those times; after solving, push the
+resolved logic levels with `set_pin_input` (Schmitt thresholds are the co-sim's job) and
+comparator voltages with `set_pin_voltage`; schedule device-generated edges you already know
+(UART bits) with `schedule_pin_input`; answer `AdcSampleNeeded` by advancing the analog side to
+`cycle`. Hand every stop to the MCU's `Debugger` (if attached); `Pause` = stop calling `run`.
 
 ## 6. Co-simulation scheduler (`bb-sim`)
 
