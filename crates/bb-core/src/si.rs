@@ -73,12 +73,13 @@ pub fn parse(s: &str) -> Result<f64, ParseError> {
         if c.is_ascii_digit() {
             seen_digit = true;
             end += 1;
-        } else if c == '.' || ((c == '+' || c == '-') && (end == 0 || bytes[end - 1] == b'e')) {
-            end += 1;
-        } else if c == 'e' && seen_digit && end + 1 < bytes.len() && {
-            let n = bytes[end + 1] as char;
-            n.is_ascii_digit() || ((n == '+' || n == '-') && end + 2 < bytes.len() && (bytes[end + 2] as char).is_ascii_digit())
-        } {
+        } else if c == '.'
+            || ((c == '+' || c == '-') && (end == 0 || bytes[end - 1] == b'e'))
+            || (c == 'e' && seen_digit && end + 1 < bytes.len() && {
+                let n = bytes[end + 1] as char;
+                n.is_ascii_digit() || ((n == '+' || n == '-') && end + 2 < bytes.len() && (bytes[end + 2] as char).is_ascii_digit())
+            })
+        {
             end += 1;
         } else {
             break;

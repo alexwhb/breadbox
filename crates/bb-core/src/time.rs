@@ -30,7 +30,7 @@ impl SimTime {
     }
     /// Rounds to the nearest picosecond; negative / NaN inputs clamp to zero.
     pub fn from_secs_f64(s: f64) -> Self {
-        if !(s > 0.0) {
+        if s.is_nan() || s <= 0.0 {
             return SimTime::ZERO;
         }
         let ps = (s * Self::PS_PER_SEC as f64).round();
