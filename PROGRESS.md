@@ -136,8 +136,10 @@ against ngspice-47 golden data (checked in; `scripts/regen-spice-golden.sh` rege
   read back by bb-spice), CSV (mag/phase, dB/phase, re/im), ASCII rawfile write + read.
 - Tests: 47 unit (parser, expressions incl. AD gradients, LU, waveforms, every model's DC
   Jacobian vs finite differences and AC vs transient charge Jacobian, temperature formulas),
-  21 analysis (convergence aids + diagnostics, Schmitt/latch, MC statistics with fixed seed,
-  .step/.dc/.meas, export round trip, design netlist), 48 reference, 16 session, 7 doctests;
+  23 analysis (convergence aids + diagnostics, Schmitt/latch, MC statistics with fixed seed,
+  .step/.dc/.meas, export round trip + `*!bb` directives, design netlist, noise
+  contributions), 48 reference, 16 session, 2 robustness (2 940 netlist mutants + hostile
+  inputs, no panics), 7 doctests;
   2 perf (`cargo test -p bb-spice --release --test perf -- --ignored --nocapture`). clippy
   `-D warnings` + fmt clean.
 
