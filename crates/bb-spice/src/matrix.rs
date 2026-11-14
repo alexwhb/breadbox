@@ -296,6 +296,7 @@ struct SparseLu<T> {
 struct DenseLu<T> {
     a: Vec<T>,
     perm: Vec<usize>,
+    y: Vec<T>,
     valid: bool,
 }
 
@@ -427,6 +428,7 @@ impl<T: Scalar> Matrix<T> {
             _ => DenseLu {
                 a: vec![T::ZERO; n * n],
                 perm: vec![0; n],
+                y: vec![T::ZERO; n],
                 valid: false,
             },
         };
@@ -739,17 +741,16 @@ impl<T: Scalar> Matrix<T> {
                     f.work[f.cols[q] as usize] -= l * u;
                 }
             }
-            let mut rmax = 0.0f64;
             for p in start..end {
                 let c = f.cols[p] as usize;
                 f.lu[p] = f.work[c];
                 f.work[c] = T::ZERO;
-                if p >= d {
-                    rmax = rmax.max(f.lu[p].mag());
-                }
             }
+            // Like Sparse 1.3's spFactor: keep the order unless a pivot (nearly) vanished. A
+            // relative test would need the reduced column, which the row-wise refactorisation
+            // never forms; Newton's convergence test guards accuracy instead.
             let piv = f.lu[d].mag();
-            if !(piv > self.pivot_abs) || piv < 1e-9 * rmax || !piv.is_finite() {
+            if !(piv > self.pivot_abs) || !piv.is_finite() {
                 f.valid = false;
                 return false;
             }
@@ -768,7 +769,10 @@ impl<T: Scalar> Matrix<T> {
         }
         match &mut self.factor {
             Factor::Dense(d) => {
-                let mut y: Vec<T> = (0..n).map(|i| b[d.perm[i] + 1]).collect();
+                let y = &mut d.y;
+                for i in 0..n {
+                    y[i] = b[d.perm[i] + 1];
+                }
                 let a = &d.a;
                 for i in 0..n {
                     let mut s = y[i];
@@ -785,7 +789,7 @@ impl<T: Scalar> Matrix<T> {
                     y[i] = s / a[i * n + i];
                 }
                 b[0] = T::ZERO;
-                b[1..=n].copy_from_slice(&y);
+                b[1..=n].copy_from_slice(y);
             }
             Factor::Sparse(f) => {
                 let f = &mut **f;
@@ -1079,6 +1083,54 @@ mod tests {
         m.solve(&mut b);
         for i in 1..=n {
             assert!((b[i] - x[i]).abs() < 1e-9);
+        }
+    }
+}
+
+#[cfg(test)]
+mod mna_tests {
+    use super::*;
+
+    /// Grid of conductances plus voltage-source branch rows (zero diagonals), like an MNA mesh.
+    #[test]
+    fn mesh_with_voltage_sources() {
+        let k = 32;
+        let nn = k * k;
+        let n = nn + 2;
+        let mut p = Pattern::new(n);
+        let id = |i: usize, j: usize| i * k + j + 1;
+        let mut ent = Vec::new();
+        for i in 0..k {
+            for j in 0..k {
+                let a = id(i, j);
+                ent.push((p.slot(a, a), 0.68));
+                for (ii, jj) in [(i + 1, j), (i, j + 1)] {
+                    if ii < k && jj < k {
+                        let b = id(ii, jj);
+                        ent.push((p.slot(a, a), 0.01));
+                        ent.push((p.slot(b, b), 0.01));
+                        ent.push((p.slot(a, b), -0.01));
+                        ent.push((p.slot(b, a), -0.01));
+                    }
+                }
+            }
+        }
+        for (node, br) in [(id(0, 0), nn + 1), (id(k - 1, k - 1), nn + 2)] {
+            ent.push((p.slot(node, br), 1.0));
+            ent.push((p.slot(br, node), 1.0));
+        }
+        let mut m: Matrix<f64> = Matrix::new(&p);
+        for (s, v) in &ent {
+            m.add(*s, *v);
+        }
+        m.factor().unwrap_or_else(|e| panic!("{e:?}"));
+        let x: Vec<f64> = (0..=n)
+            .map(|i| if i == 0 { 0.0 } else { (i % 5) as f64 })
+            .collect();
+        let mut b = m.mul_vec(&x);
+        m.solve(&mut b);
+        for i in 1..=n {
+            assert!((b[i] - x[i]).abs() < 1e-8, "{i}: {} vs {}", b[i], x[i]);
         }
     }
 }

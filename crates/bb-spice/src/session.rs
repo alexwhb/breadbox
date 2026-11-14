@@ -521,6 +521,29 @@ impl Session {
         if self.s.watches.iter().all(|w| !w.active) {
             return None;
         }
+        // fast path (the common 1 µs quantum): a single segment and no threshold crossed
+        let t_vis = self.s.t;
+        if !self.s.trail.iter().any(|(t, _)| *t > t_vis && *t < t1) {
+            let mut crossed = false;
+            for w in &self.s.watches {
+                if !w.active {
+                    continue;
+                }
+                let v = self.x_at_time(w.node, t1);
+                if (w.high && v < w.lo) || (!w.high && v > w.hi) {
+                    crossed = true;
+                    break;
+                }
+            }
+            if !crossed {
+                for k in 0..self.s.watches.len() {
+                    let n = self.s.watches[k].node;
+                    let v = self.x_at_time(n, t1);
+                    self.s.watches[k].last_v = v;
+                }
+                return None;
+            }
+        }
         // segment end points: trail entries < t1, then (t1, interpolated)
         let end_vals: Vec<f64> = self
             .s

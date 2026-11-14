@@ -5,7 +5,7 @@
 //! collected from sources (and T-line corners), step cut by 8 on Newton failure, and a
 //! "timestep too small" diagnostic naming the unknowns/elements that refused to converge.
 
-use crate::devices::{Dev, Init, Mode};
+use crate::devices::{Dev, Device, Init, Mode};
 use crate::elab::Method;
 use crate::engine::Engine;
 use crate::error::SimError;
@@ -98,7 +98,7 @@ impl Stepper {
             return;
         }
         let from = self.bp_horizon;
-        let to = (from + self.bp_window).min(self.tstop);
+        let to = (from + self.bp_window.max(8.0 * self.tmax)).min(self.tstop);
         let mut v = Vec::new();
         for d in &e.devices {
             d.breakpoints(from, to, &mut v);
@@ -132,28 +132,22 @@ impl Stepper {
     }
 
     fn next_bp(&mut self, e: &Engine) -> f64 {
-        loop {
-            while self
-                .bps
-                .first()
-                .is_some_and(|&b| b <= self.time + self.delmin.max(1e-18))
-            {
-                self.bps.remove(0);
-            }
-            if let Some(&b) = self.bps.first() {
-                return b;
-            }
-            if self.bp_horizon >= self.tstop {
-                return f64::INFINITY;
+        // keep the collection horizon comfortably ahead of the next step
+        if self.bp_horizon < self.tstop && self.time + 4.0 * self.tmax >= self.bp_horizon {
+            if self.bp_horizon < self.time {
+                self.bp_horizon = self.time;
             }
             self.refill_bps(e);
-            if self.bps.is_empty() && self.bp_horizon >= self.tstop {
-                return f64::INFINITY;
-            }
-            if self.bps.is_empty() {
-                // nothing in this window; extend once more next call
-                return self.bp_horizon;
-            }
+        }
+        let cut = self.time + self.delmin.max(1e-18);
+        let past = self.bps.partition_point(|&b| b <= cut);
+        if past > 0 {
+            self.bps.drain(..past);
+        }
+        match self.bps.first() {
+            Some(&b) => b,
+            None if self.tstop.is_finite() => self.tstop,
+            None => f64::INFINITY,
         }
     }
 
@@ -267,6 +261,16 @@ impl Stepper {
                         self.time = e.ck.time;
                         for d in e.devices.iter_mut() {
                             d.accept(&e.ck);
+                        }
+                        // transmission lines report wave-front corners as they appear
+                        let mut dynamic = Vec::new();
+                        for d in &e.devices {
+                            if matches!(d, Device::Tline(_)) {
+                                d.breakpoints(self.time, f64::INFINITY, &mut dynamic);
+                            }
+                        }
+                        for b in dynamic {
+                            self.add_breakpoint(b);
                         }
                         e.rotate_states();
                         let ck = &mut e.ck;
