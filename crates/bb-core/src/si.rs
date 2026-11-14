@@ -30,8 +30,22 @@ pub fn format(value: f64, unit: &str) -> String {
 /// Like [`format`] with an explicit number of significant digits.
 pub fn format_sig(value: f64, unit: &str, sig: usize) -> String {
     if value == 0.0 || !value.is_finite() {
-        let v = if value.is_nan() { "NaN".to_string() } else if value.is_infinite() { if value > 0.0 { "∞".into() } else { "-∞".into() } } else { "0".into() };
-        return if unit.is_empty() { v } else { format!("{v} {unit}") };
+        let v = if value.is_nan() {
+            "NaN".to_string()
+        } else if value.is_infinite() {
+            if value > 0.0 {
+                "∞".into()
+            } else {
+                "-∞".into()
+            }
+        } else {
+            "0".into()
+        };
+        return if unit.is_empty() {
+            v
+        } else {
+            format!("{v} {unit}")
+        };
     }
     let mag = value.abs();
     let (scale, prefix) = PREFIXES
@@ -77,7 +91,10 @@ pub fn parse(s: &str) -> Result<f64, ParseError> {
             || ((c == '+' || c == '-') && (end == 0 || bytes[end - 1] == b'e'))
             || (c == 'e' && seen_digit && end + 1 < bytes.len() && {
                 let n = bytes[end + 1] as char;
-                n.is_ascii_digit() || ((n == '+' || n == '-') && end + 2 < bytes.len() && (bytes[end + 2] as char).is_ascii_digit())
+                n.is_ascii_digit()
+                    || ((n == '+' || n == '-')
+                        && end + 2 < bytes.len()
+                        && (bytes[end + 2] as char).is_ascii_digit())
             })
         {
             end += 1;
@@ -113,9 +130,15 @@ pub fn parse(s: &str) -> Result<f64, ParseError> {
         }
     };
     let after = &rest[consumed..];
-    if consumed > 0 && !after.is_empty() && after.chars().all(|c| c.is_ascii_digit()) && !lower[..end].contains('.') {
+    if consumed > 0
+        && !after.is_empty()
+        && after.chars().all(|c| c.is_ascii_digit())
+        && !lower[..end].contains('.')
+    {
         // 4k7 → 4.7k
-        base = format!("{}.{}", &lower[..end], after).parse().map_err(|_| err())?;
+        base = format!("{}.{}", &lower[..end], after)
+            .parse()
+            .map_err(|_| err())?;
     }
     Ok(base * mult)
 }

@@ -30,13 +30,25 @@ pub struct ErcItem {
     pub net: Option<String>,
 }
 
-fn item(sev: ErcSeverity, code: &str, message: String, parts: Vec<String>, net: Option<&Net>) -> ErcItem {
+fn item(
+    sev: ErcSeverity,
+    code: &str,
+    message: String,
+    parts: Vec<String>,
+    net: Option<&Net>,
+) -> ErcItem {
     ErcItem {
         severity: sev,
         code: code.into(),
         message,
         parts,
-        net: net.map(|n| if n.name == "0" { "GND".into() } else { n.name.clone() }),
+        net: net.map(|n| {
+            if n.name == "0" {
+                "GND".into()
+            } else {
+                n.name.clone()
+            }
+        }),
     }
 }
 
@@ -114,7 +126,10 @@ impl<'a> Ctx<'a> {
     }
     fn is_led(&self, part: &str) -> bool {
         self.def(part).is_some_and(|d| {
-            d.model.spice.iter().any(|l| l.to_ascii_uppercase().contains(" LED_"))
+            d.model
+                .spice
+                .iter()
+                .any(|l| l.to_ascii_uppercase().contains(" LED_"))
         })
     }
     /// Parts that limit current in series (anything with resistance or a transistor).
@@ -125,7 +140,10 @@ impl<'a> Ctx<'a> {
                 && !d.pins.iter().any(|p| p.role == PinRole::PowerOut)
                 && (d.model.spice.iter().any(|l| {
                     let first = l.trim_start_matches(|c| c != '$').to_string();
-                    first.starts_with("$(el:R") || first.starts_with("$(el:Q") || first.starts_with("$(el:M") || first.starts_with("$(el:X")
+                    first.starts_with("$(el:R")
+                        || first.starts_with("$(el:Q")
+                        || first.starts_with("$(el:M")
+                        || first.starts_with("$(el:X")
                 }) || d.model.behaviour.is_some())
         })
     }
@@ -139,7 +157,10 @@ pub fn erc(project: &Project, lib: &Library, conn: &Connectivity) -> Vec<ErcItem
     let real_pins = |net: &Net| -> Vec<TermRef> {
         net.pins
             .iter()
-            .filter(|t| cx.def(&t.part).is_some_and(|d| !d.has_tag("symbol") && !d.has_tag("instrument")))
+            .filter(|t| {
+                cx.def(&t.part)
+                    .is_some_and(|d| !d.has_tag("symbol") && !d.has_tag("instrument"))
+            })
             .cloned()
             .collect()
     };
@@ -196,8 +217,7 @@ pub fn erc(project: &Project, lib: &Library, conn: &Connectivity) -> Vec<ErcItem
             .filter(|t| cx.role(t) == Some(PinRole::Input) && !cx.is_mcu_pin(t))
             .collect();
         let drivers = pins.iter().any(|t| {
-            cx.is_mcu_pin(t)
-                || !matches!(cx.role(t), Some(PinRole::Input) | Some(PinRole::Nc))
+            cx.is_mcu_pin(t) || !matches!(cx.role(t), Some(PinRole::Input) | Some(PinRole::Nc))
         });
         if !inputs.is_empty() && !drivers && net.name != "0" {
             out.push(item(
@@ -205,7 +225,11 @@ pub fn erc(project: &Project, lib: &Library, conn: &Connectivity) -> Vec<ErcItem
                 "floating_input",
                 format!(
                     "{} floats: nothing drives it (add a pull-up/down or connect an output)",
-                    inputs.iter().map(|t| cx.pin_label(t)).collect::<Vec<_>>().join(", ")
+                    inputs
+                        .iter()
+                        .map(|t| cx.pin_label(t))
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 ),
                 inputs.iter().map(|t| t.part.clone()).collect(),
                 Some(net),
@@ -223,7 +247,11 @@ pub fn erc(project: &Project, lib: &Library, conn: &Connectivity) -> Vec<ErcItem
                 "output_conflict",
                 format!(
                     "Outputs fight each other: {}",
-                    outputs.iter().map(|t| cx.pin_label(t)).collect::<Vec<_>>().join(" ↔ ")
+                    outputs
+                        .iter()
+                        .map(|t| cx.pin_label(t))
+                        .collect::<Vec<_>>()
+                        .join(" ↔ ")
                 ),
                 distinct.iter().map(|s| s.to_string()).collect(),
                 Some(net),
@@ -248,8 +276,12 @@ pub fn erc(project: &Project, lib: &Library, conn: &Connectivity) -> Vec<ErcItem
         } else {
             let parts: BTreeSet<&str> = supplies.iter().map(|(t, _)| t.part.as_str()).collect();
             let vmin = supplies.iter().map(|x| x.1).fold(f64::INFINITY, f64::min);
-            let vmax = supplies.iter().map(|x| x.1).fold(f64::NEG_INFINITY, f64::max);
-            if parts.len() > 1 && vmax - vmin > 0.25 {
+            let vmax = supplies
+                .iter()
+                .map(|x| x.1)
+                .fold(f64::NEG_INFINITY, f64::max);
+            let _ = &parts;
+            if supplies.len() > 1 && vmax - vmin > 0.25 {
                 out.push(item(
                     Error,
                     "supply_short",
@@ -273,7 +305,10 @@ pub fn erc(project: &Project, lib: &Library, conn: &Connectivity) -> Vec<ErcItem
             .max_by(|a, b| a.1.total_cmp(&b.1));
         if let Some((src, v)) = vdrive {
             for t in &pins {
-                let maxv = cx.def(&t.part).and_then(|d| d.pin(&t.pin)).and_then(|p| p.max_voltage);
+                let maxv = cx
+                    .def(&t.part)
+                    .and_then(|d| d.pin(&t.pin))
+                    .and_then(|p| p.max_voltage);
                 if let Some(m) = maxv
                     && v > m + 0.05
                     && t.part != src.part
@@ -311,7 +346,8 @@ pub fn erc(project: &Project, lib: &Library, conn: &Connectivity) -> Vec<ErcItem
             let others: Vec<&TermRef> = net.pins.iter().filter(|t| t.part != p.id).collect();
             let hard = net.name == "0"
                 || others.iter().any(|t| {
-                    cx.is_mcu_pin(t) || matches!(cx.role(t), Some(PinRole::PowerOut) | Some(PinRole::Ground))
+                    cx.is_mcu_pin(t)
+                        || matches!(cx.role(t), Some(PinRole::PowerOut) | Some(PinRole::Ground))
                 });
             let limiter = others.iter().any(|t| cx.limits_current(&t.part));
             sides.push((hard, limiter));
@@ -322,7 +358,10 @@ pub fn erc(project: &Project, lib: &Library, conn: &Connectivity) -> Vec<ErcItem
             out.push(item(
                 Error,
                 "led_no_resistor",
-                format!("{} has no current-limiting resistor — it will burn out", p.reference),
+                format!(
+                    "{} has no current-limiting resistor — it will burn out",
+                    p.reference
+                ),
                 vec![p.id.clone()],
                 None,
             ));
@@ -355,7 +394,12 @@ pub fn drc(project: &Project, lib: &Library, conn: &Connectivity) -> Vec<ErcItem
         .collect();
     for p in &project.parts {
         let Some(d) = cx.def(&p.id) else { continue };
-        if p.bench.is_none() || d.bench.sockets || d.bench.off_board || d.bench.hidden || d.pins.is_empty() {
+        if p.bench.is_none()
+            || d.bench.sockets
+            || d.bench.off_board
+            || d.bench.hidden
+            || d.pins.is_empty()
+        {
             continue;
         }
         let ins = inserted.get(p.id.as_str());
@@ -369,12 +413,23 @@ pub fn drc(project: &Project, lib: &Library, conn: &Connectivity) -> Vec<ErcItem
             .collect();
         let n = d.pins.iter().filter(|x| x.role != PinRole::Nc).count();
         if loose.len() == n {
-            out.push(item(Warning, "not_plugged", format!("{} is not plugged into anything", p.reference), vec![p.id.clone()], None));
+            out.push(item(
+                Warning,
+                "not_plugged",
+                format!("{} is not plugged into anything", p.reference),
+                vec![p.id.clone()],
+                None,
+            ));
         } else if !loose.is_empty() {
             out.push(item(
                 Warning,
                 "loose_lead",
-                format!("{}: {} of {} leads not in a hole", p.reference, loose.len(), n),
+                format!(
+                    "{}: {} of {} leads not in a hole",
+                    p.reference,
+                    loose.len(),
+                    n
+                ),
                 vec![p.id.clone()],
                 None,
             ));
@@ -383,7 +438,10 @@ pub fn drc(project: &Project, lib: &Library, conn: &Connectivity) -> Vec<ErcItem
         let pins: Vec<&str> = d.pins.iter().map(|x| x.id.as_str()).collect();
         for i in 0..pins.len() {
             for j in i + 1..pins.len() {
-                let bonded = d.bonds.iter().any(|b| b.iter().any(|x| x == pins[i]) && b.iter().any(|x| x == pins[j]));
+                let bonded = d
+                    .bonds
+                    .iter()
+                    .any(|b| b.iter().any(|x| x == pins[i]) && b.iter().any(|x| x == pins[j]));
                 if !bonded
                     && ins.is_some_and(|s| s.contains(pins[i]) && s.contains(pins[j]))
                     && conn.connected_on_bench((&p.id, pins[i]), (&p.id, pins[j]))
@@ -410,7 +468,15 @@ pub fn drc(project: &Project, lib: &Library, conn: &Connectivity) -> Vec<ErcItem
             out.push(item(
                 Error,
                 "hole_conflict",
-                format!("Two leads in hole {} ({})", hole.pin, parts.iter().map(|p| cx.reference(p)).collect::<Vec<_>>().join(", ")),
+                format!(
+                    "Two leads in hole {} ({})",
+                    hole.pin,
+                    parts
+                        .iter()
+                        .map(|p| cx.reference(p))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
                 parts.iter().map(|s| s.to_string()).collect(),
                 None,
             ));
@@ -421,7 +487,10 @@ pub fn drc(project: &Project, lib: &Library, conn: &Connectivity) -> Vec<ErcItem
 
 /// Status-strip text: `ERC 1 warning`, `ERC clean`, `DRC 2 errors · 1 warning`.
 pub fn summary(prefix: &str, items: &[ErcItem]) -> String {
-    let e = items.iter().filter(|i| i.severity == ErcSeverity::Error).count();
+    let e = items
+        .iter()
+        .filter(|i| i.severity == ErcSeverity::Error)
+        .count();
     let w = items.len() - e;
     let plural = |n: usize, s: &str| format!("{n} {s}{}", if n == 1 { "" } else { "s" });
     match (e, w) {

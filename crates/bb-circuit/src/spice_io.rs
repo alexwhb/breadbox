@@ -37,7 +37,8 @@ pub fn merge_directives(nl: &mut Netlist, directives: &str) -> Result<(), SpiceI
         first_line_is_title: false,
         ..ParseOptions::default()
     };
-    let d = Netlist::parse_with(directives, &opts).map_err(|e| SpiceIoError::Parse(e.to_string()))?;
+    let d =
+        Netlist::parse_with(directives, &opts).map_err(|e| SpiceIoError::Parse(e.to_string()))?;
     nl.analyses.extend(d.analyses);
     nl.steps.extend(d.steps);
     if d.mc.is_some() {
@@ -161,9 +162,10 @@ pub fn import_cir(text: &str, name: &str, lib: &Library) -> Result<Project, Spic
         let id = project.next_id(&format!("{}_", el.name.to_ascii_lowercase()));
         let num = |e: &Option<bb_spice::expr::Expr>| e.as_ref().and_then(|x| x.as_num());
         let (def_id, props): (&str, Vec<(&str, PropValue)>) = match &el.kind {
-            ElemKind::Resistor { value, model: None } if num(value).is_some() => {
-                ("resistor", vec![("resistance", PropValue::Num(num(value).unwrap_or(1e3)))])
-            }
+            ElemKind::Resistor { value, model: None } if num(value).is_some() => (
+                "resistor",
+                vec![("resistance", PropValue::Num(num(value).unwrap_or(1e3)))],
+            ),
             ElemKind::Capacitor { value, model: None } if num(value).is_some() => (
                 "capacitor",
                 vec![("capacitance", PropValue::Num(num(value).unwrap_or(1e-6)))],
@@ -227,7 +229,8 @@ pub fn import_cir(text: &str, name: &str, lib: &Library) -> Result<Project, Spic
             let Some((x, y)) = anchor else { continue };
             if node == "0" || node.eq_ignore_ascii_case("gnd") {
                 gnd_n += 1;
-                let mut g = PartInstance::new(&format!("gnd_{gnd_n}"), &format!("#GND{gnd_n}"), "gnd");
+                let mut g =
+                    PartInstance::new(&format!("gnd_{gnd_n}"), &format!("#GND{gnd_n}"), "gnd");
                 if let Some(gd) = lib.get("gnd")
                     && let Some(s) = gd.schematic.pins.first()
                 {

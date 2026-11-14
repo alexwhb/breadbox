@@ -34,5 +34,5 @@ pub use library::{Library, LibraryError};
 pub use netlist::{BuiltNetlist, NetKind, NetlistMode};
 pub use part::{Category, PartDef, PinDef, PinRole, PropValue};
 pub use project::{
-    Endpoint, InstrumentDef, PartInstance, ProbeDef, Project, ProjectError, Wire, FORMAT,
+    Endpoint, FORMAT, InstrumentDef, PartInstance, ProbeDef, Project, ProjectError, Wire,
 };

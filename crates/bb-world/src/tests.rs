@@ -113,23 +113,25 @@ fn heat_sources_warm_nearby_sensors() {
 
 #[test]
 fn objects_for_distance_motion_and_magnets() {
-    let mut cfg = WorldConfig::default();
-    cfg.objects = vec![
-        ObjectConfig {
-            id: "hand".into(),
-            pos: Pos::new(0.30, 0.0),
-            radius: 0.04,
-            ..Default::default()
-        },
-        ObjectConfig {
-            id: "mag".into(),
-            kind: ObjectKind::Magnet,
-            pos: Pos::new(0.0, 0.02),
-            radius: 0.005,
-            strength_mt: 50.0,
-            ..Default::default()
-        },
-    ];
+    let cfg = WorldConfig {
+        objects: vec![
+            ObjectConfig {
+                id: "hand".into(),
+                pos: Pos::new(0.30, 0.0),
+                radius: 0.04,
+                ..Default::default()
+            },
+            ObjectConfig {
+                id: "mag".into(),
+                kind: ObjectKind::Magnet,
+                pos: Pos::new(0.0, 0.02),
+                radius: 0.005,
+                strength_mt: 50.0,
+                ..Default::default()
+            },
+        ],
+        ..WorldConfig::default()
+    };
     let mut w = World::new(cfg).unwrap();
     let s = Pos::new(0.0, 0.0);
     let d = w.distance(s, 0.0, 15.0, 4.0).unwrap();

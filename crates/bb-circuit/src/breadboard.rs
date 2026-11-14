@@ -23,7 +23,12 @@ pub enum Rail {
 }
 
 impl Rail {
-    pub const ALL: [Rail; 4] = [Rail::TopPlus, Rail::TopMinus, Rail::BottomPlus, Rail::BottomMinus];
+    pub const ALL: [Rail; 4] = [
+        Rail::TopPlus,
+        Rail::TopMinus,
+        Rail::BottomPlus,
+        Rail::BottomMinus,
+    ];
     pub fn prefix(self) -> &'static str {
         match self {
             Rail::TopPlus => "t+",
@@ -112,7 +117,10 @@ pub fn parse_hole(name: &str) -> Option<Hole> {
     if !ROWS.contains(&row) {
         return None;
     }
-    ch.as_str().parse().ok().map(|column| Hole::Strip { row, column })
+    ch.as_str()
+        .parse()
+        .ok()
+        .map(|column| Hole::Strip { row, column })
 }
 
 /// Key of the internal strip a hole belongs to (holes with equal keys are connected).
@@ -168,8 +176,20 @@ mod tests {
         assert_eq!(l.len(), 830);
         let (p4, _) = holes(30, 25);
         assert_eq!(p4.len(), 400);
-        assert_eq!(parse_hole("a1"), Some(Hole::Strip { row: 'a', column: 1 }));
-        assert_eq!(parse_hole("j63"), Some(Hole::Strip { row: 'j', column: 63 }));
+        assert_eq!(
+            parse_hole("a1"),
+            Some(Hole::Strip {
+                row: 'a',
+                column: 1
+            })
+        );
+        assert_eq!(
+            parse_hole("j63"),
+            Some(Hole::Strip {
+                row: 'j',
+                column: 63
+            })
+        );
         assert_eq!(
             parse_hole("t+7"),
             Some(Hole::Rail {

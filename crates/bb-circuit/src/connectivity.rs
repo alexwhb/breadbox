@@ -77,6 +77,9 @@ pub struct Connectivity {
     pub ratsnest_schematic: Vec<RatsLine>,
 }
 
+type Cell = (i64, i64);
+type Point = (f64, f64);
+
 struct Uf {
     p: Vec<usize>,
 }
@@ -117,15 +120,21 @@ impl Terms<'_> {
     fn tref(&self, idx: usize) -> TermRef {
         let pi = self.offset.partition_point(|&o| o <= idx) - 1;
         let def = self.defs[pi].as_ref().expect("terminal of a known part");
-        TermRef::new(&self.project.parts[pi].id, &def.pins[idx - self.offset[pi]].id)
+        TermRef::new(
+            &self.project.parts[pi].id,
+            &def.pins[idx - self.offset[pi]].id,
+        )
     }
 }
 
 impl Connectivity {
     /// Computes nets and ratsnests for a project.
     pub fn compute(project: &Project, lib: &Library) -> Connectivity {
-        let defs: Vec<Option<Arc<PartDef>>> =
-            project.parts.iter().map(|p| lib.get(&p.part).cloned()).collect();
+        let defs: Vec<Option<Arc<PartDef>>> = project
+            .parts
+            .iter()
+            .map(|p| lib.get(&p.part).cloned())
+            .collect();
         let mut offset = Vec::with_capacity(defs.len() + 1);
         let mut n = 0;
         for d in &defs {
@@ -218,7 +227,7 @@ impl Connectivity {
         }
 
         // leads into sockets
-        let mut sockets: HashMap<(i64, i64), Vec<(usize, (f64, f64), usize)>> = HashMap::new();
+        let mut sockets: HashMap<Cell, Vec<(usize, Point, usize)>> = HashMap::new();
         for (pi, p) in project.parts.iter().enumerate() {
             let Some(def) = &terms.defs[pi] else { continue };
             if !def.bench.sockets {
@@ -227,10 +236,11 @@ impl Connectivity {
             if let Some(leads) = Project::bench_leads(def, p) {
                 for (pin, x, y) in leads {
                     if let Some(i) = def.pin_index(&pin) {
-                        sockets
-                            .entry(cell((x, y)))
-                            .or_default()
-                            .push((terms.offset[pi] + i, (x, y), pi));
+                        sockets.entry(cell((x, y))).or_default().push((
+                            terms.offset[pi] + i,
+                            (x, y),
+                            pi,
+                        ));
                     }
                 }
             }
@@ -245,7 +255,9 @@ impl Connectivity {
                 continue;
             };
             for (pin, x, y) in leads {
-                let Some(i) = def.pin_index(&pin) else { continue };
+                let Some(i) = def.pin_index(&pin) else {
+                    continue;
+                };
                 let (cx, cy) = cell((x, y));
                 let mut found = None;
                 'search: for dx in -1..=1 {
@@ -290,6 +302,27 @@ impl Connectivity {
                 }
             }
         }
+        // pins touching pins connect directly
+        {
+            let mut by_cell: HashMap<Cell, Vec<(usize, Point)>> = HashMap::new();
+            for &(t, pos) in &anchors {
+                by_cell.entry(cell(pos)).or_default().push((t, pos));
+            }
+            for &(t, pos) in &anchors {
+                let (cx, cy) = cell(pos);
+                for dx in -1..=1 {
+                    for dy in -1..=1 {
+                        if let Some(v) = by_cell.get(&(cx + dx, cy + dy)) {
+                            for &(u, q) in v {
+                                if u != t && same_point(pos, q) {
+                                    both(t, u, false, true, &mut logical);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         let on_poly = |pt: (f64, f64), pts: &[(f64, f64)]| -> bool {
             if pts.iter().any(|&q| same_point(q, pt)) {
                 return true;
@@ -309,11 +342,7 @@ impl Connectivity {
                     continue;
                 }
                 let ends = [w2.points.first(), w2.points.last()];
-                if ends
-                    .iter()
-                    .flatten()
-                    .any(|&&e| on_poly(e, &w.points))
-                {
+                if ends.iter().flatten().any(|&&e| on_poly(e, &w.points)) {
                     both(slot, n_terms + wj, false, true, &mut logical);
                 }
             }
@@ -505,7 +534,11 @@ impl Connectivity {
                         .unwrap_or(false)
                 });
             if name.is_none() && all_nc {
-                name = Some(format!("{}_{}_NC", reference(&net.pins[0].part), net.pins[0].pin));
+                name = Some(format!(
+                    "{}_{}_NC",
+                    reference(&net.pins[0].part),
+                    net.pins[0].pin
+                ));
             }
             let name = name.unwrap_or_else(|| {
                 if net.pins.is_empty() {
@@ -536,7 +569,9 @@ impl Connectivity {
         let mut bench_pos: HashMap<TermRef, (f64, f64)> = HashMap::new();
         let mut sch_pos: HashMap<TermRef, (f64, f64)> = HashMap::new();
         for p in &project.parts {
-            let Some((d, inst)) = def_of(&p.id) else { continue };
+            let Some((d, inst)) = def_of(&p.id) else {
+                continue;
+            };
             if d.is_breadboard() {
                 continue;
             }

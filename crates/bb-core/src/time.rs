@@ -5,7 +5,9 @@ use std::ops::{Add, AddAssign, Sub};
 /// Simulated time in **picoseconds** since simulation start (u64 ≈ 213 days of range).
 ///
 /// One AVR cycle at 16 MHz is exactly 62 500 ps, so cycle-exact scheduling never rounds.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
+)]
 pub struct SimTime(pub u64);
 
 impl SimTime {
@@ -34,7 +36,11 @@ impl SimTime {
             return SimTime::ZERO;
         }
         let ps = (s * Self::PS_PER_SEC as f64).round();
-        if ps >= u64::MAX as f64 { SimTime::MAX } else { SimTime(ps as u64) }
+        if ps >= u64::MAX as f64 {
+            SimTime::MAX
+        } else {
+            SimTime(ps as u64)
+        }
     }
     /// Time of `cycles` clock cycles at `hz` (exact when `hz` divides 1e12).
     pub fn from_cycles(cycles: u64, hz: u64) -> Self {
@@ -84,7 +90,11 @@ impl fmt::Display for SimTime {
         let s = (total_ms / 1000) % 60;
         let m = (total_ms / 60_000) % 60;
         let h = total_ms / 3_600_000;
-        if h > 0 { write!(f, "{h}:{m:02}:{s:02}.{ms:03}") } else { write!(f, "{m:02}:{s:02}.{ms:03}") }
+        if h > 0 {
+            write!(f, "{h}:{m:02}:{s:02}.{ms:03}")
+        } else {
+            write!(f, "{m:02}:{s:02}.{ms:03}")
+        }
     }
 }
 
@@ -95,7 +105,10 @@ mod tests {
     #[test]
     fn avr_cycle_is_exact() {
         assert_eq!(SimTime::from_cycles(1, 16_000_000).as_ps(), 62_500);
-        assert_eq!(SimTime::from_cycles(16_000_000, 16_000_000), SimTime::from_secs(1));
+        assert_eq!(
+            SimTime::from_cycles(16_000_000, 16_000_000),
+            SimTime::from_secs(1)
+        );
         assert_eq!(SimTime::from_secs(1).to_cycles(16_000_000), 16_000_000);
     }
 

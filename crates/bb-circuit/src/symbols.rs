@@ -67,10 +67,18 @@ pub fn finalize(def: &mut PartDef) {
         g.size = (2.0 * len, 2.0);
     };
     match g.symbol.as_str() {
-        "resistor" | "capacitor" | "capacitor_polarized" | "inductor" | "diode" | "led"
-        | "photoresistor" | "thermistor" | "switch" | "buzzer" | "speaker" | "motor" => {
-            two(g, 3.0)
-        }
+        "resistor"
+        | "capacitor"
+        | "capacitor_polarized"
+        | "inductor"
+        | "diode"
+        | "led"
+        | "photoresistor"
+        | "thermistor"
+        | "switch"
+        | "buzzer"
+        | "speaker"
+        | "motor" => two(g, 3.0),
         "button" => {
             // 4-pin tactile: 1/2 and 3/4 are bonded; draw 1 and 3, put 2/4 on the same anchors
             if ids.len() == 4 {
@@ -165,16 +173,31 @@ pub fn box_layout(def: &mut PartDef) {
     let h = rows + 1.0;
     let mut pins = Vec::new();
     for (i, id) in left.iter().enumerate() {
-        pins.push(p(id, -w / 2.0 - 2.0, -h / 2.0 + 1.0 + i as f64, PinDir::Left));
+        pins.push(p(
+            id,
+            -w / 2.0 - 2.0,
+            -h / 2.0 + 1.0 + i as f64,
+            PinDir::Left,
+        ));
     }
     for (i, id) in right.iter().enumerate() {
-        pins.push(p(id, w / 2.0 + 2.0, -h / 2.0 + 1.0 + i as f64, PinDir::Right));
+        pins.push(p(
+            id,
+            w / 2.0 + 2.0,
+            -h / 2.0 + 1.0 + i as f64,
+            PinDir::Right,
+        ));
     }
     for (i, id) in top.iter().enumerate() {
         pins.push(p(id, -w / 2.0 + 1.0 + i as f64, -h / 2.0 - 2.0, PinDir::Up));
     }
     for (i, id) in bottom.iter().enumerate() {
-        pins.push(p(id, -w / 2.0 + 1.0 + i as f64, h / 2.0 + 2.0, PinDir::Down));
+        pins.push(p(
+            id,
+            -w / 2.0 + 1.0 + i as f64,
+            h / 2.0 + 2.0,
+            PinDir::Down,
+        ));
     }
     // round to the grid so wires meet anchors exactly
     for q in pins.iter_mut() {

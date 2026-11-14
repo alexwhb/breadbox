@@ -57,20 +57,42 @@ pub enum Look {
     None,
     /// Single LED: `brightness` 0…1 is proportional to the average forward current
     /// (1 = rated current); `current` is that average in amps.
-    Led { color: Rgb, brightness: f32, current: f64 },
+    Led {
+        color: Rgb,
+        brightness: f32,
+        current: f64,
+    },
     /// RGB LED: per-channel brightness 0…1.
-    RgbLed { r: f32, g: f32, b: f32 },
+    RgbLed {
+        r: f32,
+        g: f32,
+        b: f32,
+    },
     /// Several lights in a row (LED bar graph, WS2812 strip): colour already scaled by
     /// brightness.
-    LedArray { leds: Vec<Rgb> },
+    LedArray {
+        leds: Vec<Rgb>,
+    },
     /// 7-segment digits: bit 0 = segment a … bit 6 = g, bit 7 = decimal point.
-    SevenSeg { digits: Vec<u8>, brightness: f32 },
+    SevenSeg {
+        digits: Vec<u8>,
+        brightness: f32,
+    },
     /// DC motor / vibration motor.
-    Motor { rpm: f64, angle_deg: f64 },
+    Motor {
+        rpm: f64,
+        angle_deg: f64,
+    },
     /// Hobby servo horn angle (0…180°) and where it is heading.
-    Servo { angle_deg: f64, target_deg: f64 },
+    Servo {
+        angle_deg: f64,
+        target_deg: f64,
+    },
     /// Stepper rotor position.
-    Stepper { steps: i64, angle_deg: f64 },
+    Stepper {
+        steps: i64,
+        angle_deg: f64,
+    },
     /// Character LCD (HD44780): visible text per row plus state.
     TextLcd {
         cols: u8,
@@ -94,19 +116,37 @@ pub enum Look {
         inverted: bool,
         contrast: u8,
     },
-    Relay { energized: bool },
+    Relay {
+        energized: bool,
+    },
     /// Buzzer / speaker: dominant frequency of the drive waveform and loudness 0…1.
-    Buzzer { freq_hz: f64, level: f32 },
+    Buzzer {
+        freq_hz: f64,
+        level: f32,
+    },
     /// Push button, slide switch, tilt switch, reed switch.
-    Switch { on: bool },
+    Switch {
+        on: bool,
+    },
     /// Several switches (DIP switch).
-    Switches { on: Vec<bool> },
+    Switches {
+        on: Vec<bool>,
+    },
     /// Potentiometer / trimmer knob position 0…1.
-    Knob { position: f64 },
+    Knob {
+        position: f64,
+    },
     /// Board status LEDs (power, L on D13, TX, RX).
-    Board { power: bool, l: f32, tx: bool, rx: bool },
+    Board {
+        power: bool,
+        l: f32,
+        tx: bool,
+        rx: bool,
+    },
     /// Generic numeric readout (sensors: "21.0 °C").
-    Readout { text: String },
+    Readout {
+        text: String,
+    },
 }
 
 /// Everything the UI needs to draw one part.

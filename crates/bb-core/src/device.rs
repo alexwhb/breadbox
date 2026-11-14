@@ -134,17 +134,30 @@ pub struct AudioChunk {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum DeviceEvent {
     /// A line for the event log (and the serial monitor's system lines).
-    Log { level: LogLevel, text: String },
+    Log {
+        level: LogLevel,
+        text: String,
+    },
     /// A serial-monitor annotation (`channel` = `"wifi"`, `"mqtt"`, `"ble"`, …; RF-8).
-    Annotation { channel: String, text: String },
+    Annotation {
+        channel: String,
+        text: String,
+    },
     /// The part is overstressed but still working.
-    Stress { reason: String },
+    Stress {
+        reason: String,
+    },
     /// The part was destroyed (stays damaged until repaired).
-    Damage { reason: String },
+    Damage {
+        reason: String,
+    },
     Sound(Sound),
     Audio(AudioChunk),
     /// An electrical-rule finding discovered while running (e.g. 5 V on a 3.3 V input).
-    Erc { warning: bool, message: String },
+    Erc {
+        warning: bool,
+        message: String,
+    },
 }
 
 /// A context that does nothing — for unit-testing devices' pure logic and as a default.

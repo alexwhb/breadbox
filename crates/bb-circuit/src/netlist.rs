@@ -286,7 +286,10 @@ pub fn build(
     let mut infos: HashMap<String, PartInfo> = HashMap::new();
     for p in &project.parts {
         let Some(def) = lib.get(&p.part).cloned() else {
-            warnings.push(format!("{}: unknown part `{}` skipped", p.reference, p.part));
+            warnings.push(format!(
+                "{}: unknown part `{}` skipped",
+                p.reference, p.part
+            ));
             continue;
         };
         let damaged = opts.damaged.get(&p.id).copied();
@@ -410,7 +413,9 @@ pub fn build(
     let mut mcus = Vec::new();
     let mut ports = Vec::new();
     for p in &project.parts {
-        let Some(info) = infos.get(&p.id) else { continue };
+        let Some(info) = infos.get(&p.id) else {
+            continue;
+        };
         let def = &info.def;
         let pin_node = |pin: &str| -> Option<String> {
             def.pin(pin)?;
@@ -559,7 +564,10 @@ pub fn build(
                 );
                 let xname = template::element_name('X', &p.reference, None);
                 if opts.mcu_params {
-                    lines.push(format!("{xname} {vcc} 0 {} {stub} {params}", nodes.join(" ")));
+                    lines.push(format!(
+                        "{xname} {vcc} 0 {} {stub} {params}",
+                        nodes.join(" ")
+                    ));
                 } else {
                     warnings.push(format!("{xname}: {params}"));
                     lines.push(format!("{xname} {vcc} 0 {} {stub}", nodes.join(" ")));
@@ -584,7 +592,9 @@ pub fn build(
                 vcc_net,
                 vcc_node,
                 pins,
-                reset_node: analog_node("RESET").or_else(|| analog_node("EN")).or_else(|| analog_node("RUN")),
+                reset_node: analog_node("RESET")
+                    .or_else(|| analog_node("EN"))
+                    .or_else(|| analog_node("RUN")),
                 aref_node: analog_node("AREF"),
                 firmware: p.firmware.clone(),
             });
@@ -597,7 +607,9 @@ pub fn build(
             let mut dpins = Vec::new();
             for (index, pd) in def.pins.iter().enumerate() {
                 let net = conn.net_of(&p.id, &pd.id);
-                let kind = net.map(|n| net_kind[n.0].clone()).unwrap_or(NetKind::Isolated);
+                let kind = net
+                    .map(|n| net_kind[n.0].clone())
+                    .unwrap_or(NetKind::Isolated);
                 let is_dev = info.dev_pins.contains(&pd.id);
                 let mut port = None;
                 if is_dev
@@ -705,7 +717,8 @@ pub fn build(
 
     // ---- assemble
     for card in &lib_cards {
-        b.cards(card).map_err(|e| NetlistError::Other(format!("model library: {e}")))?;
+        b.cards(card)
+            .map_err(|e| NetlistError::Other(format!("model library: {e}")))?;
     }
     for (reference, lines) in &element_lines {
         b.cards(&lines.join("\n")).map_err(|e| NetlistError::Part {

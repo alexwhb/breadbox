@@ -78,7 +78,14 @@ impl<'a> BenchBuilder<'a> {
     }
 
     /// Places a part anywhere on the bench (boards, off-board items).
-    pub fn offboard(&mut self, def: &str, reference: &str, x: f64, y: f64, props: &[(&str, PropValue)]) -> String {
+    pub fn offboard(
+        &mut self,
+        def: &str,
+        reference: &str,
+        x: f64,
+        y: f64,
+        props: &[(&str, PropValue)],
+    ) -> String {
         let id = self.id_for(reference);
         self.push(PartInstance::new(&id, reference, def).at(x, y), props)
     }
@@ -93,7 +100,11 @@ impl<'a> BenchBuilder<'a> {
         hole_b: &str,
         props: &[(&str, PropValue)],
     ) -> String {
-        let d = self.lib.get(def).unwrap_or_else(|| panic!("no part {def}")).clone();
+        let d = self
+            .lib
+            .get(def)
+            .unwrap_or_else(|| panic!("no part {def}"))
+            .clone();
         let (ax, ay) = self.hole(bb, hole_a);
         let (bx, by) = self.hole(bb, hole_b);
         let mut leads = BTreeMap::new();
@@ -109,6 +120,7 @@ impl<'a> BenchBuilder<'a> {
     }
 
     /// Places a rigid part so that `pin` lands in `hole`, rotated by `rot` degrees.
+    #[allow(clippy::too_many_arguments)]
     pub fn rigid(
         &mut self,
         def: &str,
@@ -119,7 +131,11 @@ impl<'a> BenchBuilder<'a> {
         rot: f64,
         props: &[(&str, PropValue)],
     ) -> String {
-        let d = self.lib.get(def).unwrap_or_else(|| panic!("no part {def}")).clone();
+        let d = self
+            .lib
+            .get(def)
+            .unwrap_or_else(|| panic!("no part {def}"))
+            .clone();
         let lead = d
             .bench
             .leads
@@ -142,7 +158,15 @@ impl<'a> BenchBuilder<'a> {
     }
 
     /// A part that only lives in the schematic (Pro circuits).
-    pub fn schematic_only(&mut self, def: &str, reference: &str, x: f64, y: f64, rot: f64, props: &[(&str, PropValue)]) -> String {
+    pub fn schematic_only(
+        &mut self,
+        def: &str,
+        reference: &str,
+        x: f64,
+        y: f64,
+        rot: f64,
+        props: &[(&str, PropValue)],
+    ) -> String {
         let id = self.id_for(reference);
         let p = PartInstance::new(&id, reference, def).sch(x, y, rot);
         self.push(p, props)
@@ -162,7 +186,13 @@ impl<'a> BenchBuilder<'a> {
     }
 
     /// A pinned live label.
-    pub fn probe(&mut self, label: &str, target: (&str, &str), q: Quantity, at: Option<(f64, f64)>) -> String {
+    pub fn probe(
+        &mut self,
+        label: &str,
+        target: (&str, &str),
+        q: Quantity,
+        at: Option<(f64, f64)>,
+    ) -> String {
         let id = self.project.next_id("probe");
         self.project.probes.push(ProbeDef {
             id: id.clone(),
@@ -199,10 +229,10 @@ impl<'a> BenchBuilder<'a> {
     /// Schematic wire between two absolute points (orthogonal: horizontal then vertical).
     pub fn sch_wire(&mut self, points: Vec<(f64, f64)>) -> String {
         let id = self.project.next_id("sw");
-        self.project
-            .schematic
-            .wires
-            .push(crate::project::SchWire { id: id.clone(), points });
+        self.project.schematic.wires.push(crate::project::SchWire {
+            id: id.clone(),
+            points,
+        });
         id
     }
 
@@ -211,7 +241,11 @@ impl<'a> BenchBuilder<'a> {
         let p = self.project.part(part).expect("part");
         let d = self.lib.get(&p.part).expect("def");
         Project::schematic_pins(d, p)
-            .and_then(|v| v.into_iter().find(|(id, _, _)| id == pin).map(|(_, x, y)| (x, y)))
+            .and_then(|v| {
+                v.into_iter()
+                    .find(|(id, _, _)| id == pin)
+                    .map(|(_, x, y)| (x, y))
+            })
             .unwrap_or_else(|| panic!("{part}.{pin} not placed in schematic"))
     }
 
@@ -223,7 +257,11 @@ impl<'a> BenchBuilder<'a> {
 
 /// Holes of a breadboard column strip (for tests): `strip_holes(5, true)` → a5…e5.
 pub fn strip_holes(column: u32, top: bool) -> Vec<String> {
-    let rows = if top { &breadboard::ROWS[..5] } else { &breadboard::ROWS[5..] };
+    let rows = if top {
+        &breadboard::ROWS[..5]
+    } else {
+        &breadboard::ROWS[5..]
+    };
     rows.iter().map(|r| format!("{r}{column}")).collect()
 }
 

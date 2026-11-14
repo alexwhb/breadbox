@@ -32,26 +32,83 @@ fn every_spec_part_exists() {
     let lib = Library::builtin();
     for id in [
         // PART-1
-        "uno", "nano", "mega", "esp32_devkit", "pico",
+        "uno",
+        "nano",
+        "mega",
+        "esp32_devkit",
+        "pico",
         // PART-2
-        "breadboard_830", "breadboard_400", "jumper_wire", "resistor", "capacitor",
-        "capacitor_electrolytic", "inductor", "push_button", "slide_switch", "dip_switch",
-        "potentiometer", "trimmer", "battery_pack", "usb_power", "barrel_jack",
+        "breadboard_830",
+        "breadboard_400",
+        "jumper_wire",
+        "resistor",
+        "capacitor",
+        "capacitor_electrolytic",
+        "inductor",
+        "push_button",
+        "slide_switch",
+        "dip_switch",
+        "potentiometer",
+        "trimmer",
+        "battery_pack",
+        "usb_power",
+        "barrel_jack",
         // PART-3
-        "led", "rgb_led", "seven_segment", "led_bar", "ws2812_strip", "buzzer_passive",
-        "buzzer_active", "speaker",
+        "led",
+        "rgb_led",
+        "seven_segment",
+        "led_bar",
+        "ws2812_strip",
+        "buzzer_passive",
+        "buzzer_active",
+        "speaker",
         // PART-4
-        "ldr", "capsoil", "soil_resistive", "tmp36", "dht11", "dht22", "ds18b20", "bme280",
-        "hc_sr04", "pir", "tilt_switch", "hall_sensor", "microphone", "thermistor",
+        "ldr",
+        "capsoil",
+        "soil_resistive",
+        "tmp36",
+        "dht11",
+        "dht22",
+        "ds18b20",
+        "bme280",
+        "hc_sr04",
+        "pir",
+        "tilt_switch",
+        "hall_sensor",
+        "microphone",
+        "thermistor",
         // PART-5
-        "diode", "npn", "pnp", "nmos", "opamp_lm358", "opamp_tl072", "opamp_ideal", "ne555",
-        "hc595", "hc00", "hc04", "hc08", "hc32", "uln2003", "l293d", "reg_7805", "ams1117_3v3",
+        "diode",
+        "npn",
+        "pnp",
+        "nmos",
+        "opamp_lm358",
+        "opamp_tl072",
+        "opamp_ideal",
+        "ne555",
+        "hc595",
+        "hc00",
+        "hc04",
+        "hc08",
+        "hc32",
+        "uln2003",
+        "l293d",
+        "reg_7805",
+        "ams1117_3v3",
         "pc817",
         // PART-6
-        "lcd_1602", "lcd_1602_i2c", "ssd1306", "dc_motor", "servo", "stepper_28byj48",
-        "relay_module", "vibration_motor",
+        "lcd_1602",
+        "lcd_1602_i2c",
+        "ssd1306",
+        "dc_motor",
+        "servo",
+        "stepper_28byj48",
+        "relay_module",
+        "vibration_motor",
         // PART-7
-        "esp01", "hm10", "hc05",
+        "esp01",
+        "hm10",
+        "hc05",
     ] {
         assert!(lib.get(id).is_some(), "missing {id}");
     }
@@ -77,11 +134,23 @@ fn uno_header_geometry_and_bonds() {
     // 160 mil gap between D7 and D8
     assert!((lead("D7").x - lead("D8").x - 1.6).abs() < 1e-9);
     assert_eq!(lead("D0").x, 26.0);
-    assert!(uno.bonds.iter().any(|b| b.contains(&"GND".into()) && b.len() == 3));
-    assert!(uno.bonds.iter().any(|b| b == &vec!["A4".to_string(), "SDA".to_string()]));
+    assert!(
+        uno.bonds
+            .iter()
+            .any(|b| b.contains(&"GND".into()) && b.len() == 3)
+    );
+    assert!(
+        uno.bonds
+            .iter()
+            .any(|b| b == &vec!["A4".to_string(), "SDA".to_string()])
+    );
     let mega = lib.get("mega").unwrap();
     assert!(mega.pin("D53").is_some() && mega.pin("A15").is_some());
-    assert!(mega.bonds.iter().any(|b| b.contains(&"D20".into()) && b.contains(&"SDA".into())));
+    assert!(
+        mega.bonds
+            .iter()
+            .any(|b| b.contains(&"D20".into()) && b.contains(&"SDA".into()))
+    );
     let nano = lib.get("nano").unwrap();
     assert!(nano.pin("A7").is_some());
     assert_eq!(nano.bench.leads.len(), 30);
@@ -144,7 +213,9 @@ fn plugin_parts_use_the_same_schema() {
         "model": {"behaviour": "plugin:hx711"},
         "bench": {"layout": "row"}, "schematic": {"symbol": "box"}
     }"#;
-    let ids = lib.add_json(json, "plugin.json", "com.example.hx711").unwrap();
+    let ids = lib
+        .add_json(json, "plugin.json", "com.example.hx711")
+        .unwrap();
     assert_eq!(ids, vec!["hx711"]);
     let p = lib.get("hx711").unwrap();
     assert_eq!(p.bench.leads.len(), 6);

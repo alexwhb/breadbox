@@ -83,7 +83,11 @@ use crate::project::PartInstance;
 #[test]
 fn garden_node_example_connectivity() {
     let lib = lib();
-    let p = Project::load(concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples/garden-node")).unwrap();
+    let p = Project::load(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../examples/garden-node"
+    ))
+    .unwrap();
     assert!(p.check(&lib).is_empty(), "{:?}", p.check(&lib));
     let c = Connectivity::compute(&p, &lib);
     assert!(c.connected(("u1", "D9"), ("r2", "1")));
@@ -100,7 +104,13 @@ fn garden_node_example_connectivity() {
     // the bench is fully wired: no ratsnest
     assert!(c.ratsnest_bench.is_empty(), "{:?}", c.ratsnest_bench);
     // net names follow the MCU pins
-    for (pin, name) in [("A0", "A0"), ("A1", "A1"), ("D9", "D9"), ("D8", "D8"), ("5V", "VCC")] {
+    for (pin, name) in [
+        ("A0", "A0"),
+        ("A1", "A1"),
+        ("D9", "D9"),
+        ("D8", "D8"),
+        ("5V", "VCC"),
+    ] {
         assert_eq!(c.net(c.net_of("u1", pin).unwrap()).name, name);
     }
 }

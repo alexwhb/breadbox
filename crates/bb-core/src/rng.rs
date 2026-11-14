@@ -20,7 +20,12 @@ impl Rng {
     pub fn new(seed: u64) -> Rng {
         let mut x = seed;
         Rng {
-            s: [splitmix(&mut x), splitmix(&mut x), splitmix(&mut x), splitmix(&mut x)],
+            s: [
+                splitmix(&mut x),
+                splitmix(&mut x),
+                splitmix(&mut x),
+                splitmix(&mut x),
+            ],
         }
     }
 
@@ -92,6 +97,9 @@ mod tests {
         let var = sq / n as f64 - mean * mean;
         assert!(mean.abs() < 0.03, "{mean}");
         assert!((var - 1.0).abs() < 0.05, "{var}");
-        assert_ne!(Rng::derive(1, "a").next_u64(), Rng::derive(1, "b").next_u64());
+        assert_ne!(
+            Rng::derive(1, "a").next_u64(),
+            Rng::derive(1, "b").next_u64()
+        );
     }
 }

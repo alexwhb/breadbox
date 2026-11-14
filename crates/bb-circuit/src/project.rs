@@ -568,8 +568,15 @@ impl Project {
                 continue;
             }
             let big = def.schematic.size.1 > 10.0;
-            let step_y = if big { def.schematic.size.1 + 8.0 } else { 12.0 };
-            p.schematic = Some(Placement::at(start + col as f64 * 16.0, 10.0 + row as f64 * step_y));
+            let step_y = if big {
+                def.schematic.size.1 + 8.0
+            } else {
+                12.0
+            };
+            p.schematic = Some(Placement::at(
+                start + col as f64 * 16.0,
+                10.0 + row as f64 * step_y,
+            ));
             row += 1;
             if row >= 6 || big {
                 row = 0;

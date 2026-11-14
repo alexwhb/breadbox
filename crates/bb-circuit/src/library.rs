@@ -19,10 +19,16 @@ pub enum LibraryError {
 const BUILTIN: [(&str, &str); 7] = [
     ("boards.json", include_str!("../parts/boards.json")),
     ("blocks.json", include_str!("../parts/blocks.json")),
-    ("light_sound.json", include_str!("../parts/light_sound.json")),
+    (
+        "light_sound.json",
+        include_str!("../parts/light_sound.json"),
+    ),
     ("sensors.json", include_str!("../parts/sensors.json")),
     ("semis.json", include_str!("../parts/semis.json")),
-    ("displays_motors.json", include_str!("../parts/displays_motors.json")),
+    (
+        "displays_motors.json",
+        include_str!("../parts/displays_motors.json"),
+    ),
     ("misc.json", include_str!("../parts/misc.json")),
 ];
 
@@ -310,7 +316,7 @@ fn layout_leads(layout: &Layout, ids: &[String]) -> Result<(Vec<Lead>, (f64, f64
         ),
         Layout::Dip(spacing) => {
             let n = ids.len();
-            if n % 2 != 0 {
+            if !n.is_multiple_of(2) {
                 return Err("DIP layout needs an even pin count".into());
             }
             let half = n / 2;
@@ -417,7 +423,10 @@ pub fn board_layout(id: &str) -> Result<BoardGeom, String> {
                         .extend([pid.clone(), bp.name.clone()]);
                 }
             }
-            groups.entry(base.to_string()).or_default().push(pid.clone());
+            groups
+                .entry(base.to_string())
+                .or_default()
+                .push(pid.clone());
             let (x, y) = if pairs {
                 (x0 + (i % 2) as f64, y0 + (i / 2) as f64)
             } else {
@@ -456,7 +465,10 @@ pub fn validate(def: &PartDef) -> Result<(), String> {
             return Err(format!("duplicate pin `{}`", p.id));
         }
         if p.id.contains(')') || p.id.contains(':') || p.id.contains(char::is_whitespace) {
-            return Err(format!("pin id `{}` may not contain `)`, `:` or spaces", p.id));
+            return Err(format!(
+                "pin id `{}` may not contain `)`, `:` or spaces",
+                p.id
+            ));
         }
     }
     for l in &def.bench.leads {
@@ -513,7 +525,10 @@ pub fn validate(def: &PartDef) -> Result<(), String> {
     }
     for r in &def.ratings {
         if !elements.contains(&r.element) {
-            return Err(format!("rating names element `{}` not in the model", r.element));
+            return Err(format!(
+                "rating names element `{}` not in the model",
+                r.element
+            ));
         }
         if let ValueRef::Expr(e) = &r.limit {
             let k = e.trim().trim_start_matches("$(").trim_end_matches(')');
@@ -538,7 +553,10 @@ pub fn validate(def: &PartDef) -> Result<(), String> {
         if let PropKind::Choice { default, options } = &p.kind
             && !options.iter().any(|o| &o.value == default)
         {
-            return Err(format!("property `{}` default `{default}` is not an option", p.key));
+            return Err(format!(
+                "property `{}` default `{default}` is not an option",
+                p.key
+            ));
         }
     }
     Ok(())

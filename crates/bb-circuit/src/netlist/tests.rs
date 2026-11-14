@@ -12,7 +12,11 @@ fn op(s: &mut Session) {
 }
 
 fn example(name: &str) -> Project {
-    Project::load(format!("{}/../../examples/{name}", env!("CARGO_MANIFEST_DIR"))).unwrap()
+    Project::load(format!(
+        "{}/../../examples/{name}",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .unwrap()
 }
 
 #[test]
@@ -23,8 +27,22 @@ fn usb_resistor_led_matches_hand_written_spice() {
     let bb = b.breadboard("breadboard_400", 10.0, 0.0);
     b.wire((&ps, "VBUS"), (&bb, "t+1"), "red");
     b.wire((&ps, "GND"), (&bb, "t-1"), "black");
-    let r1 = b.two_lead("resistor", "R1", &bb, "a3", "a7", &[("resistance", PropValue::Num(220.0))]);
-    let d1 = b.two_lead("led", "D1", &bb, "b7", "b8", &[("color", PropValue::Text("red".into()))]);
+    let r1 = b.two_lead(
+        "resistor",
+        "R1",
+        &bb,
+        "a3",
+        "a7",
+        &[("resistance", PropValue::Num(220.0))],
+    );
+    let d1 = b.two_lead(
+        "led",
+        "D1",
+        &bb,
+        "b7",
+        "b8",
+        &[("color", PropValue::Text("red".into()))],
+    );
     b.wire((&bb, "c3"), (&bb, "t+3"), "red");
     b.wire((&bb, "c8"), (&bb, "t-5"), "black");
     let built = build(&b.project, &lib, &NetlistOptions::bench()).unwrap();
@@ -57,7 +75,12 @@ D1 a 0 LED_RED
     let r = built.ratings.iter().find(|r| r.part == r1).unwrap();
     assert_eq!(r.kind, RatingKind::Power);
     assert_eq!(r.limit, 0.25);
-    assert!(built.ratings.iter().any(|r| r.part == d1 && r.element == "d1"));
+    assert!(
+        built
+            .ratings
+            .iter()
+            .any(|r| r.part == d1 && r.element == "d1")
+    );
 }
 
 #[test]
@@ -80,7 +103,12 @@ fn garden_node_bench_netlist() {
     assert_eq!(mcu.vcc_node.as_deref(), Some("VCC"));
     let d9 = mcu.pins.iter().find(|x| x.pin == "D9").unwrap();
     assert!(d9.hi_port.is_some() && d9.lo_port.is_some());
-    assert!(built.ports.iter().any(|x| x.part == "j1" && x.pin == "VCC" && x.role == PortRole::Device));
+    assert!(
+        built
+            .ports
+            .iter()
+            .any(|x| x.part == "j1" && x.pin == "VCC" && x.role == PortRole::Device)
+    );
     assert!(built.mcus[0].firmware.is_some());
     // devices: capsoil (pot1), LEDs, LDR, resistors (thermal), board power, ESP-01
     let behaviours: Vec<&str> = built.devices.iter().map(|d| d.behaviour.as_str()).collect();
@@ -98,7 +126,11 @@ fn garden_node_bench_netlist() {
     let r_ldr = 350e3 * 180f64.powf(-0.7);
     assert!((vcc - 4.98).abs() < 0.01, "{vcc}");
     assert!((a1 - vcc * 10e3 / (10e3 + r_ldr)).abs() < 1e-4, "{a1}");
-    assert!((s.voltage("3v3").unwrap() - 3.3).abs() < 0.02, "{:?}", s.voltage("3v3"));
+    assert!(
+        (s.voltage("3v3").unwrap() - 3.3).abs() < 0.02,
+        "{:?}",
+        s.voltage("3v3")
+    );
     // driving D9 high lights D1 through R2
     let port = s.port(d9.hi_port.as_ref().unwrap()).unwrap();
     s.set_port(port, bb_core::PinDrive::Thevenin { v: 0.0, r: 25.0 });
@@ -111,14 +143,28 @@ fn garden_node_bench_netlist() {
 fn garden_node_pro_netlist_matches_the_design() {
     let lib = lib();
     let p = example("garden-node");
-    let shown = crate::spice_io::pro_display_text(&p, &lib).unwrap().to_ascii_lowercase();
-    assert!(shown.contains("xu1 vcc 0 a0 a1 d3 d2 d9 d8 atmega328p"), "{shown}");
+    let shown = crate::spice_io::pro_display_text(&p, &lib)
+        .unwrap()
+        .to_ascii_lowercase();
+    assert!(
+        shown.contains("xu1 vcc 0 a0 a1 d3 d2 d9 d8 atmega328p"),
+        "{shown}"
+    );
     assert!(shown.contains("fw=garden-node.hex"), "{shown}");
     let text = crate::spice_io::export_cir(&p, &lib).unwrap();
     let lower = text.to_ascii_lowercase();
-    assert!(lower.contains("* breadbox mcu xu1: fw=garden-node.hex"), "{text}");
-    assert!(lower.contains("xj1 vcc 0 a0 capsoil params: vwc=42"), "{text}");
-    assert!(lower.contains("r2 d9 n1 220") && lower.contains("d1 n1 0 led_amber"), "{text}");
+    assert!(
+        lower.contains("* breadbox mcu xu1: fw=garden-node.hex"),
+        "{text}"
+    );
+    assert!(
+        lower.contains("xj1 vcc 0 a0 capsoil params: vwc=42"),
+        "{text}"
+    );
+    assert!(
+        lower.contains("r2 d9 n1 220") && lower.contains("d1 n1 0 led_amber"),
+        "{text}"
+    );
     assert!(lower.contains("rldr1 vcc a1"), "{text}");
     assert!(lower.contains("led_amber"), "{text}");
     assert!(lower.contains(".subckt capsoil"), "{text}");
@@ -165,13 +211,21 @@ fn floating_nodes_get_shunts_and_damage_changes_the_netlist() {
 fn every_example_netlists_and_solves() {
     let lib = lib();
     for name in [
-        "garden-node", "blink", "night-light", "thermometer", "ble-button", "servo-sweep",
-        "esp32-weather", "555-astable", "rc-filter-bode", "op-amp-amplifier",
+        "garden-node",
+        "blink",
+        "night-light",
+        "thermometer",
+        "ble-button",
+        "servo-sweep",
+        "esp32-weather",
+        "555-astable",
+        "rc-filter-bode",
+        "op-amp-amplifier",
     ] {
         let p = example(name);
         assert!(p.check(&lib).is_empty(), "{name}: {:?}", p.check(&lib));
-        let built = build(&p, &lib, &NetlistOptions::bench())
-            .unwrap_or_else(|e| panic!("{name}: {e}"));
+        let built =
+            build(&p, &lib, &NetlistOptions::bench()).unwrap_or_else(|e| panic!("{name}: {e}"));
         let mut s = built
             .session(SessionOptions::default())
             .unwrap_or_else(|e| panic!("{name}: {e}"));

@@ -23,32 +23,46 @@ pub enum EditError {
     Invalid(String),
 }
 
-/// One invertible change: `before` → `after` (`None` = absent).
+/// One invertible change: `before` → `after` (`None` = absent). List ops remember where a
+/// removed object was (`index`) so undo puts it back in the same place.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[allow(clippy::large_enum_variant)]
 pub enum Op {
     Part {
         before: Option<PartInstance>,
         after: Option<PartInstance>,
+        #[serde(default)]
+        index: Option<usize>,
     },
     Wire {
         before: Option<Wire>,
         after: Option<Wire>,
+        #[serde(default)]
+        index: Option<usize>,
     },
     SchWire {
         before: Option<SchWire>,
         after: Option<SchWire>,
+        #[serde(default)]
+        index: Option<usize>,
     },
     Label {
         before: Option<NetLabel>,
         after: Option<NetLabel>,
+        #[serde(default)]
+        index: Option<usize>,
     },
     Probe {
         before: Option<ProbeDef>,
         after: Option<ProbeDef>,
+        #[serde(default)]
+        index: Option<usize>,
     },
     Instrument {
         before: Option<InstrumentDef>,
         after: Option<InstrumentDef>,
+        #[serde(default)]
+        index: Option<usize>,
     },
     World {
         before: Box<WorldConfig>,
@@ -63,29 +77,59 @@ pub enum Op {
 impl Op {
     fn inverse(&self) -> Op {
         match self.clone() {
-            Op::Part { before, after } => Op::Part {
+            Op::Part {
+                before,
+                after,
+                index,
+            } => Op::Part {
                 before: after,
                 after: before,
+                index,
             },
-            Op::Wire { before, after } => Op::Wire {
+            Op::Wire {
+                before,
+                after,
+                index,
+            } => Op::Wire {
                 before: after,
                 after: before,
+                index,
             },
-            Op::SchWire { before, after } => Op::SchWire {
+            Op::SchWire {
+                before,
+                after,
+                index,
+            } => Op::SchWire {
                 before: after,
                 after: before,
+                index,
             },
-            Op::Label { before, after } => Op::Label {
+            Op::Label {
+                before,
+                after,
+                index,
+            } => Op::Label {
                 before: after,
                 after: before,
+                index,
             },
-            Op::Probe { before, after } => Op::Probe {
+            Op::Probe {
+                before,
+                after,
+                index,
+            } => Op::Probe {
                 before: after,
                 after: before,
+                index,
             },
-            Op::Instrument { before, after } => Op::Instrument {
+            Op::Instrument {
+                before,
+                after,
+                index,
+            } => Op::Instrument {
                 before: after,
                 after: before,
+                index,
             },
             Op::World { before, after } => Op::World {
                 before: after,
@@ -101,7 +145,7 @@ impl Op {
     /// Does this op change the electrical circuit (vs. only positions / cosmetics)?
     pub fn is_electrical(&self) -> bool {
         match self {
-            Op::Part { before, after } => match (before, after) {
+            Op::Part { before, after, .. } => match (before, after) {
                 (Some(a), Some(b)) => {
                     a.part != b.part
                         || a.props != b.props
@@ -112,7 +156,7 @@ impl Op {
                 }
                 _ => true,
             },
-            Op::Wire { before, after } => match (before, after) {
+            Op::Wire { before, after, .. } => match (before, after) {
                 (Some(a), Some(b)) => a.a != b.a || a.b != b.b,
                 _ => true,
             },
@@ -127,6 +171,7 @@ fn replace<T: Clone>(
     id_of: impl Fn(&T) -> &str,
     before: &Option<T>,
     after: &Option<T>,
+    index: &mut Option<usize>,
 ) {
     let key = before
         .as_ref()
@@ -138,20 +183,48 @@ fn replace<T: Clone>(
         (Some(i), Some(a)) => v[i] = a.clone(),
         (Some(i), None) => {
             v.remove(i);
+            *index = Some(i);
         }
-        (None, Some(a)) => v.push(a.clone()),
+        (None, Some(a)) => match *index {
+            Some(i) if i <= v.len() => v.insert(i, a.clone()),
+            _ => v.push(a.clone()),
+        },
         (None, None) => {}
     }
 }
 
-fn apply_op(p: &mut Project, op: &Op) {
+fn apply_op(p: &mut Project, op: &mut Op) {
     match op {
-        Op::Part { before, after } => replace(&mut p.parts, |x| &x.id, before, after),
-        Op::Wire { before, after } => replace(&mut p.wires, |x| &x.id, before, after),
-        Op::SchWire { before, after } => replace(&mut p.schematic.wires, |x| &x.id, before, after),
-        Op::Label { before, after } => replace(&mut p.schematic.labels, |x| &x.id, before, after),
-        Op::Probe { before, after } => replace(&mut p.probes, |x| &x.id, before, after),
-        Op::Instrument { before, after } => replace(&mut p.instruments, |x| &x.id, before, after),
+        Op::Part {
+            before,
+            after,
+            index,
+        } => replace(&mut p.parts, |x| &x.id, before, after, index),
+        Op::Wire {
+            before,
+            after,
+            index,
+        } => replace(&mut p.wires, |x| &x.id, before, after, index),
+        Op::SchWire {
+            before,
+            after,
+            index,
+        } => replace(&mut p.schematic.wires, |x| &x.id, before, after, index),
+        Op::Label {
+            before,
+            after,
+            index,
+        } => replace(&mut p.schematic.labels, |x| &x.id, before, after, index),
+        Op::Probe {
+            before,
+            after,
+            index,
+        } => replace(&mut p.probes, |x| &x.id, before, after, index),
+        Op::Instrument {
+            before,
+            after,
+            index,
+        } => replace(&mut p.instruments, |x| &x.id, before, after, index),
         Op::World { after, .. } => p.world = (**after).clone(),
         Op::Meta { after, .. } => {
             p.name = after.0.clone();
@@ -210,11 +283,11 @@ impl Editor {
     }
 
     /// Applies a transaction and records it for undo.
-    pub fn commit(&mut self, tx: Transaction) {
+    pub fn commit(&mut self, mut tx: Transaction) {
         if tx.ops.is_empty() {
             return;
         }
-        for op in &tx.ops {
+        for op in tx.ops.iter_mut() {
             apply_op(&mut self.project, op);
         }
         self.bump(tx.is_electrical());
@@ -243,11 +316,13 @@ impl Editor {
     }
 
     pub fn undo(&mut self) -> bool {
-        let Some(tx) = self.undo.pop() else {
+        let Some(mut tx) = self.undo.pop() else {
             return false;
         };
-        for op in tx.ops.iter().rev() {
-            apply_op(&mut self.project, &op.inverse());
+        for op in tx.ops.iter_mut().rev() {
+            let mut inv = op.inverse();
+            apply_op(&mut self.project, &mut inv);
+            *op = inv.inverse();
         }
         self.bump(tx.is_electrical());
         self.redo.push(tx);
@@ -255,10 +330,10 @@ impl Editor {
     }
 
     pub fn redo(&mut self) -> bool {
-        let Some(tx) = self.redo.pop() else {
+        let Some(mut tx) = self.redo.pop() else {
             return false;
         };
-        for op in &tx.ops {
+        for op in tx.ops.iter_mut() {
             apply_op(&mut self.project, op);
         }
         self.bump(tx.is_electrical());
@@ -291,6 +366,7 @@ impl Editor {
         tx.ops.push(Op::Part {
             before: None,
             after: Some(inst),
+            index: None,
         });
         self.commit(tx);
         Ok(id)
@@ -319,6 +395,7 @@ impl Editor {
                 tx.ops.push(Op::Wire {
                     before: Some(w.clone()),
                     after: None,
+                    index: None,
                 });
             }
         }
@@ -327,6 +404,7 @@ impl Editor {
                 tx.ops.push(Op::Probe {
                     before: Some(pr.clone()),
                     after: None,
+                    index: None,
                 });
             }
         }
@@ -335,6 +413,7 @@ impl Editor {
                 tx.ops.push(Op::Part {
                     before: Some(p.clone()),
                     after: None,
+                    index: None,
                 });
             }
         }
@@ -359,6 +438,7 @@ impl Editor {
             tx.ops.push(Op::Part {
                 before: Some(before),
                 after: Some(after),
+                index: None,
             });
             self.commit(tx);
         }
@@ -384,6 +464,7 @@ impl Editor {
             tx.ops.push(Op::Part {
                 before: Some(before),
                 after: Some(after),
+                index: None,
             });
         }
         self.commit(tx);
@@ -462,6 +543,7 @@ impl Editor {
                 color,
                 bends: Vec::new(),
             }),
+            index: None,
         });
         self.commit(tx);
         id
@@ -478,6 +560,7 @@ impl Editor {
         tx.ops.push(Op::Wire {
             before: Some(before),
             after: Some(wire),
+            index: None,
         });
         self.commit(tx);
         Ok(())
@@ -492,6 +575,7 @@ impl Editor {
                 id: id.clone(),
                 points,
             }),
+            index: None,
         });
         self.commit(tx);
         id
@@ -509,12 +593,18 @@ impl Editor {
                 y,
                 rot: 0.0,
             }),
+            index: None,
         });
         self.commit(tx);
         id
     }
 
-    pub fn add_probe(&mut self, label: &str, target: Endpoint, q: crate::project::Quantity) -> String {
+    pub fn add_probe(
+        &mut self,
+        label: &str,
+        target: Endpoint,
+        q: crate::project::Quantity,
+    ) -> String {
         let id = self.project.next_id("probe");
         let mut tx = Transaction::new("Add probe");
         tx.ops.push(Op::Probe {
@@ -526,6 +616,7 @@ impl Editor {
                 quantity: q,
                 pinned: None,
             }),
+            index: None,
         });
         self.commit(tx);
         id
@@ -537,6 +628,7 @@ impl Editor {
             tx.ops.push(Op::Probe {
                 before: Some(p),
                 after: None,
+                index: None,
             });
             self.commit(tx);
         }
@@ -615,6 +707,7 @@ impl Editor {
             tx.ops.push(Op::Part {
                 before: None,
                 after: Some(np),
+                index: None,
             });
         }
         for w in &clip.wires {
@@ -637,6 +730,7 @@ impl Editor {
             tx.ops.push(Op::Wire {
                 before: None,
                 after: Some(nw),
+                index: None,
             });
         }
         self.commit(tx);
@@ -658,8 +752,12 @@ pub fn auto_color(project: &Project, lib: &Library, a: &Endpoint, b: &Endpoint) 
         let Endpoint::Pin { part, pin } = e else {
             continue;
         };
-        let Some(p) = project.part(part) else { continue };
-        let Some(def) = lib.get(&p.part) else { continue };
+        let Some(p) = project.part(part) else {
+            continue;
+        };
+        let Some(def) = lib.get(&p.part) else {
+            continue;
+        };
         if def.is_breadboard() {
             if pin.starts_with("t+") || pin.starts_with("b+") {
                 color = "red";

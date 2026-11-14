@@ -95,7 +95,10 @@ impl PinRole {
         matches!(self, PinRole::PowerOut)
     }
     pub fn drives(self) -> bool {
-        matches!(self, PinRole::Output | PinRole::AnalogOut | PinRole::PowerOut)
+        matches!(
+            self,
+            PinRole::Output | PinRole::AnalogOut | PinRole::PowerOut
+        )
     }
 }
 
@@ -468,7 +471,10 @@ pub enum Layout {
     Dip(f64),
     /// Two rows of pins `spacing` apart: first list along y=0, second along y=spacing, both
     /// left to right (dev boards, modules).
-    Rows { spacing: f64, rows: Vec<Vec<String>> },
+    Rows {
+        spacing: f64,
+        rows: Vec<Vec<String>>,
+    },
     /// Board headers generated from a board id (`"uno"`, `"mega"`).
     Board(String),
     /// A breadboard (`columns`, rail holes per rail).

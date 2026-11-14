@@ -631,7 +631,9 @@ impl WorldView for World {
             "world.noise" => self.cfg.noise as u8 as f64,
             _ => {
                 if let Some((obj, field)) = key.split_once('.') {
-                    if let Some((i, p)) = self.cfg.pots.iter().enumerate().find(|(_, p)| p.id == obj) {
+                    if let Some((i, p)) =
+                        self.cfg.pots.iter().enumerate().find(|(_, p)| p.id == obj)
+                    {
                         return match field {
                             "vwc" => Some(p.vwc),
                             "evaporation" => Some(p.evaporation as u8 as f64),

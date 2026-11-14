@@ -11,9 +11,7 @@ mod time;
 pub mod visual;
 pub mod world;
 
-pub use device::{
-    AudioChunk, Device, DeviceCtx, DeviceEvent, LogLevel, NullCtx, Sound, UserInput,
-};
+pub use device::{AudioChunk, Device, DeviceCtx, DeviceEvent, LogLevel, NullCtx, Sound, UserInput};
 pub use rng::Rng;
 pub use time::SimTime;
 pub use visual::{Health, Look, Rgb, VisualState};

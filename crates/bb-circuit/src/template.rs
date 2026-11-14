@@ -51,7 +51,13 @@ pub fn element_spec_name(spec: &str, reference: &str) -> String {
 pub fn sanitize(s: &str) -> String {
     let mut out: String = s
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect();
     if out.is_empty() {
         out.push('x');
@@ -105,7 +111,9 @@ fn condition<'l>(line: &'l str, ctx: &TemplateCtx) -> Result<Option<&'l str>, St
     } else {
         return Err(format!("bad template condition `{cond}`"));
     };
-    let have = (ctx.prop)(key.trim()).map(|v| v.as_text()).unwrap_or_default();
+    let have = (ctx.prop)(key.trim())
+        .map(|v| v.as_text())
+        .unwrap_or_default();
     let eq = have.eq_ignore_ascii_case(want.trim());
     Ok(if eq != neg { Some(body) } else { None })
 }
@@ -141,7 +149,9 @@ fn expand_one(inner: &str, ctx: &TemplateCtx) -> Result<String, String> {
     if let Some((kind, arg)) = inner.split_once(':') {
         return match kind {
             "el" => Ok(element_spec_name(arg, ctx.reference)),
-            "n" => Ok(format!("{}_{}", sanitize(ctx.reference), sanitize(arg)).to_ascii_lowercase()),
+            "n" => {
+                Ok(format!("{}_{}", sanitize(ctx.reference), sanitize(arg)).to_ascii_lowercase())
+            }
             "ext" => Ok(format!("ext(\"{}.{}\")", ctx.reference, arg)),
             "prop" => (ctx.prop)(arg)
                 .map(|v| fmt_value(&v))
@@ -198,9 +208,14 @@ mod tests {
         )
         .unwrap()
         .unwrap();
-        assert_eq!(s, "RLDR1 vcc a1 {350000*pwr(max(ext(\"LDR1.lux\"),0.01),-0.7)}");
         assert_eq!(
-            expand("$(el:R:esr) $(n:mid) $(gnd) 1", &ctx).unwrap().unwrap(),
+            s,
+            "RLDR1 vcc a1 {350000*pwr(max(ext(\"LDR1.lux\"),0.01),-0.7)}"
+        );
+        assert_eq!(
+            expand("$(el:R:esr) $(n:mid) $(gnd) 1", &ctx)
+                .unwrap()
+                .unwrap(),
             "RLDR1_esr ldr1_mid 0 1"
         );
         assert_eq!(expand("?common=cathode: D1 a b x", &ctx).unwrap(), None);
@@ -213,6 +228,9 @@ mod tests {
         assert_eq!(element_name('R', "R1", None), "R1");
         assert_eq!(element_name('X', "J1", None), "XJ1");
         assert_eq!(placeholders("$(el:R) $(1) $(n:x) $(2)"), vec!["1", "2"]);
-        assert_eq!(element_specs("$(el:R) $(el:V:sense) x"), vec!["R", "V:sense"]);
+        assert_eq!(
+            element_specs("$(el:R) $(el:V:sense) x"),
+            vec!["R", "V:sense"]
+        );
     }
 }
