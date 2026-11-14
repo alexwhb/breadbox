@@ -7,3 +7,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+bb-core = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
