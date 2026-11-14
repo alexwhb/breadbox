@@ -20,6 +20,9 @@ pub(crate) enum MOp {
     SdaBit(bool),
     SclLow,
     SclRelease,
+    /// First half of the SCL low phase (data hold time after SCL falls).
+    WaitHold,
+    /// Rest of the SCL low phase (data setup time before SCL rises).
     WaitLow,
     WaitHigh,
     WaitSclHigh,
@@ -199,6 +202,9 @@ impl Avr {
 
     // ------------------------------------------------------------------ master sequencer
 
+    // SDA only changes in the middle of an SCL-low phase (hold = first half, setup = second
+    // half), never in the same cycle as an SCL edge, except for START/STOP conditions.
+
     fn twi_queue_start(&mut self, repeated: bool) {
         use MOp::*;
         let q = &mut self.twi.mops;
@@ -212,10 +218,18 @@ impl Avr {
                 SdaLow,
                 WaitHigh,
                 SclLow,
+                WaitHold,
                 Done(DoneKind::RepStart),
             ]);
         } else {
-            q.extend([WaitBusFree, SdaLow, WaitHigh, SclLow, Done(DoneKind::Start)]);
+            q.extend([
+                WaitBusFree,
+                SdaLow,
+                WaitHigh,
+                SclLow,
+                WaitHold,
+                Done(DoneKind::Start),
+            ]);
         }
     }
 
@@ -245,6 +259,7 @@ impl Avr {
                 WaitHigh,
                 SampleArb(b),
                 SclLow,
+                WaitHold,
             ]);
         }
         self.twi.mops.extend([
@@ -255,6 +270,7 @@ impl Avr {
             WaitHigh,
             SampleAck,
             SclLow,
+            WaitHold,
             Done(kind),
         ]);
     }
@@ -271,6 +287,7 @@ impl Avr {
                 WaitHigh,
                 SampleBit,
                 SclLow,
+                WaitHold,
             ]);
         }
         self.twi.m_ack = ack;
@@ -281,6 +298,7 @@ impl Avr {
             WaitSclHigh,
             WaitHigh,
             SclLow,
+            WaitHold,
             SdaRelease,
             Done(DoneKind::DataRx),
         ]);
@@ -297,10 +315,15 @@ impl Avr {
         let scl_pin = self.v.twi_scl;
         while let Some(op) = self.twi.mops.front().copied() {
             match op {
-                MOp::WaitLow | MOp::WaitHigh => {
+                MOp::WaitHold | MOp::WaitLow | MOp::WaitHigh => {
                     if self.twi.m_wait_until == NEVER {
-                        self.twi.m_wait_until =
-                            now + if op == MOp::WaitLow { low_t } else { high_t };
+                        let hold = low_t / 2;
+                        self.twi.m_wait_until = now
+                            + match op {
+                                MOp::WaitHold => hold,
+                                MOp::WaitLow => low_t - hold,
+                                _ => high_t,
+                            };
                     }
                     if now < self.twi.m_wait_until {
                         break;
