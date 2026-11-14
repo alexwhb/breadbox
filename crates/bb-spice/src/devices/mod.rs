@@ -580,3 +580,6 @@ impl ParamMap {
             .collect()
     }
 }
+
+#[cfg(test)]
+mod tests;

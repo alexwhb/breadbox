@@ -453,7 +453,12 @@ impl Results {
     pub fn family(&self, kind: PlotKind) -> Vec<(&Run, &Plot)> {
         self.runs
             .iter()
-            .filter_map(|r| r.plot(kind).map(|p| (r, p)))
+            .flat_map(|r| {
+                r.plots
+                    .iter()
+                    .filter(move |p| p.kind == kind)
+                    .map(move |p| (r, p))
+            })
             .collect()
     }
     /// Operating-point value from the first run.
