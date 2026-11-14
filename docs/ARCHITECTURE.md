@@ -116,21 +116,67 @@ u8)>`). `bb-radio` never depends on `bb-sim`.
 
 ## 4. Analog engine boundary (`bb-spice`)
 
-- Parsing/analyses for Pro mode: `Netlist::parse(text) -> Result<Netlist, ParseError>`;
-  `Netlist::run(&Analysis) -> Results` (op, dc, tran, ac, step, mc, temp, noise, tf, meas).
-- Programmatic construction (used by `bb-circuit`'s netlister): `CircuitBuilder` adding nodes
-  and elements with typed parameters — no string round-trip needed — plus `to_spice_text()`.
-- **External variables**: `ext("name")` usable in any `{expr}` (element values, B-sources,
-  model params). `Session::set_ext(name, v)` re-evaluates dependents before the next solve. This
-  is how world/sensor state reaches the circuit (LDR `R = {350k*pwr(max(ext("J2.lux"),0.01),-0.7)}`).
-- **Ports**: `Session::add_port(node_p, node_n) -> PortId` (programmatic element; exported to
-  `.cir` as an equivalent V+R / I source with a comment) and `Session::set_port(id, PinDrive)`.
-  Ports are how MCU pins and device outputs drive nets.
-- **Incremental transient** (`Session`): `advance_to(t_secs)` with adaptive internal steps and
-  forced breakpoints; `voltage(node)`, `current(element|port)`; `watch(node, lo, hi)` returning
-  crossing times found inside steps (interpolated); `snapshot()/restore()`; `op()` re-solve at
-  current time after discontinuous changes. Purely resistive circuits must short-circuit
-  (no time stepping when nothing changes) so 1× real-time is cheap.
+The rustdoc of `bb_spice` (crate root, `Session`, `CircuitBuilder`) is the detailed reference;
+this is the contract other crates code against.
+
+- **Parsing / Pro mode**: `Netlist::parse(text)`, `Netlist::parse_file(path)` or
+  `Netlist::parse_with(text, &ParseOptions { file_name, base_dir, loader, libraries, .. })` →
+  `Result<Netlist, ParseError>` (`ParseError { span: Span { file, line, col }, msg }`).
+  `Netlist::run() -> Result<Results, SimError>` runs every analysis in the netlist with
+  `.step`, multi-value `.temp`, `.mc` and `.meas`; `run_with(&RunOptions { cancel:
+  Some(CancelToken), progress, skip_mc, only })` is the background-thread variant;
+  `run_analysis(&Analysis) -> Vec<Plot>` runs one analysis at nominal parameters.
+  `Results { runs: Vec<Run { label, params, plots, measures }>, mc: Option<McResults>, stats,
+  warnings }`; `Results::summary()` is the Pro header (`3 steps · 1.82 s solve · 0 convergence
+  warnings`). A `Plot { kind: PlotKind, vectors }` holds named vectors (`v(out)`, `i(v1)`,
+  `i(d1)`, scale first: `time` / `frequency` / sweep); `McResults::distribution("v(a1)")` gives
+  `Distribution { mean, sigma, min, max, values }` + `histogram(bins)`. Export: `export::
+  {plot_to_csv, results_to_raw, read_raw}` and `Netlist::to_spice_text()` (ngspice-compatible).
+- **Breadbox parts as subcircuits** (`XJ1 VCC 0 A0 CAPSOIL vwc=42`, `XU1 … ATMEGA328P
+  fw=garden-node.hex`): an unknown subcircuit is a clean `SimError::Elaboration` naming the
+  instance and line. Register parts with `Netlist::add_library(Arc<Library>)`
+  (`Library::parse(".subckt …")`) or `CircuitBuilder::library`. Non-numeric instance parameters
+  are kept in `netlist::ElemKind::Subckt { text_params, .. }` for bb-sim.
+- **Programmatic construction** (bb-circuit's netlister): `CircuitBuilder::new(title)` with
+  typed methods — `resistor(name, a, b, ohms)`, `resistor_expr(.., "expr")`, `capacitor`,
+  `inductor`, `coupling`, `vsource(name, p, n, SourceDef::dc(5.0).ac(1.0, 0.0).pulse(..))`,
+  `isource`, `vcvs/vccs/cccs/ccvs`, `bsource_v/bsource_i`, `switch/cswitch`, `diode/bjt/
+  mosfet/jfet` + `model(name, ModelKind::D, &[("is", 1e-14)])`, `tline`, `subckt`,
+  `port(name, p, n, PinDrive) -> PortId`, `param`, `option`, `ic`, `temp`, `analysis`,
+  `library`, `build() -> Netlist`. Element methods return an `ElementRef` for extra instance
+  parameters (`.param("w", 10e-6)`, `.param("tol", 0.05)` for Monte Carlo). Names get their
+  SPICE letter prepended when missing (`resistor("LDR", …)` → `rldr`).
+- **External variables**: `ext("name")` works in any expression — element values, model
+  parameters, subcircuit parameters, B sources. `Session::set_ext(name, v)` re-evaluates only the
+  dependents before the next solve (LDR: `R = {350k*pwr(max(ext("J2.lux"),0.01),-0.7)}`).
+  Exported `.cir` text freezes them as `.param ext_j2_lux=<value>`.
+- **Ports**: declared with `CircuitBuilder::port` (ids in creation order, element `p<name>`)
+  or `Session::add_port(name, node_p, node_n) -> Result<PortId>` (after the start this rebuilds
+  the solver, keeping node voltages and charges). `Session::set_port(id, PinDrive)`:
+  `HighZ` = 1 pS leak, `Thevenin`/`Pull` = Norton equivalent, `Current { i }` = injected into
+  `node_p`. Exported to `.cir` as an equivalent V+R / I source after a `* breadbox port` comment.
+- **Incremental transient** — `Session::new(&Netlist)` or `Session::with_options(&nl,
+  SessionOptions { max_step, method })`:
+  - `advance_to(t) -> Result<Vec<Crossing>, SimError>`; `advance_until_crossing(t)` stops at
+    the first crossing (`time()` then equals its time) so the host can react exactly there.
+  - Reads at the visible time: `node(name) -> Option<NodeId>`, `voltage(name)`,
+    `voltage_at(NodeId)` (fast path), `current(element)` (into the first terminal; collector /
+    drain for transistors; SPICE sign for V sources), `port_current(PortId)` (sourced into the
+    node).
+  - `watch(node, lo, hi) -> WatchId` (Schmitt); `Crossing { watch, time, rising }` with times
+    interpolated inside solver steps, delivered in time order.
+  - Inputs — `set_port`, `set_ext`, `set_param(element, param, v)`, `set_temperature(°C)` —
+    take effect at the current time. `op()` re-solves immediately (capacitor voltages and
+    inductor currents continuous, algebraic nodes jump) and returns crossings caused by the
+    jump; otherwise the next `advance_to` does it. Drive changes made before the first advance
+    are an event at t = 0 after the initial operating point (which uses the declared drives).
+  - `snapshot() -> SessionSnapshot` / `restore(&snap)`; `stats()`; `to_spice_text()` (drives and
+    ext values frozen).
+  - Cost model: the solver steps ahead with LTE-controlled steps and interpolates, so a 1 µs
+    quantum is ~free; an input change inside a step rewinds by interpolation and re-solves.
+    Circuits without C/L or time-dependent sources are solved only when an input changes;
+    settled reactive circuits stop stepping. Measured: 490 Hz PWM into RC + LED at 1 µs
+    quanta runs 26× faster than real time.
 
 ## 5. MCU boundary (`bb-avr`, `bb-firmware`)
 

@@ -18,8 +18,9 @@
 //! b.diode("1", "a1", "0", "led_amber");
 //! b.analysis(Analysis::Op);
 //! let nl = b.build();
-//! assert!(nl.to_spice_text().contains("Rldr vcc a1 {350000*pwr(max(ext_j2_lux,0.01),-0.7)}")
-//!     || nl.to_spice_text().to_lowercase().contains("rldr vcc a1"));
+//! let text = nl.to_spice_text();
+//! assert!(text.contains("rldr vcc a1 {350000*pwr(max(ext_j2_lux,0.01),-0.7)}"));
+//! assert!(text.contains(".param ext_j2_lux=0"));
 //! ```
 
 use crate::error::{SimError, Span};

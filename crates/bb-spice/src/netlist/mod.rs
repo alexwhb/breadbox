@@ -137,7 +137,7 @@ pub enum ElemKind {
         area: Option<Expr>,
         off: bool,
     },
-    /// Q (nodes c b e [s]); `model` resolved during parsing heuristics
+    /// Q (nodes c b e, optional substrate); the substrate/model ambiguity is resolved while parsing
     Bjt {
         model: String,
         area: Option<Expr>,

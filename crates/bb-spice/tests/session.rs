@@ -332,3 +332,33 @@ fn time_dependent_sources_and_tline_in_a_session() {
         "{first_rise} vs {expect}"
     );
 }
+
+#[test]
+fn ext_in_model_parameters_and_temperature() {
+    let nl = Netlist::parse(
+        "t\nI1 0 a DC 1m\nD1 a 0 dx\n.model dx D(IS={1e-15*ext(\"scale\")} N=1)\n.end\n",
+    )
+    .unwrap();
+    let mut s = Session::new(&nl).unwrap();
+    s.set_ext("scale", 1.0);
+    s.advance_to(1e-6).unwrap();
+    let v1 = s.voltage("a").unwrap();
+    s.set_ext("scale", 10.0);
+    s.advance_to(2e-6).unwrap();
+    let v2 = s.voltage("a").unwrap();
+    // ten times the saturation current: V drops by Vt·ln(10)
+    let vt = 1.380649e-23 * 300.15 / 1.602176634e-19;
+    assert!(((v1 - v2) - vt * 10f64.ln()).abs() < 1e-4, "{v1} {v2}");
+    s.set_temperature(77.0);
+    s.advance_to(3e-6).unwrap();
+    assert!(s.voltage("a").unwrap() < v2);
+}
+
+#[test]
+fn engine_types_are_send() {
+    fn assert_send<T: Send + 'static>() {}
+    assert_send::<Session>();
+    assert_send::<Netlist>();
+    assert_send::<bb_spice::Results>();
+    assert_send::<bb_spice::SessionSnapshot>();
+}

@@ -219,7 +219,7 @@ pub enum ElementKind {
         params: InstParams,
         off: bool,
     },
-    /// nodes c b e [s]
+    /// nodes c b e (substrate optional)
     Bjt {
         model: Arc<ModelInst>,
         params: InstParams,
