@@ -410,6 +410,19 @@ impl Toolchain {
         url: &str,
         progress: &mut dyn FnMut(InstallProgress),
     ) -> Result<Toolchain, FirmwareError> {
+        let mut tc = Toolchain::install_cli(dir, url, progress)?;
+        tc.install_core(progress)?;
+        progress(InstallProgress::Done);
+        Ok(tc)
+    }
+
+    /// First half of the install: fetch + extract arduino-cli into `dir/bin` and write its
+    /// private `arduino-cli.yaml` (data in `dir/data`). No core yet.
+    pub fn install_cli(
+        dir: &Path,
+        url: &str,
+        progress: &mut dyn FnMut(InstallProgress),
+    ) -> Result<Toolchain, FirmwareError> {
         std::fs::create_dir_all(dir.join("bin")).map_err(|e| FirmwareError::Io(e.to_string()))?;
         progress(InstallProgress::Step("Downloading arduino-cli".into()));
         let archive = fetch(url, progress)?;
@@ -429,10 +442,7 @@ impl Toolchain {
             search_homebrew: false,
             app_dir: dir.to_path_buf(),
         };
-        let mut tc = Toolchain::detect_with(&opts)?;
-        tc.install_core(progress)?;
-        progress(InstallProgress::Done);
-        Ok(tc)
+        Toolchain::detect_with(&opts)
     }
 
     // ------------------------------------------------------------------ libraries
@@ -642,7 +652,7 @@ mod tests {
         ));
         let data = b"#!/bin/sh\necho hi\n";
         let mut header = tar::Header::new_gnu();
-        header.set_size(data.len() as u64);
+        header.set_size(1);
         header.set_mode(0o644);
         header.set_cksum();
         builder

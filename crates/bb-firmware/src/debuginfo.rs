@@ -1122,7 +1122,7 @@ impl DebugInfo {
                         } else if n == 8 {
                             Value::Float(f64::from_bits(raw))
                         } else {
-                            Value::Unavailable(format!("{name}"))
+                            Value::Unavailable(name.to_string())
                         }
                     }
                     0x05 => {

@@ -133,19 +133,14 @@ impl SizeReport {
         })
     }
 
+    /// Integer percentage, truncated like arduino-cli.
     pub fn program_percent(&self) -> usize {
-        if self.program_max == 0 {
-            0
-        } else {
-            self.program * 100 / self.program_max
-        }
+        (self.program * 100)
+            .checked_div(self.program_max)
+            .unwrap_or(0)
     }
     pub fn data_percent(&self) -> usize {
-        if self.data_max == 0 {
-            0
-        } else {
-            self.data * 100 / self.data_max
-        }
+        (self.data * 100).checked_div(self.data_max).unwrap_or(0)
     }
 
     /// Exactly what arduino-cli prints.
