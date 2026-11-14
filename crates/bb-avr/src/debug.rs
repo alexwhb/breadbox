@@ -131,17 +131,14 @@ impl Avr {
                 max_depth,
                 ignore_interrupts_from,
             }) => {
-                if ranges.iter().any(|&(a, b)| pc >= a && pc < b) {
-                    false
-                } else if max_depth.is_some_and(|m| depth > m) {
-                    false
-                } else if let Some(base) = *ignore_interrupts_from {
-                    !shadow[base.min(depth)..]
+                let inside = ranges.iter().any(|&(a, b)| pc >= a && pc < b);
+                let too_deep = max_depth.is_some_and(|m| depth > m);
+                let in_isr = ignore_interrupts_from.is_some_and(|base| {
+                    shadow[base.min(depth)..]
                         .iter()
                         .any(|f| matches!(f.kind, crate::CallKind::Interrupt { .. }))
-                } else {
-                    true
-                }
+                });
+                !inside && !too_deep && !in_isr
             }
             Some(StepFilter::Return { depth: d }) => depth < *d,
         };

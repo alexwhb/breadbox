@@ -385,7 +385,7 @@ fn analog_comparator_edges_and_output() {
     avr.set_pin_voltage(ain1, 2.0);
     let mut ev = Vec::new();
     run_for(&mut avr, ms(5.0), &mut ev);
-    let mut ask = |avr: &mut Avr| -> String {
+    let ask = |avr: &mut Avr| -> String {
         avr.usart_inject(0, b"?");
         let mut ev = Vec::new();
         run_for(avr, ms(3.0), &mut ev);

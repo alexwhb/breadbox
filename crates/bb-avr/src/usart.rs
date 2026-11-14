@@ -134,7 +134,7 @@ impl Usart {
     /// Oscillator cycles per bit.
     pub fn bit_cycles(&self) -> u64 {
         let per = if self.ucsra & 0x02 != 0 { 8 } else { 16 };
-        ((self.ubrr as u64 & 0x0FFF) + 1) * per << self.clk_shift
+        (((self.ubrr as u64 & 0x0FFF) + 1) * per) << self.clk_shift
     }
 
     fn char_bits(&self) -> u8 {

@@ -139,18 +139,13 @@ fn watchdog_interrupt_mode_and_reset() {
         ..StopOn::default()
     });
     let mut ev = Vec::new();
-    let reset_at;
-    loop {
-        match avr.run(ms(3_000.0), &mut ()) {
-            StopReason::Reset { cause } => {
-                assert_eq!(cause, ResetCause::Watchdog);
-                reset_at = avr.cycle();
-                break;
-            }
-            StopReason::ReachedCycle => panic!("no watchdog reset"),
-            other => panic!("{other:?}"),
+    let reset_at = match avr.run(ms(3_000.0), &mut ()) {
+        StopReason::Reset { cause } => {
+            assert_eq!(cause, ResetCause::Watchdog);
+            avr.cycle()
         }
-    }
+        other => panic!("expected a watchdog reset, got {other:?}"),
+    };
     ev.extend(avr.take_pin_events());
     let out = usart_text(&mut avr, 0);
     assert!(out.starts_with("boot\r\nwdt_irqs="), "{out}");
@@ -171,7 +166,7 @@ fn watchdog_interrupt_mode_and_reset() {
     // happened 100 ms (delay) before the last D7 toggle.
     let marks = edges(&ev, Pin::new('D', 7));
     // (the reset itself tri-states D7, so take the last toggle before it)
-    let last_feed_mark = marks.iter().filter(|m| m.0 < reset_at).last().unwrap().0;
+    let last_feed_mark = marks.iter().rfind(|m| m.0 < reset_at).unwrap().0;
     let gap_ms = (reset_at - last_feed_mark) as f64 / 16_000.0;
     assert!(
         (155.0..=157.0).contains(&gap_ms),

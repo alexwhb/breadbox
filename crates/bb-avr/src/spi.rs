@@ -261,7 +261,7 @@ impl Avr {
         }
         let (mosi, miso, sck) = (self.v.spi_mosi, self.v.spi_miso, self.v.spi_sck);
         let e = self.spi.edge;
-        let leading = e % 2 == 0;
+        let leading = e.is_multiple_of(2);
         let bit = e / 2;
         let cpol = self.spi.cpol();
         let sck_level = if leading { !cpol } else { cpol };

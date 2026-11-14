@@ -652,7 +652,7 @@ impl fmt::Display for Op {
             Out { r, a } => write!(f, "out 0x{a:02X}, r{r}"),
             Rjmp { k } => write!(f, "rjmp .{:+}", k as i32 * 2),
             Rcall { k } => write!(f, "rcall .{:+}", k as i32 * 2),
-            Ldi { d, k } if k == 0xFF => write!(f, "ser r{d}"),
+            Ldi { d, k: 0xFF } => write!(f, "ser r{d}"),
             Ldi { d, k } => write!(f, "ldi r{d}, 0x{k:02X}"),
             Brbs { s, k } => write!(f, "{} .{:+}", BR_SET[s as usize & 7], k as i32 * 2),
             Brbc { s, k } => write!(f, "{} .{:+}", BR_CLR[s as usize & 7], k as i32 * 2),
