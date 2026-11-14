@@ -496,12 +496,13 @@ pub(crate) fn noise(
     let mut in_tot = 0.0;
     for dens in &per_src {
         out_tot += powerlaw_integral(&freqs, dens);
-        let ref_dens: Vec<f64> = dens
-            .iter()
-            .zip(&gains)
-            .map(|(d, g)| if *g > 0.0 { d / g } else { 0.0 })
-            .collect();
-        in_tot += powerlaw_integral(&freqs, &ref_dens);
+        // input-referred: ngspice scales each interval by the gain at its upper end
+        for i in 1..freqs.len().min(dens.len()) {
+            let g = gains[i];
+            if g > 0.0 {
+                in_tot += powerlaw_integral(&freqs[i - 1..=i], &[dens[i - 1] / g, dens[i] / g]);
+            }
+        }
     }
     let mut p2 = Plot::new(PlotKind::NoiseTotal, title);
     p2.push(Vector::real(

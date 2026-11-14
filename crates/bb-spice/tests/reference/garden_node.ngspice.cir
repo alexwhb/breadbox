@@ -1,6 +1,6 @@
 * garden-node, ngspice equivalent: lux = 10^(v(k)/40) so the log .dc becomes a linear sweep of Vk
 V1    VCC 0  DC 5
-Vk    k 0 DC 90.2182
+Vk    k 0 DC 90.21090
 BRLDR VCC A1 I=v(VCC,A1)/(350k*pwr(pow(10,v(k)/40),-0.7))
 R1    A1  0  {R1v}
 XJ1   VCC 0  A0 CAPSOIL vwc=42

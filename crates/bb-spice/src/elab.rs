@@ -1003,7 +1003,10 @@ impl<'n> Elab<'n> {
                 Ok(out)
             };
             let kind = match &card.kind {
-                ElemKind::Subckt { name: sname } => {
+                ElemKind::Subckt {
+                    name: sname,
+                    text_params,
+                } => {
                     if depth >= 64 {
                         return Err(SimError::elab(
                             span,
@@ -1022,6 +1025,15 @@ impl<'n> Elab<'n> {
                             ),
                         ));
                     };
+                    if let Some((k, v)) = text_params.first() {
+                        return Err(SimError::elab(
+                            span,
+                            format!(
+                                "`{}`: parameter `{k}={v}` is not a numeric expression",
+                                card.name
+                            ),
+                        ));
+                    }
                     if sub.ports.len() != card.nodes.len() {
                         return Err(SimError::elab(
                             span,

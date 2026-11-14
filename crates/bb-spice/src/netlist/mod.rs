@@ -154,9 +154,12 @@ pub enum ElemKind {
     },
     /// T (lossless line; nodes p1+ p1- p2+ p2-)
     Tline,
-    /// X (subcircuit instance)
+    /// X (subcircuit instance). `text_params` holds instance parameters whose values are not
+    /// expressions (e.g. `fw=garden-node.hex` on a Breadbox-provided MCU part); they are kept
+    /// for the caller (bb-sim) and rejected if the subcircuit is an ordinary `.subckt`.
     Subckt {
         name: String,
+        text_params: Vec<(String, String)>,
     },
     /// Breadbox co-simulation port (an MCU pin or device output driving `nodes[0]`
     /// against `nodes[1]`). Exported to `.cir` as an equivalent V+R / I source.
@@ -359,17 +362,13 @@ pub(crate) fn sweep_values(start: f64, stop: f64, kind: &SweepKind) -> Vec<f64> 
     match kind {
         SweepKind::List(l) => v.extend_from_slice(l),
         SweepKind::Lin { step } => {
+            // ngspice semantics: start, start+step, … while within stop (no extra end point)
             if *step == 0.0 || (stop - start) * step < 0.0 {
                 v.push(start);
             } else {
                 let n = ((stop - start) / step + 1e-9).floor() as usize;
                 for i in 0..=n.min(10_000_000) {
                     v.push(start + i as f64 * step);
-                }
-                if let Some(&last) = v.last() {
-                    if (last - stop).abs() > 1e-9 * step.abs() && (stop - last) * step > 0.0 {
-                        v.push(stop);
-                    }
                 }
             }
         }
@@ -396,11 +395,6 @@ pub(crate) fn sweep_values(start: f64, stop: f64, kind: &SweepKind) -> Vec<f64> 
                 let n = ((stop / start).ln() / ratio.ln() + 1e-9).floor() as usize;
                 for i in 0..=n.min(10_000_000) {
                     v.push(start * ratio.powi(i as i32));
-                }
-                if let Some(&last) = v.last() {
-                    if last < stop * (1.0 - 1e-9) {
-                        v.push(stop);
-                    }
                 }
             }
         }

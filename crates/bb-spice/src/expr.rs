@@ -354,8 +354,9 @@ impl<'a> Lexer<'a> {
         }
         self.pos += c.len_utf8();
         let t = match c {
-            '(' => Tok::LParen,
-            ')' => Tok::RParen,
+            // braces inside an expression (ngspice numparam style `{vwc}`) group like parens
+            '(' | '{' => Tok::LParen,
+            ')' | '}' => Tok::RParen,
             ',' => Tok::Comma,
             '?' => Tok::Question,
             ':' => Tok::Colon,

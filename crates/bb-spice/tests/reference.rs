@@ -3,7 +3,8 @@
 //! `scripts/regen-spice-golden.sh`.
 //!
 //! Tolerances (SPEC SPICE-6): `.op`/`.dc`/`.tf` within 0.1 % or 1 µV / 1 nA; `.ac` within
-//! 0.5 % magnitude and 0.5° phase; `.tran` within 1 % normalised RMS error. Noise spectra use
+//! 0.5 % magnitude and 0.5° phase; `.tran` within 1 % normalised RMS error (time-weighted:
+//! `sqrt(∫e²dt/T)` over the ngspice time grid, divided by the signal's range). Noise spectra use
 //! 1 % and `.meas` results 1 % (ngspice prints them with 6 digits and measures `avg/rms` up to
 //! the next time point rather than exactly at `to=`).
 
@@ -46,7 +47,15 @@ fn compare_plot(r: &mut Report, ctx: &str, g: &Plot, o: &Plot) {
         if g.has_scale && std::ptr::eq(gv, &g.vectors[0]) {
             continue;
         }
-        let Some(ov) = o.vector(&gv.name) else {
+        // ngspice wraps scalar results (.tf, integrated noise) as `v(name)`
+        let lookup = match (
+            g.kind,
+            gv.name.strip_prefix("v(").and_then(|n| n.strip_suffix(')')),
+        ) {
+            (PlotKind::Tf | PlotKind::NoiseTotal, Some(inner)) => inner.to_string(),
+            _ => gv.name.clone(),
+        };
+        let Some(ov) = o.vector(&lookup) else {
             continue;
         };
         any = true;
@@ -154,13 +163,25 @@ fn compare_plot(r: &mut Report, ctx: &str, g: &Plot, o: &Plot) {
                         (a.min(y), b.max(y))
                     });
                 let amax = gy.iter().fold(0.0f64, |a, &y| a.max(y.abs()));
-                let range = (mx - mn).max(1e-3 * amax).max(abs_floor(name));
-                let mut sum = 0.0;
-                for (k, &t) in gx.iter().enumerate() {
-                    let d = interp(&ox, &oy, t) - gy[k];
-                    sum += d * d;
+                // nearly constant signals: normalise by 10 % of the level so the criterion
+                // matches the DC tolerance (0.1 %) instead of amplifying numerical noise
+                let range = (mx - mn).max(0.1 * amax).max(abs_floor(name));
+                // time-weighted RMS: sqrt(∫ e(t)² dt / T) / range (trapezoid over golden points)
+                let e2: Vec<f64> = gx
+                    .iter()
+                    .zip(&gy)
+                    .map(|(&t, &y)| (interp(&ox, &oy, t) - y).powi(2))
+                    .collect();
+                let mut integral = 0.0;
+                for k in 1..gx.len() {
+                    integral += 0.5 * (e2[k] + e2[k - 1]) * (gx[k] - gx[k - 1]);
                 }
-                let nrms = (sum / gx.len().max(1) as f64).sqrt() / range;
+                let span = gx.last().copied().unwrap_or(0.0) - gx.first().copied().unwrap_or(0.0);
+                let nrms = if span > 0.0 {
+                    (integral / span).sqrt() / range
+                } else {
+                    0.0
+                };
                 r.worst.push((format!("{ctx} {name}"), nrms / 0.01));
                 if nrms > 0.01 {
                     r.fail(format!(

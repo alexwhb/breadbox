@@ -300,3 +300,13 @@ impl Stepper {
         }
     }
 }
+
+impl Stepper {
+    /// After a zero-length re-solve: restart at first order with a small step.
+    pub(crate) fn discontinuity_after_resolve(&mut self) {
+        self.at_bp = true;
+        self.order = 1;
+        self.first = false;
+        self.delta = (self.delta.min(self.tmax) / 10.0).max(self.delmin * 2.0);
+    }
+}

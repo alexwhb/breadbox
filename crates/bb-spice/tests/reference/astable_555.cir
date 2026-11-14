@@ -9,5 +9,5 @@ B1 out 0 V=v(dis) > 2.5 ? 5 : 0
 ROUT out 0 10k
 .model sdis SW(VT=2.5 VH=0.8333333 RON=10 ROFF=1g)
 .ic v(th)=0
-.tran 0.5u 600u uic
+.tran 0.02u 600u uic
 .end

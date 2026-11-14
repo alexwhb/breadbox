@@ -39,6 +39,8 @@ pub struct Bsrc {
     bad: bool,
     nonlinear: bool,
     timed: bool,
+    /// Times where the expression switches discontinuously (`time > 1m`, `u(time-2m)`).
+    pub time_bps: Vec<f64>,
 }
 
 impl Bsrc {
@@ -71,6 +73,7 @@ impl Bsrc {
             bad: false,
             nonlinear,
             timed,
+            time_bps: Vec::new(),
         }
     }
 
@@ -246,6 +249,14 @@ impl Dev for Bsrc {
     fn is_time_varying(&self) -> bool {
         self.timed
     }
+    fn breakpoints(&self, t: f64, t_end: f64, out: &mut Vec<f64>) {
+        out.extend(
+            self.time_bps
+                .iter()
+                .copied()
+                .filter(|&b| b > t && b <= t_end),
+        );
+    }
     fn current(&self, ck: &Ckt) -> Option<f64> {
         Some(if self.is_current {
             self.last_v
@@ -253,4 +264,42 @@ impl Dev for Bsrc {
             ck.x[self.br]
         })
     }
+}
+
+/// Constant times at which an expression of `time` is discontinuous: comparisons with
+/// `time` (`time > 1m`) and steps/ramps of `time - c` (`u(time-2m)`).
+pub fn time_breakpoints(e: &crate::expr::Expr) -> Vec<f64> {
+    use crate::expr::{BinOp, Expr, Func, RtVar};
+    let mut out = Vec::new();
+    let time_offset = |x: &Expr| -> Option<f64> {
+        match x {
+            Expr::Rt(RtVar::Time) => Some(0.0),
+            Expr::Binary(BinOp::Sub, a, b) if matches!(**a, Expr::Rt(RtVar::Time)) => b.as_num(),
+            Expr::Binary(BinOp::Add, a, b) if matches!(**a, Expr::Rt(RtVar::Time)) => {
+                b.as_num().map(|v| -v)
+            }
+            _ => None,
+        }
+    };
+    e.visit(&mut |n| match n {
+        Expr::Binary(
+            BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge | BinOp::Eq | BinOp::Ne,
+            a,
+            b,
+        ) => {
+            if let (Some(off), Some(c)) = (time_offset(a), b.as_num()) {
+                out.push(c + off);
+            } else if let (Some(c), Some(off)) = (a.as_num(), time_offset(b)) {
+                out.push(c + off);
+            }
+        }
+        Expr::Call(Func::U | Func::Uramp | Func::Sgn, args) => {
+            if let Some(off) = args.first().and_then(time_offset) {
+                out.push(off);
+            }
+        }
+        _ => {}
+    });
+    out.retain(|t| *t > 0.0 && t.is_finite());
+    out
 }

@@ -474,6 +474,8 @@ pub trait Dev {
     fn ac_excite(&self, _rhs: &mut [C64]) {}
     /// Transient step/stop times (waveform defaults).
     fn prepare_tran(&mut self, _tstep: f64, _tstop: f64) {}
+    /// Rewinds internal history to time `t` (co-simulation restart inside a step).
+    fn rewind(&mut self, _t: f64, _x: &[f64]) {}
 }
 
 macro_rules! devices {
@@ -510,6 +512,7 @@ macro_rules! devices {
             fn set_source_value(&mut self, v: f64) -> bool { dispatch!(self, d => d.set_source_value(v)) }
             fn ac_excite(&self, rhs: &mut [C64]) { dispatch!(self, d => d.ac_excite(rhs)) }
             fn prepare_tran(&mut self, a: f64, b: f64) { dispatch!(self, d => d.prepare_tran(a, b)) }
+            fn rewind(&mut self, t: f64, x: &[f64]) { dispatch!(self, d => d.rewind(t, x)) }
         }
     };
 }

@@ -15,6 +15,8 @@
 #   Breadbox runs them (.step points outermost, analyses in netlist order). Breadbox ignores
 #   .control blocks.
 # * Otherwise ngspice runs the dot analyses itself (-r golden.raw).
+# * ngspice runs with `.options reltol=1e-5` unless the netlist sets reltol, so the golden data
+#   is closer to the exact solution than the 0.1 % tolerance it is compared at.
 #
 # The golden files are checked in, so `cargo test -p bb-spice` never needs ngspice.
 set -euo pipefail
@@ -97,6 +99,13 @@ for cir in "$REF"/*.cir; do
     # .step/.mc are Breadbox (LTspice-style) extensions ngspice rejects; the .control block
     # emulates them, so drop the cards from ngspice's copy.
     sed -E '2,$ s/^([[:space:]]*\.(step|mc)[[:space:]])/* \1/I' "$src" >"$work/in.cir"
+    # Tighter Newton tolerance for the reference: ngspice's DC sweeps otherwise stop within its
+    # default 0.1 % reltol, which is the very tolerance we compare at. (Breadbox runs with the
+    # netlist's own options.) Circuits that set reltol themselves keep their value.
+    if ! grep -qi 'reltol' "$work/in.cir"; then
+        awk 'NR == 1 { print; print ".options reltol=1e-5"; next } { print }' "$work/in.cir" >"$work/in2.cir"
+        mv "$work/in2.cir" "$work/in.cir"
+    fi
     (
         cd "$work"
         if grep -qi '^\.control' in.cir; then

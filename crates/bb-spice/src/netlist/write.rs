@@ -458,12 +458,19 @@ pub(crate) fn element_text(el: &ElementCard) -> String {
             format!("{name} {n} {model}{}{p}", if *off { " off" } else { "" })
         }
         ElemKind::Tline => format!("{name} {n}{p}"),
-        ElemKind::Subckt { name: sub } => {
-            if el.params.is_empty() {
+        ElemKind::Subckt {
+            name: sub,
+            text_params,
+        } => {
+            let mut s = if el.params.is_empty() && text_params.is_empty() {
                 format!("{name} {n} {sub}")
             } else {
                 format!("{name} {n} {sub} params:{p}")
+            };
+            for (k, v) in text_params {
+                let _ = write!(s, " {k}={v}");
             }
+            s
         }
         ElemKind::Port { drive } => {
             let (a, b) = (

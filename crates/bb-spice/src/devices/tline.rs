@@ -226,6 +226,14 @@ impl Dev for Tline {
             }
         }
     }
+    fn rewind(&mut self, t: f64, x: &[f64]) {
+        while self.hist.last().is_some_and(|r| r[0] >= t) {
+            self.hist.pop();
+        }
+        let v = self.port_values(x);
+        self.hist.push([t, v[0], v[1], v[2], v[3]]);
+        self.corners.retain(|&c| c > t);
+    }
     fn init_uic(&mut self, _ck: &mut Ckt) {
         self.hist.clear();
         self.hist

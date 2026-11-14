@@ -1206,11 +1206,63 @@ impl<'o> State<'o> {
             return Err(cur.err(format!("`{name}` needs a subcircuit name")));
         };
         let nodes = words.iter().map(|w| normalize_node(&w.text)).collect();
-        let (params, _) = self.params(cur, &[])?;
+        // key=value pairs; values that are not expressions are kept as text
+        let mut params = Vec::new();
+        let mut text_params = Vec::new();
+        while !cur.done() {
+            cur.skip_commas();
+            if cur.done() {
+                break;
+            }
+            if !cur.at_kv() {
+                let t = cur.next().unwrap();
+                return Err(
+                    cur.err_at(&t, format!("unexpected `{}` (expected name=value)", t.text))
+                );
+            }
+            let k = cur.next().unwrap();
+            let eq = cur.next().unwrap();
+            // raw text up to the next whitespace-separated `name=` (or end of line)
+            let start = eq.start + 1;
+            let mut j = cur.i;
+            while j < cur.toks.len() {
+                let t = &cur.toks[j];
+                if t.kind == TK::Word
+                    && matches!(cur.toks.get(j + 1), Some(n) if n.kind == TK::Eq)
+                    && j > cur.i
+                {
+                    break;
+                }
+                j += 1;
+            }
+            let end = cur
+                .toks
+                .get(j)
+                .map(|t| t.start)
+                .unwrap_or(cur.line.text.len());
+            let raw = cur.line.text[start..end].trim().to_string();
+            let vt = cur.peek().cloned();
+            match vt.as_ref().map(|t| cur.value_of(t, "value")) {
+                Some(Ok(e)) if j == cur.i + 1 => {
+                    cur.next();
+                    params.push((k.lower(), e));
+                }
+                _ => {
+                    if raw.is_empty() {
+                        return Err(cur.err_at(&k, format!("`{}=` needs a value", k.text)));
+                    }
+                    cur.i = j;
+                    text_params.push((k.lower(), raw));
+                }
+            }
+        }
         Ok(ElementCard {
             name,
             nodes,
-            kind: ElemKind::Subckt { name: sub.lower() },
+            kind: ElemKind::Subckt {
+                name: sub.lower(),
+                text_params,
+            },
             params,
             span: Span::none(),
         })

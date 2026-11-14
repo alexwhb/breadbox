@@ -934,7 +934,9 @@ impl Builder<'_> {
                         Leaf::Ext(x) => Input::Ext(self.ext(&x)),
                     });
                 }
-                Device::Bsrc(Bsrc::new(name, n[0], n[1], *is_current, compiled, inputs))
+                let mut b = Bsrc::new(name, n[0], n[1], *is_current, compiled, inputs);
+                b.time_bps = crate::devices::bsrc::time_breakpoints(expr);
+                Device::Bsrc(b)
             }
             ElementKind::Switch { model, init_on }
             | ElementKind::CSwitch { model, init_on, .. } => {

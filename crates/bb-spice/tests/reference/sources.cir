@@ -1,4 +1,4 @@
-independent source waveforms PULSE SIN EXP PWL(repeat) SFFM AM into loads (tran)
+independent source waveforms PULSE SIN EXP PWL(repeat) SFFM into loads (tran; ngspice 47 ignores AM, see unit tests)
 V1 a 0 PULSE(-1 2 10u 5u 7u 20u 50u)
 R1 a 0 1k
 V2 b 0 SIN(0.5 1 20k 30u 2k 45)
@@ -9,8 +9,6 @@ V4 d 0 PWL(0 0 10u 1 20u 1 30u -0.5 40u 0) r=10u
 R4 d 0 1k
 V5 e 0 SFFM(0 1 50k 2 5k)
 R5 e 0 1k
-V6 f 0 AM(1 0.5 5k 50k 5u)
-R6 f 0 1k
 I1 0 g PULSE(0 1m 5u 5u 5u 20u 60u)
 R7 g 0 2k
 .tran 0.2u 150u

@@ -11,8 +11,8 @@ Variables:
 	2	i(v1)	current
 Values:
 0		3.0000000000e+00
-	7.7407482985e-01
-	-2.2259251702e-03
+	7.7407024967e-01
+	-2.2259297503e-03
 Title: nested .step over two parameters (step, op)
 Date: (golden)
 Command: ngspice-47, Build 
@@ -26,8 +26,8 @@ Variables:
 	2	i(v1)	current
 Values:
 0		3.0000000000e+00
-	8.0428424137e-01
-	-2.1957157586e-03
+	8.0427438476e-01
+	-2.1957256152e-03
 Title: nested .step over two parameters (step, op)
 Date: (golden)
 Command: ngspice-47, Build 
@@ -41,8 +41,8 @@ Variables:
 	2	i(v1)	current
 Values:
 0		3.0000000000e+00
-	8.0902306509e-01
-	-2.1909769349e-03
+	8.0901932066e-01
+	-2.1909806793e-03
 Title: nested .step over two parameters (step, op)
 Date: (golden)
 Command: ngspice-47, Build 
@@ -71,8 +71,8 @@ Variables:
 	2	i(v1)	current
 Values:
 0		3.0000000000e+00
-	7.5532928813e-01
-	-7.4822357062e-04
+	7.5532885292e-01
+	-7.4822371569e-04
 Title: nested .step over two parameters (step, op)
 Date: (golden)
 Command: ngspice-47, Build 
@@ -86,5 +86,5 @@ Variables:
 	2	i(v1)	current
 Values:
 0		3.0000000000e+00
-	7.7257464103e-01
-	-7.4247511966e-04
+	7.7257463805e-01
+	-7.4247512065e-04

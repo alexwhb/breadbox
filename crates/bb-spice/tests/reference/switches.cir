@@ -10,5 +10,5 @@ W1 b 0 Vs csh
 R2 v b 2k
 .model swh SW(VT=1 VH=0.25 RON=10 ROFF=1meg)
 .model csh CSW(IT=1m IH=0.2m RON=5 ROFF=100k)
-.tran 2u 4m
+.tran 0.1u 4m
 .end

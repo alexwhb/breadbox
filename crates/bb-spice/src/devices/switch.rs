@@ -123,12 +123,9 @@ impl Dev for Switch {
             },
             Init::Tran | Init::Pred => self.decide(c, ck.st[1][self.st] > 0.5),
             Init::Float => {
-                let prev = if ck.mode == Mode::Tran {
-                    ck.st[1][self.st] > 0.5
-                } else {
-                    old_on
-                };
-                let on = self.decide(c, prev);
+                // inside the hysteresis band keep this iteration's state (ngspice: "use state0
+                // since INITTRAN or INITPRED already called")
+                let on = self.decide(c, old_on);
                 if on != old_on {
                     ck.nonconverged();
                 }
@@ -158,11 +155,14 @@ impl Dev for Switch {
             return f64::INFINITY;
         }
         let dt = (target - c0) / slope;
-        if dt > 0.0 {
-            // land shortly after the crossing
-            (dt * 1.05).max(ck.delta * 0.05)
+        if dt <= 0.0 {
+            return f64::INFINITY;
+        }
+        // Land just before the crossing, then just after it, so the switching edge is sharp.
+        if dt > 0.01 * ck.delta {
+            dt * 0.995
         } else {
-            f64::INFINITY
+            dt + 0.01 * ck.delta
         }
     }
     fn is_nonlinear(&self) -> bool {

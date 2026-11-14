@@ -238,7 +238,7 @@ fn pwl_value(pts: &[(f64, f64)], repeat: Option<f64>, delay: f64, t: f64) -> f64
     if tt <= t0 {
         return v0;
     }
-    if tt >= tl {
+    if tt > tl || (tt == tl && repeat.is_none()) {
         match repeat {
             Some(r) if tl > r => {
                 let period = tl - r;
@@ -567,7 +567,8 @@ mod tests {
             tstop: 1e-3,
         }
         .breakpoints(0.0, 20e-6, &mut bps);
-        assert!(bps.contains(&2e-6) && bps.contains(&5e-6) && bps.contains(&7e-6));
+        let has = |t: f64| bps.iter().any(|b| (b - t).abs() < 1e-15);
+        assert!(has(2e-6) && has(5e-6) && has(7e-6), "{bps:?}");
     }
 
     #[test]
