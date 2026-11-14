@@ -1,0 +1,329 @@
+[
+  {
+    "id": "breadboard_830", "name": "Breadboard (830)", "category": "building_blocks",
+    "simple": true, "simple_name": "Breadboard", "icon": "bb", "ref_prefix": "BB",
+    "description": "Full-size solderless breadboard: 63 columns a–j plus two power rail pairs.",
+    "props": [{"key": "split_rails", "label": "Split rails", "type": "bool", "default": false, "help": "Rails broken in the middle, like some boards"}],
+    "pins": [],
+    "bench": {"art": "breadboard", "layout": {"breadboard": {"columns": 63, "rail_holes": 50}}, "sockets": true},
+    "schematic": {"symbol": "none"},
+    "tags": ["tool"]
+  },
+  {
+    "id": "breadboard_400", "name": "Breadboard (400)", "category": "building_blocks",
+    "icon": "bb", "ref_prefix": "BB",
+    "description": "Half-size breadboard: 30 columns a–j plus two power rail pairs.",
+    "props": [{"key": "split_rails", "label": "Split rails", "type": "bool", "default": false}],
+    "pins": [],
+    "bench": {"art": "breadboard", "layout": {"breadboard": {"columns": 30, "rail_holes": 25}}, "sockets": true},
+    "schematic": {"symbol": "none"},
+    "tags": ["tool"]
+  },
+  {
+    "id": "jumper_wire", "name": "Jumper wire", "category": "building_blocks",
+    "simple": true, "icon": "wire", "ref_prefix": "W",
+    "description": "Drag from any pin or hole to any pin or hole. Red for +, black for GND.",
+    "pins": [],
+    "bench": {"art": "wire", "hidden": true},
+    "schematic": {"symbol": "none"},
+    "tags": ["tool"]
+  },
+  {
+    "id": "resistor", "name": "Resistor", "category": "building_blocks",
+    "simple": true, "icon": "res", "ref_prefix": "R",
+    "description": "Limits current. Pick an E-series value and watch the colour bands change.",
+    "props": [
+      {"key": "resistance", "label": "Resistance", "unit": "Ω", "type": "number", "default": 10000, "min": 0.01, "max": 1e9, "series": "E24", "live": true},
+      {"key": "tolerance", "label": "Tolerance", "unit": "%", "type": "choice", "default": "5", "options": [{"value": "1"}, {"value": "2"}, {"value": "5"}, {"value": "10"}]},
+      {"key": "power", "label": "Power rating", "unit": "W", "type": "number", "default": 0.25, "min": 0.0625, "max": 10},
+      {"key": "tempco", "label": "Tempco", "unit": "ppm/°C", "type": "number", "default": 100, "min": 0, "max": 5000}
+    ],
+    "pins": ["1", "2"],
+    "model": {
+      "spice": ["$(el:R) $(1) $(2) {$(resistance)*(1+$(tempco)*1e-6*($(ext:temp)-25))}"],
+      "pro": ["$(el:R) $(1) $(2) $(resistance)"],
+      "ext": [{"name": "temp", "default": 25}],
+      "behaviour": "thermal",
+      "device_pins": []
+    },
+    "inspector": [
+      {"label": "Resistance", "value": "$(resistance|Ω) ±$(tolerance) %"},
+      {"label": "Power rating", "value": "$(power|W)"},
+      {"label": "Tempco", "value": "$(tempco) ppm/°C"},
+      {"label": "Model", "value": "R · self-heating → R(T)"}
+    ],
+    "ratings": [{"element": "R", "kind": "power", "limit": "$(power)", "tau": 3.0, "destroy_at": 3.0, "message": "resistor overheated", "effect": "smoke"}],
+    "bench": {"art": "resistor_axial", "layout": {"axial": 4}, "flexible": true},
+    "schematic": {"symbol": "resistor"},
+    "pcb": {"footprint": "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal", "smd": "Resistor_SMD:R_0805_2012Metric"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "capacitor", "name": "Capacitor (ceramic)", "category": "building_blocks",
+    "simple": true, "simple_name": "Capacitor", "icon": "cap", "ref_prefix": "C",
+    "description": "Stores charge. Ceramic, non-polarised; pair with a resistor for RC timing.",
+    "props": [
+      {"key": "capacitance", "label": "Capacitance", "unit": "F", "type": "number", "default": 1e-7, "min": 1e-13, "max": 1e-3, "series": "E12", "live": true},
+      {"key": "voltage", "label": "Voltage rating", "unit": "V", "type": "number", "default": 50, "min": 1, "max": 1000}
+    ],
+    "pins": ["1", "2"],
+    "model": {"spice": ["$(el:C) $(1) $(2) $(capacitance)"]},
+    "inspector": [
+      {"label": "Capacitance", "value": "$(capacitance|F)"},
+      {"label": "Rated voltage", "value": "$(voltage|V)"}
+    ],
+    "ratings": [{"element": "C", "kind": "voltage", "limit": "$(voltage)", "tau": 0.01, "destroy_at": 1.5, "message": "capacitor over-voltage", "effect": "short"}],
+    "bench": {"art": "cap_ceramic", "layout": {"axial": 2}, "flexible": true},
+    "schematic": {"symbol": "capacitor"},
+    "pcb": {"footprint": "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P2.50mm", "smd": "Capacitor_SMD:C_0805_2012Metric"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "capacitor_electrolytic", "name": "Capacitor (electrolytic)", "category": "building_blocks",
+    "icon": "cap", "ref_prefix": "C",
+    "description": "Big capacitance, polarised: the stripe is −. Reverse it and it pops.",
+    "props": [
+      {"key": "capacitance", "label": "Capacitance", "unit": "F", "type": "number", "default": 1e-4, "min": 1e-7, "max": 1, "series": "E6"},
+      {"key": "voltage", "label": "Voltage rating", "unit": "V", "type": "number", "default": 16, "min": 2.5, "max": 450},
+      {"key": "esr", "label": "ESR", "unit": "Ω", "type": "number", "default": 0.2, "min": 0.001, "max": 100}
+    ],
+    "pins": ["plus::+", "minus::−"],
+    "model": {"spice": ["$(el:C) $(plus) $(n:esr) $(capacitance)", "$(el:R:esr) $(n:esr) $(minus) $(esr)"]},
+    "inspector": [
+      {"label": "Capacitance", "value": "$(capacitance|F)"},
+      {"label": "Rated voltage", "value": "$(voltage|V)"},
+      {"label": "Polarity", "value": "stripe = −"}
+    ],
+    "ratings": [
+      {"element": "C", "kind": "reverse_voltage", "limit": 1.0, "tau": 0.05, "destroy_at": 1.5, "message": "electrolytic reversed — pop!", "effect": "pop"},
+      {"element": "C", "kind": "voltage", "limit": "$(voltage)", "tau": 0.05, "destroy_at": 1.4, "message": "electrolytic over-voltage — pop!", "effect": "pop"}
+    ],
+    "bench": {"art": "cap_electrolytic", "layout": {"axial": 1}},
+    "schematic": {"symbol": "capacitor_polarized"},
+    "pcb": {"footprint": "Capacitor_THT:CP_Radial_D6.3mm_P2.50mm"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "inductor", "name": "Inductor", "category": "building_blocks",
+    "icon": "ind", "ref_prefix": "L",
+    "description": "Resists changes in current. Radial choke with winding resistance.",
+    "props": [
+      {"key": "inductance", "label": "Inductance", "unit": "H", "type": "number", "default": 1e-3, "min": 1e-9, "max": 10, "series": "E12"},
+      {"key": "dcr", "label": "DC resistance", "unit": "Ω", "type": "number", "default": 1.5, "min": 0.001, "max": 1000}
+    ],
+    "pins": ["1", "2"],
+    "model": {"spice": ["$(el:L) $(1) $(n:dcr) $(inductance)", "$(el:R:dcr) $(n:dcr) $(2) $(dcr)"]},
+    "inspector": [{"label": "Inductance", "value": "$(inductance|H)"}, {"label": "DCR", "value": "$(dcr|Ω)"}],
+    "bench": {"art": "inductor_radial", "layout": {"axial": 2}},
+    "schematic": {"symbol": "inductor"},
+    "pcb": {"footprint": "Inductor_THT:L_Radial_D8.7mm_P5.00mm"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "push_button", "name": "Push button", "category": "building_blocks",
+    "simple": true, "icon": "btn", "ref_prefix": "SW",
+    "description": "Momentary tactile switch. Pins 1–2 and 3–4 are joined; pressing connects them.",
+    "props": [{"key": "bounce_ms", "label": "Contact bounce", "unit": "ms", "type": "number", "default": 2, "min": 0, "max": 20, "live": true}],
+    "pins": ["1", "2", "3", "4"],
+    "bonds": [["1", "2"], ["3", "4"]],
+    "model": {
+      "spice": ["$(el:R) $(1) $(3) {0.05+(1-$(ext:closed))*1e9}"],
+      "ext": [{"name": "closed", "default": 0}],
+      "behaviour": "switch"
+    },
+    "inspector": [{"label": "Contact", "value": "momentary SPST, 50 mΩ"}, {"label": "Bounce", "value": "$(bounce_ms) ms"}],
+    "bench": {"art": "tactile_button", "leads": [{"pin": "1", "x": 0, "y": 0}, {"pin": "2", "x": 0, "y": 2}, {"pin": "3", "x": 3, "y": 0}, {"pin": "4", "x": 3, "y": 2}], "size": [3, 2]},
+    "schematic": {"symbol": "button"},
+    "pcb": {"footprint": "Button_Switch_THT:SW_PUSH_6mm"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "slide_switch", "name": "Slide switch", "category": "building_blocks",
+    "icon": "btn", "ref_prefix": "SW",
+    "description": "SPDT slide switch: the middle pin connects to A or B.",
+    "props": [{"key": "on", "label": "Position B", "type": "bool", "default": false, "live": true}],
+    "pins": ["a", "com", "b"],
+    "model": {
+      "spice": ["$(el:R:a) $(com) $(a) {0.05+$(ext:closed)*1e9}", "$(el:R:b) $(com) $(b) {0.05+(1-$(ext:closed))*1e9}"],
+      "ext": [{"name": "closed", "default": 0}],
+      "behaviour": "switch"
+    },
+    "bench": {"art": "slide_switch", "layout": "row"},
+    "schematic": {"symbol": "spdt"},
+    "pcb": {"footprint": "Button_Switch_THT:SW_Slide_1P2T"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "dip_switch", "name": "DIP switch (4)", "category": "building_blocks",
+    "icon": "dip", "ref_prefix": "SW",
+    "description": "Four tiny on/off switches in a DIP package.",
+    "pins": ["1", "2", "3", "4", "5", "6", "7", "8"],
+    "model": {
+      "spice": [
+        "$(el:R:1) $(1) $(8) {0.05+(1-$(ext:s0))*1e9}",
+        "$(el:R:2) $(2) $(7) {0.05+(1-$(ext:s1))*1e9}",
+        "$(el:R:3) $(3) $(6) {0.05+(1-$(ext:s2))*1e9}",
+        "$(el:R:4) $(4) $(5) {0.05+(1-$(ext:s3))*1e9}"
+      ],
+      "ext": [{"name": "s0", "default": 0}, {"name": "s1", "default": 0}, {"name": "s2", "default": 0}, {"name": "s3", "default": 0}],
+      "behaviour": "switch"
+    },
+    "bench": {"art": "dip_switch", "layout": {"dip": 3}},
+    "schematic": {"symbol": "box"},
+    "pcb": {"footprint": "Button_Switch_THT:SW_DIP_SPSTx04_Slide_9.78x12.34mm_W7.62mm_P2.54mm"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "potentiometer", "name": "Potentiometer", "category": "building_blocks",
+    "simple": true, "simple_name": "Knob (pot)", "icon": "pot", "ref_prefix": "RV",
+    "description": "Turn the knob: a variable voltage divider between the outer pins.",
+    "props": [
+      {"key": "resistance", "label": "Resistance", "unit": "Ω", "type": "number", "default": 10000, "min": 100, "max": 1e7, "series": "E6"},
+      {"key": "position", "label": "Knob", "type": "number", "default": 0.5, "min": 0, "max": 1, "live": true}
+    ],
+    "pins": ["1", "w::wiper", "3"],
+    "model": {
+      "spice": [
+        "$(el:R:a) $(1) $(w) {max($(resistance)*$(ext:pos),0.1)}",
+        "$(el:R:b) $(w) $(3) {max($(resistance)*(1-$(ext:pos)),0.1)}"
+      ],
+      "pro": ["$(el:R:a) $(1) $(w) {max($(resistance)*$(position),0.1)}", "$(el:R:b) $(w) $(3) {max($(resistance)*(1-$(position)),0.1)}"],
+      "ext": [{"name": "pos", "default": 0.5}],
+      "behaviour": "pot"
+    },
+    "inspector": [{"label": "Track", "value": "$(resistance|Ω) linear"}],
+    "ratings": [{"element": "R:a", "kind": "power", "limit": 0.1, "tau": 2.0, "destroy_at": 4.0, "message": "pot track burnt", "effect": "smoke"}],
+    "bench": {"art": "potentiometer", "layout": {"axial": 2}, "leads": [{"pin": "1", "x": 0, "y": 0}, {"pin": "w", "x": 1, "y": 0}, {"pin": "3", "x": 2, "y": 0}], "size": [3, 3]},
+    "schematic": {"symbol": "potentiometer"},
+    "pcb": {"footprint": "Potentiometer_THT:Potentiometer_Alps_RK09K_Single_Vertical"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "trimmer", "name": "Trimmer", "category": "building_blocks",
+    "icon": "pot", "ref_prefix": "RV",
+    "description": "Small screwdriver-adjust potentiometer.",
+    "props": [
+      {"key": "resistance", "label": "Resistance", "unit": "Ω", "type": "number", "default": 10000, "min": 100, "max": 1e7, "series": "E6"},
+      {"key": "position", "label": "Setting", "type": "number", "default": 0.5, "min": 0, "max": 1, "live": true}
+    ],
+    "pins": ["1", "w::wiper", "3"],
+    "model": {
+      "spice": [
+        "$(el:R:a) $(1) $(w) {max($(resistance)*$(ext:pos),0.1)}",
+        "$(el:R:b) $(w) $(3) {max($(resistance)*(1-$(ext:pos)),0.1)}"
+      ],
+      "ext": [{"name": "pos", "default": 0.5}],
+      "behaviour": "pot"
+    },
+    "bench": {"art": "trimmer", "layout": "row"},
+    "schematic": {"symbol": "potentiometer"},
+    "pcb": {"footprint": "Potentiometer_THT:Potentiometer_Bourns_3296W_Vertical"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "battery_pack", "name": "Battery pack", "category": "power",
+    "simple": true, "icon": "batt", "ref_prefix": "BT",
+    "description": "AA×2, AA×4, 9 V or LiPo 1S — internal resistance and a real discharge curve.",
+    "props": [
+      {"key": "kind", "label": "Pack", "type": "choice", "default": "aa4", "options": [
+        {"value": "aa2", "label": "2 × AA", "sets": {"emf": 3.2, "rint": 0.3, "capacity_mah": 2500}},
+        {"value": "aa4", "label": "4 × AA", "sets": {"emf": 6.4, "rint": 0.6, "capacity_mah": 2500}},
+        {"value": "9v", "label": "9 V", "sets": {"emf": 9.4, "rint": 1.7, "capacity_mah": 550}},
+        {"value": "lipo1s", "label": "LiPo 1S", "sets": {"emf": 4.2, "rint": 0.08, "capacity_mah": 1000}}
+      ]},
+      {"key": "charge", "label": "State of charge", "unit": "%", "type": "number", "default": 100, "min": 0, "max": 100}
+    ],
+    "pins": ["plus:power_out:+", "minus:ground:−"],
+    "model": {
+      "spice": ["$(el:V) $(n:emf) $(minus) {$(ext:emf)}", "$(el:R:int) $(n:emf) $(plus) {$(ext:rint)}"],
+      "ext": [{"name": "emf", "default": 6.4}, {"name": "rint", "default": 0.6}],
+      "behaviour": "battery",
+      "device_pins": []
+    },
+    "inspector": [{"label": "Chemistry", "value": "$(kind)"}, {"label": "Charge", "value": "$(charge) %"}],
+    "bench": {"art": "battery_pack", "layout": {"axial": 1}, "off_board": true, "size": [8, 5]},
+    "schematic": {"symbol": "battery"},
+    "pcb": {"footprint": "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "usb_power", "name": "USB power", "category": "power",
+    "simple": true, "icon": "usb", "ref_prefix": "PS",
+    "description": "5 V from a USB port with a 500 mA polyfuse that trips on a short.",
+    "props": [
+      {"key": "voltage", "label": "Voltage", "unit": "V", "type": "number", "default": 5.0, "min": 4.4, "max": 5.25},
+      {"key": "cable_r", "label": "Cable resistance", "unit": "Ω", "type": "number", "default": 0.3, "min": 0.01, "max": 5}
+    ],
+    "pins": ["VBUS:power_out:+5V", "GND:ground"],
+    "model": {
+      "spice": [
+        "$(el:V) $(n:src) $(GND) $(voltage)",
+        "$(el:R:cable) $(n:src) $(n:fuse) $(cable_r)",
+        "$(el:R:fuse) $(n:fuse) $(VBUS) {$(ext:fuse_r)}"
+      ],
+      "pro": ["$(el:V) $(n:src) $(GND) $(voltage)", "$(el:R:cable) $(n:src) $(VBUS) $(cable_r)"],
+      "ext": [{"name": "fuse_r", "default": 0.1}],
+      "behaviour": "board_power",
+      "device_pins": []
+    },
+    "inspector": [{"label": "Output", "value": "$(voltage|V) · 500 mA polyfuse"}, {"label": "Trip", "value": "1 A trip · 500 mA hold"}],
+    "bench": {"art": "usb_supply", "layout": "row", "off_board": true, "size": [5, 4]},
+    "schematic": {"symbol": "vsource"},
+    "pcb": {"footprint": "Connector_USB:USB_Micro-B_Molex-105017-0001"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "barrel_jack", "name": "DC barrel jack", "category": "power",
+    "icon": "usb", "ref_prefix": "J",
+    "description": "Wall adapter input (9 V default) through a 2.1 mm barrel jack.",
+    "props": [{"key": "voltage", "label": "Adapter voltage", "unit": "V", "type": "number", "default": 9.0, "min": 3, "max": 24}],
+    "pins": ["plus:power_out:+", "minus:ground:−"],
+    "model": {"spice": ["$(el:V) $(n:src) $(minus) $(voltage)", "$(el:R) $(n:src) $(plus) 0.5"]},
+    "bench": {"art": "barrel_jack", "layout": "row", "off_board": true, "size": [4, 3]},
+    "schematic": {"symbol": "vsource"},
+    "pcb": {"footprint": "Connector_BarrelJack:BarrelJack_Horizontal"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "reg_7805", "name": "7805 regulator", "part_number": "L7805", "category": "power",
+    "icon": "reg", "ref_prefix": "U",
+    "description": "Linear 5 V regulator, 1.5 A, ~2 V dropout. Wastes the difference as heat.",
+    "pins": ["IN:power_in", "GND:ground", "OUT:power_out"],
+    "model": {
+      "spice": [
+        "$(el:B) $(n:o0) $(GND) V=min(5.0,max(v($(IN),$(GND))-2.0,0))",
+        "$(el:R:out) $(n:o0) $(n:o1) 0.05",
+        "$(el:V:sense) $(n:o1) $(OUT) 0",
+        "$(el:F) $(IN) $(GND) $(el:V:sense) 1",
+        "$(el:R:q) $(IN) $(GND) 1.8k"
+      ]
+    },
+    "inspector": [{"label": "Output", "value": "5.0 V · 1.5 A"}, {"label": "Dropout", "value": "≈ 2 V"}],
+    "ratings": [{"element": "F", "kind": "current", "limit": 1.5, "tau": 1.0, "destroy_at": 3.0, "message": "regulator over-current", "effect": "smoke"}],
+    "bench": {"art": "to220", "layout": "row"},
+    "schematic": {"symbol": "box"},
+    "pcb": {"footprint": "Package_TO_SOT_THT:TO-220-3_Vertical"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "ams1117_3v3", "name": "AMS1117-3.3 regulator", "part_number": "AMS1117-3.3", "category": "power",
+    "icon": "reg", "ref_prefix": "U",
+    "description": "3.3 V low-dropout regulator (1 A, ~1.1 V dropout).",
+    "pins": ["GND:ground", "OUT:power_out", "IN:power_in"],
+    "model": {
+      "spice": [
+        "$(el:B) $(n:o0) $(GND) V=min(3.3,max(v($(IN),$(GND))-1.1,0))",
+        "$(el:R:out) $(n:o0) $(n:o1) 0.1",
+        "$(el:V:sense) $(n:o1) $(OUT) 0",
+        "$(el:F) $(IN) $(GND) $(el:V:sense) 1",
+        "$(el:R:q) $(IN) $(GND) 1k"
+      ]
+    },
+    "inspector": [{"label": "Output", "value": "3.3 V · 1 A"}, {"label": "Dropout", "value": "≈ 1.1 V"}],
+    "ratings": [{"element": "F", "kind": "current", "limit": 1.0, "tau": 1.0, "destroy_at": 3.0, "message": "regulator over-current", "effect": "smoke"}],
+    "bench": {"art": "sot223_module", "layout": "row"},
+    "schematic": {"symbol": "box"},
+    "pcb": {"footprint": "Package_TO_SOT_SMD:SOT-223-3_TabPin2"},
+    "tags": ["spice"]
+  }
+]

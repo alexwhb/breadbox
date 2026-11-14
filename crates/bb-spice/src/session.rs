@@ -168,10 +168,20 @@ impl Session {
     }
 
     pub fn with_options(netlist: &Netlist, opts: SessionOptions) -> Result<Session, SimError> {
+        Session::with_ext(netlist, opts, &[])
+    }
+
+    /// Like [`Session::with_options`] with initial values for `ext()` variables, so the
+    /// circuit is elaborated (and its first operating point solved) with them in place.
+    pub fn with_ext(
+        netlist: &Netlist,
+        opts: SessionOptions,
+        ext: &[(String, f64)],
+    ) -> Result<Session, SimError> {
         if opts.max_step.is_nan() || opts.max_step <= 0.0 {
             return Err(SimError::invalid("max_step must be positive"));
         }
-        let ext_values = HashMap::new();
+        let ext_values: HashMap<String, f64> = ext.iter().cloned().collect();
         let engine = build_engine(netlist, &opts, &ext_values)?;
         let ports = collect_ports(netlist, &engine);
         let n = engine.n();
@@ -212,6 +222,17 @@ impl Session {
     /// The circuit this session simulates (including ports added later).
     pub fn netlist(&self) -> &Netlist {
         &self.netlist
+    }
+
+    /// True when nothing in the circuit can change until an input changes: the circuit has
+    /// no charge storage and no time-dependent sources, or it has settled (several maximum
+    /// steps without measurable change) and has no time-dependent sources. Co-simulators use
+    /// this to lengthen their sync quantum safely.
+    pub fn is_quiescent(&self) -> bool {
+        if !self.s.started || self.s.dirty || !self.s.pending.is_empty() {
+            return false;
+        }
+        self.is_static() || (self.s.quiet >= 3 && !self.s.engine.time_varying)
     }
 
     fn is_static(&self) -> bool {

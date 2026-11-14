@@ -1,0 +1,263 @@
+[
+  {
+    "id": "ldr", "name": "Light sensor (LDR)", "part_number": "GL5528", "category": "sensors",
+    "simple": true, "simple_name": "Light", "icon": "ldr", "ref_prefix": "LDR",
+    "description": "Photoresistor: R ≈ 350k·lux^-0.7. Pair it with a 10 k resistor as a divider.",
+    "props": [
+      {"key": "r1lux", "label": "R at 1 lx", "unit": "Ω", "type": "number", "default": 350000, "min": 1000, "max": 1e8},
+      {"key": "gamma", "label": "γ", "type": "number", "default": 0.7, "min": 0.3, "max": 1.2},
+      {"key": "tolerance", "label": "Tolerance", "unit": "%", "type": "number", "default": 10}
+    ],
+    "pins": ["1", "2"],
+    "model": {
+      "spice": ["$(el:R) $(1) $(2) {$(r1lux)*pwr(max($(ext:lux),0.01),-$(gamma))}"],
+      "pro": ["$(el:R) $(1) $(2) {$(r1lux)*pwr(max($(world:lux),0.01),-$(gamma))} tol=0.1"],
+      "ext": [{"name": "lux", "default": 180}],
+      "behaviour": "ldr",
+      "device_pins": []
+    },
+    "inspector": [
+      {"label": "Resistance", "value": "≈ 350k·lux^-0.7 ±$(tolerance) %"},
+      {"label": "Dark", "value": "≥ 1 MΩ"},
+      {"label": "Response", "value": "rise 20 ms · decay 30 ms"},
+      {"label": "Model", "value": "world.lux → R(lux)"}
+    ],
+    "bench": {"art": "ldr", "layout": {"axial": 2}, "flexible": true},
+    "schematic": {"symbol": "photoresistor"},
+    "pcb": {"footprint": "OptoDevice:R_LDR_5.1x4.3mm_P3.4mm_Vertical"},
+    "tags": ["spice", "world"]
+  },
+  {
+    "id": "capsoil", "name": "Capacitive soil sensor v1.2", "category": "sensors",
+    "simple": true, "simple_name": "Soil moisture", "icon": "soil", "ref_prefix": "J",
+    "description": "Push it into a pot: analog output falls from ~3.0 V (dry) to ~1.4 V (wet).",
+    "props": [
+      {"key": "v_dry", "label": "Output at 0 % VWC", "unit": "V", "type": "number", "default": 3.03},
+      {"key": "slope", "label": "Slope", "unit": "V/%", "type": "number", "default": -0.02737},
+      {"key": "tau", "label": "Response τ", "unit": "s", "type": "number", "default": 1.8, "min": 0.01, "max": 60, "live": true},
+      {"key": "noise_lsb", "label": "Noise", "unit": "LSB", "type": "number", "default": 4, "min": 0, "max": 50, "live": true}
+    ],
+    "pins": ["GND:ground", "VCC:power_in", "AOUT:analog_out"],
+    "model": {
+      "behaviour": "capsoil",
+      "pro": ["$(el:X) $(VCC) $(GND) $(AOUT) CAPSOIL vwc=$(world:vwc)"],
+      "library": [
+        ".subckt CAPSOIL vcc vss out params: vwc=40\nB1 int vss V={3.03-0.02737*vwc}\nR1 int out 1k\nR2 vcc vss 1k\n.ends CAPSOIL"
+      ]
+    },
+    "inspector": [
+      {"label": "Supply", "value": "3.3–5.5 V"},
+      {"label": "Output (dry→wet)", "value": "3.0→1.4 V"},
+      {"label": "Response", "value": "τ ≈ $(tau) s"},
+      {"label": "Noise", "value": "±$(noise_lsb) LSB"},
+      {"label": "Model", "value": "soil.vwc → C(ε)"}
+    ],
+    "bench": {"art": "capsoil_v12", "layout": "row", "size": [3, 10]},
+    "schematic": {"symbol": "box"},
+    "pcb": {"footprint": "Connector_JST:JST_PH_B3B-PH-K_1x03_P2.00mm_Vertical"},
+    "tags": ["world"]
+  },
+  {
+    "id": "soil_resistive", "name": "Resistive soil probe", "part_number": "YL-69", "category": "sensors",
+    "icon": "soil", "ref_prefix": "J",
+    "description": "Two forks in the soil: resistance drops as the soil gets wetter.",
+    "props": [{"key": "r_wet", "label": "R at saturation", "unit": "Ω", "type": "number", "default": 2000}, {"key": "tau", "label": "Response τ", "unit": "s", "type": "number", "default": 3.0, "live": true}],
+    "pins": ["1", "2"],
+    "model": {
+      "spice": ["$(el:R) $(1) $(2) {$(r_wet)*pwr(60/max($(ext:vwc),0.5),1.6)}"],
+      "ext": [{"name": "vwc", "default": 40}],
+      "behaviour": "soil_resistive",
+      "device_pins": []
+    },
+    "inspector": [{"label": "Resistance", "value": "$(r_wet|Ω)·(60/VWC)^1.6"}],
+    "bench": {"art": "soil_fork", "layout": {"axial": 2}},
+    "schematic": {"symbol": "resistor"},
+    "tags": ["spice", "world"]
+  },
+  {
+    "id": "tmp36", "name": "TMP36 temperature sensor", "part_number": "TMP36", "category": "sensors",
+    "simple": true, "simple_name": "TMP36", "icon": "dht", "ref_prefix": "U",
+    "description": "Analog temperature: 0.5 V + 10 mV/°C. Feels nearby parts heating up.",
+    "props": [{"key": "tau", "label": "Thermal τ", "unit": "s", "type": "number", "default": 8, "min": 0.1, "max": 600, "live": true}],
+    "pins": ["VS:power_in:+Vs", "VOUT:analog_out", "GND:ground"],
+    "model": {
+      "behaviour": "tmp36",
+      "pro": ["$(el:B) $(n:o) $(GND) V={0.5+0.01*$(world:air.temp_c)}", "$(el:R) $(n:o) $(VOUT) 1"]
+    },
+    "inspector": [
+      {"label": "Supply", "value": "2.7–5.5 V · 50 µA"},
+      {"label": "Output", "value": "0.5 V + 10 mV/°C"},
+      {"label": "Accuracy", "value": "±1 °C"},
+      {"label": "Response", "value": "τ ≈ $(tau) s"}
+    ],
+    "bench": {"art": "to92", "layout": "row"},
+    "schematic": {"symbol": "box"},
+    "pcb": {"footprint": "Package_TO_SOT_THT:TO-92_Inline"},
+    "tags": ["world"]
+  },
+  {
+    "id": "dht22", "name": "DHT22 temperature & humidity", "part_number": "AM2302", "category": "sensors",
+    "simple": true, "simple_name": "Temp & humidity", "icon": "dht", "ref_prefix": "U",
+    "description": "Single-wire digital sensor (bit-accurate timing). Needs a pull-up on DATA.",
+    "props": [{"key": "noise", "label": "Noise", "type": "bool", "default": true}],
+    "pins": ["VCC:power_in", "DATA:io", "NC:nc", "GND:ground"],
+    "model": {"behaviour": "dht22"},
+    "inspector": [
+      {"label": "Range", "value": "−40–80 °C · 0–100 %RH"},
+      {"label": "Accuracy", "value": "±0.5 °C · ±2 %RH"},
+      {"label": "Protocol", "value": "single-wire, 40 bits, ≥ 2 s between reads"}
+    ],
+    "bench": {"art": "dht22", "layout": "row", "size": [4, 6]},
+    "schematic": {"symbol": "box"},
+    "pcb": {"footprint": "Sensor:Aosong_DHT11_5.5x12.0_P2.54mm"},
+    "tags": ["world"]
+  },
+  {
+    "id": "dht11", "name": "DHT11 temperature & humidity", "part_number": "DHT11", "category": "sensors",
+    "icon": "dht", "ref_prefix": "U",
+    "description": "The blue budget sibling: whole-degree readings, 1 s between reads.",
+    "pins": ["VCC:power_in", "DATA:io", "NC:nc", "GND:ground"],
+    "model": {"behaviour": "dht11"},
+    "inspector": [{"label": "Range", "value": "0–50 °C · 20–90 %RH"}, {"label": "Accuracy", "value": "±2 °C · ±5 %RH"}],
+    "bench": {"art": "dht11", "layout": "row", "size": [4, 5]},
+    "schematic": {"symbol": "box"},
+    "pcb": {"footprint": "Sensor:Aosong_DHT11_5.5x12.0_P2.54mm"},
+    "tags": ["world"]
+  },
+  {
+    "id": "ds18b20", "name": "DS18B20 temperature sensor", "part_number": "DS18B20", "category": "sensors",
+    "icon": "dht", "ref_prefix": "U",
+    "description": "1-Wire digital thermometer with a unique 64-bit ROM. Needs a 4.7 k pull-up.",
+    "props": [{"key": "serial", "label": "Serial number", "type": "number", "default": 1, "min": 0, "max": 281474976710655}],
+    "pins": ["GND:ground", "DQ:io", "VDD:power_in"],
+    "model": {"behaviour": "ds18b20"},
+    "inspector": [{"label": "Range", "value": "−55–125 °C"}, {"label": "Resolution", "value": "9–12 bit (750 ms at 12 bit)"}],
+    "bench": {"art": "to92", "layout": "row"},
+    "schematic": {"symbol": "box"},
+    "pcb": {"footprint": "Package_TO_SOT_THT:TO-92_Inline"},
+    "tags": ["world"]
+  },
+  {
+    "id": "bme280", "name": "BME280 breakout", "part_number": "BME280", "category": "sensors",
+    "icon": "imu", "ref_prefix": "U",
+    "description": "Pressure, temperature and humidity over I²C (address 0x76).",
+    "props": [{"key": "address", "label": "I²C address", "type": "choice", "default": "0x76", "options": [{"value": "0x76"}, {"value": "0x77"}]}],
+    "pins": ["VIN:power_in", "GND:ground", "SCL:input", "SDA:io"],
+    "model": {
+      "behaviour": "bme280",
+      "spice": ["$(el:R:scl) $(VIN) $(SCL) 10k", "$(el:R:sda) $(VIN) $(SDA) 10k", "$(el:R:q) $(VIN) $(GND) 1Meg"],
+      "device_pins": ["SCL", "SDA"]
+    },
+    "inspector": [{"label": "Interface", "value": "I²C · $(address)"}, {"label": "Pressure", "value": "300–1100 hPa ±1 hPa"}],
+    "bench": {"art": "breakout_4pin", "layout": "row", "size": [4, 4]},
+    "schematic": {"symbol": "box"},
+    "pcb": {"footprint": "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical"},
+    "tags": ["world", "spice"]
+  },
+  {
+    "id": "hc_sr04", "name": "Ultrasonic distance sensor", "part_number": "HC-SR04", "category": "sensors",
+    "simple_name": "Distance", "icon": "sonar", "ref_prefix": "U",
+    "description": "Pulse TRIG, time ECHO: 58 µs per cm to the nearest object in the world.",
+    "props": [{"key": "direction", "label": "Facing", "unit": "°", "type": "number", "default": -90, "live": true}],
+    "pins": ["VCC:power_in", "TRIG:input", "ECHO:output", "GND:ground"],
+    "model": {"behaviour": "hc_sr04"},
+    "inspector": [{"label": "Range", "value": "2–400 cm · 15° cone"}, {"label": "Echo", "value": "58 µs/cm"}],
+    "bench": {"art": "hc_sr04", "layout": "row", "size": [9, 4]},
+    "schematic": {"symbol": "box"},
+    "pcb": {"footprint": "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical"},
+    "tags": ["world"]
+  },
+  {
+    "id": "pir", "name": "PIR motion sensor", "part_number": "HC-SR501", "category": "sensors",
+    "simple_name": "Motion", "icon": "pir", "ref_prefix": "U",
+    "description": "OUT goes high for a few seconds when something warm moves nearby.",
+    "props": [
+      {"key": "hold_s", "label": "Hold time", "unit": "s", "type": "number", "default": 3, "min": 0.5, "max": 300, "live": true},
+      {"key": "range_m", "label": "Range", "unit": "m", "type": "number", "default": 3, "min": 0.1, "max": 7},
+      {"key": "warmup_s", "label": "Warm-up", "unit": "s", "type": "number", "default": 1, "min": 0, "max": 60}
+    ],
+    "pins": ["VCC:power_in", "OUT:output", "GND:ground"],
+    "model": {"behaviour": "pir"},
+    "bench": {"art": "pir", "layout": "row", "size": [5, 5]},
+    "schematic": {"symbol": "box"},
+    "pcb": {"footprint": "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical"},
+    "tags": ["world"]
+  },
+  {
+    "id": "tilt_switch", "name": "Tilt switch", "part_number": "SW-520D", "category": "sensors",
+    "icon": "btn", "ref_prefix": "SW",
+    "description": "A rolling ball closes the contacts when upright; tip it to open.",
+    "props": [{"key": "tilted", "label": "Tilted", "type": "bool", "default": false, "live": true}],
+    "pins": ["1", "2"],
+    "model": {"spice": ["$(el:R) $(1) $(2) {0.1+(1-$(ext:closed))*1e9}"], "ext": [{"name": "closed", "default": 1}], "behaviour": "switch"},
+    "bench": {"art": "tilt_switch", "layout": {"axial": 1}},
+    "schematic": {"symbol": "switch"},
+    "tags": ["spice", "world"]
+  },
+  {
+    "id": "hall_sensor", "name": "Hall sensor", "part_number": "A3144", "category": "sensors",
+    "icon": "imu", "ref_prefix": "U",
+    "description": "Open-collector output pulls low near a magnet's south pole.",
+    "pins": ["VCC:power_in", "GND:ground", "OUT:open_drain"],
+    "model": {"behaviour": "hall"},
+    "inspector": [{"label": "Operate / release", "value": "≈ 25 / 15 mT"}],
+    "bench": {"art": "to92", "layout": "row"},
+    "schematic": {"symbol": "box"},
+    "tags": ["world"]
+  },
+  {
+    "id": "microphone", "name": "Microphone module", "part_number": "MAX4466", "category": "sensors",
+    "icon": "buzz", "ref_prefix": "MK",
+    "description": "Analog mic + amplifier: VCC/2 with the sound wave riding on top.",
+    "props": [{"key": "gain", "label": "Gain", "type": "number", "default": 1.0, "min": 0.1, "max": 5, "live": true}],
+    "pins": ["OUT:analog_out", "GND:ground", "VCC:power_in"],
+    "model": {"behaviour": "microphone"},
+    "bench": {"art": "breakout_3pin", "layout": "row", "size": [3, 4]},
+    "schematic": {"symbol": "box"},
+    "tags": ["world"]
+  },
+  {
+    "id": "thermistor", "name": "Thermistor 10k NTC", "category": "sensors",
+    "icon": "res", "ref_prefix": "TH",
+    "description": "Resistance falls as it warms (B = 3950). 10 kΩ at 25 °C.",
+    "props": [
+      {"key": "r25", "label": "R at 25 °C", "unit": "Ω", "type": "number", "default": 10000},
+      {"key": "beta", "label": "B constant", "unit": "K", "type": "number", "default": 3950},
+      {"key": "tau", "label": "Thermal τ", "unit": "s", "type": "number", "default": 5, "live": true}
+    ],
+    "pins": ["1", "2"],
+    "model": {
+      "spice": ["$(el:R) $(1) $(2) {$(r25)*exp($(beta)*(1/($(ext:temp)+273.15)-1/298.15))}"],
+      "ext": [{"name": "temp", "default": 21}],
+      "behaviour": "thermistor",
+      "device_pins": []
+    },
+    "inspector": [{"label": "R25", "value": "$(r25|Ω)"}, {"label": "B", "value": "$(beta) K"}],
+    "bench": {"art": "thermistor", "layout": {"axial": 2}},
+    "schematic": {"symbol": "thermistor"},
+    "pcb": {"footprint": "Resistor_THT:R_Axial_DIN0204_L3.6mm_D1.6mm_P5.08mm_Horizontal"},
+    "tags": ["spice", "world"]
+  },
+  {
+    "id": "pot_of_soil", "name": "Pot of soil", "category": "sensors",
+    "icon": "soil", "ref_prefix": "POT",
+    "description": "A plant pot on the bench: soil sensors pushed into it read its moisture.",
+    "props": [{"key": "pot", "label": "World pot", "type": "text", "default": "pot1"}],
+    "pins": [],
+    "model": {},
+    "bench": {"art": "pot_soil", "off_board": true, "size": [16, 14]},
+    "schematic": {"symbol": "none"},
+    "tags": ["world"]
+  },
+  {
+    "id": "hand", "name": "Hand", "category": "sensors",
+    "icon": "pir", "ref_prefix": "OBJ",
+    "description": "Drag it in front of a distance or motion sensor.",
+    "props": [{"key": "object", "label": "World object", "type": "text", "default": "hand"}],
+    "pins": [],
+    "model": {},
+    "bench": {"art": "hand", "off_board": true, "size": [8, 10]},
+    "schematic": {"symbol": "none"},
+    "tags": ["world"]
+  }
+]

@@ -1,0 +1,150 @@
+[
+  {
+    "id": "lcd_1602", "name": "16×2 LCD", "part_number": "HD44780", "category": "displays",
+    "simple": true, "icon": "lcd", "ref_prefix": "LCD",
+    "description": "Character display (HD44780, 4- or 8-bit). Works with the LiquidCrystal library.",
+    "pins": ["VSS:ground", "VDD:power_in", "V0:input", "RS:input", "RW:input", "E:input", "D0:io", "D1:io", "D2:io", "D3:io", "D4:io", "D5:io", "D6:io", "D7:io", "A:passive", "K:passive"],
+    "model": {
+      "spice": ["$(el:R:q) $(VDD) $(VSS) 3.3k", "$(el:R:v0) $(V0) $(VSS) 1Meg", "$(el:D:bl) $(A) $(n:bl) LED_LCD_BL", "$(el:R:bl) $(n:bl) $(K) 10"],
+      "library": [".model LED_LCD_BL D(Is=1e-22 N=1.9 Rs=4)"],
+      "behaviour": "hd44780",
+      "device_pins": ["RS", "RW", "E", "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7"]
+    },
+    "inspector": [{"label": "Controller", "value": "HD44780 · 4/8-bit"}, {"label": "Backlight", "value": "LED via A/K"}],
+    "bench": {"art": "lcd_1602", "layout": "row", "size": [32, 14]},
+    "schematic": {"symbol": "box"},
+    "pcb": {"footprint": "Display:WC1602A"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "lcd_1602_i2c", "name": "16×2 LCD with I²C backpack", "part_number": "PCF8574", "category": "displays",
+    "icon": "lcd", "ref_prefix": "LCD",
+    "description": "The same display through a PCF8574 backpack: just SDA and SCL (address 0x27).",
+    "props": [{"key": "address", "label": "I²C address", "type": "choice", "default": "0x27", "options": [{"value": "0x27"}, {"value": "0x3F"}, {"value": "0x20"}]}],
+    "pins": ["GND:ground", "VCC:power_in", "SDA:io", "SCL:input"],
+    "model": {
+      "spice": ["$(el:R:q) $(VCC) $(GND) 220", "$(el:R:sda) $(VCC) $(SDA) 4.7k", "$(el:R:scl) $(VCC) $(SCL) 4.7k"],
+      "behaviour": "hd44780_i2c",
+      "device_pins": ["SDA", "SCL"]
+    },
+    "inspector": [{"label": "Interface", "value": "I²C · $(address)"}],
+    "bench": {"art": "lcd_1602_i2c", "layout": "row", "size": [32, 14]},
+    "schematic": {"symbol": "box"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "ssd1306", "name": "OLED 128×64", "part_number": "SSD1306", "category": "displays",
+    "simple_name": "OLED screen", "icon": "oled", "ref_prefix": "DISP",
+    "description": "0.96\" monochrome OLED over I²C (address 0x3C). Draw with Adafruit_SSD1306.",
+    "props": [{"key": "address", "label": "I²C address", "type": "choice", "default": "0x3C", "options": [{"value": "0x3C"}, {"value": "0x3D"}]}],
+    "pins": ["GND:ground", "VCC:power_in", "SCL:input", "SDA:io"],
+    "model": {
+      "spice": ["$(el:R:q) $(VCC) $(GND) 250", "$(el:R:sda) $(VCC) $(SDA) 10k", "$(el:R:scl) $(VCC) $(SCL) 10k"],
+      "behaviour": "ssd1306",
+      "device_pins": ["SDA", "SCL"]
+    },
+    "inspector": [{"label": "Resolution", "value": "128 × 64 px"}, {"label": "Interface", "value": "I²C · $(address)"}],
+    "bench": {"art": "oled_096", "layout": "row", "size": [11, 11]},
+    "schematic": {"symbol": "box"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "dc_motor", "name": "DC motor", "category": "motors_actuators",
+    "simple": true, "icon": "motor", "ref_prefix": "M",
+    "description": "Hobby motor with back-EMF: spins faster with more voltage, draws more when loaded.",
+    "props": [
+      {"key": "r_arm", "label": "Winding resistance", "unit": "Ω", "type": "number", "default": 2.5, "min": 0.1, "max": 100},
+      {"key": "kv", "label": "Speed constant", "unit": "rpm/V", "type": "number", "default": 1200},
+      {"key": "load", "label": "Load torque", "unit": "mN·m", "type": "number", "default": 0.2, "min": 0, "max": 20, "live": true}
+    ],
+    "pins": ["plus::+", "minus::−"],
+    "model": {
+      "spice": ["$(el:R) $(plus) $(n:m) $(r_arm)", "$(el:V:emf) $(n:m) $(minus) {$(ext:emf)}"],
+      "ext": [{"name": "emf", "default": 0}],
+      "behaviour": "dc_motor",
+      "device_pins": []
+    },
+    "inspector": [{"label": "Rated", "value": "3–6 V · no-load $(kv) rpm/V"}, {"label": "Stall current", "value": "≈ 2 A at 5 V"}],
+    "ratings": [{"element": "R", "kind": "power", "limit": 3.0, "tau": 2.0, "destroy_at": 3.0, "message": "motor winding burnt", "effect": "smoke"}],
+    "bench": {"art": "dc_motor", "layout": {"axial": 2}, "off_board": true, "size": [8, 6]},
+    "schematic": {"symbol": "motor"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "vibration_motor", "name": "Vibration motor", "category": "motors_actuators",
+    "icon": "motor", "ref_prefix": "M",
+    "description": "Coin vibration motor (3 V, ~70 mA).",
+    "props": [
+      {"key": "r_arm", "label": "Winding resistance", "unit": "Ω", "type": "number", "default": 30},
+      {"key": "kv", "label": "Speed constant", "unit": "rpm/V", "type": "number", "default": 4000},
+      {"key": "load", "label": "Load torque", "unit": "mN·m", "type": "number", "default": 0.02}
+    ],
+    "pins": ["plus::+", "minus::−"],
+    "model": {
+      "spice": ["$(el:R) $(plus) $(n:m) $(r_arm)", "$(el:V:emf) $(n:m) $(minus) {$(ext:emf)}"],
+      "ext": [{"name": "emf", "default": 0}],
+      "behaviour": "dc_motor",
+      "device_pins": []
+    },
+    "bench": {"art": "vibration_motor", "layout": {"axial": 2}},
+    "schematic": {"symbol": "motor"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "water_pump", "name": "Water pump", "category": "motors_actuators",
+    "simple_name": "Water pump", "icon": "pump", "ref_prefix": "M",
+    "description": "Small submersible pump: switch it with a relay or transistor to water the pot.",
+    "props": [
+      {"key": "flow_ml_s", "label": "Flow at 5 V", "unit": "ml/s", "type": "number", "default": 20},
+      {"key": "pot", "label": "Waters pot", "type": "text", "default": "pot1"}
+    ],
+    "pins": ["plus::+", "minus::−"],
+    "model": {"spice": ["$(el:R) $(plus) $(minus) 25"], "behaviour": "pump", "device_pins": []},
+    "bench": {"art": "water_pump", "layout": {"axial": 2}, "off_board": true, "size": [6, 6]},
+    "schematic": {"symbol": "motor"},
+    "tags": ["spice", "world"]
+  },
+  {
+    "id": "servo", "name": "Servo", "part_number": "SG90", "category": "motors_actuators",
+    "simple": true, "icon": "servo", "ref_prefix": "M",
+    "description": "Pulse width sets the angle: 544 µs = 0°, 2400 µs = 180°. Moves at 600°/s.",
+    "pins": ["GND:ground:brown", "VCC:power_in:red", "SIG:input:orange"],
+    "model": {"behaviour": "servo"},
+    "inspector": [{"label": "Pulse", "value": "544–2400 µs @ 50 Hz"}, {"label": "Speed", "value": "0.1 s / 60°"}, {"label": "Current", "value": "10 mA idle · 200 mA moving"}],
+    "bench": {"art": "sg90", "layout": "row", "off_board": true, "size": [12, 6]},
+    "schematic": {"symbol": "box"},
+    "tags": []
+  },
+  {
+    "id": "stepper_28byj48", "name": "Stepper motor", "part_number": "28BYJ-48", "category": "motors_actuators",
+    "icon": "step", "ref_prefix": "M",
+    "description": "5 V unipolar stepper, 2048 steps per turn. Drive the coils with a ULN2003.",
+    "pins": ["COM:power_in:red", "A:passive:orange", "B:passive:yellow", "C:passive:pink", "D:passive:blue"],
+    "model": {
+      "spice": ["$(el:R:a) $(COM) $(A) 50", "$(el:R:b) $(COM) $(B) 50", "$(el:R:c) $(COM) $(C) 50", "$(el:R:d) $(COM) $(D) 50"],
+      "behaviour": "stepper",
+      "device_pins": []
+    },
+    "inspector": [{"label": "Steps", "value": "2048 / rev (full step)"}, {"label": "Coils", "value": "4 × 50 Ω to COM"}],
+    "bench": {"art": "stepper_28byj48", "layout": "row", "off_board": true, "size": [12, 12]},
+    "schematic": {"symbol": "box"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "relay_module", "name": "Relay module", "category": "motors_actuators",
+    "simple_name": "Relay", "icon": "relay", "ref_prefix": "K",
+    "description": "5 V relay with driver: IN switches COM between NC and NO (with a click).",
+    "props": [{"key": "active_low", "label": "Active low input", "type": "bool", "default": false}],
+    "pins": ["VCC:power_in", "GND:ground", "IN:input", "COM:passive", "NO:passive", "NC:passive"],
+    "model": {
+      "spice": ["$(el:R:no) $(COM) $(NO) {0.05+(1-$(ext:on))*1e9}", "$(el:R:nc) $(COM) $(NC) {0.05+$(ext:on)*1e9}"],
+      "ext": [{"name": "on", "default": 0}],
+      "behaviour": "relay",
+      "device_pins": ["VCC", "IN"]
+    },
+    "inspector": [{"label": "Coil", "value": "5 V · 70 mA"}, {"label": "Contacts", "value": "10 A 250 V AC"}],
+    "bench": {"art": "relay_module", "layout": "row", "size": [10, 8]},
+    "schematic": {"symbol": "box"},
+    "tags": ["spice"]
+  }
+]

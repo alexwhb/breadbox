@@ -1,0 +1,118 @@
+[
+  {
+    "id": "esp01", "name": "ESP-01 Wi-Fi module", "part_number": "ESP8266", "category": "radios",
+    "simple": true, "simple_name": "ESP-01 Wi-Fi", "icon": "radio", "ref_prefix": "U",
+    "description": "ESP8266 speaking ESP-AT over its UART. 3.3 V only — mind the 5 V TX line.",
+    "props": [{"key": "baud", "label": "UART baud", "type": "number", "default": 115200}],
+    "pins": [
+      {"id": "GND", "role": "ground"}, {"id": "TX", "role": "output"}, {"id": "GPIO2", "role": "io", "max_voltage": 3.6},
+      {"id": "EN", "role": "input", "max_voltage": 3.6, "name": "CH_PD"}, {"id": "GPIO0", "role": "io", "max_voltage": 3.6},
+      {"id": "RST", "role": "input", "max_voltage": 3.6}, {"id": "RX", "role": "input", "max_voltage": 3.6}, {"id": "VCC", "role": "power_in", "max_voltage": 3.6}
+    ],
+    "model": {"behaviour": "esp01"},
+    "inspector": [{"label": "Firmware", "value": "ESP-AT 2.x"}, {"label": "Supply", "value": "3.3 V · 70 mA avg, 300 mA peaks"}, {"label": "UART", "value": "$(baud) baud 8N1"}],
+    "bench": {"art": "esp01", "off_board": true, "layout": {"rows": {"spacing": 1, "rows": [["GND", "GPIO2", "GPIO0", "RX"], ["TX", "EN", "RST", "VCC"]]}}},
+    "schematic": {"symbol": "box"},
+    "tags": ["radio"]
+  },
+  {
+    "id": "hm10", "name": "HM-10 BLE module", "category": "radios",
+    "simple": true, "simple_name": "HM-10 BLE", "icon": "radio", "ref_prefix": "U",
+    "description": "Bluetooth LE serial module (AT commands, transparent UART) — pair a virtual phone.",
+    "props": [{"key": "baud", "label": "UART baud", "type": "number", "default": 9600}],
+    "pins": ["VCC:power_in", "GND:ground", "TXD:output", "RXD:input", "STATE:output", "BRK:input"],
+    "model": {"behaviour": "hm10"},
+    "inspector": [{"label": "Radio", "value": "BLE 4.0 · FFE0/FFE1"}, {"label": "UART", "value": "$(baud) baud"}],
+    "bench": {"art": "hm10", "layout": "row", "size": [6, 10]},
+    "schematic": {"symbol": "box"},
+    "tags": ["radio"]
+  },
+  {
+    "id": "hc05", "name": "HC-05 Bluetooth module", "category": "radios",
+    "icon": "radio", "ref_prefix": "U",
+    "description": "Classic Bluetooth SPP serial module.",
+    "props": [{"key": "baud", "label": "UART baud", "type": "number", "default": 9600}],
+    "pins": ["EN:input", "VCC:power_in", "GND:ground", "TXD:output", "RXD:input", "STATE:output"],
+    "model": {"behaviour": "hc05"},
+    "bench": {"art": "hc05", "layout": "row", "size": [6, 14]},
+    "schematic": {"symbol": "box"},
+    "tags": ["radio"]
+  },
+  {
+    "id": "mini_scope", "name": "Mini oscilloscope", "category": "instruments",
+    "icon": "scope", "ref_prefix": "SCOPE",
+    "description": "Built-in 2-channel bench scope: clip CH1/CH2 to any net.",
+    "pins": ["CH1:input", "CH2:input", "GND:ground"],
+    "model": {"behaviour": "instrument"},
+    "bench": {"art": "mini_scope", "layout": "row", "off_board": true, "size": [14, 9]},
+    "schematic": {"symbol": "none"},
+    "tags": ["instrument"]
+  },
+  {
+    "id": "dmm", "name": "Multimeter", "category": "instruments",
+    "icon": "dmm", "ref_prefix": "DMM",
+    "description": "Bench multimeter (DC volts). The Handheld DMM plugin adds every mode.",
+    "pins": ["VO:input:VΩ", "COM:passive"],
+    "model": {"behaviour": "instrument"},
+    "bench": {"art": "dmm", "layout": "row", "off_board": true, "size": [12, 16]},
+    "schematic": {"symbol": "none"},
+    "tags": ["instrument"]
+  },
+  {
+    "id": "gnd", "name": "Ground", "category": "spice",
+    "icon": "src", "ref_prefix": "#GND",
+    "description": "Ground symbol: every GND symbol is the same net (0).",
+    "pins": ["0:ground:GND"],
+    "model": {},
+    "bench": {"hidden": true},
+    "schematic": {"symbol": "ground"},
+    "tags": ["symbol"]
+  },
+  {
+    "id": "power_symbol", "name": "Power symbol", "category": "spice",
+    "icon": "src", "ref_prefix": "#PWR",
+    "description": "Names a supply net (VCC, 5V, 3V3): same name = same net.",
+    "props": [{"key": "net", "label": "Net", "type": "text", "default": "VCC"}],
+    "pins": ["1:passive"],
+    "model": {},
+    "bench": {"hidden": true},
+    "schematic": {"symbol": "vcc"},
+    "tags": ["symbol"]
+  },
+  {
+    "id": "vsource", "name": "Voltage source", "category": "spice",
+    "icon": "src", "ref_prefix": "V",
+    "description": "Independent voltage source: DC, AC, PULSE, SIN, PWL …",
+    "props": [{"key": "spec", "label": "Value", "type": "text", "default": "DC 5"}],
+    "pins": ["plus:power_out:+", "minus:passive:−"],
+    "model": {"spice": ["$(el:V) $(plus) $(minus) $(spec)"]},
+    "bench": {"art": "source", "layout": {"axial": 2}, "off_board": true},
+    "schematic": {"symbol": "vsource"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "isource", "name": "Current source", "category": "spice",
+    "icon": "src", "ref_prefix": "I",
+    "description": "Independent current source (flows from + through the source to −).",
+    "props": [{"key": "spec", "label": "Value", "type": "text", "default": "DC 1m"}],
+    "pins": ["plus", "minus"],
+    "model": {"spice": ["$(el:I) $(plus) $(minus) $(spec)"]},
+    "bench": {"art": "source", "layout": {"axial": 2}, "off_board": true},
+    "schematic": {"symbol": "isource"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "spice_card", "name": "SPICE element", "category": "spice",
+    "icon": "src", "ref_prefix": "X",
+    "description": "Any SPICE card: E F G H B S W T X … with $(1) … $(n) for its nodes.",
+    "props": [
+      {"key": "card", "label": "Card", "type": "text", "default": "$(el:E) $(1) $(2) $(3) $(4) 10"},
+      {"key": "nodes", "label": "Nodes", "type": "number", "default": 4, "min": 1, "max": 16}
+    ],
+    "pins": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"],
+    "model": {"spice": ["$(prop:card)"]},
+    "bench": {"art": "spice_box", "layout": "row", "off_board": true},
+    "schematic": {"symbol": "box"},
+    "tags": ["spice"]
+  }
+]

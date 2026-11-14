@@ -597,6 +597,28 @@ impl CircuitBuilder {
         Ok(self)
     }
 
+    /// Appends element, `.model`, `.subckt`, `.param` and `.func` cards parsed from netlist
+    /// text (no title line) — used by bb-circuit to instantiate part templates.
+    pub fn cards(&mut self, text: &str) -> Result<&mut Self, SimError> {
+        let lib = Library::parse(text)?;
+        let s = lib.scope;
+        for e in s.elements {
+            self.nl.top.elements.retain(|x| x.name != e.name);
+            self.nl.top.elements.push(e);
+        }
+        for m in s.models {
+            self.nl.top.models.retain(|x| x.name != m.name);
+            self.nl.top.models.push(m);
+        }
+        for sc in s.subckts {
+            self.nl.top.subckts.retain(|x| x.name != sc.name);
+            self.nl.top.subckts.push(sc);
+        }
+        self.nl.top.params.extend(s.params);
+        self.nl.top.funcs.extend(s.funcs);
+        Ok(self)
+    }
+
     /// Finishes the netlist.
     pub fn build(&self) -> Netlist {
         self.nl.clone()

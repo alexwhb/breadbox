@@ -1,0 +1,265 @@
+[
+  {
+    "id": "diode", "name": "Diode", "category": "semiconductors",
+    "simple": true, "icon": "diode", "ref_prefix": "D",
+    "description": "Current flows one way: 1N4148 signal, 1N4007 rectifier, 1N5819 Schottky, 5V1 Zener.",
+    "props": [{"key": "model", "label": "Type", "type": "choice", "default": "1N4007", "options": [
+      {"value": "1N4148", "label": "1N4148 signal"}, {"value": "1N4007", "label": "1N4007 rectifier"},
+      {"value": "1N5819", "label": "1N5819 Schottky"}, {"value": "1N4733A", "label": "Zener 5V1"}
+    ]}],
+    "pins": ["a:passive:A", "k:passive:K"],
+    "model": {
+      "spice": ["$(el:D) $(a) $(k) D$(prop:model)"],
+      "library": [
+        "?model=1N4148:.model D1N4148 D(IS=2.52n RS=0.568 N=1.752 CJO=4p M=0.4 TT=20n BV=100 IBV=100u)",
+        "?model=1N4007:.model D1N4007 D(IS=7.02767n RS=0.0341512 N=1.80803 EG=1.05743 XTI=5 BV=1000 IBV=5e-08 CJO=1e-11 VJ=0.7 M=0.5 FC=0.5 TT=1e-07)",
+        "?model=1N5819:.model D1N5819 D(IS=31.7u RS=0.051 N=1.373 CJO=110p M=0.35 EG=0.69 XTI=2 BV=40 IBV=1m)",
+        "?model=1N4733A:.model D1N4733A D(IS=1.2n RS=1 N=1.5 BV=5.1 IBV=49m CJO=97p)"
+      ]
+    },
+    "inspector": [{"label": "Type", "value": "$(model)"}],
+    "ratings": [{"element": "D", "kind": "current", "limit": 1.0, "tau": 0.5, "destroy_at": 3.0, "message": "diode over-current", "effect": "short"}],
+    "bench": {"art": "diode_axial", "layout": {"axial": 4}, "flexible": true},
+    "schematic": {"symbol": "diode"},
+    "pcb": {"footprint": "Diode_THT:D_DO-41_SOD81_P10.16mm_Horizontal", "smd": "Diode_SMD:D_SOD-123"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "npn", "name": "NPN transistor", "category": "semiconductors",
+    "simple": true, "simple_name": "Transistor", "icon": "bjt", "ref_prefix": "Q",
+    "description": "Small current into the base switches a big one through collector → emitter.",
+    "props": [{"key": "model", "label": "Type", "type": "choice", "default": "2N2222", "options": [{"value": "2N2222"}, {"value": "2N3904"}, {"value": "TIP120", "label": "TIP120 Darlington"}]}],
+    "pins": ["E", "B", "C"],
+    "model": {
+      "spice": [
+        "?model!=TIP120:$(el:Q) $(C) $(B) $(E) Q$(prop:model)",
+        "?model=TIP120:$(el:X) $(C) $(B) $(E) TIP120"
+      ],
+      "library": [
+        "?model=2N2222:.model Q2N2222 NPN(IS=14.34f XTI=3 EG=1.11 VAF=74.03 BF=255.9 NE=1.307 ISE=14.34f IKF=.2847 XTB=1.5 BR=6.092 NC=2 ISC=0 IKR=0 RC=1 CJC=7.306p MJC=.3416 VJC=.75 FC=.5 CJE=22.01p MJE=.377 VJE=.75 TR=46.91n TF=411.1p ITF=.6 VTF=1.7 XTF=3 RB=10)",
+        "?model=2N3904:.model Q2N3904 NPN(IS=6.734f XTI=3 EG=1.11 VAF=74.03 BF=416.4 NE=1.259 ISE=6.734f IKF=66.78m XTB=1.5 BR=.7371 NC=2 ISC=0 IKR=0 RC=1 CJC=3.638p MJC=.3085 VJC=.75 FC=.5 CJE=4.493p MJE=.2593 VJE=.75 TR=239.5n TF=301.2p ITF=.4 VTF=4 XTF=2 RB=10)",
+        "?model=TIP120:.subckt TIP120 c b e\nQ1 c b n1 QTIP_DRV\nQ2 c n1 e QTIP_OUT\nR1 b n1 8k\nR2 n1 e 120\nD1 e c DTIP_FLY\n.model QTIP_DRV NPN(IS=1e-14 BF=100 VAF=100 RB=10 CJE=50p CJC=30p TF=1n)\n.model QTIP_OUT NPN(IS=1e-12 BF=60 VAF=100 RB=1 RC=0.05 IKF=5 CJE=500p CJC=200p TF=10n)\n.model DTIP_FLY D(IS=1e-12 RS=0.05)\n.ends TIP120"
+      ]
+    },
+    "inspector": [{"label": "Type", "value": "$(model) NPN"}, {"label": "Pinout", "value": "E B C (flat side facing you)"}],
+    "ratings": [{"element": "Q", "kind": "current", "limit": 0.6, "tau": 0.2, "destroy_at": 3.0, "message": "transistor over-current", "effect": "smoke"}],
+    "bench": {"art": "to92", "layout": "row"},
+    "schematic": {"symbol": "npn", "pins": [{"pin": "C", "x": 1, "y": -3, "dir": "up"}, {"pin": "B", "x": -3, "y": 0, "dir": "left"}, {"pin": "E", "x": 1, "y": 3, "dir": "down"}]},
+    "pcb": {"footprint": "Package_TO_SOT_THT:TO-92_Inline", "smd": "Package_TO_SOT_SMD:SOT-23"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "pnp", "name": "PNP transistor", "part_number": "2N3906", "category": "semiconductors",
+    "icon": "bjt", "ref_prefix": "Q",
+    "description": "The mirror image of an NPN: pull the base low to switch on.",
+    "pins": ["E", "B", "C"],
+    "model": {
+      "spice": ["$(el:Q) $(C) $(B) $(E) Q2N3906"],
+      "library": [".model Q2N3906 PNP(IS=1.41f XTI=3 EG=1.11 VAF=18.7 BF=180.7 NE=1.5 ISE=0 IKF=80m XTB=1.5 BR=4.977 NC=2 ISC=0 IKR=0 RC=2.5 CJC=9.728p MJC=.5776 VJC=.75 FC=.5 CJE=8.063p MJE=.3677 VJE=.75 TR=33.42n TF=179.3p ITF=.4 VTF=4 XTF=6 RB=10)"]
+    },
+    "ratings": [{"element": "Q", "kind": "current", "limit": 0.2, "tau": 0.2, "destroy_at": 3.0, "message": "transistor over-current", "effect": "smoke"}],
+    "bench": {"art": "to92", "layout": "row"},
+    "schematic": {"symbol": "pnp", "pins": [{"pin": "C", "x": 1, "y": 3, "dir": "down"}, {"pin": "B", "x": -3, "y": 0, "dir": "left"}, {"pin": "E", "x": 1, "y": -3, "dir": "up"}]},
+    "pcb": {"footprint": "Package_TO_SOT_THT:TO-92_Inline"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "nmos", "name": "N-channel MOSFET", "category": "semiconductors",
+    "icon": "mos", "ref_prefix": "Q",
+    "description": "Voltage on the gate switches drain → source. 2N7000 small signal or IRLZ44N logic-level power.",
+    "props": [{"key": "model", "label": "Type", "type": "choice", "default": "2N7000", "options": [{"value": "2N7000"}, {"value": "IRLZ44N"}]}],
+    "pins": ["S", "G", "D"],
+    "model": {
+      "spice": [
+        "$(el:M) $(D) $(G) $(S) $(S) M$(prop:model)",
+        "?model=IRLZ44N:$(el:D:body) $(S) $(D) DBODY_IRLZ44N"
+      ],
+      "library": [
+        "?model=2N7000:.model M2N7000 NMOS(LEVEL=1 VTO=2.0 KP=0.27 LAMBDA=0.01 RD=1.2 RS=0.5 CGSO=20n CGDO=5n)",
+        "?model=IRLZ44N:.model MIRLZ44N NMOS(LEVEL=1 VTO=1.6 KP=40 LAMBDA=0.005 RD=0.01 RS=0.008 CGSO=1.5u CGDO=0.3u)",
+        "?model=IRLZ44N:.model DBODY_IRLZ44N D(IS=1e-12 RS=0.01)"
+      ]
+    },
+    "ratings": [{"element": "M", "kind": "current", "limit": 0.2, "tau": 0.5, "destroy_at": 5.0, "message": "MOSFET over-current", "effect": "smoke"}],
+    "bench": {"art": "to92", "layout": "row"},
+    "schematic": {"symbol": "nmos", "pins": [{"pin": "D", "x": 1, "y": -3, "dir": "up"}, {"pin": "G", "x": -3, "y": 0, "dir": "left"}, {"pin": "S", "x": 1, "y": 3, "dir": "down"}]},
+    "pcb": {"footprint": "Package_TO_SOT_THT:TO-92_Inline"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "opamp_lm358", "name": "LM358 dual op-amp", "part_number": "LM358", "category": "ics",
+    "icon": "opamp", "ref_prefix": "U",
+    "description": "Two single-supply op-amps, 1 MHz GBW, output to ~Vcc−1.5 V.",
+    "pins": ["OUT1:output", "IN1-:input", "IN1+:input", "VEE:ground:GND", "IN2+:input", "IN2-:input", "OUT2:output", "VCC:power_in"],
+    "model": {
+      "spice": [
+        "$(el:X:a) $(IN1+) $(IN1-) $(OUT1) $(VCC) $(VEE) OPA_LM358",
+        "$(el:X:b) $(IN2+) $(IN2-) $(OUT2) $(VCC) $(VEE) OPA_LM358"
+      ],
+      "library": [".subckt OPA_LM358 inp inn out vcc vee\nRin inp inn 2Meg\nE1 n1 0 inp inn 1e5\nR1 n1 n2 1k\nC1 n2 0 15.9u\nB1 n3 0 V=(v(vcc)-1.5+v(vee)+0.005)/2+max((v(vcc)-1.5-v(vee)-0.005)/2,0.01)*tanh((v(n2)-(v(vcc)-1.5+v(vee)+0.005)/2)/max((v(vcc)-1.5-v(vee)-0.005)/2,0.01))\nR2 n3 out 50\nRq vcc vee 7k\n.ends OPA_LM358"]
+    },
+    "bench": {"art": "dip", "layout": {"dip": 3}},
+    "schematic": {"symbol": "box"},
+    "pcb": {"footprint": "Package_DIP:DIP-8_W7.62mm"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "opamp_tl072", "name": "TL072 dual op-amp", "part_number": "TL072", "category": "ics",
+    "icon": "opamp", "ref_prefix": "U",
+    "description": "Low-noise JFET-input dual op-amp, 3 MHz GBW, split supply.",
+    "pins": ["OUT1:output", "IN1-:input", "IN1+:input", "VEE:power_in", "IN2+:input", "IN2-:input", "OUT2:output", "VCC:power_in"],
+    "model": {
+      "spice": [
+        "$(el:X:a) $(IN1+) $(IN1-) $(OUT1) $(VCC) $(VEE) OPA_TL072",
+        "$(el:X:b) $(IN2+) $(IN2-) $(OUT2) $(VCC) $(VEE) OPA_TL072"
+      ],
+      "library": [".subckt OPA_TL072 inp inn out vcc vee\nRin inp inn 1T\nE1 n1 0 inp inn 2e5\nR1 n1 n2 1k\nC1 n2 0 10.6u\nB1 n3 0 V=(v(vcc)+v(vee))/2+max((v(vcc)-v(vee))/2-1.5,0.01)*tanh((v(n2)-(v(vcc)+v(vee))/2)/max((v(vcc)-v(vee))/2-1.5,0.01))\nR2 n3 out 100\nRq vcc vee 2.5k\n.ends OPA_TL072"]
+    },
+    "bench": {"art": "dip", "layout": {"dip": 3}},
+    "schematic": {"symbol": "box"},
+    "pcb": {"footprint": "Package_DIP:DIP-8_W7.62mm"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "opamp_ideal", "name": "Ideal op-amp", "category": "ics",
+    "icon": "opamp", "ref_prefix": "U",
+    "description": "Infinite-ish gain, no rails, no limits — the textbook op-amp.",
+    "pins": ["+:input", "-:input", "out:output"],
+    "model": {"spice": ["$(el:E) $(out) 0 $(+) $(-) 1e6"]},
+    "bench": {"art": "opamp_module", "layout": "row"},
+    "schematic": {"symbol": "opamp", "pins": [{"pin": "+", "x": -4, "y": 1, "dir": "left"}, {"pin": "-", "x": -4, "y": -1, "dir": "left"}, {"pin": "out", "x": 4, "y": 0, "dir": "right"}]},
+    "tags": ["spice"]
+  },
+  {
+    "id": "ne555", "name": "555 timer", "part_number": "NE555", "category": "ics",
+    "icon": "dip", "ref_prefix": "U",
+    "description": "The timer everyone knows: astable blinkers, monostable pulses, PWM.",
+    "pins": ["GND:ground", "TRIG:input", "OUT:output", "RESET:input", "CTRL:passive", "THR:input", "DIS:open_drain", "VCC:power_in"],
+    "model": {
+      "spice": [
+        "$(el:R:d1) $(VCC) $(CTRL) 5k",
+        "$(el:R:d2) $(CTRL) $(n:lo) 5k",
+        "$(el:R:d3) $(n:lo) $(GND) 5k",
+        "$(el:R:q) $(VCC) $(GND) 1.5k"
+      ],
+      "behaviour": "ne555",
+      "device_pins": ["TRIG", "OUT", "RESET", "THR", "DIS"]
+    },
+    "inspector": [{"label": "Supply", "value": "4.5–16 V"}, {"label": "Thresholds", "value": "⅓ / ⅔ Vcc"}],
+    "ratings": [{"element": "R:q", "kind": "voltage", "limit": 16, "tau": 0.01, "destroy_at": 1.25, "message": "555 over-voltage", "effect": "smoke"}],
+    "bench": {"art": "dip", "layout": {"dip": 3}},
+    "schematic": {"symbol": "box"},
+    "pcb": {"footprint": "Package_DIP:DIP-8_W7.62mm"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "hc595", "name": "74HC595 shift register", "part_number": "74HC595", "category": "ics",
+    "icon": "dip", "ref_prefix": "U",
+    "description": "8 outputs from 3 pins: shift bits in, latch them out.",
+    "pins": ["Q1:output", "Q2:output", "Q3:output", "Q4:output", "Q5:output", "Q6:output", "Q7:output", "GND:ground", "Q7S:output:Q7'", "MR:input:SRCLR", "SHCP:input:SRCLK", "STCP:input:RCLK", "OE:input", "DS:input:SER", "Q0:output", "VCC:power_in"],
+    "model": {"spice": ["$(el:R:q) $(VCC) $(GND) 100k"], "behaviour": "hc595", "device_pins": ["Q0", "Q1", "Q2", "Q3", "Q4", "Q5", "Q6", "Q7", "Q7S", "MR", "SHCP", "STCP", "OE", "DS"]},
+    "bench": {"art": "dip", "layout": {"dip": 3}},
+    "schematic": {"symbol": "box"},
+    "pcb": {"footprint": "Package_DIP:DIP-16_W7.62mm"},
+    "tags": []
+  },
+  {
+    "id": "hc00", "name": "74HC00 quad NAND", "part_number": "74HC00", "category": "ics",
+    "icon": "dip", "ref_prefix": "U",
+    "description": "Four 2-input NAND gates.",
+    "props": [{"key": "gate", "label": "Gate", "type": "text", "default": "nand"}],
+    "pins": ["1A:input", "1B:input", "1Y:output", "2A:input", "2B:input", "2Y:output", "GND:ground", "3Y:output", "3A:input", "3B:input", "4Y:output", "4A:input", "4B:input", "VCC:power_in"],
+    "model": {"spice": ["$(el:R:q) $(VCC) $(GND) 1Meg"], "behaviour": "logic", "device_pins": ["1A", "1B", "1Y", "2A", "2B", "2Y", "3Y", "3A", "3B", "4Y", "4A", "4B"]},
+    "bench": {"art": "dip", "layout": {"dip": 3}},
+    "schematic": {"symbol": "box"},
+    "pcb": {"footprint": "Package_DIP:DIP-14_W7.62mm"}
+  },
+  {
+    "id": "hc08", "name": "74HC08 quad AND", "part_number": "74HC08", "category": "ics",
+    "icon": "dip", "ref_prefix": "U",
+    "description": "Four 2-input AND gates.",
+    "props": [{"key": "gate", "label": "Gate", "type": "text", "default": "and"}],
+    "pins": ["1A:input", "1B:input", "1Y:output", "2A:input", "2B:input", "2Y:output", "GND:ground", "3Y:output", "3A:input", "3B:input", "4Y:output", "4A:input", "4B:input", "VCC:power_in"],
+    "model": {"spice": ["$(el:R:q) $(VCC) $(GND) 1Meg"], "behaviour": "logic", "device_pins": ["1A", "1B", "1Y", "2A", "2B", "2Y", "3Y", "3A", "3B", "4Y", "4A", "4B"]},
+    "bench": {"art": "dip", "layout": {"dip": 3}},
+    "schematic": {"symbol": "box"},
+    "pcb": {"footprint": "Package_DIP:DIP-14_W7.62mm"}
+  },
+  {
+    "id": "hc32", "name": "74HC32 quad OR", "part_number": "74HC32", "category": "ics",
+    "icon": "dip", "ref_prefix": "U",
+    "description": "Four 2-input OR gates.",
+    "props": [{"key": "gate", "label": "Gate", "type": "text", "default": "or"}],
+    "pins": ["1A:input", "1B:input", "1Y:output", "2A:input", "2B:input", "2Y:output", "GND:ground", "3Y:output", "3A:input", "3B:input", "4Y:output", "4A:input", "4B:input", "VCC:power_in"],
+    "model": {"spice": ["$(el:R:q) $(VCC) $(GND) 1Meg"], "behaviour": "logic", "device_pins": ["1A", "1B", "1Y", "2A", "2B", "2Y", "3Y", "3A", "3B", "4Y", "4A", "4B"]},
+    "bench": {"art": "dip", "layout": {"dip": 3}},
+    "schematic": {"symbol": "box"},
+    "pcb": {"footprint": "Package_DIP:DIP-14_W7.62mm"}
+  },
+  {
+    "id": "hc04", "name": "74HC04 hex inverter", "part_number": "74HC04", "category": "ics",
+    "icon": "dip", "ref_prefix": "U",
+    "description": "Six NOT gates.",
+    "props": [{"key": "gate", "label": "Gate", "type": "text", "default": "not"}],
+    "pins": ["1A:input", "1Y:output", "2A:input", "2Y:output", "3A:input", "3Y:output", "GND:ground", "4Y:output", "4A:input", "5Y:output", "5A:input", "6Y:output", "6A:input", "VCC:power_in"],
+    "model": {"spice": ["$(el:R:q) $(VCC) $(GND) 1Meg"], "behaviour": "logic", "device_pins": ["1A", "1Y", "2A", "2Y", "3A", "3Y", "4Y", "4A", "5Y", "5A", "6Y", "6A"]},
+    "bench": {"art": "dip", "layout": {"dip": 3}},
+    "schematic": {"symbol": "box"},
+    "pcb": {"footprint": "Package_DIP:DIP-14_W7.62mm"}
+  },
+  {
+    "id": "uln2003", "name": "ULN2003 Darlington array", "part_number": "ULN2003A", "category": "ics",
+    "icon": "dip", "ref_prefix": "U",
+    "description": "Seven 500 mA low-side switches with flyback diodes — stepper and relay driver.",
+    "pins": ["1B:input", "2B:input", "3B:input", "4B:input", "5B:input", "6B:input", "7B:input", "E:ground", "COM:passive", "7C:open_drain", "6C:open_drain", "5C:open_drain", "4C:open_drain", "3C:open_drain", "2C:open_drain", "1C:open_drain"],
+    "model": {
+      "spice": [
+        "$(el:D:1) $(1C) $(COM) DULN_FLY", "$(el:D:2) $(2C) $(COM) DULN_FLY", "$(el:D:3) $(3C) $(COM) DULN_FLY",
+        "$(el:D:4) $(4C) $(COM) DULN_FLY", "$(el:D:5) $(5C) $(COM) DULN_FLY", "$(el:D:6) $(6C) $(COM) DULN_FLY",
+        "$(el:D:7) $(7C) $(COM) DULN_FLY"
+      ],
+      "library": [".model DULN_FLY D(IS=1e-12 RS=0.5 N=1.5)"],
+      "behaviour": "uln2003",
+      "device_pins": ["1B", "2B", "3B", "4B", "5B", "6B", "7B", "1C", "2C", "3C", "4C", "5C", "6C", "7C"]
+    },
+    "bench": {"art": "dip", "layout": {"dip": 3}},
+    "schematic": {"symbol": "box"},
+    "pcb": {"footprint": "Package_DIP:DIP-16_W7.62mm"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "l293d", "name": "L293D motor driver", "part_number": "L293D", "category": "ics",
+    "icon": "dip", "ref_prefix": "U",
+    "description": "Dual H-bridge, 600 mA per channel: drive two DC motors both ways.",
+    "pins": ["EN12:input:1,2EN", "1A:input", "1Y:output", "GND:ground", "GND.2:ground:GND", "2Y:output", "2A:input", "VCC2:power_in", "EN34:input:3,4EN", "3A:input", "3Y:output", "GND.3:ground:GND", "GND.4:ground:GND", "4Y:output", "4A:input", "VCC1:power_in"],
+    "bonds": [["GND", "GND.2", "GND.3", "GND.4"]],
+    "model": {
+      "spice": ["$(el:R:q1) $(VCC1) $(GND) 2.5k", "$(el:R:q2) $(VCC2) $(GND) 10k"],
+      "behaviour": "l293d",
+      "device_pins": ["EN12", "1A", "1Y", "2Y", "2A", "EN34", "3A", "3Y", "4Y", "4A"]
+    },
+    "bench": {"art": "dip", "layout": {"dip": 3}},
+    "schematic": {"symbol": "box"},
+    "pcb": {"footprint": "Package_DIP:DIP-16_W7.62mm"}
+  },
+  {
+    "id": "pc817", "name": "PC817 optocoupler", "part_number": "PC817", "category": "ics",
+    "icon": "dip", "ref_prefix": "U",
+    "description": "An LED shining on a phototransistor: isolation between two circuits.",
+    "props": [{"key": "ctr", "label": "CTR", "type": "number", "default": 1.0, "min": 0.5, "max": 6}],
+    "pins": ["A", "K", "E", "C"],
+    "model": {
+      "spice": [
+        "$(el:D) $(A) $(n:k) DPC817_IR",
+        "$(el:V:s) $(n:k) $(K) 0",
+        "$(el:B) $(C) $(E) I=$(ctr)*i($(el:V:s))*tanh(max(v($(C),$(E)),0)/0.15)"
+      ],
+      "library": [".model DPC817_IR D(Is=1e-14 N=1.6 Rs=3)"]
+    },
+    "ratings": [{"element": "D", "kind": "current", "limit": 0.05, "tau": 0.05, "destroy_at": 3.0, "message": "optocoupler LED burnt out", "effect": "open"}],
+    "bench": {"art": "dip", "layout": {"dip": 3}},
+    "schematic": {"symbol": "box"},
+    "pcb": {"footprint": "Package_DIP:DIP-4_W7.62mm"},
+    "tags": ["spice"]
+  }
+]

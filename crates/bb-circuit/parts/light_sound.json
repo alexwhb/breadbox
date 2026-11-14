@@ -1,0 +1,176 @@
+[
+  {
+    "id": "led", "name": "LED", "category": "light_sound",
+    "simple": true, "icon": "led", "ref_prefix": "D",
+    "description": "5 mm LED. Glows with the current through it — and burns out without a resistor.",
+    "props": [
+      {"key": "color", "label": "Colour", "type": "choice", "default": "red", "options": [
+        {"value": "red", "label": "Red"}, {"value": "amber", "label": "Amber"}, {"value": "yellow", "label": "Yellow"},
+        {"value": "green", "label": "Green"}, {"value": "blue", "label": "Blue"}, {"value": "white", "label": "White"}
+      ]},
+      {"key": "if_rated", "label": "Rated current", "unit": "A", "type": "number", "default": 0.02, "min": 0.001, "max": 0.1}
+    ],
+    "pins": ["a:passive:A", "k:passive:K"],
+    "model": {
+      "spice": ["$(el:D) $(a) $(k) LED_$(prop:color)"],
+      "library": [
+        "?color=red:.model LED_RED D(Is=1e-18 N=1.9 Rs=5)",
+        "?color=amber:.model LED_AMBER D(Is=1e-19 N=1.8 Rs=6)",
+        "?color=yellow:.model LED_YELLOW D(Is=1e-19 N=1.85 Rs=6)",
+        "?color=green:.model LED_GREEN D(Is=1e-20 N=1.9 Rs=5)",
+        "?color=blue:.model LED_BLUE D(Is=1e-26 N=2.0 Rs=10)",
+        "?color=white:.model LED_WHITE D(Is=1e-26 N=2.0 Rs=10)"
+      ],
+      "behaviour": "led",
+      "device_pins": []
+    },
+    "inspector": [
+      {"label": "Colour", "value": "$(color)"},
+      {"label": "Rated current", "value": "$(if_rated|A)"},
+      {"label": "Abs. max", "value": "30 mA continuous"},
+      {"label": "Model", "value": "D · LED_$(color)"}
+    ],
+    "ratings": [{"element": "D", "kind": "current", "limit": 0.03, "tau": 0.02, "destroy_at": 3.0, "message": "LED burnt out", "effect": "open"}],
+    "bench": {"art": "led_5mm", "layout": {"axial": 1}},
+    "schematic": {"symbol": "led"},
+    "pcb": {"footprint": "LED_THT:LED_D5.0mm", "smd": "LED_SMD:LED_0805_2012Metric"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "rgb_led", "name": "RGB LED", "category": "light_sound",
+    "simple": true, "icon": "rgb", "ref_prefix": "D",
+    "description": "Three LEDs in one: mix red, green and blue. Common cathode or common anode.",
+    "props": [{"key": "common", "label": "Common pin", "type": "choice", "default": "cathode", "options": [{"value": "cathode", "label": "Common cathode"}, {"value": "anode", "label": "Common anode"}]}],
+    "pins": ["R", "COM", "G", "B"],
+    "model": {
+      "spice": [
+        "?common=cathode:$(el:D:r) $(R) $(COM) LED_RGB_R",
+        "?common=cathode:$(el:D:g) $(G) $(COM) LED_RGB_G",
+        "?common=cathode:$(el:D:b) $(B) $(COM) LED_RGB_B",
+        "?common=anode:$(el:D:r) $(COM) $(R) LED_RGB_R",
+        "?common=anode:$(el:D:g) $(COM) $(G) LED_RGB_G",
+        "?common=anode:$(el:D:b) $(COM) $(B) LED_RGB_B"
+      ],
+      "library": [
+        ".model LED_RGB_R D(Is=1e-18 N=1.9 Rs=8)",
+        ".model LED_RGB_G D(Is=1e-26 N=2.0 Rs=12)",
+        ".model LED_RGB_B D(Is=1e-26 N=2.0 Rs=12)"
+      ],
+      "behaviour": "rgb_led",
+      "device_pins": []
+    },
+    "ratings": [
+      {"element": "D:r", "kind": "current", "limit": 0.03, "tau": 0.02, "destroy_at": 3.0, "message": "red die burnt out", "effect": "open"},
+      {"element": "D:g", "kind": "current", "limit": 0.03, "tau": 0.02, "destroy_at": 3.0, "message": "green die burnt out", "effect": "open"},
+      {"element": "D:b", "kind": "current", "limit": 0.03, "tau": 0.02, "destroy_at": 3.0, "message": "blue die burnt out", "effect": "open"}
+    ],
+    "bench": {"art": "rgb_led", "layout": "row"},
+    "schematic": {"symbol": "box"},
+    "pcb": {"footprint": "LED_THT:LED_D5.0mm-4_RGB"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "seven_segment", "name": "7-segment display", "category": "light_sound",
+    "icon": "led", "ref_prefix": "DS",
+    "description": "One digit, common cathode, with decimal point.",
+    "pins": ["e", "d", "COM", "c", "dp", "b", "a", "COM.2::COM", "f", "g"],
+    "bonds": [["COM", "COM.2"]],
+    "model": {
+      "spice": [
+        "$(el:D:a) $(a) $(COM) LED_SEG", "$(el:D:b) $(b) $(COM) LED_SEG", "$(el:D:c) $(c) $(COM) LED_SEG",
+        "$(el:D:d) $(d) $(COM) LED_SEG", "$(el:D:e) $(e) $(COM) LED_SEG", "$(el:D:f) $(f) $(COM) LED_SEG",
+        "$(el:D:g) $(g) $(COM) LED_SEG", "$(el:D:dp) $(dp) $(COM) LED_SEG"
+      ],
+      "library": [".model LED_SEG D(Is=1e-18 N=1.9 Rs=10)"],
+      "behaviour": "seven_seg",
+      "device_pins": []
+    },
+    "ratings": [{"element": "D:a", "kind": "current", "limit": 0.03, "tau": 0.02, "destroy_at": 3.0, "message": "segment burnt out", "effect": "open"}],
+    "bench": {"art": "seven_segment", "layout": {"rows": {"spacing": 6, "rows": [["g", "f", "COM.2", "a", "b"], ["e", "d", "COM", "c", "dp"]]}}},
+    "schematic": {"symbol": "box"},
+    "pcb": {"footprint": "Display_7Segment:7SegmentLED_LTS6760_LTS6780"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "led_bar", "name": "LED bar graph", "category": "light_sound",
+    "icon": "led", "ref_prefix": "DS",
+    "description": "Ten LEDs in a row: anodes on one side, cathodes on the other.",
+    "pins": ["a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "a9", "a10", "k10", "k9", "k8", "k7", "k6", "k5", "k4", "k3", "k2", "k1"],
+    "model": {
+      "spice": [
+        "$(el:D:1) $(a1) $(k1) LED_BAR", "$(el:D:2) $(a2) $(k2) LED_BAR", "$(el:D:3) $(a3) $(k3) LED_BAR",
+        "$(el:D:4) $(a4) $(k4) LED_BAR", "$(el:D:5) $(a5) $(k5) LED_BAR", "$(el:D:6) $(a6) $(k6) LED_BAR",
+        "$(el:D:7) $(a7) $(k7) LED_BAR", "$(el:D:8) $(a8) $(k8) LED_BAR", "$(el:D:9) $(a9) $(k9) LED_BAR",
+        "$(el:D:10) $(a10) $(k10) LED_BAR"
+      ],
+      "library": [".model LED_BAR D(Is=1e-18 N=1.9 Rs=8)"],
+      "behaviour": "led_bar",
+      "device_pins": []
+    },
+    "bench": {"art": "led_bar", "layout": {"dip": 3}},
+    "schematic": {"symbol": "box"},
+    "pcb": {"footprint": "Display:LED_Bar_10"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "ws2812_strip", "name": "WS2812 strip", "part_number": "WS2812B", "category": "light_sound",
+    "icon": "strip", "ref_prefix": "LED",
+    "description": "Addressable NeoPixels: bit-accurate 800 kHz protocol, up to 60 mA per pixel.",
+    "props": [{"key": "count", "label": "Pixels", "type": "number", "default": 8, "min": 1, "max": 300}],
+    "pins": ["VDD:power_in:5V", "DIN:input", "GND:ground", "DOUT:output"],
+    "model": {"behaviour": "ws2812", "spice": ["$(el:R:q) $(VDD) $(GND) 10k"], "device_pins": ["VDD", "DIN", "DOUT"]},
+    "inspector": [{"label": "Protocol", "value": "WS2812B · 800 kbit/s · GRB"}, {"label": "Current", "value": "≤ 60 mA per pixel"}],
+    "bench": {"art": "ws2812_strip", "layout": "row"},
+    "schematic": {"symbol": "box"},
+    "pcb": {"footprint": "LED_SMD:LED_WS2812B_PLCC4_5.0x5.0mm_P3.2mm"}
+  },
+  {
+    "id": "buzzer_passive", "name": "Passive buzzer", "category": "light_sound",
+    "simple": true, "simple_name": "Buzzer", "icon": "buzz", "ref_prefix": "BZ",
+    "description": "Plays whatever frequency you drive it with — tone(pin, 440) sounds like A4.",
+    "pins": ["plus::+", "minus::−"],
+    "model": {"spice": ["$(el:R) $(plus) $(minus) 150"], "behaviour": "buzzer", "device_pins": []},
+    "inspector": [{"label": "Type", "value": "passive transducer, 150 Ω"}, {"label": "Range", "value": "≈ 100 Hz – 10 kHz"}],
+    "bench": {"art": "buzzer", "layout": {"axial": 3}},
+    "schematic": {"symbol": "buzzer"},
+    "pcb": {"footprint": "Buzzer_Beeper:Buzzer_12x9.5RM7.6"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "buzzer_active", "name": "Active buzzer", "category": "light_sound",
+    "icon": "buzz", "ref_prefix": "BZ",
+    "description": "Built-in oscillator: beeps at 2.3 kHz whenever it has power.",
+    "pins": ["plus::+", "minus::−"],
+    "model": {"spice": ["$(el:R) $(plus) $(minus) 200"], "behaviour": "buzzer_active", "device_pins": []},
+    "bench": {"art": "buzzer", "layout": {"axial": 3}},
+    "schematic": {"symbol": "buzzer"},
+    "pcb": {"footprint": "Buzzer_Beeper:Buzzer_12x9.5RM7.6"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "speaker", "name": "Small speaker", "category": "light_sound",
+    "icon": "buzz", "ref_prefix": "LS",
+    "description": "8 Ω speaker. Drive it through a transistor — a pin alone can't supply the current.",
+    "pins": ["plus::+", "minus::−"],
+    "model": {"spice": ["$(el:R) $(plus) $(minus) 8"], "behaviour": "buzzer", "device_pins": []},
+    "ratings": [{"element": "R", "kind": "power", "limit": 0.5, "tau": 1.0, "destroy_at": 3.0, "message": "speaker coil overheated", "effect": "open"}],
+    "bench": {"art": "speaker", "layout": {"axial": 4}, "off_board": true},
+    "schematic": {"symbol": "speaker"},
+    "pcb": {"footprint": "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical"},
+    "tags": ["spice"]
+  },
+  {
+    "id": "lamp", "name": "Desk lamp", "category": "light_sound",
+    "icon": "led", "ref_prefix": "LAMP",
+    "description": "A bench light source: drag it near a light sensor to light it up.",
+    "props": [
+      {"key": "candela", "label": "Brightness", "unit": "cd", "type": "number", "default": 60, "min": 0, "max": 2000, "live": true},
+      {"key": "on", "label": "On", "type": "bool", "default": true, "live": true}
+    ],
+    "pins": [],
+    "model": {"behaviour": "lamp"},
+    "bench": {"art": "desk_lamp", "off_board": true, "size": [12, 12]},
+    "schematic": {"symbol": "none"},
+    "tags": ["world"]
+  }
+]

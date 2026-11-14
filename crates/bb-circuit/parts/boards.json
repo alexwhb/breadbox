@@ -1,0 +1,189 @@
+[
+  {
+    "id": "uno", "name": "Arduino UNO R3", "part_number": "ATmega328P", "category": "boards",
+    "simple": true, "simple_name": "UNO R3", "icon": "uno", "ref_prefix": "U",
+    "description": "The classic. ATmega328P at 16 MHz running your real compiled sketch, cycle-accurate.",
+    "pins": [],
+    "model": {
+      "mcu": {"board": "uno", "core": "avr", "vcc_pin": "5V", "label": "ATmega328P @ 16 MHz"},
+      "behaviour": "board_power",
+      "device_pins": [],
+      "ext": [{"name": "fuse_r", "default": 0.1}],
+      "spice": [
+        "$(el:V:usb) $(n:usb) $(GND) 5.0",
+        "$(el:R:cable) $(n:usb) $(n:fuse) 0.3",
+        "$(el:R:fuse) $(n:fuse) $(5V) {$(ext:fuse_r)}",
+        "$(el:R:load) $(5V) $(GND) 130",
+        "$(el:B:reg) $(n:r3) $(GND) V=min(3.3,max(v($(5V),$(GND))-0.25,0))",
+        "$(el:R:reg) $(n:r3) $(n:r3s) 0.5",
+        "$(el:V:regs) $(n:r3s) $(3V3) 0",
+        "$(el:F:reg) $(5V) $(GND) $(el:V:regs) 1",
+        "$(el:R:ioref) $(5V) $(IOREF) 0.01",
+        "$(el:R:rst) $(5V) $(RESET) 10k",
+        "$(el:R:vin) $(VIN) $(GND) 1Meg",
+        "$(el:R:aref) $(AREF) $(GND) 1G"
+      ],
+      "pro": [
+        "$(el:V:usb) $(n:usb) $(GND) 5.0",
+        "$(el:R:cable) $(n:usb) $(5V) 0.4",
+        "$(el:R:load) $(5V) $(GND) 130"
+      ]
+    },
+    "ratings": [{"element": "R:fuse", "kind": "current", "limit": 0.5, "tau": 1.0, "destroy_at": 1000, "message": "USB current over 500 mA", "effect": "none"}],
+    "inspector": [
+      {"label": "MCU", "value": "ATmega328P · 16 MHz · cycle-accurate AVR core"},
+      {"label": "Flash / SRAM", "value": "32 KB / 2 KB"},
+      {"label": "Supply", "value": "USB 5 V · 500 mA polyfuse"},
+      {"label": "Pin current", "value": "40 mA abs. max per pin"}
+    ],
+    "bench": {"art": "uno_r3", "layout": {"board": "uno"}, "sockets": true},
+    "schematic": {"symbol": "box"},
+    "pcb": {"footprint": "Breadbox:Arduino_UNO_R3_Shield"},
+    "tags": ["firmware", "spice", "3d"]
+  },
+  {
+    "id": "nano", "name": "Arduino Nano", "part_number": "ATmega328P", "category": "boards",
+    "icon": "dip", "ref_prefix": "U",
+    "description": "UNO brains in a breadboard-friendly stick: plugs across the channel.",
+    "pins": [],
+    "model": {
+      "mcu": {"board": "nano", "core": "avr", "vcc_pin": "5V", "label": "ATmega328P @ 16 MHz"},
+      "behaviour": "board_power",
+      "device_pins": [],
+      "ext": [{"name": "fuse_r", "default": 0.1}],
+      "spice": [
+        "$(el:V:usb) $(n:usb) $(GND) 5.0",
+        "$(el:R:cable) $(n:usb) $(n:fuse) 0.3",
+        "$(el:R:fuse) $(n:fuse) $(5V) {$(ext:fuse_r)}",
+        "$(el:R:load) $(5V) $(GND) 200",
+        "$(el:B:reg) $(n:r3) $(GND) V=min(3.3,max(v($(5V),$(GND))-0.25,0))",
+        "$(el:R:reg) $(n:r3) $(3V3) 2",
+        "$(el:R:rst) $(5V) $(RESET) 10k",
+        "$(el:R:vin) $(VIN) $(GND) 1Meg",
+        "$(el:R:aref) $(AREF) $(GND) 1G"
+      ]
+    },
+    "ratings": [{"element": "R:fuse", "kind": "current", "limit": 0.5, "tau": 1.0, "destroy_at": 1000, "message": "USB current over 500 mA", "effect": "none"}],
+    "inspector": [
+      {"label": "MCU", "value": "ATmega328P · 16 MHz · cycle-accurate AVR core"},
+      {"label": "Analog inputs", "value": "A0–A7 (A6/A7 analog only)"}
+    ],
+    "bench": {"art": "nano", "layout": {"board": "nano"}},
+    "schematic": {"symbol": "box"},
+    "pcb": {"footprint": "Module:Arduino_Nano"},
+    "tags": ["firmware", "spice"]
+  },
+  {
+    "id": "mega", "name": "Arduino Mega 2560", "part_number": "ATmega2560", "category": "boards",
+    "icon": "uno", "ref_prefix": "U",
+    "description": "54 digital pins, 16 analog inputs, 4 hardware serial ports. Cycle-accurate ATmega2560.",
+    "pins": [],
+    "model": {
+      "mcu": {"board": "mega", "core": "avr", "vcc_pin": "5V", "label": "ATmega2560 @ 16 MHz"},
+      "behaviour": "board_power",
+      "device_pins": [],
+      "ext": [{"name": "fuse_r", "default": 0.1}],
+      "spice": [
+        "$(el:V:usb) $(n:usb) $(GND) 5.0",
+        "$(el:R:cable) $(n:usb) $(n:fuse) 0.3",
+        "$(el:R:fuse) $(n:fuse) $(5V) {$(ext:fuse_r)}",
+        "$(el:R:load) $(5V) $(GND) 70",
+        "$(el:B:reg) $(n:r3) $(GND) V=min(3.3,max(v($(5V),$(GND))-0.25,0))",
+        "$(el:R:reg) $(n:r3) $(3V3) 0.5",
+        "$(el:R:ioref) $(5V) $(IOREF) 0.01",
+        "$(el:R:rst) $(5V) $(RESET) 10k",
+        "$(el:R:vin) $(VIN) $(GND) 1Meg",
+        "$(el:R:aref) $(AREF) $(GND) 1G"
+      ]
+    },
+    "ratings": [{"element": "R:fuse", "kind": "current", "limit": 0.5, "tau": 1.0, "destroy_at": 1000, "message": "USB current over 500 mA", "effect": "none"}],
+    "inspector": [
+      {"label": "MCU", "value": "ATmega2560 · 16 MHz · cycle-accurate AVR core"},
+      {"label": "Flash / SRAM", "value": "256 KB / 8 KB"}
+    ],
+    "bench": {"art": "mega_2560", "layout": {"board": "mega"}, "sockets": true},
+    "schematic": {"symbol": "box"},
+    "pcb": {"footprint": "Breadbox:Arduino_Mega2560_Shield"},
+    "tags": ["firmware", "spice"]
+  },
+  {
+    "id": "esp32_devkit", "name": "ESP32 DevKit v1", "part_number": "ESP32-WROOM-32", "category": "boards",
+    "simple": true, "simple_name": "ESP32", "icon": "esp32", "ref_prefix": "U",
+    "description": "Dual-core Wi-Fi + BLE board. API-level emulation of your Arduino sketch.",
+    "pins": [
+      "EN:input", "VP:io:GPIO36", "VN:io:GPIO39", "D34:io", "D35:io", "D32:io", "D33:io", "D25:io", "D26:io", "D27:io", "D14:io", "D12:io", "D13:io", "GND:ground", "VIN:power_in",
+      "D23:io", "D22:io", "TX0:io", "RX0:io", "D21:io", "D19:io", "D18:io", "D5:io", "TX2:io", "RX2:io", "D4:io", "D2:io", "D15:io", "GND.2:ground:GND", "3V3:power_out"
+    ],
+    "bonds": [["GND", "GND.2"]],
+    "model": {
+      "mcu": {"board": "esp32", "core": "host", "vcc_pin": "3V3", "label": "ESP32 · API-level"},
+      "behaviour": "board_power",
+      "device_pins": [],
+      "ext": [{"name": "fuse_r", "default": 0.1}],
+      "spice": [
+        "$(el:V:usb) $(n:usb) $(GND) 5.0",
+        "$(el:R:cable) $(n:usb) $(n:fuse) 0.3",
+        "$(el:R:fuse) $(n:fuse) $(VIN) {$(ext:fuse_r)}",
+        "$(el:B:reg) $(n:r3) $(GND) V=min(3.3,max(v($(VIN),$(GND))-1.1,0))",
+        "$(el:R:reg) $(n:r3) $(n:r3s) 0.3",
+        "$(el:V:regs) $(n:r3s) $(3V3) 0",
+        "$(el:F:reg) $(VIN) $(GND) $(el:V:regs) 1",
+        "$(el:R:load) $(3V3) $(GND) 41",
+        "$(el:R:en) $(3V3) $(EN) 10k"
+      ]
+    },
+    "inspector": [
+      {"label": "SoC", "value": "ESP32 · 240 MHz dual core · Wi-Fi + BLE"},
+      {"label": "Emulation", "value": "API-level (host core)"},
+      {"label": "Logic level", "value": "3.3 V (not 5 V tolerant)"}
+    ],
+    "bench": {"art": "esp32_devkit", "layout": {"rows": {"spacing": 10, "rows": [
+      ["EN", "VP", "VN", "D34", "D35", "D32", "D33", "D25", "D26", "D27", "D14", "D12", "D13", "GND", "VIN"],
+      ["3V3", "GND.2", "D15", "D2", "D4", "RX2", "TX2", "D5", "D18", "D19", "D21", "RX0", "TX0", "D22", "D23"]
+    ]}}},
+    "schematic": {"symbol": "box"},
+    "pcb": {"footprint": "Module:ESP32-DEVKIT-V1"},
+    "tags": ["firmware", "radio"]
+  },
+  {
+    "id": "pico", "name": "Raspberry Pi Pico", "part_number": "RP2040", "category": "boards",
+    "simple": true, "simple_name": "Pico", "icon": "pico", "ref_prefix": "U",
+    "description": "RP2040 dual Cortex-M0+. API-level emulation of your Arduino sketch.",
+    "pins": [
+      "GP0:io", "GP1:io", "GND:ground", "GP2:io", "GP3:io", "GP4:io", "GP5:io", "GND.2:ground:GND", "GP6:io", "GP7:io", "GP8:io", "GP9:io", "GND.3:ground:GND", "GP10:io", "GP11:io", "GP12:io", "GP13:io", "GND.4:ground:GND", "GP14:io", "GP15:io",
+      "GP16:io", "GP17:io", "GND.5:ground:GND", "GP18:io", "GP19:io", "GP20:io", "GP21:io", "GND.6:ground:GND", "GP22:io", "RUN:input", "GP26:io", "GP27:io", "AGND:ground", "GP28:io", "ADC_VREF:input", "3V3:power_out", "3V3_EN:input", "GND.7:ground:GND", "VSYS:power_in", "VBUS:power_out"
+    ],
+    "bonds": [["GND", "GND.2", "GND.3", "GND.4", "GND.5", "GND.6", "GND.7", "AGND"]],
+    "model": {
+      "mcu": {"board": "pico", "core": "host", "vcc_pin": "3V3", "label": "RP2040 · API-level"},
+      "behaviour": "board_power",
+      "device_pins": [],
+      "ext": [{"name": "fuse_r", "default": 0.1}],
+      "spice": [
+        "$(el:V:usb) $(n:usb) $(GND) 5.0",
+        "$(el:R:cable) $(n:usb) $(n:fuse) 0.3",
+        "$(el:R:fuse) $(n:fuse) $(VBUS) {$(ext:fuse_r)}",
+        "$(el:D:vsys) $(VBUS) $(VSYS) D_SCHOTTKY_PICO",
+        "$(el:B:reg) $(n:r3) $(GND) V=min(3.3,max(v($(VSYS),$(GND))-0.1,0))",
+        "$(el:R:reg) $(n:r3) $(3V3) 0.2",
+        "$(el:R:load) $(3V3) $(GND) 165",
+        "$(el:R:run) $(3V3) $(RUN) 50k",
+        "$(el:R:vref) $(3V3) $(ADC_VREF) 200",
+        "$(el:R:en) $(VSYS) $(3V3_EN) 100k"
+      ],
+      "library": [".model D_SCHOTTKY_PICO D(IS=31.7u RS=0.051 N=1.373)"]
+    },
+    "inspector": [
+      {"label": "MCU", "value": "RP2040 · 133 MHz dual Cortex-M0+"},
+      {"label": "Emulation", "value": "API-level (host core)"},
+      {"label": "Logic level", "value": "3.3 V"}
+    ],
+    "bench": {"art": "pico", "layout": {"rows": {"spacing": 7, "rows": [
+      ["GP0", "GP1", "GND", "GP2", "GP3", "GP4", "GP5", "GND.2", "GP6", "GP7", "GP8", "GP9", "GND.3", "GP10", "GP11", "GP12", "GP13", "GND.4", "GP14", "GP15"],
+      ["VBUS", "VSYS", "GND.7", "3V3_EN", "3V3", "ADC_VREF", "GP28", "AGND", "GP27", "GP26", "RUN", "GP22", "GND.6", "GP21", "GP20", "GP19", "GP18", "GND.5", "GP17", "GP16"]
+    ]}}},
+    "schematic": {"symbol": "box"},
+    "pcb": {"footprint": "Module:RaspberryPi_Pico"},
+    "tags": ["firmware"]
+  }
+]
