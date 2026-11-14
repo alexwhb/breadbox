@@ -1,0 +1,9 @@
+[package]
+name = "bb-lessons"
+description = "Guided lesson format, checker engine and built-in lesson tracks."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]

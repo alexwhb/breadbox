@@ -1,0 +1,9 @@
+/target
+**/target
+.DS_Store
+*.profraw
+/dist
+/build
+**/.breadbox-cache
+tests/**/snapshots/*.new.png
+tests/**/snapshots/*.diff.png

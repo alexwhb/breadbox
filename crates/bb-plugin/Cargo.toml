@@ -1,0 +1,9 @@
+[package]
+name = "bb-plugin"
+description = "Plugin manifests, registry and WebAssembly sandbox runtime."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]

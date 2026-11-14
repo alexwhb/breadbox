@@ -1,0 +1,9 @@
+[package]
+name = "bb-spice"
+description = "Breadbox analog engine: SPICE netlist parser, MNA solver, device models and analyses."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]

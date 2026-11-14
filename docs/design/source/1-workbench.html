@@ -1,0 +1,1095 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>Breadbox — Workbench</title>
+<script src="a3710114-552e-414c-88a1-f6b1127653f9"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>/* cyrillic-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa2JL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa0ZL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* greek-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa2ZL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+1F00-1FFF;
+}
+/* greek */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("font-4e5fea36-d907-4419-a70e-2f91593d78f9") format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa2pL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa25L7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("font-8000b837-e261-4ccc-82c0-7f34f019c6ab") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa2JL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa0ZL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* greek-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa2ZL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+1F00-1FFF;
+}
+/* greek */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("font-4e5fea36-d907-4419-a70e-2f91593d78f9") format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa2pL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa25L7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("font-8000b837-e261-4ccc-82c0-7f34f019c6ab") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa2JL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa0ZL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* greek-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa2ZL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+1F00-1FFF;
+}
+/* greek */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("font-4e5fea36-d907-4419-a70e-2f91593d78f9") format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa2pL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa25L7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("font-8000b837-e261-4ccc-82c0-7f34f019c6ab") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("font-76e97bfd-ffeb-49e3-aa19-792b5476e78a") format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("font-8a31699a-ff9d-4181-9d89-2d43539603cd") format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* greek */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("font-f340faf4-7e5d-41cc-b16d-963176d6c87c") format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("font-5c4e81f5-dbce-4466-8eed-b0c40a97f683") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("font-3fc7acf4-de70-4e5d-9e0f-31fdccd642cd") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("font-9c8491f3-9e7b-413a-9b28-5f69064b065f") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("font-76e97bfd-ffeb-49e3-aa19-792b5476e78a") format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("font-8a31699a-ff9d-4181-9d89-2d43539603cd") format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* greek */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("font-f340faf4-7e5d-41cc-b16d-963176d6c87c") format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("font-5c4e81f5-dbce-4466-8eed-b0c40a97f683") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("font-3fc7acf4-de70-4e5d-9e0f-31fdccd642cd") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("font-9c8491f3-9e7b-413a-9b28-5f69064b065f") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/spacegrotesk/v22/V8mDoQDjQSkFtoMM3T6r8E7mPb54C_k3HqUtEw.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/spacegrotesk/v22/V8mDoQDjQSkFtoMM3T6r8E7mPb94C_k3HqUtEw.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("font-d4171fe7-7612-4974-bbf0-f7126c26d2e5") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/spacegrotesk/v22/V8mDoQDjQSkFtoMM3T6r8E7mPb54C_k3HqUtEw.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/spacegrotesk/v22/V8mDoQDjQSkFtoMM3T6r8E7mPb94C_k3HqUtEw.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("font-d4171fe7-7612-4974-bbf0-f7126c26d2e5") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+</style>
+<style>
+body{margin:0;background:#0A0A0A}
+.paper{background-color:#0A0A0A;background-image:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px),linear-gradient(rgba(255,255,255,.016) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.016) 1px,transparent 1px);background-size:60px 60px,60px 60px,12px 12px,12px 12px}
+a{color:#4CC3F0}a:hover{color:#8AD8F5}
+.seg{border:0;background:transparent;color:#A3A3A3;font:500 13px Inter,system-ui,sans-serif;padding:0 14px;height:32px;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:8px}
+.seg:hover{color:#EAEAEA}
+.seg-on{background:#2A2A2A;color:#F5F5F5}
+.ghost{border:1px solid #2E2E2E;background:#171717;color:#D9D9D9;font:500 13px Inter,system-ui,sans-serif;height:32px;padding:0 12px;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:8px}
+.ghost:hover{background:#1F1F1F}
+.mini{border:0;background:transparent;color:#A3A3A3;font:500 12px Inter,system-ui,sans-serif;height:26px;padding:0 10px;border-radius:5px;cursor:pointer}
+.mini:hover{color:#EAEAEA}
+.mini-on{background:#2A2A2A;color:#F5F5F5}
+.tile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:76px;border:1px solid #242424;border-radius:8px;background:rgba(18,18,18,0.92);color:#D9D9D9;font:500 11px/1.25 Inter,system-ui,sans-serif;cursor:grab;padding:8px 4px;text-align:center}
+.tile:hover{border-color:#6B4A16;background:#17130D}
+.row{display:flex;align-items:center;gap:10px;padding:5px 8px;border-radius:6px;border:0;background:transparent;width:100%;text-align:left;font-family:Inter,system-ui,sans-serif;cursor:grab}
+.row:hover{background:#1A1A1A}
+.cat-h{display:flex;align-items:center;gap:8px;min-height:32px;padding:0 6px;border:0;background:transparent;color:#D9D9D9;font:500 13px Inter,system-ui,sans-serif;width:100%;text-align:left;cursor:pointer;border-radius:6px}
+.cat-h:hover{background:#171717}
+.fchip{border:1px solid #2E2E2E;border-radius:999px;height:26px;padding:0 10px;font:500 11px Inter,system-ui,sans-serif;color:#A3A3A3;background:transparent;cursor:pointer}
+.rb{width:40px;height:40px;border:1px solid transparent;border-radius:8px;background:transparent;color:#C7C7C7;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
+.rb:hover{background:#1C1C1C;color:#EAEAEA}
+.rb-on{background:#1D1810;border-color:#6B4A16;color:#F7C77A}
+.tc{border:1px solid #242424;border-radius:8px;background:#111111;padding:10px;display:flex;flex-direction:column;gap:8px}
+.tc-on{border-color:#4A3614;background:#14110C}
+.tab-out{position:absolute;right:0;top:50%;transform:translateY(-50%);width:30px;padding:12px 0;border:1px solid #2E2E2E;border-right:0;border-radius:8px 0 0 8px;background:#141414;color:#D9D9D9;font:500 12px Inter,system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer}
+.tab-out:hover{background:#1C1C1C}
+.inst{border:1px solid #2E2E2E;background:#141414;color:#D9D9D9;font:500 12px Inter,system-ui,sans-serif;height:30px;padding:0 10px;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:6px}
+.inst:hover{background:#1A1A1A}
+.inst-on{border-color:#6B4A16;background:#1D1810;color:#F7C77A}
+.fchip-on{border-color:#6B4A16;color:#F7C77A;background:#1D1810}
+.ln{display:flex;gap:16px;white-space:pre}
+.ln-t{color:#858585}
+.ln-net{color:#4CC3F0}
+.ln-warn{color:#F2A33A}
+.ln-sys{color:#A3A3A3}
+.tab{border:0;background:transparent;color:#A3A3A3;font:500 12px Inter,system-ui,sans-serif;height:36px;padding:0 4px;cursor:pointer;border-bottom:2px solid transparent}
+.tab-on{color:#F5F5F5;border-bottom-color:#F2A33A}
+.dots{background-color:#060606;background-image:linear-gradient(rgba(255,255,255,.075) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.075) 1px,transparent 1px),linear-gradient(rgba(255,255,255,.028) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.028) 1px,transparent 1px);background-size:80px 80px,80px 80px,16px 16px,16px 16px;background-position:-1px -1px}
+input[type=range]{accent-color:#F2A33A;width:100%;margin:0}
+input[type=checkbox]{accent-color:#F2A33A;width:16px;height:16px;margin:0}
+</style>
+</helmet>
+<div class="paper" style="min-height: 900px; display: flex; flex-direction: column; color: #EAEAEA; font-family: Inter, system-ui, sans-serif">
+
+  <header style="height: 56px; display: flex; align-items: center; gap: 16px; padding: 0 16px; border-bottom: 1px solid #242424; background: rgba(12,12,12,0.8); flex-wrap: wrap">
+    <div style="display: flex; align-items: center; gap: 10px">
+      <svg width="26" height="26" sc-camel-view-box="0 0 26 26" aria-hidden="true"><rect x="1" y="1" width="24" height="24" rx="6" fill="#171717" stroke="#F2A33A" stroke-width="1.5"></rect><circle cx="8" cy="9" r="1.6" fill="#F2A33A"></circle><circle cx="13" cy="9" r="1.6" fill="#F2A33A"></circle><circle cx="18" cy="9" r="1.6" fill="#F2A33A"></circle><path d="M8 9 C8 18 18 12 18 18" fill="none" stroke="#4CC3F0" stroke-width="1.8" stroke-linecap="round"></path><circle cx="18" cy="18" r="1.6" fill="#4CC3F0"></circle></svg>
+      <span style="font: 600 16px 'Space Grotesk', Inter, sans-serif; letter-spacing: -0.01em">Breadbox</span>
+      <span style="color: #4A4A4A">/</span>
+      <span style="font-size: 13px; color: #D9D9D9">garden-node</span>
+      <span style="font-size: 11px; color: #A3A3A3; border: 1px solid #2E2E2E; border-radius: 4px; padding: 2px 6px">Playground</span>
+    </div>
+
+    <div role="group" aria-label="View" style="display: flex; gap: 2px; padding: 3px; background: rgba(6,6,6,0.88); border: 1px solid #242424; border-radius: 8px; margin-left: 12px">
+      <button class="seg {{bbCls}}" sc-camel-on-click="{{setBB}}">
+        <svg width="14" height="14" sc-camel-view-box="0 0 14 14" aria-hidden="true"><rect x="1" y="2" width="12" height="10" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"></rect><path d="M3.5 5h1M6.5 5h1M9.5 5h1M3.5 9h1M6.5 9h1M9.5 9h1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"></path></svg>
+        Breadboard
+      </button>
+      <button class="seg {{schCls}}" sc-camel-on-click="{{setSch}}">
+        <svg width="14" height="14" sc-camel-view-box="0 0 14 14" aria-hidden="true"><path d="M1 7h3l1-3 2 6 2-6 1 3h3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"></path></svg>
+        Schematic
+      </button>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 8px; margin-left: auto; flex-wrap: wrap">
+      <button class="ghost" sc-camel-on-click="{{toggleRun}}" style="background: #2A1F0E; border-color: #6B4A16; color: #F7C77A">
+        <sc-if value="{{running}}" hint-placeholder-val="{{ true }}">
+          <svg width="12" height="12" sc-camel-view-box="0 0 12 12" aria-hidden="true"><rect x="2" y="1.5" width="2.6" height="9" rx="0.6" fill="currentColor"></rect><rect x="7.4" y="1.5" width="2.6" height="9" rx="0.6" fill="currentColor"></rect></svg>
+          Pause
+        </sc-if>
+        <sc-if value="{{paused}}" hint-placeholder-val="{{ false }}">
+          <svg width="12" height="12" sc-camel-view-box="0 0 12 12" aria-hidden="true"><path d="M3 1.5l7 4.5-7 4.5z" fill="currentColor"></path></svg>
+          Run
+        </sc-if>
+      </button>
+      <div style="display: flex; align-items: center; gap: 12px; font: 400 12px 'JetBrains Mono', monospace; color: #A3A3A3; padding: 0 8px">
+        <span>t = <span style="color: #EAEAEA">00:12.500</span></span>
+        <span>1× real-time</span>
+        <span style="display: flex; align-items: center; gap: 6px"><span style="width: 7px; height: 7px; border-radius: 50%; background: {{runDot}}"></span>{{runLabel}}</span>
+      </div>
+      <button class="ghost">Share</button>
+    </div>
+  </header>
+
+  <div style="display: flex; flex-wrap: wrap; flex: 1 1 auto; min-height: 0">
+
+    <aside aria-label="Parts library" style="flex: 0 0 292px; border-right: 1px solid #242424; background: rgba(17,17,17,0.84); padding: 14px 12px; display: flex; flex-direction: column; gap: 12px; height: 620px; overflow: auto; box-sizing: border-box">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px">
+        <label for="parts-search" style="font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #A3A3A3; font-weight: 600">Parts</label>
+        <div role="group" aria-label="Library mode" style="display: flex; gap: 2px; padding: 2px; background: #070707; border: 1px solid #242424; border-radius: 7px">
+          <button class="mini {{simpleCls}}" sc-camel-on-click="{{setSimple}}">Simple</button>
+          <button class="mini {{advCls}}" sc-camel-on-click="{{setAdv}}">Advanced</button>
+        </div>
+      </div>
+      <input id="parts-search" type="search" placeholder="{{searchPh}}" style="height: 32px; border-radius: 6px; border: 1px solid #2E2E2E; background: #0A0A0A; color: #EAEAEA; padding: 0 10px; font: 13px Inter, sans-serif">
+
+      <sc-if value="{{isSimple}}" hint-placeholder-val="{{ true }}">
+        <div style="font-size: 12px; color: #A3A3A3; line-height: 1.5">Starter kit: the 25 parts most first projects use. Drag one onto the bench.</div>
+        <sc-for list="{{simpleGroups}}" as="g" hint-placeholder-count="6">
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <div style="font-size: 11px; color: #A3A3A3; font-weight: 600">{{g.name}}</div>
+            <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px">
+              <sc-for list="{{g.items}}" as="p" hint-placeholder-count="3">
+                <button class="tile">
+                  <svg width="30" height="30" sc-camel-view-box="0 0 24 24" aria-hidden="true" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="{{p.d}}" stroke="#D9D9D9" stroke-width="1.4"></path><path d="{{p.a}}" stroke="#F2A33A" stroke-width="1.6"></path></svg>
+                  <span>{{p.name}}</span>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+        </sc-for>
+      </sc-if>
+
+      <sc-if value="{{isAdv}}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; flex-wrap: wrap; gap: 6px">
+          <button class="fchip fchip-on">All</button>
+          <button class="fchip">Has SPICE model</button>
+          <button class="fchip">Runs firmware</button>
+          <button class="fchip">Has 3D view</button>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 1px">
+          <sc-for list="{{cats}}" as="c" hint-placeholder-count="10">
+            <div style="display: flex; flex-direction: column">
+              <button class="cat-h" sc-camel-on-click="{{c.toggle}}" aria-expanded="{{c.open}}">
+                <svg width="10" height="10" sc-camel-view-box="0 0 10 10" aria-hidden="true"><path transform="{{c.chev}}" d="M3 1.5L6.5 5 3 8.5" fill="none" stroke="#858585" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                <svg width="18" height="18" sc-camel-view-box="0 0 24 24" aria-hidden="true" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="{{c.d}}" stroke="#D9D9D9" stroke-width="1.5"></path><path d="{{c.a}}" stroke="#F2A33A" stroke-width="1.7"></path></svg>
+                <span style="flex: 1">{{c.name}}</span>
+              </button>
+              <sc-if value="{{c.open}}" hint-placeholder-val="{{ false }}">
+                <div style="display: flex; flex-direction: column; padding: 2px 0 6px 18px">
+                  <sc-for list="{{c.items}}" as="p" hint-placeholder-count="5">
+                    <button class="row">
+                      <svg width="18" height="18" sc-camel-view-box="0 0 24 24" aria-hidden="true" fill="none" stroke-linecap="round" stroke-linejoin="round" style="flex: 0 0 18px"><path d="{{p.d}}" stroke="#D9D9D9" stroke-width="1.5"></path><path d="{{p.a}}" stroke="#F2A33A" stroke-width="1.7"></path></svg>
+                      <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0">
+                        <span style="font: 500 12px 'JetBrains Mono', monospace; color: #EAEAEA">{{p.pn}}</span>
+                        <span style="font-size: 11px; color: #A3A3A3">{{p.desc}}</span>
+                      </span>
+                    </button>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+        <div style="border: 1px dashed #3A3A3A; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 10px; background: rgba(10,10,10,0.9)">
+          <span style="font: 500 13px 'Space Grotesk', Inter, sans-serif">Not here? Define it in code</span>
+          <div style="font: 400 11px/17px 'JetBrains Mono', monospace; color: #D9D9D9; white-space: pre; overflow-x: auto"><span style="color: #82AAFF">part</span>(<span style="color: #B5D88A">'hx711'</span>)
+  .<span style="color: #82AAFF">pins</span>(<span style="color: #B5D88A">'E+ E- A+ A- DT SCK'</span>)
+  .<span style="color: #82AAFF">spice</span>(<span style="color: #B5D88A">'./hx711.sub'</span>)
+  .<span style="color: #82AAFF">on</span>(<span style="color: #B5D88A">'clock'</span>, s =&gt; s.<span style="color: #82AAFF">shift</span>(<span style="color: #82AAFF">adc</span>()))</div>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px">
+            <button class="ghost" style="height: 28px; font-size: 12px; background: #2A1F0E; border-color: #6B4A16; color: #F7C77A">New part from code</button>
+            <button class="ghost" style="height: 28px; font-size: 12px">Import .subckt</button>
+            <button class="ghost" style="height: 28px; font-size: 12px">Import KiCad symbol</button>
+          </div>
+        </div>
+      </sc-if>
+    </aside>
+
+    <main style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; height: 620px">
+      <div style="height: 40px; display: flex; align-items: center; gap: 14px; padding: 0 14px; border-bottom: 1px solid #242424; font-size: 12px; color: #A3A3A3; background: rgba(12,12,12,0.8)">
+        <span>{{viewTitle}}</span>
+        <span style="margin-left: auto; font-family: 'JetBrains Mono', monospace">ERC 1 warning · DRC clean</span>
+        <span style="font-family: 'JetBrains Mono', monospace">100%</span>
+      </div>
+
+      <div style="flex: 1 1 auto; display: flex; min-height: 0">
+      <div class="dots" style="flex: 1 1 auto; min-width: 0; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; padding: 12px">
+
+        <sc-if value="{{isBB}}" hint-placeholder-val="{{ true }}">
+          <div style="width: 100%; max-width: 900px; transform: perspective(1800px) rotateX(13deg); transform-origin: 50% 100%">
+          <svg sc-camel-view-box="0 0 900 540" style="width: 100%; height: auto; display: block" role="img" aria-label="Breadboard view: UNO R3 wired to a breadboard with a light sensor, two LEDs, a Wi-Fi module, and a soil moisture probe in a potted plant">
+            <defs>
+              <pattern id="holes" width="12" height="12" sc-camel-pattern-units="userSpaceOnUse"><rect x="4" y="4" width="4" height="4" rx="0.8" fill="#A39C8F"></rect></pattern>
+              <pattern id="pins" width="14" height="14" sc-camel-pattern-units="userSpaceOnUse"><rect x="4" y="4" width="6" height="6" fill="#C9A54A"></rect></pattern>
+              <pattern id="legs" width="9" height="6" sc-camel-pattern-units="userSpaceOnUse"><rect x="2" y="0" width="4" height="6" fill="#B8BDC4"></rect></pattern>
+              <radialGradient id="gAmber"><stop offset="0" stop-color="#FFD27A" stop-opacity="0.95"></stop><stop offset="1" stop-color="#FFB547" stop-opacity="0"></stop></radialGradient>
+              <radialGradient id="gRed"><stop offset="0" stop-color="#FF6A5A" stop-opacity="0.95"></stop><stop offset="1" stop-color="#FF3B2E" stop-opacity="0"></stop></radialGradient>
+              <linearGradient id="pot" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#C9693F"></stop><stop offset="1" stop-color="#94442A"></stop></linearGradient>
+              <filter id="sh" x="-10%" y="-10%" width="130%" height="140%"><feDropShadow dx="0" dy="8" sc-camel-std-deviation="7" flood-color="#000000" flood-opacity="0.5"></feDropShadow></filter>
+            </defs>
+
+            <g filter="url(#sh)">
+              <rect x="30" y="110" width="280" height="200" rx="10" fill="#1D5C78" stroke="#164A61" stroke-width="2"></rect>
+              <circle cx="46" cy="126" r="5" fill="#0A0A0A" stroke="#C9B37E"></circle><circle cx="294" cy="294" r="5" fill="#0A0A0A" stroke="#C9B37E"></circle><circle cx="46" cy="294" r="5" fill="#0A0A0A" stroke="#C9B37E"></circle>
+              <rect x="14" y="140" width="58" height="46" rx="3" fill="#BCC1C8" stroke="#8A9099"></rect>
+              <rect x="18" y="238" width="46" height="40" rx="4" fill="#1A1A1A"></rect>
+              <rect x="114" y="118" width="182" height="14" rx="2" fill="#141414"></rect><rect x="114" y="118" width="182" height="14" fill="url(#pins)"></rect>
+              <rect x="142" y="288" width="154" height="14" rx="2" fill="#141414"></rect><rect x="142" y="288" width="154" height="14" fill="url(#pins)"></rect>
+              <text x="118" y="148" font-family="JetBrains Mono, monospace" font-size="8" fill="#CFE3EC">DIGITAL (PWM~)   D9 D8 · D3 D2</text>
+              <text x="146" y="282" font-family="JetBrains Mono, monospace" font-size="8" fill="#CFE3EC">5V GND    A0 A1</text>
+              <rect x="146" y="200" width="130" height="8" fill="url(#legs)"></rect><rect x="146" y="240" width="130" height="8" fill="url(#legs)"></rect>
+              <rect x="146" y="206" width="130" height="36" rx="2" fill="#191919"></rect><circle cx="154" cy="224" r="3" fill="#2A2A2A"></circle>
+              <rect x="96" y="214" width="32" height="12" rx="6" fill="#C8CDD3"></rect>
+              <circle cx="92" cy="132" r="3.5" fill="#5CFF8A"></circle>
+              <text x="150" y="182" font-family="Space Grotesk, sans-serif" font-weight="600" font-size="20" fill="#EAF3F7">UNO R3</text>
+              <text x="160" y="228" font-family="JetBrains Mono, monospace" font-size="8" fill="#9AA6AE">ATmega328P</text>
+            </g>
+
+            <g filter="url(#sh)">
+              <rect x="360" y="70" width="510" height="270" rx="8" fill="#EFEBE3" stroke="#D7D1C5"></rect>
+              <rect x="376" y="84" width="478" height="26" fill="url(#holes)"></rect>
+              <line x1="376" y1="81" x2="854" y2="81" stroke="#D64545" stroke-width="2"></line><line x1="376" y1="113" x2="854" y2="113" stroke="#2F6FD6" stroke-width="2"></line>
+              <rect x="376" y="124" width="478" height="64" fill="url(#holes)"></rect>
+              <rect x="368" y="196" width="494" height="10" fill="#DCD6CA"></rect>
+              <rect x="376" y="214" width="478" height="64" fill="url(#holes)"></rect>
+              <line x1="376" y1="289" x2="854" y2="289" stroke="#D64545" stroke-width="2"></line>
+              <rect x="376" y="292" width="478" height="26" fill="url(#holes)"></rect>
+              <line x1="376" y1="321" x2="854" y2="321" stroke="#2F6FD6" stroke-width="2"></line>
+              <text x="854" y="334" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="9" fill="#625C51">BB1 · 830 tie-points</text>
+            </g>
+
+            <line x1="412" y1="168" x2="412" y2="232" stroke="#9AA0A6" stroke-width="2"></line><line x1="428" y1="168" x2="428" y2="232" stroke="#9AA0A6" stroke-width="2"></line>
+            <circle cx="420" cy="160" r="13" fill="#E7B65A" stroke="#A27A2C" stroke-width="1.5"></circle>
+            <path d="M411 155 h4 v6 h4 v-6 h4 v6 h4" fill="none" stroke="#8A3B1E" stroke-width="1.6"></path>
+            <text x="420" y="138" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#3A352D">LDR1</text>
+
+            <line x1="440" y1="152" x2="528" y2="152" stroke="#9AA0A6" stroke-width="2"></line>
+            <rect x="462" y="145" width="44" height="14" rx="7" fill="#E2C896"></rect>
+            <rect x="469" y="145" width="3" height="14" fill="#7A4A21"></rect><rect x="477" y="145" width="3" height="14" fill="#111111"></rect><rect x="485" y="145" width="3" height="14" fill="#E07A1F"></rect><rect x="497" y="145" width="3" height="14" fill="#C9A54A"></rect>
+            <text x="484" y="138" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#3A352D">R1 10k</text>
+
+            <line x1="612" y1="160" x2="612" y2="184" stroke="#9AA0A6" stroke-width="2"></line><line x1="628" y1="160" x2="628" y2="184" stroke="#9AA0A6" stroke-width="2"></line>
+            <rect x="611" y="134" width="18" height="28" rx="9" fill="#FFC861" stroke="#C78A2A"></rect>
+            <rect x="607" y="158" width="26" height="4" rx="1" fill="#E8B04E"></rect>
+            <text x="620" y="126" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#3A352D">D1</text>
+
+            <line x1="692" y1="160" x2="692" y2="184" stroke="#9AA0A6" stroke-width="2"></line><line x1="708" y1="160" x2="708" y2="184" stroke="#9AA0A6" stroke-width="2"></line>
+            <rect x="691" y="134" width="18" height="28" rx="9" fill="{{redFill}}" stroke="#7A2620"></rect>
+            <rect x="687" y="158" width="26" height="4" rx="1" fill="#B23A30"></rect>
+            <text x="700" y="126" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#3A352D">D2</text>
+
+            <line x1="604" y1="244" x2="688" y2="244" stroke="#9AA0A6" stroke-width="2"></line>
+            <rect x="624" y="237" width="44" height="14" rx="7" fill="#E2C896"></rect>
+            <rect x="631" y="237" width="3" height="14" fill="#C8352B"></rect><rect x="639" y="237" width="3" height="14" fill="#C8352B"></rect><rect x="647" y="237" width="3" height="14" fill="#7A4A21"></rect><rect x="659" y="237" width="3" height="14" fill="#C9A54A"></rect>
+            <text x="646" y="266" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#3A352D">R2 220Ω</text>
+
+            <rect x="752" y="214" width="96" height="54" rx="3" fill="#1E1E1E"></rect>
+            <path d="M760 222 h10 v8 h8 v-8 h8 v8 h8 v-8 h10" fill="none" stroke="#C9A54A" stroke-width="2"></path>
+            <rect x="808" y="236" width="30" height="22" rx="2" fill="#2E2E2E"></rect>
+            <circle cx="762" cy="258" r="2.5" fill="#4CC3F0"></circle>
+            <text x="770" y="261" font-family="JetBrains Mono, monospace" font-size="8" fill="#CFD5DB">ESP8266</text>
+            <text x="800" y="208" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#3A352D">U2 Wi-Fi</text>
+
+            <rect x="462" y="378" width="196" height="20" rx="4" fill="#B85A33"></rect>
+            <ellipse cx="560" cy="390" rx="92" ry="10" fill="{{soilColor}}"></ellipse>
+            <rect x="548" y="338" width="24" height="70" rx="3" fill="#161616"></rect>
+            <rect x="551" y="334" width="18" height="6" fill="url(#pins)"></rect>
+            <text x="560" y="372" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="7" fill="#9AA6AE">J1</text>
+            <path d="M470 394 L650 394 L630 512 L490 512 Z" fill="url(#pot)"></path>
+            <path d="M520 388 C 516 360, 526 330, 520 296" fill="none" stroke="#3E8B45" stroke-width="5" stroke-linecap="round"></path>
+            <path transform="{{leafA}}" d="M0 0 C 18 -24, 52 -22, 66 -8 C 48 4, 20 8, 0 0 Z" fill="#4FA357"></path>
+            <path transform="{{leafB}}" d="M0 0 C 18 -24, 52 -22, 66 -8 C 48 4, 20 8, 0 0 Z" fill="#459A4D"></path>
+            <path transform="{{leafC}}" d="M0 0 C 14 -16, 36 -16, 46 -6 C 34 3, 14 6, 0 0 Z" fill="#5BB563"></path>
+
+            <g transform="translate(4 7)" fill="none" stroke="#000000" stroke-opacity="0.32" stroke-width="6" stroke-linecap="round">
+              <path d="M200 125 C 205 30, 590 20, 604 238"></path>
+              <path d="M214 125 C 226 40, 690 34, 700 188"></path>
+              <path d="M268 125 C 290 58, 760 50, 776 216"></path>
+              <path d="M282 125 C 306 66, 800 62, 820 216"></path>
+              <path d="M150 296 C 150 380, 380 382, 390 300"></path>
+              <path d="M164 296 C 170 410, 408 410, 412 318"></path>
+              <path d="M232 296 C 246 380, 520 300, 556 338"></path>
+              <path d="M246 296 C 262 356, 404 340, 420 270"></path>
+              <path d="M554 336 C 540 320, 474 336, 470 300"></path>
+              <path d="M566 336 C 584 318, 606 330, 606 318"></path>
+            </g>
+            <g fill="none" stroke-width="5.5" stroke-linecap="round">
+              <path d="M200 125 C 205 30, 590 20, 604 238" stroke="#F08A24"></path>
+              <path d="M214 125 C 226 40, 690 34, 700 188" stroke="#3D7BE0"></path>
+              <path d="M268 125 C 290 58, 760 50, 776 216" stroke="#9B6BE0"></path>
+              <path d="M282 125 C 306 66, 800 62, 820 216" stroke="#E6E6E6"></path>
+              <path d="M150 296 C 150 380, 380 382, 390 300" stroke="#E0483D"></path>
+              <path d="M164 296 C 170 410, 408 410, 412 318" stroke="#2B2B2B"></path>
+              <path d="M232 296 C 246 380, 520 300, 556 338" stroke="#F2D03B"></path>
+              <path d="M246 296 C 262 356, 404 340, 420 270" stroke="#3FBF6A"></path>
+              <path d="M554 336 C 540 320, 474 336, 470 300" stroke="#E0483D"></path>
+              <path d="M566 336 C 584 318, 606 330, 606 318" stroke="#2B2B2B"></path>
+            </g>
+            <g fill="none" stroke="#FFFFFF" stroke-opacity="0.28" stroke-width="1.5" stroke-linecap="round" transform="translate(-1 -1.5)">
+              <path d="M200 125 C 205 30, 590 20, 604 238"></path>
+              <path d="M214 125 C 226 40, 690 34, 700 188"></path>
+              <path d="M268 125 C 290 58, 760 50, 776 216"></path>
+              <path d="M150 296 C 150 380, 380 382, 390 300"></path>
+              <path d="M164 296 C 170 410, 408 410, 412 318"></path>
+              <path d="M232 296 C 246 380, 520 300, 556 338"></path>
+              <path d="M246 296 C 262 356, 404 340, 420 270"></path>
+            </g>
+
+            <rect x="0" y="0" width="900" height="540" fill="#000000" opacity="{{dark}}"></rect>
+            <circle cx="620" cy="146" r="58" fill="url(#gAmber)" opacity="{{glow}}"></circle>
+            <circle cx="700" cy="146" r="44" fill="url(#gRed)" opacity="{{redGlow}}"></circle>
+
+
+            <g display="{{scopeDisp}}">
+              <path d="M178 108 C 188 120, 196 122, 200 127" fill="none" stroke="#F2D03B" stroke-width="2.5" stroke-linecap="round"></path>
+              <circle cx="200" cy="127" r="3.5" fill="#F2D03B"></circle>
+              <g transform="translate(14 8)">
+                <rect width="182" height="102" rx="8" fill="#262626" stroke="#3A3A3A"></rect>
+                <rect x="8" y="8" width="124" height="70" rx="3" fill="#040604"></rect>
+                <path d="M39 8v70M70 8v70M101 8v70M8 25.5h124M8 43h124M8 60.5h124" stroke="#1B2A1B" stroke-width="1"></path>
+                <path d="{{scopePath}}" fill="none" stroke="#F2D03B" stroke-width="1.6" stroke-linejoin="round"></path>
+                <circle cx="152" cy="24" r="9" fill="#171717" stroke="#454545"></circle><path d="M152 24l4-6" stroke="#D9D9D9" stroke-width="1.5" stroke-linecap="round"></path>
+                <circle cx="152" cy="54" r="9" fill="#171717" stroke="#454545"></circle><path d="M152 54l-5-4" stroke="#D9D9D9" stroke-width="1.5" stroke-linecap="round"></path>
+                <text x="152" y="78" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="8" fill="#F2D03B">CH1</text>
+                <text x="10" y="93" font-family="JetBrains Mono, monospace" font-size="9" fill="#EAEAEA">D9 · 2 V/div · 1 ms/div · {{duty}}%</text>
+              </g>
+            </g>
+
+            <g display="{{dmmDisp}}">
+              <path d="M732 440 C 690 430, 620 380, 566 338" fill="none" stroke="#C8352B" stroke-width="2.5" stroke-linecap="round"></path>
+              <path d="M732 470 C 700 460, 690 360, 664 324" fill="none" stroke="#1F1F1F" stroke-width="2.5" stroke-linecap="round"></path>
+              <path d="M732 470 C 700 460, 690 360, 664 324" fill="none" stroke="#6E6E6E" stroke-width="0.8" stroke-linecap="round"></path>
+              <circle cx="566" cy="338" r="3.5" fill="#C8352B"></circle><circle cx="664" cy="324" r="3.5" fill="#6E6E6E"></circle>
+              <text x="672" y="320" font-family="JetBrains Mono, monospace" font-size="9" fill="#625C51">COM → GND</text>
+              <g transform="translate(722 392)">
+                <rect width="152" height="140" rx="16" fill="#3A3A3A"></rect>
+                <rect x="5" y="5" width="142" height="130" rx="12" fill="#1C1C1C"></rect>
+                <rect x="28" y="14" width="112" height="42" rx="4" fill="#AEB9A0"></rect>
+                <text x="34" y="25" font-family="JetBrains Mono, monospace" font-size="7" fill="#2C3627">DC  AUTO</text>
+                <text x="124" y="48" text-anchor="end" font-family="JetBrains Mono, monospace" font-weight="500" font-size="22" fill="#18200F">{{vA0x}}</text>
+                <text x="127" y="48" font-family="JetBrains Mono, monospace" font-size="9" fill="#18200F">V</text>
+                <circle cx="88" cy="98" r="26" fill="#141414" stroke="#2E2E2E"></circle>
+                <circle cx="88" cy="98" r="17" fill="#3A3A3A"></circle>
+                <path d="M88 98 L76 84" stroke="#EAEAEA" stroke-width="4" stroke-linecap="round"></path>
+                <g font-family="JetBrains Mono, monospace" font-size="7" fill="#C7C7C7" text-anchor="middle">
+                  <text x="88" y="68">OFF</text><text x="62" y="78" fill="#F2A33A">V⎓</text><text x="114" y="78">Ω</text><text x="120" y="104">A</text><text x="114" y="126">Hz</text>
+                </g>
+                <circle cx="10" cy="48" r="5.5" fill="#070707" stroke="#C8352B" stroke-width="2"></circle>
+                <circle cx="10" cy="78" r="5.5" fill="#070707" stroke="#6E6E6E" stroke-width="2"></circle>
+                <circle cx="10" cy="108" r="5.5" fill="#070707" stroke="#6E6E6E" stroke-width="2"></circle>
+                <g font-family="JetBrains Mono, monospace" font-size="6.5" fill="#A3A3A3"><text x="19" y="70">VΩ</text><text x="19" y="92">COM</text><text x="19" y="122">10A</text></g>
+              </g>
+            </g>
+            <g font-family="JetBrains Mono, monospace" font-size="11">
+              <path d="M556 338 L548 352" stroke="#F2D03B" stroke-width="1.2" stroke-dasharray="3 2"></path>
+              <circle cx="556" cy="338" r="6" fill="none" stroke="#F2D03B" stroke-width="2"></circle><circle cx="556" cy="338" r="1.8" fill="#F2D03B"></circle>
+              <rect x="364" y="350" width="184" height="22" rx="11" fill="#0E0E0E" fill-opacity="0.94" stroke="#F2D03B"></rect>
+              <text x="376" y="365" fill="#EAEAEA">Soil sensor → A0 <tspan fill="#F7C77A">{{vA0}} V</tspan></text>
+
+              <path d="M420 270 L436 269" stroke="#3FBF6A" stroke-width="1.2" stroke-dasharray="3 2"></path>
+              <circle cx="420" cy="270" r="6" fill="none" stroke="#3FBF6A" stroke-width="2"></circle><circle cx="420" cy="270" r="1.8" fill="#3FBF6A"></circle>
+              <rect x="436" y="258" width="186" height="22" rx="11" fill="#0E0E0E" fill-opacity="0.94" stroke="#3FBF6A"></rect>
+              <text x="448" y="273" fill="#EAEAEA">Light sensor → A1 <tspan fill="#F7C77A">{{vA1}} V</tspan></text>
+
+              <path d="M604 114 L616 134" stroke="#F08A24" stroke-width="1.2" stroke-dasharray="3 2"></path>
+              <rect x="462" y="92" width="158" height="22" rx="11" fill="#0E0E0E" fill-opacity="0.94" stroke="#F08A24"></rect>
+              <text x="474" y="107" fill="#EAEAEA">Night LED · D9 <tspan fill="#F7C77A">{{duty}}%</tspan></text>
+
+              <path d="M690 114 L700 134" stroke="#6F9BEA" stroke-width="1.2" stroke-dasharray="3 2"></path>
+              <rect x="636" y="92" width="158" height="22" rx="11" fill="#0E0E0E" fill-opacity="0.94" stroke="#6F9BEA"></rect>
+              <text x="648" y="107" fill="#EAEAEA">Water LED · D8 <tspan fill="#F7C77A">{{d8word}}</tspan></text>
+            </g>
+          </svg>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{isSch}}" hint-placeholder-val="{{ false }}">
+          <svg sc-camel-view-box="0 0 900 540" style="width: 100%; max-width: 900px; height: auto; display: block; border-radius: 6px; box-shadow: 0 10px 30px rgba(0,0,0,.5)" role="img" aria-label="Schematic view of the same circuit: ATmega328P with soil sensor on A0, LDR divider on A1, LEDs on D9 and D8, ESP8266 on a software UART">
+            <defs>
+              <pattern id="sgrid" width="20" height="20" sc-camel-pattern-units="userSpaceOnUse"><circle cx="1" cy="1" r="0.9" fill="#D4D0C4"></circle></pattern>
+            </defs>
+            <rect width="900" height="540" fill="#F6F5F0"></rect>
+            <rect width="900" height="540" fill="url(#sgrid)"></rect>
+            <g fill="none" stroke="#1C1C1C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="340" y="110" width="210" height="300" fill="#FFFDF6"></rect>
+              <path d="M310 140h30M310 200h30M310 320h30M310 380h30"></path>
+              <path d="M550 150h30M550 250h30M550 330h30M550 370h30"></path>
+              <path d="M310 140v-30M298 110h24"></path>
+              <path d="M310 380v30M296 410h28M302 416h16M307 422h6"></path>
+
+              <rect x="70" y="160" width="140" height="90" fill="#FFFDF6"></rect>
+              <path d="M110 160v-40M98 120h24"></path>
+              <path d="M110 250v40M96 290h28M102 296h16M107 302h6"></path>
+              <path d="M210 200h100"></path>
+
+              <path d="M270 228v-20M258 208h24"></path>
+              <rect x="262" y="236" width="16" height="36"></rect>
+              <path d="M270 228v8M270 272v48h40"></path>
+              <path d="M240 238l14 8M244 250l14 8"></path>
+              <path d="M250 244l4 2l-1 -4M254 256l4 2l-1 -4"></path>
+              <path d="M270 320v10l-7 4l14 8l-14 8l14 8l-14 8l7 4v6"></path>
+              <path d="M270 382v8M256 390h28M262 396h16M267 402h6"></path>
+
+              <path d="M580 150h14l4 -7l8 14l8 -14l8 14l8 -14l4 7h26"></path>
+              <path d="M660 150h60v30"></path>
+              <path d="M710 180h20l-10 16z" fill="#FFFDF6"></path>
+              <path d="M710 196h20M720 196v20M706 216h28M712 222h16M717 228h6"></path>
+              <path d="M734 184l9 -6M738 192l9 -6"></path>
+
+              <path d="M580 250h14l4 -7l8 14l8 -14l8 14l8 -14l4 7h26"></path>
+              <path d="M660 250h60v30"></path>
+              <path d="M710 280h20l-10 16z" fill="#FFFDF6"></path>
+              <path d="M710 296h20M720 296v20M706 316h28M712 322h16M717 328h6"></path>
+              <path d="M734 284l9 -6M738 292l9 -6"></path>
+
+              <path d="M580 330h20v70h40"></path>
+              <path d="M580 370h5v60h55"></path>
+              <rect x="640" y="380" width="170" height="70" fill="#FFFDF6"></rect>
+              <path d="M725 380v-14M713 366h24"></path>
+            </g>
+            <circle cx="270" cy="320" r="4" fill="#1C1C1C"></circle>
+            <g font-family="JetBrains Mono, monospace" font-size="11" fill="#1C1C1C">
+              <text x="340" y="100" font-weight="500">U1</text>
+              <text x="445" y="256" text-anchor="middle" font-size="13" font-weight="500">ATmega328P</text>
+              <text x="445" y="274" text-anchor="middle" fill="#5C5C5C">UNO R3 · 16 MHz</text>
+              <text x="348" y="144">5V</text><text x="348" y="204">A0</text><text x="348" y="324">A1</text><text x="348" y="384">GND</text>
+              <text x="542" y="154" text-anchor="end">D9~</text><text x="542" y="254" text-anchor="end">D8</text><text x="542" y="334" text-anchor="end">D2 SW_TX</text><text x="542" y="374" text-anchor="end">D3 SW_RX</text>
+              <text x="310" y="102" text-anchor="middle">+5V</text>
+              <text x="110" y="112" text-anchor="middle">+5V</text>
+              <text x="270" y="200" text-anchor="middle">+5V</text>
+              <text x="140" y="190" text-anchor="middle" font-weight="500">J1</text>
+              <text x="140" y="208" text-anchor="middle">Soil sensor</text>
+              <text x="140" y="224" text-anchor="middle" fill="#5C5C5C">capacitive v1.2</text>
+              <text x="204" y="196" text-anchor="end" font-size="9">AOUT</text>
+              <text x="286" y="252">LDR1</text><text x="286" y="266" fill="#5C5C5C">GL5528</text>
+              <text x="286" y="354">R1</text><text x="286" y="368" fill="#5C5C5C">10k</text>
+              <text x="626" y="140" text-anchor="middle">R2 220Ω</text>
+              <text x="626" y="240" text-anchor="middle">R3 330Ω</text>
+              <text x="752" y="194">D1 amber</text>
+              <text x="752" y="294">D2 red</text>
+              <text x="648" y="396" font-weight="500">U2</text>
+              <text x="725" y="414" text-anchor="middle">ESP8266 Wi-Fi hat</text>
+              <text x="646" y="404" font-size="9">RX</text><text x="646" y="434" font-size="9">TX</text>
+              <text x="725" y="362" text-anchor="middle">+3V3</text>
+            </g>
+            <g font-family="JetBrains Mono, monospace" font-size="11" fill="#1F5FB8" font-weight="500">
+              <rect x="218" y="180" width="80" height="16" rx="3" fill="#DCE8FA"></rect><text x="258" y="192" text-anchor="middle">A0 {{vA0}} V</text>
+              <rect x="186" y="300" width="80" height="16" rx="3" fill="#DCE8FA"></rect><text x="226" y="312" text-anchor="middle">A1 {{vA1}} V</text>
+              <rect x="580" y="160" width="92" height="16" rx="3" fill="#DCE8FA"></rect><text x="626" y="172" text-anchor="middle">D9 PWM {{duty}}%</text>
+            </g>
+            <g transform="translate(596 464)">
+              <path d="M8 2l7 12h-14z" fill="#F2A33A"></path>
+              <text x="22" y="13" font-family="JetBrains Mono, monospace" font-size="10" fill="#8A5A12">ERC: U2.RX is 3.3 V tolerant, driven by 5 V D2 — add a divider</text>
+            </g>
+            <g transform="translate(640 490)" font-family="JetBrains Mono, monospace" font-size="10" fill="#1C1C1C">
+              <rect width="240" height="40" fill="none" stroke="#1C1C1C" stroke-width="1.5"></rect>
+              <path d="M150 0v40" stroke="#1C1C1C" stroke-width="1"></path>
+              <text x="10" y="17" font-weight="500">garden-node.sch</text>
+              <text x="10" y="32" fill="#5C5C5C">Breadbox · sheet 1/1</text>
+              <text x="160" y="17">Rev A</text>
+              <text x="160" y="32" fill="#5C5C5C">2026-11-14</text>
+            </g>
+          </svg>
+        </sc-if>
+      </div>
+
+      <sc-if value="{{toolsRail}}" hint-placeholder-val="{{ true }}">
+        <nav aria-label="Tools" style="flex: 0 0 56px; border-left: 1px solid #242424; background: rgba(14,14,14,0.92); display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 0">
+          <button class="rb" sc-camel-on-click="{{toolsOpen}}" aria-label="Expand tools"><svg width="16" height="16" sc-camel-view-box="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 3.5L5 8l4.5 4.5M13 3.5v9"></path></svg></button>
+          <div style="width: 28px; height: 1px; background: #2E2E2E; margin: 2px 0"></div>
+          <sc-for list="{{tools}}" as="t" hint-placeholder-count="5">
+            <button class="rb {{t.cls}}" sc-camel-on-click="{{t.toggle}}" aria-label="{{t.name}}" title="{{t.name}}"><svg width="20" height="20" sc-camel-view-box="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="{{t.d}}"></path></svg></button>
+          </sc-for>
+          <button class="rb" sc-camel-on-click="{{toolsHide}}" aria-label="Hide tools" style="margin-top: auto"><svg width="16" height="16" sc-camel-view-box="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.5L11 8l-4.5 4.5M3 3.5v9"></path></svg></button>
+        </nav>
+      </sc-if>
+
+      <sc-if value="{{toolsWide}}" hint-placeholder-val="{{ false }}">
+        <nav aria-label="Tools" style="flex: 0 0 248px; border-left: 1px solid #242424; background: rgba(14,14,14,0.94); display: flex; flex-direction: column; gap: 10px; padding: 12px; box-sizing: border-box; overflow: auto">
+          <div style="display: flex; align-items: center; gap: 4px">
+            <span style="flex: 1; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #A3A3A3; font-weight: 600">Tools</span>
+            <button class="rb" sc-camel-on-click="{{toolsCollapse}}" aria-label="Collapse to icons" style="width: 32px; height: 32px"><svg width="16" height="16" sc-camel-view-box="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.5L11 8l-4.5 4.5"></path></svg></button>
+            <button class="rb" sc-camel-on-click="{{toolsHide}}" aria-label="Hide tools" style="width: 32px; height: 32px"><svg width="16" height="16" sc-camel-view-box="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"></path></svg></button>
+          </div>
+          <sc-for list="{{tools}}" as="t" hint-placeholder-count="5">
+            <div class="tc {{t.ccls}}">
+              <div style="display: flex; align-items: center; gap: 10px">
+                <svg width="22" height="22" sc-camel-view-box="0 0 16 16" aria-hidden="true" fill="none" stroke="{{t.ink}}" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" style="flex: 0 0 22px"><path d="{{t.d}}"></path></svg>
+                <span style="flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0">
+                  <span style="font-size: 13px; font-weight: 500">{{t.name}}</span>
+                  <span style="font-size: 11px; color: #A3A3A3">{{t.sub}}</span>
+                </span>
+                <button class="ghost" sc-camel-on-click="{{t.toggle}}" style="height: 28px; padding: 0 10px; font-size: 12px">{{t.act}}</button>
+              </div>
+              <sc-if value="{{t.on}}" hint-placeholder-val="{{ false }}">
+                <div style="font: 11.5px/1.5 'JetBrains Mono', monospace; color: #F7C77A; padding-left: 32px">{{t.detail}}</div>
+              </sc-if>
+            </div>
+          </sc-for>
+          <span style="font-size: 11px; color: #858585; line-height: 1.5; padding-top: 4px">Drag a tool onto the bench, then drop its probes on any pin, wire or hole.</span>
+        </nav>
+      </sc-if>
+
+      <sc-if value="{{toolsHidden}}" hint-placeholder-val="{{ false }}">
+        <div style="flex: 0 0 0px; position: relative">
+          <button class="tab-out" sc-camel-on-click="{{toolsCollapse}}" aria-label="Show tools">
+            <svg width="14" height="14" sc-camel-view-box="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 3.5L5 8l4.5 4.5"></path></svg>
+            <span style="writing-mode: vertical-rl">Tools</span>
+          </button>
+        </div>
+      </sc-if>
+      </div>
+    </main>
+
+    <aside aria-label="World and inspector" style="flex: 1 0 300px; max-width: 340px; border-left: 1px solid #242424; background: rgba(17,17,17,0.84); padding: 16px; display: flex; flex-direction: column; gap: 18px; height: 620px; overflow: auto; box-sizing: border-box">
+      <div style="display: flex; align-items: baseline; justify-content: space-between">
+        <span style="font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #A3A3A3; font-weight: 600">World</span>
+        <span style="font-size: 12px; color: #A3A3A3">Pot 1 · indoor</span>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; justify-content: space-between; font-size: 13px"><label for="w-moist">Soil moisture</label><span style="font-family: 'JetBrains Mono', monospace; color: #F7C77A">{{moist}} % VWC</span></div>
+        <input id="w-moist" type="range" min="0" max="60" value="{{moist}}" sc-camel-on-change="{{onMoist}}">
+        <div style="display: flex; justify-content: space-between; font-size: 11px; color: #A3A3A3"><span>Bone dry</span><span>Field capacity</span><span>Saturated</span></div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; justify-content: space-between; font-size: 13px"><label for="w-lux">Ambient light</label><span style="font-family: 'JetBrains Mono', monospace; color: #F7C77A">{{lux}} lx</span></div>
+        <input id="w-lux" type="range" min="0" max="1000" step="10" value="{{lux}}" sc-camel-on-change="{{onLux}}">
+        <div style="display: flex; justify-content: space-between; font-size: 11px; color: #A3A3A3"><span>Night</span><span>Living room</span><span>Bright office</span></div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; justify-content: space-between; font-size: 13px"><label for="w-temp">Air temperature</label><span style="font-family: 'JetBrains Mono', monospace; color: #F7C77A">{{temp}} °C</span></div>
+        <input id="w-temp" type="range" min="-10" max="45" value="{{temp}}" sc-camel-on-change="{{onTemp}}">
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 10px; padding-top: 4px">
+        <label style="display: flex; align-items: center; gap: 10px; font-size: 13px"><input type="checkbox" checked="{{evap}}" sc-camel-on-change="{{toggleEvap}}">Evaporation · ≈{{evapRate}} %/h</label>
+        <label style="display: flex; align-items: center; gap: 10px; font-size: 13px"><input type="checkbox">Day/night cycle (Ashland, OR)</label>
+        <label style="display: flex; align-items: center; gap: 10px; font-size: 13px"><input type="checkbox" checked="{{ true }}">Sensor noise &amp; ADC quantization</label>
+      </div>
+
+      <div style="height: 1px; background: #242424"></div>
+
+      <div style="display: flex; flex-direction: column; gap: 10px">
+        <span style="font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #A3A3A3; font-weight: 600">Inspector · J1</span>
+        <span style="font: 500 14px 'Space Grotesk', Inter, sans-serif">Capacitive soil sensor v1.2</span>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; font-size: 12px">
+          <span style="color: #A3A3A3">Supply</span><span style="font-family: 'JetBrains Mono', monospace">3.3–5.5 V</span>
+          <span style="color: #A3A3A3">Output (dry→wet)</span><span style="font-family: 'JetBrains Mono', monospace">3.0→1.4 V</span>
+          <span style="color: #A3A3A3">Response</span><span style="font-family: 'JetBrains Mono', monospace">τ ≈ 1.8 s</span>
+          <span style="color: #A3A3A3">Noise</span><span style="font-family: 'JetBrains Mono', monospace">±4 LSB</span>
+          <span style="color: #A3A3A3">Model</span><span style="font-family: 'JetBrains Mono', monospace">soil.vwc → C(ε)</span>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <section aria-label="Console" style="border-top: 1px solid #242424; background: rgba(6,6,6,0.88); display: flex; flex-direction: column; height: 224px">
+    <div style="display: flex; align-items: center; gap: 18px; padding: 0 16px; border-bottom: 1px solid #1C1C1C; flex-wrap: wrap">
+      <button class="tab {{serialCls}}" sc-camel-on-click="{{tabSerial}}">Serial monitor</button>
+      <button class="tab {{probeCls}}" sc-camel-on-click="{{tabProbes}}">Probes &amp; power</button>
+      <span style="margin-left: auto; font: 400 12px 'JetBrains Mono', monospace; color: #A3A3A3">U1 · SoftwareSerial + USB · 115200 baud · NL</span>
+      <button class="ghost" style="height: 26px; font-size: 12px">Clear</button>
+    </div>
+    <sc-if value="{{isSerial}}" hint-placeholder-val="{{ true }}">
+      <div style="flex: 1 1 auto; overflow: auto; padding: 10px 16px; font: 400 12.5px/1.65 'JetBrains Mono', ui-monospace, monospace; color: #D9D9D9">
+        <sc-for list="{{lines}}" as="l" hint-placeholder-count="8">
+          <div class="ln {{l.cls}}"><span class="ln-t">{{l.t}}</span><span>{{l.text}}</span></div>
+        </sc-for>
+      </div>
+    </sc-if>
+    <sc-if value="{{isProbes}}" hint-placeholder-val="{{ false }}">
+      <div style="flex: 1 1 auto; padding: 14px 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); gap: 12px; align-content: start">
+        <sc-for list="{{probes}}" as="p" hint-placeholder-count="6">
+          <div style="border: 1px solid #242424; border-radius: 8px; padding: 12px; background: rgba(12,12,12,0.8); display: flex; flex-direction: column; gap: 4px">
+            <span style="font-size: 12px; color: #A3A3A3">{{p.label}}</span>
+            <span style="font: 500 20px 'JetBrains Mono', monospace; color: #EAEAEA">{{p.value}}</span>
+            <span style="font-size: 11px; color: #A3A3A3">{{p.sub}}</span>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script="" data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900}}">
+class Component extends DCLogic {
+  constructor(...a) {
+    super(...a);
+    this.state = { view: 'breadboard', moist: 42, lux: 180, temp: 21, running: true, tab: 'serial', evap: true, lib: 'simple', openCat: 'semi', dmm: true, scope: true, tools: 'rail' };
+  }
+  renderVals() {
+    const s = this.state;
+    const m = s.moist, lux = s.lux;
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+    const soilRaw = Math.round(620 - m * 5.6);
+    const vA0 = soilRaw * 5 / 1023;
+    const lightRaw = Math.round(1023 * lux / (lux + 166));
+    const vA1 = lightRaw * 5 / 1023;
+    const pwm = clamp(Math.round(255 - lightRaw / 4), 0, 255);
+    const low = m < 30;
+    const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+    const mix = (a, b, t) => { const A = hex(a), B = hex(b); return '#' + A.map((v, i) => Math.round(v + (B[i] - v) * t).toString(16).padStart(2, '0')).join(''); };
+    const soilColor = mix('#A47E55', '#2E2018', m / 60);
+    const droop = (1 - m / 60) * 42;
+    const dark = ((1 - Math.min(lux, 1000) / 1000) * 0.5).toFixed(2);
+    const glow = s.running ? (pwm / 255).toFixed(2) : '0';
+    const redOn = s.running && low;
+    const mqttLine = (mp) => { const p = JSON.stringify({ m: mp, lux: lux, t: s.temp }); return 'mqtt: PUB garden/pot1 ' + p + '  (' + (p.length + 15) + ' B)'; };
+
+    const lines = [
+      { t: '00:00.000', text: 'Breadbox sim · ATmega328P @ 16 MHz · reset cause: power-on', cls: 'ln-sys' },
+      { t: '00:00.412', text: 'garden-node v0.3 booting…', cls: '' },
+      { t: '00:01.870', text: 'wifi: AT+CWJAP="SIM-AP" → OK  rssi=-54 dBm  ip=10.0.0.42', cls: 'ln-net' },
+    ];
+    for (let i = 0; i < 5; i++) {
+      const j = ((i * 37) % 7) - 3, k = ((i * 53) % 9) - 4;
+      const sr = soilRaw + j;
+      const lr = clamp(lightRaw + k, 0, 1023);
+      const mp = clamp(Math.round((620 - sr) / 5.6), 0, 100);
+      const ts = '00:' + (10.5 + i * 0.5).toFixed(3).padStart(6, '0');
+      lines.push({ t: ts, text: 'soil_raw=' + sr + '  moisture=' + mp + '%  light_raw=' + lr + '  led_pwm=' + pwm, cls: '' });
+      if (i % 2 === 1) lines.push({ t: ts, text: mqttLine(mp), cls: 'ln-net' });
+    }
+    if (low) lines.push({ t: '00:12.500', text: 'WARN moisture < 30% → D8 HIGH (water-me LED on)', cls: 'ln-warn' });
+    if (!s.running) lines.push({ t: '', text: '— simulation paused —', cls: 'ln-sys' });
+
+    const current = (38.6 + 70 + (pwm / 255) * 12.4 + (redOn ? 9.1 : 0)).toFixed(1);
+    const probes = [
+      { label: 'A0 · soil sensor out', value: vA0.toFixed(3) + ' V', sub: 'ADC ' + soilRaw + ' / 1023' },
+      { label: 'A1 · LDR divider', value: vA1.toFixed(3) + ' V', sub: 'ADC ' + lightRaw + ' / 1023' },
+      { label: 'D9 · night LED', value: Math.round(pwm / 2.55) + ' %', sub: 'PWM 490 Hz · I(D1) avg ' + (pwm / 255 * 12.4).toFixed(1) + ' mA' },
+      { label: 'D8 · water-me LED', value: redOn ? 'HIGH' : 'LOW', sub: redOn ? 'I(D2) 9.1 mA' : 'I(D2) 0 mA' },
+      { label: '5V rail', value: (4.99 - current * 0.0004).toFixed(3) + ' V', sub: 'USB source, 0.4 Ω cable' },
+      { label: 'Total board draw', value: current + ' mA', sub: 'U2 Wi-Fi ≈ 70 mA avg' },
+    ];
+
+    const I = {
+      uno: ['M3 6.5h18v11H3z M1.8 9.2H3 M1.8 12.2H3 M7 8.6h10.5 M9.5 15.4h8', 'M9.5 11h5.5v2.6H9.5z'],
+      esp32: ['M6 2.5h12v19H6z M6 9H4 M6 12.5H4 M6 16H4 M18 9h2 M18 12.5h2 M18 16h2 M9 11h6v6H9z', 'M8.5 4.5h7 M8.5 4.5v2.5h2.3V4.5 M13 4.5V7h2.5'],
+      pico: ['M7.5 2.5h9v19h-9z M7.5 6H5.5 M7.5 9.5H5.5 M7.5 13H5.5 M7.5 16.5H5.5 M16.5 6h2 M16.5 9.5h2 M16.5 13h2 M16.5 16.5h2', 'M10.2 10.5h3.6v3.6h-3.6z M10.5 3.6h3v1.8h-3z'],
+      bb: ['M2.5 5h19v14h-19z M2.5 12h19', 'M6 8.2v.1 M9 8.2v.1 M12 8.2v.1 M15 8.2v.1 M18 8.2v.1 M6 15.7v.1 M9 15.7v.1 M12 15.7v.1 M15 15.7v.1 M18 15.7v.1'],
+      wire: ['M6 17.5C6 8 18 16 18 6.5', 'M4.5 17.5h3v3h-3z M16.5 3.5h3v3h-3z'],
+      res: ['M2 12h4 M18 12h4 M6 9.4h12v5.2H6z', 'M9 9.4v5.2 M11.8 9.4v5.2 M14.6 9.4v5.2'],
+      cap: ['M2 12h8 M14 12h8 M10 6v12', 'M14 6v12'],
+      btn: ['M4 15h16v5H4z M7 15v-2.6h10V15 M2 20h2 M20 20h2', 'M12 10.5V4.5 M9.6 6.9 12 4.5l2.4 2.4'],
+      pot: ['M6 13a6 6 0 1 0 12 0a6 6 0 1 0-12 0 M8 21.5v-3 M12 21.5v-2.5 M16 21.5v-3', 'M12 13l3.2-4.2'],
+      batt: ['M3.5 7h14v10h-14z M17.5 10h2.5v4h-2.5', 'M7 12h3 M8.5 10.5v3 M12.5 12h2.5'],
+      usb: ['M8 2.5h8v6H8z M6.5 8.5h11v4.5a5.5 5.5 0 0 1-11 0z M12 18.5v3', 'M10.2 5h.8 M13 5h.8'],
+      led: ['M9 21v-6.5 M15 21v-4.5 M7.5 14.5h9 M9 14.5V9a3 3 0 0 1 6 0v5.5', 'M18.2 5.8l1.9-1.9 M19 9.5h2.6 M16 3.2l.6-1.7'],
+      rgb: ['M8 21v-6.5 M11 21v-6.5 M14 21v-6.5 M17 21v-6.5 M6.5 14.5h12 M8 14.5V9a4.5 4.5 0 0 1 9 0v5.5', 'M10.3 10v.1 M12.5 8.2v.1 M14.7 10v.1'],
+      buzz: ['M5 12a7 7 0 1 0 14 0a7 7 0 1 0-14 0 M10.5 12a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0', 'M21 8a9 9 0 0 1 0 8 M3 8a9 9 0 0 0 0 8'],
+      ldr: ['M7 14a5 5 0 1 0 10 0a5 5 0 1 0-10 0 M9.4 12.6h1.8v2.8h1.8v-2.8h1.6 M10 19v2.5 M14 19v2.5', 'M3 4l3.6 3.6 M6.8 2.2l2.4 4 M6.6 7.6l-.3-2 M9.2 6.2l-1.7-1'],
+      soil: ['M8 2.5h8v5.5H8z M9.5 8v10.5L11 21 M14.5 8v10.5L13 21', 'M12 10.5c-1.4 1.7-2.1 2.8-2.1 3.7a2.1 2.1 0 0 0 4.2 0c0-.9-.7-2-2.1-3.7z'],
+      dht: ['M6 2.5h12v15H6z M9 17.5v4 M12 17.5v4 M15 17.5v4', 'M9 6h6 M9 9h6 M9 12h6 M9 15h6'],
+      sonar: ['M2.5 8h19v10h-19z M4.8 13a2.7 2.7 0 1 0 5.4 0a2.7 2.7 0 1 0-5.4 0 M13.8 13a2.7 2.7 0 1 0 5.4 0a2.7 2.7 0 1 0-5.4 0', 'M8.5 4.8a5 5 0 0 1 7 0 M10.4 6.4a2.4 2.4 0 0 1 3.2 0'],
+      pir: ['M5 14h14v6.5H5z M7 14a5 5 0 0 1 10 0', 'M9.6 10.8l1.1 1 M14.4 10.8l-1.1 1 M12 9.2v1.4'],
+      servo: ['M3.5 9.5h13v10h-13z M1.5 12.5h2 M1.5 16.5h2', 'M12 6.5h9 M11.8 6.5a2 2 0 1 0 4 0a2 2 0 1 0-4 0'],
+      motor: ['M3 7h13v10H3z M16 10h2v4h-2 M18 12h4', 'M6 14V10l2.5 3 2.5-3v4'],
+      relay: ['M4 4.5h16v15H4z', 'M7.5 15h3l4.5-5 M15 15h1.5 M7.5 9h1.5'],
+      pump: ['M5.5 7h9.5v10H5.5z M15 10h3v4h-3 M9 7V4h3.5 M3 17h12.5', 'M20.2 11.6c-1 1.3-1.5 2.1-1.5 2.8a1.5 1.5 0 0 0 3 0c0-.7-.5-1.5-1.5-2.8z'],
+      oled: ['M3 4.5h18v12H3z M8 21h8 M12 16.5V21', 'M6 8.5h7 M6 11.5h10 M6 14h4'],
+      lcd: ['M2 6h20v12H2z M4 8h16v8H4z', 'M6 10.5h12 M6 13.5h8'],
+      dip: ['M6.5 3.5h11v17h-11z M6.5 6.5H4 M6.5 10H4 M6.5 13.5H4 M6.5 17H4 M17.5 6.5H20 M17.5 10H20 M17.5 13.5H20 M17.5 17H20', 'M10.5 3.5a1.5 1.5 0 0 0 3 0'],
+      diode: ['M2 12h6 M16 12h6 M8 7l8 5-8 5z', 'M16 7v10'],
+      bjt: ['M4 12a8 8 0 1 0 16 0a8 8 0 1 0-16 0 M2 12h7 M9 8v8 M9 10l5-3.6V3 M9 14l5 3.6V21', 'M11.6 17.8l2.4-.2-.9-2.2'],
+      mos: ['M2 16.5h6 M8 7.5v9 M10.5 6v3 M10.5 10.5v3 M10.5 15v3 M10.5 7.5H16V3 M10.5 16.5H16V21 M10.5 12H16v4.5', 'M12.2 12l2-1.3v2.6z'],
+      opamp: ['M6 4v16l14-8z M2 9h4 M2 15h4 M20 12h2', 'M8 9h2.2 M9.1 7.9v2.2 M8 15h2.2'],
+      ind: ['M2 14h3 M19 14h3', 'M5 14a1.75 1.75 0 0 1 3.5 0a1.75 1.75 0 0 1 3.5 0a1.75 1.75 0 0 1 3.5 0a1.75 1.75 0 0 1 3.5 0'],
+      reg: ['M5 9h14v10.5H5z M8 19.5v2.5 M12 19.5v2.5 M16 19.5v2.5 M7 9V4h10v5', 'M10.5 6.5h3'],
+      src: ['M4 12a8 8 0 1 0 16 0a8 8 0 1 0-16 0 M12 1v3 M12 20v3', 'M10 8.4h4 M12 6.4v4 M10 15.8h4'],
+      radio: ['M5 9.5h14v11H5z M8 9.5V3', 'M14.5 5.5a3.5 3.5 0 0 1 3.5 3.5 M14.5 2.5A6.5 6.5 0 0 1 21 9'],
+      strip: ['M2 9h20v6H2z', 'M5.5 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0 M11 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0 M16.5 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0'],
+      step: ['M5 12a7 7 0 1 0 14 0a7 7 0 1 0-14 0 M12 2v3', 'M9.5 12a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0'],
+      imu: ['M6 6h12v12H6z M9 6V3.5 M12 6V3.5 M15 6V3.5 M9 18v2.5 M12 18v2.5 M15 18v2.5', 'M9.5 14.5h5 M9.5 14.5v-5'],
+      xtal: ['M2 12h5 M17 12h5 M7 7v10 M17 7v10', 'M9.5 8h5v8h-5z'],
+    };
+    const it = (k, name) => ({ d: I[k][0], a: I[k][1], name: name });
+    const pt = (k, pn, desc) => ({ d: I[k][0], a: I[k][1], pn: pn, desc: desc });
+    const simpleGroups = [
+      { name: 'Boards', items: [ it('uno', 'UNO R3'), it('esp32', 'ESP32'), it('pico', 'Pico') ] },
+      { name: 'Building blocks', items: [ it('bb', 'Breadboard'), it('wire', 'Jumper wire'), it('res', 'Resistor'), it('cap', 'Capacitor'), it('btn', 'Push button'), it('pot', 'Knob (pot)'), it('batt', 'Battery pack'), it('usb', 'USB power') ] },
+      { name: 'Light & sound', items: [ it('led', 'LED'), it('rgb', 'RGB LED'), it('buzz', 'Buzzer') ] },
+      { name: 'Sensors', items: [ it('ldr', 'Light'), it('soil', 'Soil moisture'), it('dht', 'Temp & humidity'), it('sonar', 'Distance'), it('pir', 'Motion') ] },
+      { name: 'Move & switch', items: [ it('servo', 'Servo'), it('motor', 'DC motor'), it('relay', 'Relay'), it('pump', 'Water pump') ] },
+      { name: 'Displays', items: [ it('oled', 'OLED screen'), it('lcd', '16×2 LCD') ] },
+    ];
+    const catDefs = [
+      { id: 'mcu', k: 'dip', name: 'Microcontrollers & SBCs', items: [ pt('uno', 'ATmega328P', 'UNO R3 · cycle-accurate'), pt('esp32', 'ESP32-WROOM-32', 'dual-core, Wi-Fi + BLE'), pt('pico', 'RP2040', 'Pico · PIO emulated'), pt('dip', 'ATtiny85', '8-pin AVR'), pt('dip', 'STM32F103C8', 'Cortex-M3') ] },
+      { id: 'pas', k: 'res', name: 'Passives', items: [ pt('res', 'R · E24/E96', 'tolerance, tempco, power'), pt('cap', 'C · MLCC / electrolytic', 'ESR, DC-bias derating'), pt('ind', 'L · power / RF', 'DCR, saturation'), pt('xtal', 'Crystal', '16 MHz, 32.768 kHz') ] },
+      { id: 'semi', k: 'bjt', name: 'Discrete semiconductors', items: [ pt('diode', '1N4007', '1 A rectifier'), pt('diode', '1N5819', 'Schottky, 40 V'), pt('diode', '1N4733A', 'Zener 5.1 V'), pt('bjt', '2N2222A', 'NPN, 600 mA'), pt('bjt', '2N3906', 'PNP, 200 mA'), pt('mos', 'IRLZ44N', 'logic-level N-MOSFET'), pt('mos', 'BS170', 'small-signal N-MOSFET') ] },
+      { id: 'ana', k: 'opamp', name: 'Analog ICs', items: [ pt('opamp', 'LM358', 'dual op-amp'), pt('dip', 'NE555', 'timer'), pt('opamp', 'LM393', 'dual comparator') ] },
+      { id: 'logic', k: 'dip', name: 'Logic', items: [ pt('dip', '74HC595', 'shift register'), pt('dip', '74HC14', 'Schmitt inverter'), pt('dip', 'CD4017', 'decade counter') ] },
+      { id: 'pwr', k: 'reg', name: 'Power', items: [ pt('reg', 'AMS1117-3.3', 'LDO 1 A'), pt('reg', 'LM2596', 'buck module'), pt('batt', 'TP4056 + 18650', 'Li-ion charge & cell') ] },
+      { id: 'sens', k: 'imu', name: 'Sensors', items: [ pt('imu', 'BME280', 'pressure, temp, humidity'), pt('imu', 'MPU-6050', '6-axis IMU'), pt('dip', 'HX711', 'load-cell ADC'), pt('dip', 'INA219', 'current & power') ] },
+      { id: 'disp', k: 'oled', name: 'Displays & lighting', items: [ pt('oled', 'SSD1306', '128×64 OLED, I²C'), pt('lcd', 'HD44780', 'character LCD'), pt('strip', 'WS2812B', 'addressable LED strip') ] },
+      { id: 'mot', k: 'step', name: 'Motors & actuators', items: [ pt('servo', 'SG90', 'micro servo'), pt('step', '28BYJ-48', 'stepper + ULN2003'), pt('dip', 'L298N', 'dual H-bridge') ] },
+      { id: 'rf', k: 'radio', name: 'Radio & comms', items: [ pt('radio', 'ESP8266', 'Wi-Fi, AT firmware'), pt('radio', 'HC-05', 'Bluetooth SPP'), pt('radio', 'nRF24L01+', '2.4 GHz'), pt('radio', 'SX1276', 'LoRa') ] },
+      { id: 'spice', k: 'src', name: 'SPICE primitives', items: [ pt('src', 'V / I', 'DC, PULSE, SIN, PWL'), pt('src', 'E F G H', 'dependent sources'), pt('src', 'B', 'behavioral source'), pt('res', 'S / W', 'voltage & current switch'), pt('ind', 'T', 'transmission line') ] },
+    ];
+    const openCat = s.openCat;
+    const cats = catDefs.map((c) => ({ name: c.name, d: I[c.k][0], a: I[c.k][1], items: c.items, open: openCat === c.id,
+      chev: openCat === c.id ? 'rotate(90 5 5)' : '', toggle: () => this.setState({ openCat: openCat === c.id ? '' : c.id }) }));
+
+    return {
+      isBB: s.view === 'breadboard', isSch: s.view === 'schematic',
+      bbCls: s.view === 'breadboard' ? 'seg-on' : '', schCls: s.view === 'schematic' ? 'seg-on' : '',
+      viewTitle: s.view === 'breadboard' ? 'Bench · BB1 + U1 + pot 1 — drag wires from any pin' : 'Sheet 1 · garden-node.sch — same netlist as the bench',
+      setBB: () => this.setState({ view: 'breadboard' }), setSch: () => this.setState({ view: 'schematic' }),
+      running: s.running, paused: !s.running,
+      runLabel: s.running ? 'running' : 'paused', runDot: s.running ? '#3FBF6A' : '#A3A3A3',
+      toggleRun: () => this.setState({ running: !s.running }),
+      moist: m, lux: lux, temp: s.temp, evap: s.evap,
+      evapRate: (0.6 + Math.max(0, s.temp) * 0.04).toFixed(1),
+      onMoist: (e) => this.setState({ moist: +e.target.value }),
+      onLux: (e) => this.setState({ lux: +e.target.value }),
+      onTemp: (e) => this.setState({ temp: +e.target.value }),
+      toggleEvap: () => this.setState({ evap: !s.evap }),
+      soilColor: soilColor, dark: dark, glow: glow, redGlow: redOn ? '0.9' : '0', redFill: redOn ? '#FF6B5B' : '#8E3A32',
+      leafA: 'translate(520 324) rotate(' + (-12 + droop).toFixed(1) + ')',
+      leafB: 'translate(520 340) scale(-1 1) rotate(' + (-12 + droop).toFixed(1) + ')',
+      leafC: 'translate(520 300) rotate(' + (-64 + droop * 0.7).toFixed(1) + ')',
+      vA0: vA0.toFixed(2), vA1: vA1.toFixed(2), duty: Math.round(pwm / 2.55), d8: redOn ? 'HIGH' : 'LOW', d8word: redOn ? 'ON' : 'OFF', vA0x: vA0.toFixed(3),
+      dmm: s.dmm, scope: s.scope, dmmDisp: s.dmm ? 'inline' : 'none', scopeDisp: s.scope ? 'inline' : 'none',
+      dmmCls: s.dmm ? 'inst-on' : '', scopeCls: s.scope ? 'inst-on' : '',
+      toggleDmm: () => this.setState({ dmm: !s.dmm }), toggleScope: () => this.setState({ scope: !s.scope }),
+      toolsRail: s.tools === 'rail', toolsWide: s.tools === 'open', toolsHidden: s.tools === 'hidden',
+      toolsOpen: () => this.setState({ tools: 'open' }), toolsCollapse: () => this.setState({ tools: 'rail' }), toolsHide: () => this.setState({ tools: 'hidden' }),
+      tools: [
+        { key: 'dmm', name: 'Multimeter', d: 'M5 1.5h6a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2z M5.5 3.5h5v3h-5z M6 10.5a2 2 0 1 0 4 0a2 2 0 1 0-4 0', on: s.dmm, sub: s.dmm ? 'On bench · V⎓ auto' : 'V, Ω, A, continuity', detail: '+ J1 out (A0)   − GND rail', toggle: () => this.setState({ dmm: !s.dmm }) },
+        { key: 'scope', name: 'Oscilloscope', d: 'M3 3h10a1.5 1.5 0 0 1 1.5 1.5v7A1.5 1.5 0 0 1 13 13H3a1.5 1.5 0 0 1-1.5-1.5v-7A1.5 1.5 0 0 1 3 3z M3.5 10h2V6H8v4h2.5V6H12', on: s.scope, sub: s.scope ? 'On bench · 1 of 4 ch' : '4 channels, FFT', detail: 'CH1 → D9 · 2 V/div · 1 ms/div', toggle: () => this.setState({ scope: !s.scope }) },
+        { key: 'la', name: 'Logic analyzer', d: 'M1.5 6h3V3h3v3h3V3h4M1.5 13.5h2V10.5h4v3h3v-3h4', on: false, sub: 'I²C · SPI · UART decode', detail: '', toggle: () => {} },
+        { key: 'psu', name: 'Power supply', d: 'M3 3h10a1.5 1.5 0 0 1 1.5 1.5v7A1.5 1.5 0 0 1 13 13H3a1.5 1.5 0 0 1-1.5-1.5v-7A1.5 1.5 0 0 1 3 3z M4 10a1 1 0 1 0 2 0a1 1 0 1 0-2 0 M10 10a1 1 0 1 0 2 0a1 1 0 1 0-2 0 M4 6h3M5.5 4.5v3M9.5 6H12', on: false, sub: 'CV/CC, current limit', detail: '', toggle: () => {} },
+        { key: 'fg', name: 'Function generator', d: 'M1.5 8c1.5-4 3-4 4.3 0s2.9 4 4.3 0 2.8-4 4.4 0', on: false, sub: 'Sine, square, PWM, noise', detail: '', toggle: () => {} },
+      ].map((t) => Object.assign(t, { cls: t.on ? 'rb-on' : '', ccls: t.on ? 'tc-on' : '', ink: t.on ? '#F7C77A' : '#D9D9D9', act: t.on ? 'Remove' : 'Add' })),
+      scopePath: (() => { const per = 31, hi = per * pwm / 255, top = 21, bot = 70; let x = 8, d = 'M8 ' + bot; for (let i = 0; i < 4; i++) { if (!s.running) break; const a = x, b = Math.min(132, x + hi), c = Math.min(132, x + per); d += ' L' + a.toFixed(1) + ' ' + (hi > 0.5 ? top : bot) + ' L' + b.toFixed(1) + ' ' + (hi > 0.5 ? top : bot) + ' L' + b.toFixed(1) + ' ' + bot + ' L' + c.toFixed(1) + ' ' + bot; x += per; } return d + ' L132 ' + bot; })(),
+      lines: lines, probes: probes, simpleGroups: simpleGroups, cats: cats,
+      isSimple: s.lib === 'simple', isAdv: s.lib === 'advanced',
+      simpleCls: s.lib === 'simple' ? 'mini-on' : '', advCls: s.lib === 'advanced' ? 'mini-on' : '',
+      setSimple: () => this.setState({ lib: 'simple' }), setAdv: () => this.setState({ lib: 'advanced' }),
+      searchPh: s.lib === 'simple' ? 'Search starter parts' : 'Name, part number or .model',
+      isSerial: s.tab === 'serial', isProbes: s.tab === 'probes',
+      serialCls: s.tab === 'serial' ? 'tab-on' : '', probeCls: s.tab === 'probes' ? 'tab-on' : '',
+      tabSerial: () => this.setState({ tab: 'serial' }), tabProbes: () => this.setState({ tab: 'probes' }),
+    };
+  }
+}
+</script>
+
+
+</body></html>

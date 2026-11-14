@@ -1,0 +1,9 @@
+[package]
+name = "bb-world"
+description = "Physical world models: soil moisture, light, temperature, day/night cycles."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]

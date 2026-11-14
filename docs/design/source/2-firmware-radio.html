@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>Breadbox — Firmware &amp; radios</title>
+<script src="37624199-c4a5-430a-b5bc-6f3a69f028cc"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>/* cyrillic-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa2JL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa0ZL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* greek-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa2ZL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+1F00-1FFF;
+}
+/* greek */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("font-dfe6ad0e-6904-4cda-b9cf-1d19ae1edb95") format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa2pL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa25L7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("font-fe2a3394-3799-4b0e-8ca0-69594514f418") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa2JL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa0ZL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* greek-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa2ZL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+1F00-1FFF;
+}
+/* greek */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("font-dfe6ad0e-6904-4cda-b9cf-1d19ae1edb95") format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa2pL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa25L7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("font-fe2a3394-3799-4b0e-8ca0-69594514f418") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa2JL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa0ZL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* greek-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa2ZL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+1F00-1FFF;
+}
+/* greek */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("font-dfe6ad0e-6904-4cda-b9cf-1d19ae1edb95") format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa2pL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa25L7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("font-fe2a3394-3799-4b0e-8ca0-69594514f418") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("font-d9f064ac-b457-414d-a238-b893b7c5551e") format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("font-a12df033-15b0-4142-b93b-ba2b5818ee31") format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* greek */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("font-af357c5b-4b94-401a-abe2-97c914208303") format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("font-0e0458f0-f99c-4633-8fa5-c853d06f12d5") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("font-e885f792-73ba-4da9-b3d4-838e80fc083e") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("font-8004ba03-3dbf-4b7a-83fd-705e3a6711e6") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("font-d9f064ac-b457-414d-a238-b893b7c5551e") format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("font-a12df033-15b0-4142-b93b-ba2b5818ee31") format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* greek */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("font-af357c5b-4b94-401a-abe2-97c914208303") format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("font-0e0458f0-f99c-4633-8fa5-c853d06f12d5") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("font-e885f792-73ba-4da9-b3d4-838e80fc083e") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("font-8004ba03-3dbf-4b7a-83fd-705e3a6711e6") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/spacegrotesk/v22/V8mDoQDjQSkFtoMM3T6r8E7mPb54C_k3HqUtEw.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/spacegrotesk/v22/V8mDoQDjQSkFtoMM3T6r8E7mPb94C_k3HqUtEw.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("font-cdbf9ec2-10a0-41a6-821d-16759a3fb30d") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/spacegrotesk/v22/V8mDoQDjQSkFtoMM3T6r8E7mPb54C_k3HqUtEw.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/spacegrotesk/v22/V8mDoQDjQSkFtoMM3T6r8E7mPb94C_k3HqUtEw.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("font-cdbf9ec2-10a0-41a6-821d-16759a3fb30d") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+</style>
+<style>
+body{margin:0;background:#0A0A0A}
+.paper{background-color:#0A0A0A;background-image:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px),linear-gradient(rgba(255,255,255,.016) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.016) 1px,transparent 1px);background-size:60px 60px,60px 60px,12px 12px,12px 12px}
+a{color:#4CC3F0}a:hover{color:#8AD8F5}
+.kw{color:#C792EA}.ty{color:#4CC3F0}.str{color:#B5D88A}.num{color:#F7C77A}.cm{color:#858585;font-style:italic}.fn{color:#82AAFF}.pp{color:#F08A24}
+.code div{white-space:pre;min-height:20px}
+.ghost{border:1px solid #2E2E2E;background:#171717;color:#D9D9D9;font:500 13px Inter,system-ui,sans-serif;height:32px;padding:0 12px;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:8px}
+.file{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:5px;font-size:13px;color:#D9D9D9}
+</style>
+</helmet>
+<div class="paper" style="min-height: 900px; display: flex; flex-direction: column; color: #EAEAEA; font-family: Inter, system-ui, sans-serif">
+
+  <header style="height: 56px; display: flex; align-items: center; gap: 14px; padding: 0 16px; border-bottom: 1px solid #242424; background: rgba(12,12,12,0.8); flex-wrap: wrap">
+    <span style="font: 600 16px 'Space Grotesk', Inter, sans-serif">Breadbox</span>
+    <span style="color: #4A4A4A">/</span>
+    <span style="font-size: 13px; color: #D9D9D9">garden-node</span>
+    <span style="color: #4A4A4A">/</span>
+    <span style="font-size: 13px; color: #D9D9D9">Firmware · U1</span>
+    <div style="margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
+      <label for="fw-board" style="font-size: 12px; color: #A3A3A3">Target</label>
+      <sc-raw-select id="fw-board" style="height: 32px; border-radius: 6px; border: 1px solid #2E2E2E; background: #171717; color: #EAEAEA; font: 13px Inter, sans-serif; padding: 0 8px">
+        <option>U1 · UNO R3 (ATmega328P)</option>
+        <option>U2 · ESP8266 (AT firmware)</option>
+      </sc-raw-select>
+      <button class="ghost">Verify</button>
+      <button class="ghost" style="background: #2A1F0E; border-color: #6B4A16; color: #F7C77A">Upload to sim</button>
+      <button class="ghost">Step · breakpoints</button>
+    </div>
+  </header>
+
+  <div style="display: flex; flex-wrap: wrap; flex: 1 1 auto">
+
+    <aside aria-label="Project files" style="flex: 0 0 220px; border-right: 1px solid #242424; background: rgba(17,17,17,0.84); padding: 14px 10px; display: flex; flex-direction: column; gap: 4px; height: 844px; box-sizing: border-box">
+      <span style="font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #A3A3A3; font-weight: 600; padding: 0 8px 8px">Sketch</span>
+      <div class="file" style="background: #1F1F1F">garden-node.ino</div>
+      <div class="file">wifi_at.h</div>
+      <div class="file">mqtt_lite.h</div>
+      <span style="font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #A3A3A3; font-weight: 600; padding: 16px 8px 8px">Libraries</span>
+      <div class="file">SoftwareSerial</div>
+      <div class="file">ArduinoJson 7</div>
+      <span style="font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #A3A3A3; font-weight: 600; padding: 16px 8px 8px">Toolchain</span>
+      <div style="font: 12px/1.7 'JetBrains Mono', monospace; color: #A3A3A3; padding: 0 8px">avr-gcc 7.3.0<br>cycle-accurate AVR core<br>wasm · in-browser</div>
+    </aside>
+
+    <main style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; height: 844px">
+      <div style="height: 38px; display: flex; align-items: center; padding: 0 14px; gap: 18px; border-bottom: 1px solid #242424; font-size: 12px; color: #A3A3A3; background: rgba(12,12,12,0.8)">
+        <span style="color: #F5F5F5; border-bottom: 2px solid #F2A33A; height: 36px; display: flex; align-items: center">garden-node.ino</span>
+        <span>wifi_at.h</span>
+        <span style="margin-left: auto; font-family: 'JetBrains Mono', monospace">Ln 30, Col 9 · C++</span>
+      </div>
+      <div style="flex: 1 1 auto; display: flex; overflow: auto; background: rgba(6,6,6,0.88); font: 400 13px/20px 'JetBrains Mono', ui-monospace, monospace">
+        <div aria-hidden="true" style="padding: 14px 12px 14px 16px; color: #4A4A4A; text-align: right; user-select: none; white-space: pre">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33</div>
+        <div class="code" style="padding: 14px 16px; color: #D9D9D9; flex: 1">
+<div><span class="pp">#include</span> <span class="str">&lt;SoftwareSerial.h&gt;</span></div>
+<div><span class="pp">#include</span> <span class="str">"wifi_at.h"</span></div>
+<div></div>
+<div><span class="kw">const</span> <span class="ty">int</span> SOIL_PIN  = A0;   <span class="cm">// capacitive probe J1</span></div>
+<div><span class="kw">const</span> <span class="ty">int</span> LDR_PIN   = A1;   <span class="cm">// 10k divider + LDR1</span></div>
+<div><span class="kw">const</span> <span class="ty">int</span> NIGHT_LED = <span class="num">9</span>;    <span class="cm">// PWM, D1 amber</span></div>
+<div><span class="kw">const</span> <span class="ty">int</span> WATER_LED = <span class="num">8</span>;    <span class="cm">// D2 red</span></div>
+<div><span class="kw">const</span> <span class="ty">int</span> SOIL_DRY = <span class="num">620</span>, SOIL_WET = <span class="num">284</span>;</div>
+<div></div>
+<div><span class="ty">SoftwareSerial</span> esp(<span class="num">3</span>, <span class="num">2</span>);  <span class="cm">// RX, TX → U2</span></div>
+<div><span class="ty">WifiAT</span> wifi(esp);</div>
+<div></div>
+<div><span class="ty">void</span> <span class="fn">setup</span>() {</div>
+<div>  Serial.<span class="fn">begin</span>(<span class="num">115200</span>);</div>
+<div>  esp.<span class="fn">begin</span>(<span class="num">9600</span>);</div>
+<div>  <span class="fn">pinMode</span>(NIGHT_LED, OUTPUT);</div>
+<div>  <span class="fn">pinMode</span>(WATER_LED, OUTPUT);</div>
+<div>  wifi.<span class="fn">join</span>(<span class="str">"SIM-AP"</span>, <span class="str">"breadbox"</span>);</div>
+<div>  wifi.<span class="fn">mqtt</span>(<span class="str">"10.0.0.1"</span>, <span class="num">1883</span>);</div>
+<div>}</div>
+<div></div>
+<div><span class="ty">void</span> <span class="fn">loop</span>() {</div>
+<div>  <span class="ty">int</span> soil  = <span class="fn">analogRead</span>(SOIL_PIN);</div>
+<div>  <span class="ty">int</span> light = <span class="fn">analogRead</span>(LDR_PIN);</div>
+<div>  <span class="ty">int</span> pct   = <span class="fn">map</span>(soil, SOIL_DRY, SOIL_WET, <span class="num">0</span>, <span class="num">60</span>);</div>
+<div>  <span class="ty">int</span> pwm   = <span class="fn">constrain</span>(<span class="num">255</span> - light / <span class="num">4</span>, <span class="num">0</span>, <span class="num">255</span>);</div>
+<div></div>
+<div>  <span class="fn">analogWrite</span>(NIGHT_LED, pwm);</div>
+<div>  <span class="fn">digitalWrite</span>(WATER_LED, pct &lt; <span class="num">30</span> ? HIGH : LOW);</div>
+<div style="background: #2A1F0E; margin: 0 -16px; padding: 0 16px; box-shadow: inset 3px 0 0 #F2A33A">  Serial.<span class="fn">printf</span>(<span class="str">"soil_raw=%d moisture=%d%%\n"</span>, soil, pct);</div>
+<div>  <span class="kw">if</span> (<span class="fn">every</span>(<span class="num">1000</span>)) wifi.<span class="fn">publish</span>(<span class="str">"garden/pot1"</span>, pct, light);</div>
+<div>  <span class="fn">delay</span>(<span class="num">500</span>);</div>
+<div>}</div>
+        </div>
+      </div>
+      <section aria-label="Build output" style="height: 190px; border-top: 1px solid #242424; background: #0A0A0A; padding: 12px 16px; box-sizing: border-box; font: 400 12.5px/1.7 'JetBrains Mono', monospace; color: #D9D9D9; overflow: auto">
+        <div style="font: 600 11px Inter, sans-serif; letter-spacing: .08em; text-transform: uppercase; color: #A3A3A3; margin-bottom: 8px">Output</div>
+        <div style="color: #A3A3A3">Compiling sketch for UNO R3 (avr-gcc 7.3.0 -Os -mmcu=atmega328p)…</div>
+        <div>Sketch uses 9,842 bytes (30%) of program storage space. Maximum is 32,256 bytes.</div>
+        <div>Global variables use 1,104 bytes (53%) of dynamic memory, leaving 944 bytes for local variables. Maximum is 2,048 bytes.</div>
+        <div style="color: #F2A33A">note: line 30 — breakpoint armed on U1 (hits: 24)</div>
+        <div style="color: #3FBF6A">Flashed virtual U1 in 0.21 s · core reset · bench state kept</div>
+      </section>
+    </main>
+
+    <aside aria-label="Radio emulation" style="flex: 1 0 340px; max-width: 400px; border-left: 1px solid #242424; background: rgba(17,17,17,0.84); padding: 16px; display: flex; flex-direction: column; gap: 16px; height: 844px; overflow: auto; box-sizing: border-box">
+      <div style="display: flex; align-items: baseline; justify-content: space-between">
+        <span style="font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #A3A3A3; font-weight: 600">Radios</span>
+        <span style="font-size: 12px; color: #A3A3A3">virtual RF space</span>
+      </div>
+
+      <div style="border: 1px solid #242424; border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 10px; background: rgba(12,12,12,0.8)">
+        <div style="display: flex; align-items: center; gap: 10px">
+          <svg width="18" height="18" sc-camel-view-box="0 0 18 18" aria-hidden="true"><path d="M2 7a10 10 0 0 1 14 0M4.5 9.6a6.5 6.5 0 0 1 9 0M7 12.2a3 3 0 0 1 4 0" fill="none" stroke="#4CC3F0" stroke-width="1.6" stroke-linecap="round"></path><circle cx="9" cy="14.6" r="1.2" fill="#4CC3F0"></circle></svg>
+          <span style="font: 500 14px 'Space Grotesk', Inter, sans-serif">U2 · ESP8266 Wi-Fi</span>
+          <span style="margin-left: auto; font-size: 11px; color: #3FBF6A; border: 1px solid #23502F; border-radius: 4px; padding: 2px 6px">connected</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; font-size: 12px">
+          <span style="color: #A3A3A3">Access point</span><span style="font-family: 'JetBrains Mono', monospace">SIM-AP · ch 6</span>
+          <span style="color: #A3A3A3">RSSI</span><span style="font-family: 'JetBrains Mono', monospace">-54 dBm (3.2 m, 1 wall)</span>
+          <span style="color: #A3A3A3">IP</span><span style="font-family: 'JetBrains Mono', monospace">10.0.0.42 / DHCP</span>
+          <span style="color: #A3A3A3">Broker</span><span style="font-family: 'JetBrains Mono', monospace">mqtt://10.0.0.1 (built-in)</span>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <span style="font-size: 12px; color: #A3A3A3; font-weight: 600">Packet log</span>
+        <div style="border: 1px solid #242424; border-radius: 8px; overflow: hidden; font: 400 11.5px/1.5 'JetBrains Mono', monospace">
+          <div style="display: grid; grid-template-columns: 64px 26px minmax(0, 1fr); gap: 8px; padding: 6px 10px; background: #171717; color: #A3A3A3"><span>time</span><span>dir</span><span>frame</span></div>
+          <div style="display: grid; grid-template-columns: 64px 26px minmax(0, 1fr); gap: 8px; padding: 5px 10px; border-top: 1px solid #1C1C1C"><span style="color: #858585">01.870</span><span style="color: #F7C77A">tx</span><span>DHCP REQUEST 10.0.0.42</span></div>
+          <div style="display: grid; grid-template-columns: 64px 26px minmax(0, 1fr); gap: 8px; padding: 5px 10px; border-top: 1px solid #1C1C1C"><span style="color: #858585">01.902</span><span style="color: #4CC3F0">rx</span><span>DHCP ACK · lease 3600 s</span></div>
+          <div style="display: grid; grid-template-columns: 64px 26px minmax(0, 1fr); gap: 8px; padding: 5px 10px; border-top: 1px solid #1C1C1C"><span style="color: #858585">02.114</span><span style="color: #F7C77A">tx</span><span>MQTT CONNECT client=garden-node</span></div>
+          <div style="display: grid; grid-template-columns: 64px 26px minmax(0, 1fr); gap: 8px; padding: 5px 10px; border-top: 1px solid #1C1C1C"><span style="color: #858585">11.004</span><span style="color: #F7C77A">tx</span><span>PUBLISH garden/pot1 · 44 B · QoS 0</span></div>
+          <div style="display: grid; grid-template-columns: 64px 26px minmax(0, 1fr); gap: 8px; padding: 5px 10px; border-top: 1px solid #1C1C1C; color: #F2A33A"><span>11.041</span><span>!</span><span>dropped by fault injector (loss 2%)</span></div>
+          <div style="display: grid; grid-template-columns: 64px 26px minmax(0, 1fr); gap: 8px; padding: 5px 10px; border-top: 1px solid #1C1C1C"><span style="color: #858585">12.006</span><span style="color: #F7C77A">tx</span><span>PUBLISH garden/pot1 · 44 B · QoS 0</span></div>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 10px">
+        <span style="font-size: 12px; color: #A3A3A3; font-weight: 600">Network conditions</span>
+        <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; font-size: 13px; align-items: center">
+          <label for="nc-lat">Latency</label><span style="font-family: 'JetBrains Mono', monospace; color: #F7C77A">40 ms ± 10</span>
+          <input id="nc-lat" type="range" min="0" max="500" value="40" style="grid-column: 1 / -1; accent-color: #F2A33A; margin: 0">
+          <label for="nc-loss">Packet loss</label><span style="font-family: 'JetBrains Mono', monospace; color: #F7C77A">2 %</span>
+          <input id="nc-loss" type="range" min="0" max="50" value="2" style="grid-column: 1 / -1; accent-color: #F2A33A; margin: 0">
+        </div>
+        <label style="display: flex; gap: 10px; align-items: center; font-size: 13px"><input type="checkbox" style="accent-color: #F2A33A; width: 16px; height: 16px; margin: 0">Drop the AP at t = 60 s (test reconnect)</label>
+        <label style="display: flex; gap: 10px; align-items: center; font-size: 13px"><input type="checkbox" checked="checked" style="accent-color: #F2A33A; width: 16px; height: 16px; margin: 0">Bridge to my real LAN broker</label>
+      </div>
+
+      <div style="border: 1px dashed #2E2E2E; border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; align-items: center; gap: 10px">
+          <svg width="18" height="18" sc-camel-view-box="0 0 18 18" aria-hidden="true"><path d="M5 5l8 7-4 3V3l4 3-8 7" fill="none" stroke="#A3A3A3" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"></path></svg>
+          <span style="font: 500 14px 'Space Grotesk', Inter, sans-serif">Bluetooth LE</span>
+        </div>
+        <span style="font-size: 12px; color: #A3A3A3; line-height: 1.5">No BLE radio on this bench. Add a BLE hat and a virtual phone appears as a central — scan, connect, read GATT characteristics.</span>
+        <button class="ghost" style="align-self: flex-start">Add BLE hat</button>
+      </div>
+    </aside>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script="" data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900}}">
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+
+
+</body></html>

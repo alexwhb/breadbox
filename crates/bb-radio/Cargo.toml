@@ -1,0 +1,9 @@
+[package]
+name = "bb-radio"
+description = "Virtual RF space: Wi-Fi AP/DHCP/MQTT, ESP8266 AT modem, BLE, LoRa, fault injection, LAN bridge."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]

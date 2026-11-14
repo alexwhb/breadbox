@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>Breadbox — Plugins &amp; instruments</title>
+<script src="9587c387-ce10-43e2-af91-9235e277986e"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>/* cyrillic-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa2JL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa0ZL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* greek-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa2ZL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+1F00-1FFF;
+}
+/* greek */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("font-ea50c111-8baf-4fcb-bd44-d75e0f2d8512") format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa2pL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa25L7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("font-3ada7f55-153b-41dd-bf98-0fc6a97bc282") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa2JL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa0ZL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* greek-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa2ZL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+1F00-1FFF;
+}
+/* greek */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("font-ea50c111-8baf-4fcb-bd44-d75e0f2d8512") format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa2pL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa25L7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("font-3ada7f55-153b-41dd-bf98-0fc6a97bc282") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa2JL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa0ZL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* greek-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa2ZL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+1F00-1FFF;
+}
+/* greek */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("font-ea50c111-8baf-4fcb-bd44-d75e0f2d8512") format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa2pL7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa25L7W0Q5n-wU.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("font-3ada7f55-153b-41dd-bf98-0fc6a97bc282") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("font-43d9ea7a-e323-4132-a0ef-0ca059dcd13b") format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("font-b7081da4-46bd-4486-b265-40d65300e1e7") format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* greek */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("font-bbf7d845-ecdc-479d-a00f-e98129432400") format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("font-e957ed40-e146-4271-8343-0196984c88e5") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("font-df98930f-a527-4e53-ae6c-997472fa04ea") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("font-4b6bbe5e-c55b-4830-be0b-6f68feacdad6") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("font-43d9ea7a-e323-4132-a0ef-0ca059dcd13b") format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("font-b7081da4-46bd-4486-b265-40d65300e1e7") format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* greek */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("font-bbf7d845-ecdc-479d-a00f-e98129432400") format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("font-e957ed40-e146-4271-8343-0196984c88e5") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("font-df98930f-a527-4e53-ae6c-997472fa04ea") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("font-4b6bbe5e-c55b-4830-be0b-6f68feacdad6") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/spacegrotesk/v22/V8mDoQDjQSkFtoMM3T6r8E7mPb54C_k3HqUtEw.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/spacegrotesk/v22/V8mDoQDjQSkFtoMM3T6r8E7mPb94C_k3HqUtEw.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("font-3471745e-885b-4997-b1fa-76799709f024") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/spacegrotesk/v22/V8mDoQDjQSkFtoMM3T6r8E7mPb54C_k3HqUtEw.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/spacegrotesk/v22/V8mDoQDjQSkFtoMM3T6r8E7mPb94C_k3HqUtEw.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("font-3471745e-885b-4997-b1fa-76799709f024") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+</style>
+<style>
+body{margin:0;background:#0A0A0A}
+.paper{background-color:#0A0A0A;background-image:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px),linear-gradient(rgba(255,255,255,.016) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.016) 1px,transparent 1px);background-size:60px 60px,60px 60px,12px 12px,12px 12px}
+a{color:#4CC3F0}a:hover{color:#8AD8F5}
+.ghost{border:1px solid #2E2E2E;background:#171717;color:#D9D9D9;font:500 13px Inter,system-ui,sans-serif;height:32px;padding:0 12px;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:8px}
+.cat{display:flex;justify-content:space-between;padding:7px 10px;border-radius:6px;font-size:13px;color:#D9D9D9;border:0;background:transparent;font-family:Inter,sans-serif;text-align:left;width:100%}
+.tag{font:500 10px 'JetBrains Mono',monospace;color:#4CC3F0;border:1px solid #1F4A5C;border-radius:4px;padding:2px 6px;align-self:flex-start}
+.card{border:1px solid #242424;border-radius:10px;background:#0E0E0E;padding:14px;display:flex;flex-direction:column;gap:8px}
+.js div{white-space:pre;min-height:18px}
+.k{color:#82AAFF}.s{color:#B5D88A}.nm{color:#F7C77A}
+</style>
+</helmet>
+<div class="paper" style="min-height: 900px; display: flex; flex-direction: column; color: #EAEAEA; font-family: Inter, system-ui, sans-serif">
+
+  <header style="height: 56px; display: flex; align-items: center; gap: 14px; padding: 0 16px; border-bottom: 1px solid #242424; background: rgba(12,12,12,0.8); flex-wrap: wrap">
+    <span style="font: 600 16px 'Space Grotesk', Inter, sans-serif">Breadbox</span>
+    <span style="color: #4A4A4A">/</span>
+    <span style="font-size: 13px; color: #D9D9D9">Plugins</span>
+    <label for="pl-search" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Search plugins</label>
+    <input id="pl-search" type="search" placeholder="Search instruments, parts, world models…" style="margin-left: 16px; height: 32px; width: 340px; max-width: 100%; border-radius: 6px; border: 1px solid #2E2E2E; background: #0A0A0A; color: #EAEAEA; padding: 0 10px; font: 13px Inter, sans-serif">
+    <div style="margin-left: auto; display: flex; gap: 8px">
+      <button class="ghost">Load local plugin…</button>
+      <button class="ghost">Plugin SDK docs</button>
+    </div>
+  </header>
+
+  <div style="display: flex; flex-wrap: wrap; flex: 1 1 auto">
+    <aside aria-label="Plugin categories" style="flex: 0 0 220px; border-right: 1px solid #242424; background: rgba(17,17,17,0.84); padding: 14px 10px; display: flex; flex-direction: column; gap: 2px; height: 844px; box-sizing: border-box">
+      <span style="font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #A3A3A3; font-weight: 600; padding: 0 10px 8px">Extend with</span>
+      <button class="cat" style="background: #1F1F1F">Instruments</button>
+      <button class="cat">Parts &amp; boards</button>
+      <button class="cat">Radios &amp; networks</button>
+      <button class="cat">World models</button>
+      <button class="cat">Solvers &amp; analyses</button>
+      <button class="cat">Views &amp; themes</button>
+      <span style="font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #A3A3A3; font-weight: 600; padding: 18px 10px 8px">Installed</span>
+      <button class="cat">Handheld DMM</button>
+      <button class="cat">Soil &amp; weather pack</button>
+    </aside>
+
+    <main style="flex: 999 1 560px; min-width: 0; padding: 20px; display: flex; flex-direction: column; gap: 20px; box-sizing: border-box; height: 844px; overflow: auto">
+
+      <section aria-label="Featured plugin" style="display: flex; flex-wrap: wrap; gap: 24px; border: 1px solid #242424; border-radius: 12px; background: rgba(12,12,12,0.8); padding: 20px">
+        <svg sc-camel-view-box="0 0 300 470" style="flex: 0 0 240px; width: 240px; height: auto" role="img" aria-label="Handheld digital multimeter instrument reading 2.334 volts DC, dial set to DC volts, red and black probe leads">
+          <rect x="6" y="6" width="288" height="440" rx="34" fill="#3A3A3A"></rect>
+          <rect x="22" y="22" width="256" height="408" rx="24" fill="#1C1C1C"></rect>
+          <rect x="44" y="44" width="212" height="104" rx="8" fill="#AEB9A0"></rect>
+          <rect x="44" y="44" width="212" height="104" rx="8" fill="none" stroke="#0F1310" stroke-width="3"></rect>
+          <text x="58" y="66" font-family="JetBrains Mono, monospace" font-size="11" fill="#2C3627">AUTO</text>
+          <text x="200" y="66" font-family="JetBrains Mono, monospace" font-size="11" fill="#2C3627">DC</text>
+          <text x="236" y="128" text-anchor="end" font-family="JetBrains Mono, monospace" font-weight="500" font-size="50" fill="#18200F" letter-spacing="-2">1.882</text>
+          <text x="242" y="140" font-family="JetBrains Mono, monospace" font-size="14" fill="#18200F">V</text>
+          <rect x="58" y="134" width="120" height="5" rx="1" fill="#2C3627" opacity="0.8"></rect>
+          <g fill="#2A313B" stroke="#454545">
+            <rect x="44" y="164" width="62" height="26" rx="6"></rect><rect x="119" y="164" width="62" height="26" rx="6"></rect><rect x="194" y="164" width="62" height="26" rx="6"></rect>
+          </g>
+          <g font-family="Inter, sans-serif" font-size="10" fill="#D9D9D9" text-anchor="middle">
+            <text x="75" y="181">HOLD</text><text x="150" y="181">MIN MAX</text><text x="225" y="181">RANGE</text>
+          </g>
+          <circle cx="150" cy="282" r="76" fill="#141414" stroke="#2E2E2E" stroke-width="2"></circle>
+          <circle cx="150" cy="282" r="52" fill="#3A3A3A"></circle>
+          <rect x="144" y="226" width="12" height="60" rx="6" fill="#EAEAEA" transform="rotate(-38 150 282)"></rect>
+          <g font-family="JetBrains Mono, monospace" font-size="11" fill="#D9D9D9" text-anchor="middle">
+            <text x="150" y="216">OFF</text>
+            <text x="94" y="236" fill="#F2A33A">V⎓</text>
+            <text x="72" y="286">mV</text>
+            <text x="94" y="338">Ω</text>
+            <text x="206" y="236">V~</text>
+            <text x="228" y="286">A</text>
+            <text x="206" y="338">Hz</text>
+          </g>
+          <g>
+            <circle cx="80" cy="392" r="15" fill="#070707" stroke="#5C5C5C" stroke-width="2"></circle>
+            <circle cx="150" cy="392" r="15" fill="#070707" stroke="#5C5C5C" stroke-width="2"></circle>
+            <circle cx="220" cy="392" r="15" fill="#070707" stroke="#C8352B" stroke-width="3"></circle>
+            <text x="80" y="420" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="#A3A3A3">10A</text>
+            <text x="150" y="420" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="#A3A3A3">COM</text>
+            <text x="220" y="420" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="#A3A3A3">VΩ</text>
+          </g>
+          <path d="M150 392 C 150 440, 120 460, 100 470" stroke="#1A1A1A" stroke-width="8" fill="none" stroke-linecap="round"></path>
+          <path d="M220 392 C 220 440, 250 456, 270 470" stroke="#C8352B" stroke-width="8" fill="none" stroke-linecap="round"></path>
+        </svg>
+
+        <div style="flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 14px">
+          <span class="tag">INSTRUMENT · installed</span>
+          <h1 style="margin: 0; font: 600 28px/1.15 'Space Grotesk', Inter, sans-serif; letter-spacing: -0.01em">Handheld DMM</h1>
+          <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #C7C7C7; max-width: 560px">Clip the probes onto any two nodes on the bench. The meter behaves like the real thing: it loads the circuit with its input impedance, auto-ranges with a settling delay, shows last-digit flicker from noise, and reads true-RMS on AC.</p>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr)); gap: 10px">
+            <div style="border: 1px solid #242424; border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11px; color: #A3A3A3">Display</span><span style="font: 500 14px 'JetBrains Mono', monospace">6000 counts</span></div>
+            <div style="border: 1px solid #242424; border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11px; color: #A3A3A3">DC V accuracy</span><span style="font: 500 14px 'JetBrains Mono', monospace">±(0.05% + 1)</span></div>
+            <div style="border: 1px solid #242424; border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11px; color: #A3A3A3">Input impedance</span><span style="font: 500 14px 'JetBrains Mono', monospace">10 MΩ ∥ 100 pF</span></div>
+            <div style="border: 1px solid #242424; border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11px; color: #A3A3A3">Burden (10 A)</span><span style="font: 500 14px 'JetBrains Mono', monospace">0.03 V/A</span></div>
+          </div>
+          <div style="font: 12.5px/1.6 'JetBrains Mono', monospace; color: #F7C77A; border: 1px solid #4A3614; background: #1D1810; border-radius: 8px; padding: 10px 12px">Probing A0 (J1 out): meter load shifts the node by −0.4 mV — shown as it would be on a real bench.</div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap">
+            <button class="ghost" style="background: #2A1F0E; border-color: #6B4A16; color: #F7C77A">Place on bench</button>
+            <button class="ghost">Edit model</button>
+          </div>
+        </div>
+      </section>
+
+      <div style="display: flex; align-items: baseline; justify-content: space-between">
+        <h2 style="margin: 0; font: 500 18px 'Space Grotesk', Inter, sans-serif">More to add</h2>
+        <span style="font-size: 12px; color: #A3A3A3">Every plugin is a sandboxed package: parts, instruments, world models or solvers</span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 14px">
+        <div class="card"><span class="tag">INSTRUMENT</span><span style="font: 500 15px 'Space Grotesk', Inter, sans-serif">4-channel oscilloscope</span><span style="font-size: 13px; color: #A3A3A3; line-height: 1.5">Triggering, FFT, probe compensation, 10× attenuation.</span><button class="ghost" style="align-self: flex-start">Install</button></div>
+        <div class="card"><span class="tag">INSTRUMENT</span><span style="font: 500 15px 'Space Grotesk', Inter, sans-serif">Logic analyzer</span><span style="font-size: 13px; color: #A3A3A3; line-height: 1.5">16 channels with I²C, SPI and UART decoders.</span><button class="ghost" style="align-self: flex-start">Install</button></div>
+        <div class="card"><span class="tag">INSTRUMENT</span><span style="font: 500 15px 'Space Grotesk', Inter, sans-serif">Bench power supply</span><span style="font-size: 13px; color: #A3A3A3; line-height: 1.5">CV/CC with current limit, foldback and a real sag curve.</span><button class="ghost" style="align-self: flex-start">Install</button></div>
+        <div class="card"><span class="tag">WORLD MODEL</span><span style="font: 500 15px 'Space Grotesk', Inter, sans-serif">Soil &amp; weather pack</span><span style="font-size: 13px; color: #A3A3A3; line-height: 1.5">Evaporation, drainage, rain events and sun position by location.</span><button class="ghost" style="align-self: flex-start" disabled="disabled">Installed</button></div>
+        <div class="card"><span class="tag">BOARD</span><span style="font: 500 15px 'Space Grotesk', Inter, sans-serif">Pi 40-pin HAT host</span><span style="font-size: 13px; color: #A3A3A3; line-height: 1.5">Emulated Linux SBC with GPIO, I²C and HAT EEPROM detection.</span><button class="ghost" style="align-self: flex-start">Install</button></div>
+        <div class="card"><span class="tag">RADIO</span><span style="font: 500 15px 'Space Grotesk', Inter, sans-serif">LoRa + virtual gateway</span><span style="font-size: 13px; color: #A3A3A3; line-height: 1.5">Path loss by distance and terrain; airtime and duty-cycle limits.</span><button class="ghost" style="align-self: flex-start">Install</button></div>
+      </div>
+    </main>
+
+    <aside aria-label="Plugin manifest" style="flex: 1 0 320px; max-width: 380px; border-left: 1px solid #242424; background: rgba(6,6,6,0.88); display: flex; flex-direction: column; height: 844px">
+      <div style="height: 38px; display: flex; align-items: center; padding: 0 14px; border-bottom: 1px solid #242424; font-size: 12px; color: #A3A3A3; background: rgba(12,12,12,0.8)">
+        <span style="color: #F5F5F5">plugin.json</span>
+        <span style="margin-left: auto">read-only</span>
+      </div>
+      <div class="js" style="padding: 14px 16px; font: 400 12px/18px 'JetBrains Mono', ui-monospace, monospace; color: #D9D9D9; overflow: auto">
+<div>{</div>
+<div>  <span class="k">"id"</span>: <span class="s">"community.dmm-handheld"</span>,</div>
+<div>  <span class="k">"version"</span>: <span class="s">"1.4.0"</span>,</div>
+<div>  <span class="k">"kind"</span>: [<span class="s">"instrument"</span>],</div>
+<div>  <span class="k">"provides"</span>: {</div>
+<div>    <span class="k">"instrument"</span>: <span class="s">"Handheld DMM"</span>,</div>
+<div>    <span class="k">"probes"</span>: <span class="nm">2</span>,</div>
+<div>    <span class="k">"model"</span>: <span class="s">"./dmm.model.ts"</span>,</div>
+<div>    <span class="k">"view3d"</span>: <span class="s">"./dmm.glb"</span>,</div>
+<div>    <span class="k">"view2d"</span>: <span class="s">"./dmm.symbol.svg"</span></div>
+<div>  },</div>
+<div>  <span class="k">"spice"</span>: {</div>
+<div>    <span class="k">"load"</span>: <span class="s">"R 10Meg ∥ C 100p"</span></div>
+<div>  },</div>
+<div>  <span class="k">"specs"</span>: {</div>
+<div>    <span class="k">"counts"</span>: <span class="nm">6000</span>,</div>
+<div>    <span class="k">"dcv_ranges"</span>: [<span class="s">"600m"</span>, <span class="s">"6"</span>, <span class="s">"60"</span>, <span class="s">"600"</span>],</div>
+<div>    <span class="k">"dcv_accuracy"</span>: <span class="s">"0.05% + 1"</span>,</div>
+<div>    <span class="k">"autorange_ms"</span>: <span class="nm">350</span></div>
+<div>  },</div>
+<div>  <span class="k">"permissions"</span>: [</div>
+<div>    <span class="s">"read:nets"</span>,</div>
+<div>    <span class="s">"inject:load"</span></div>
+<div>  ]</div>
+<div>}</div>
+      </div>
+      <div style="margin-top: auto; padding: 14px 16px; border-top: 1px solid #242424; font-size: 12px; line-height: 1.6; color: #A3A3A3">Plugins run sandboxed and only touch the circuit through the permissions they declare.</div>
+    </aside>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script="" data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900}}">
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+
+
+</body></html>

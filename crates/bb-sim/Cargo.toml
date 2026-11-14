@@ -1,0 +1,9 @@
+[package]
+name = "bb-sim"
+description = "Mixed-signal co-simulation engine tying analog, MCUs, devices, world, radios and instruments together."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]

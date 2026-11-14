@@ -1,0 +1,54 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/bb-core",
+    "crates/bb-spice",
+    "crates/bb-avr",
+    "crates/bb-firmware",
+    "crates/bb-circuit",
+    "crates/bb-world",
+    "crates/bb-radio",
+    "crates/bb-sim",
+    "crates/bb-plugin",
+    "crates/bb-lessons",
+    "crates/breadbox",
+]
+# bb-plugin-sdk is the guest-side crate compiled to wasm32; it is built separately.
+exclude = ["crates/bb-plugin-sdk", "plugins"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+rust-version = "1.90"
+
+[workspace.dependencies]
+# Shared, version-pinned deps. Crate-specific deps go in each crate's own Cargo.toml.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+anyhow = "1"
+log = "0.4"
+bb-core = { path = "crates/bb-core" }
+bb-spice = { path = "crates/bb-spice" }
+bb-avr = { path = "crates/bb-avr" }
+bb-firmware = { path = "crates/bb-firmware" }
+bb-circuit = { path = "crates/bb-circuit" }
+bb-world = { path = "crates/bb-world" }
+bb-radio = { path = "crates/bb-radio" }
+bb-sim = { path = "crates/bb-sim" }
+bb-plugin = { path = "crates/bb-plugin" }
+bb-lessons = { path = "crates/bb-lessons" }
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.test]
+opt-level = 2
+
+[profile.release]
+lto = "thin"
+codegen-units = 4

@@ -1,0 +1,9 @@
+[package]
+name = "bb-avr"
+description = "Cycle-accurate AVR (ATmega328P / ATmega2560) microcontroller emulator with debugger support."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]

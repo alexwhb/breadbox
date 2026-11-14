@@ -1,0 +1,14 @@
+[package]
+name = "breadbox"
+description = "Breadbox — circuit playground and SPICE workbench (macOS app)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+default-run = "breadbox"
+
+[[bin]]
+name = "breadbox"
+path = "src/main.rs"
+
+[dependencies]

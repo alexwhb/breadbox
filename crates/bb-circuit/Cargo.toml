@@ -1,0 +1,9 @@
+[package]
+name = "bb-circuit"
+description = "Breadbox document model: projects, parts library, breadboard geometry, netlisting, ERC."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]

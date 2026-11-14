@@ -1,0 +1,9 @@
+[package]
+name = "bb-firmware"
+description = "Firmware toolchain integration: arduino-cli management, sketch compilation, ELF/DWARF debug info, host-emulated boards."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
