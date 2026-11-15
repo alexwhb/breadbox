@@ -517,3 +517,38 @@ fn breadbox_extensions_export_as_directives() {
     assert_eq!(back.temps, vec![0.0, 50.0]);
     assert_eq!(back.analyses.len(), 3);
 }
+
+/// SPICE-1 / SPICE-3 sweep forms the reference suite does not use: the `mil` suffix
+/// (1 mil = 25.4 µ), `.dc … oct`, `.step … dec` and `.step … oct`.
+#[test]
+fn mil_suffix_dc_octave_and_step_dec_oct() {
+    // 1mil = 25.4e-6: a 1mil Ω resistor from 1 V draws 1 / 25.4µ A
+    let r = run("t\nV1 a 0 1\nR1 a 0 1mil\n.op\n");
+    let i = r.op("i(v1)").unwrap();
+    assert!((i + 1.0 / 25.4e-6).abs() < 1e-3 * (1.0 / 25.4e-6), "{i}");
+    // .dc oct: 1 → 8 V, 2 points per octave = 7 points
+    let r = run("t\nV1 a 0 0\nR1 a 0 1k\n.dc oct V1 1 8 2\n");
+    let v = r.plot(PlotKind::Dc).unwrap().scale_values();
+    assert_eq!(v.len(), 7, "{v:?}");
+    assert!((v[2] - 2.0).abs() < 1e-9 && (v[6] - 8.0).abs() < 1e-9, "{v:?}");
+    // .step dec / oct over a parameter
+    let r = run("t\n.param rv=1k\nV1 a 0 1\nR1 a 0 {rv}\n.step dec param rv 1k 100k 1\n.op\n");
+    let labels: Vec<String> = r.runs.iter().map(|x| x.label.clone()).collect();
+    assert_eq!(r.runs.len(), 3, "{labels:?}");
+    let currents: Vec<f64> = r
+        .runs
+        .iter()
+        .map(|x| -x.plot(PlotKind::Op).unwrap().value("i(v1)").unwrap())
+        .collect();
+    for (c, rv) in currents.iter().zip([1e3, 1e4, 1e5]) {
+        assert!((c - 1.0 / rv).abs() < 1e-9, "{currents:?}");
+    }
+    let r = run("t\n.param rv=1k\nV1 a 0 1\nR1 a 0 {rv}\n.step oct param rv 1k 4k 1\n.op\n");
+    assert_eq!(r.runs.len(), 3, "1k, 2k, 4k");
+    let last = -r.runs[2]
+        .plot(PlotKind::Op)
+        .unwrap()
+        .value("i(v1)")
+        .unwrap();
+    assert!((last - 1.0 / 4e3).abs() < 1e-9, "{last}");
+}

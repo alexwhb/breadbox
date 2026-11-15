@@ -149,6 +149,10 @@ fn boot_banner_then_ready_and_basic_commands() {
     assert_eq!(r.cmd("AT+CWMODE=9", "ERROR\r\n").0, "\r\nERROR\r\n");
     assert_eq!(r.cmd("AT+CIPMUX?", "OK\r\n").0, "+CIPMUX:0\r\n\r\nOK\r\n");
     assert_eq!(r.cmd("AT+CWJAP?", "OK\r\n").0, "No AP\r\n\r\nOK\r\n");
+    // ATE1 turns the echo back on
+    let (t, _) = r.cmd("ATE1", "OK\r\n");
+    assert!(t.ends_with("\r\nOK\r\n"), "{t:?}");
+    assert_eq!(r.cmd("AT", "OK\r\n").0, "AT\r\r\n\r\nOK\r\n");
 }
 
 #[test]
