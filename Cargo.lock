@@ -580,6 +580,7 @@ dependencies = [
  "bb-avr",
  "bb-circuit",
  "bb-core",
+ "bb-firmware",
  "bb-plugin",
  "bb-sim",
  "bb-spice",
