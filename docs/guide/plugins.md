@@ -9,8 +9,8 @@ and lesson packs. Each one is a sandboxed package.
   permissions it declares (`read:nets`, `inject:load`, `drive:pins`, `world:read`,
   `world:write`, `radio:space`, `ui:panel`, `fs:project`, `net:lan`).
 - *Planned* plugins aren't in this version yet. Hover the button to see what's planned.
-- **⋯** on a plugin's page has **Disable** and **Uninstall…**. Benches using an uninstalled
-  plugin's parts show them as unknown until you reinstall it.
+- The menu button next to **Edit model** has **Disable** and **Uninstall…**. Benches using an
+  uninstalled plugin's parts show them as unknown until you reinstall it.
 - World models run on every bench while they're enabled.
 
 ## Instruments

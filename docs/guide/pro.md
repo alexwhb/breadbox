@@ -17,7 +17,7 @@ The same circuit as the bench, as a SPICE netlist with analyses, a schematic and
 - **Run analyses** solves everything again. The top bar shows steps, solve time and
   convergence warnings.
 - On the `.tran` plot, drag the two cursors. The readout gives Δt, frequency and duty cycle.
-- **⋯** on a plot exports CSV, PNG or SVG.
+- The menu button at a plot's top right exports CSV, PNG or SVG.
 - The `.op` table puts each solved value next to the live **bench probe** reading.
   `.meas` and `.tf` results get their own table.
 
