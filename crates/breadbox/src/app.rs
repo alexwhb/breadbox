@@ -447,6 +447,8 @@ impl BreadboxApp {
                 s.ui(ui, &mut self.ctx);
             }
         });
+        // floating radio tools (virtual phone, MQTT explorer)
+        widgets::radio_tools::show(&ctx, &mut self.ctx);
         self.process_commands();
         self.ctx.sync_circuit();
         self.route_changes();

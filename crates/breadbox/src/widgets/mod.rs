@@ -8,6 +8,7 @@ pub mod instrument;
 pub mod markdown;
 pub mod overlay;
 pub mod plot;
+pub mod radio_tools;
 pub mod table;
 
 pub use code_editor::{
