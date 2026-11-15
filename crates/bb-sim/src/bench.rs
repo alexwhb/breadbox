@@ -547,17 +547,34 @@ impl Bench {
         if has_analog {
             let mut nl = built.netlist.clone();
             if let Some(ic) = &ic {
+                // capacitor nodes keep their voltage through the rebuild (`.ic`: clamped during
+                // the transient operating point, so the charge carries over); every other node
+                // only gets a `.nodeset` hint and settles to the new circuit at once
+                let cap_nodes: std::collections::HashSet<String> = built
+                    .netlist
+                    .top
+                    .elements
+                    .iter()
+                    .filter(|e| e.name.starts_with('c'))
+                    .flat_map(|e| e.nodes.iter().map(|n| n.to_ascii_lowercase()))
+                    .collect();
                 for (node, v) in ic {
                     if built
                         .net_kind
                         .iter()
                         .any(|k| matches!(k, NetKind::Analog(n) if n.eq_ignore_ascii_case(node)))
                     {
-                        nl.nodesets.push((
-                            node.to_ascii_lowercase(),
+                        let name = node.to_ascii_lowercase();
+                        let entry = (
+                            name.clone(),
                             bb_spice::expr::Expr::Num(*v),
                             Default::default(),
-                        ));
+                        );
+                        if cap_nodes.contains(&name) {
+                            nl.ics.push(entry);
+                        } else {
+                            nl.nodesets.push(entry);
+                        }
                     }
                 }
             }
