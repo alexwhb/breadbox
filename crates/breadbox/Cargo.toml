@@ -7,8 +7,37 @@ license.workspace = true
 rust-version.workspace = true
 default-run = "breadbox"
 
+[lib]
+name = "breadbox"
+path = "src/lib.rs"
+
 [[bin]]
 name = "breadbox"
 path = "src/main.rs"
 
 [dependencies]
+bb-core = { workspace = true }
+bb-spice = { workspace = true }
+bb-avr = { workspace = true }
+bb-firmware = { workspace = true }
+bb-radio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+log = { workspace = true }
+eframe = { version = "0.37.0", default-features = false, features = [
+    "accesskit",
+    "default_fonts",
+    "wgpu",
+    "persistence",
+] }
+egui_plot = "0.38.0"
+env_logger = "0.11"
+image = { version = "0.25", default-features = false, features = ["png"] }
+rfd = "0.18.0"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+muda = "0.21.2"
+
+[dev-dependencies]
+egui_kittest = { version = "0.37.0", features = ["wgpu", "snapshot", "eframe"] }
