@@ -369,6 +369,13 @@ impl SimBench {
         }
     }
 
+    /// True while API-level boards' sketches (ESP32 / Pico) are still compiling in the
+    /// background: those boards idle until the bench is rebuilt with their executables.
+    pub fn host_build_pending(&self) -> bool {
+        self.host_build.as_ref().is_some_and(|h| !h.is_finished())
+            || self.host_ready.lock().map(|r| r.is_some()).unwrap_or(false)
+    }
+
     /// The latest telemetry snapshot (never blocks).
     pub fn telemetry(&self) -> Option<Arc<Telemetry>> {
         self.handle.as_ref().map(|h| h.telemetry())
