@@ -67,6 +67,8 @@ struct Persist {
     step_mode: bool,
     bottom: BottomTab,
     breakpoints: HashMap<String, Vec<u32>>,
+    debug_view: debug_panel::DebugView,
+    memory_region: debug_panel::MemRegion,
 }
 
 pub struct FirmwareScreen {
@@ -83,6 +85,7 @@ pub struct FirmwareScreen {
     libs: libraries::LibraryManager,
     install: libraries::InstallDialog,
     radio: radio_panel::RadioPanelState,
+    debug: debug_panel::DebugPanelState,
     serial_input: String,
     breakpoints: HashMap<String, BTreeSet<u32>>,
     last_edit: Option<Instant>,
@@ -106,6 +109,7 @@ impl Default for FirmwareScreen {
             libs: Default::default(),
             install: Default::default(),
             radio: Default::default(),
+            debug: Default::default(),
             serial_input: String::new(),
             breakpoints: HashMap::new(),
             last_edit: None,
@@ -766,6 +770,8 @@ impl Screen for FirmwareScreen {
                 .filter(|(_, v)| !v.is_empty())
                 .map(|(k, v)| (k, v.into_iter().collect()))
                 .collect(),
+            debug_view: self.debug.view,
+            memory_region: self.debug.region,
         })
         .ok()
     }
@@ -774,6 +780,8 @@ impl Screen for FirmwareScreen {
         if let Ok(p) = serde_json::from_value::<Persist>(state.clone()) {
             self.step_mode = p.step_mode;
             self.bottom = p.bottom;
+            self.debug.view = p.debug_view;
+            self.debug.region = p.memory_region;
             self.breakpoints = p
                 .breakpoints
                 .into_iter()
@@ -826,26 +834,37 @@ impl Screen for FirmwareScreen {
             .exact_size(340.0)
             .resizable(false)
             .show_separator_line(false)
-            .frame(egui::Frame::new().fill(p.bg_panel).inner_margin(egui::Margin::same(16)))
+            .frame(
+                egui::Frame::new()
+                    .fill(p.bg_panel)
+                    .inner_margin(egui::Margin::same(16)),
+            )
             .show(ui, |ui| {
                 let r = ui.max_rect();
-                ui.painter().line_segment([pos2(r.left() - 16.0, r.top() - 16.0), pos2(r.left() - 16.0, r.bottom() + 16.0)], Stroke::new(1.0, p.border));
-                egui::ScrollArea::vertical().id_salt("radios-scroll").auto_shrink([false, false]).show(ui, |ui| {
-                    let model = app.bench.radio.clone();
-                    let cmds = radio_panel::radio_panel(ui, model.as_ref(), &mut self.radio);
-                    for c in cmds {
-                        if app.bench.is_active() {
-                            if let Some(l) = app.bench.existing() {
-                                l.radio(c);
-                            }
-                        } else if c == crate::bench::RadioCommand::AddBleHat {
-                            app.toasts.info("Add an HM-10 BLE module on the Workbench; the virtual phone appears here.");
-                        }
-                    }
-                });
+                ui.painter().line_segment(
+                    [
+                        pos2(r.left() - 16.0, r.top() - 16.0),
+                        pos2(r.left() - 16.0, r.bottom() + 16.0),
+                    ],
+                    Stroke::new(1.0, p.border),
+                );
+                egui::ScrollArea::vertical()
+                    .id_salt("radios-scroll")
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        let model = app.bench.radio.clone();
+                        let out = radio_panel::radio_panel(ui, model.as_ref(), &mut self.radio);
+                        radio_actions(app, out);
+                    });
             });
+        // the Debug tab's hex / I/O views get a taller dock
+        let dock_h = if self.bottom == BottomTab::Debug {
+            300.0
+        } else {
+            210.0
+        };
         egui::Panel::bottom("fw-output")
-            .exact_size(210.0)
+            .exact_size(dock_h)
             .resizable(false)
             .show_separator_line(false)
             .frame(
@@ -1267,9 +1286,110 @@ impl FirmwareScreen {
             }
             BottomTab::Debug => {
                 let vm = self.debug_vm(app).cloned();
-                debug_panel::debug_view(ui, vm.as_ref());
+                let target = self
+                    .targets
+                    .iter()
+                    .find(|t| self.target.as_ref() == Some(&t.id))
+                    .cloned();
+                let watching =
+                    debug_panel::debug_tab(ui, &mut self.debug, vm.as_ref(), target.as_ref());
+                // keep the selected MCU's memory / I/O snapshot fresh while it is on screen
+                if watching
+                    && let Some(t) = &self.target
+                    && let Some(l) = app.bench.existing()
+                {
+                    l.watch_memory(t);
+                }
             }
         }
+    }
+}
+
+/// Acts on the Radios panel: bench commands, "Add BLE hat" (a circuit edit), packet-log
+/// export, the bench's new floor-plan position (stored with the project).
+fn radio_actions(app: &mut AppCtx, out: radio_panel::RadioPanelOutput) {
+    for c in out.commands {
+        if c == crate::bench::RadioCommand::AddBleHat {
+            add_ble_hat(app);
+        } else if app.bench.is_active()
+            && let Some(l) = app.bench.existing()
+        {
+            l.radio(c);
+        }
+    }
+    if let Some(f) = out.export {
+        export_packet_log(app, f);
+    }
+    if let Some(pos) = out.bench_pos
+        && let Some(doc) = app.circuit.as_mut()
+    {
+        radio_panel::store_bench_pos(doc, pos);
+    }
+}
+
+/// "Add BLE hat": an HM-10 wired to the first board, one undoable edit; the bench runs so
+/// the virtual phone sees it advertise.
+fn add_ble_hat(app: &mut AppCtx) {
+    let Some(doc) = app.circuit.as_mut() else {
+        app.toasts
+            .info("Open a project with a board first, then add the BLE hat.");
+        return;
+    };
+    match radio_panel::add_ble_hat(doc) {
+        Ok(r) => {
+            app.toasts.success(format!(
+                "Added {} · HM-10 BLE next to {} ({}) — the virtual phone sees HMSoft",
+                r.reference, r.board, r.wiring
+            ));
+            if app.project.is_some() {
+                let link = app.bench_link();
+                if !link.is_running() {
+                    link.set_running(true);
+                }
+            }
+        }
+        Err(e) => app.toasts.warn(e),
+    }
+}
+
+/// Saves the radio packet log (`RF-4`): a save dialog, or straight into
+/// `BREADBOX_EXPORT_DIR` (tests, scripts).
+fn export_packet_log(app: &mut AppCtx, f: radio_panel::LogFormat) {
+    let name = app
+        .project
+        .as_ref()
+        .map(|p| p.name.clone())
+        .unwrap_or_else(|| "bench".into());
+    let clean: String = name
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    let file = format!("{clean}-packets.{}", f.ext());
+    let path = match std::env::var_os("BREADBOX_EXPORT_DIR") {
+        Some(d) => Some(PathBuf::from(d).join(&file)),
+        None => crate::platform::save_file("Export packet log", &file, f.filter_name(), f.ext()),
+    };
+    let Some(path) = path else { return };
+    let Some(bytes) = app.sim().and_then(|s| s.export_packet_log(f.engine_name())) else {
+        app.toasts
+            .error("This bench has no packet log to export (no radio space).");
+        return;
+    };
+    match std::fs::write(&path, &bytes) {
+        Ok(()) => app.toasts.success(format!(
+            "Saved the packet log ({} bytes) to {}",
+            bytes.len(),
+            path.display()
+        )),
+        Err(e) => app
+            .toasts
+            .error(format!("Could not save {}: {e}", path.display())),
     }
 }
 
