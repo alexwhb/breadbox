@@ -470,6 +470,21 @@ impl Instruments {
         }
     }
 
+    /// Replaces the scopes and meters with `defs` (the UI added, removed or re-clipped an
+    /// instrument); probes are kept. Endpoints are bound by the next rebuild
+    /// (`Bench::update_project`). Scopes whose definition did not change keep their history.
+    pub fn set_instruments(&mut self, defs: &[InstrumentDef]) {
+        let old_scopes = std::mem::take(&mut self.scopes);
+        self.meters.clear();
+        for d in defs {
+            if let Some(s) = old_scopes.iter().find(|s| &s.def == d) {
+                self.scopes.push(s.clone());
+            } else {
+                self.add_instrument(d.clone());
+            }
+        }
+    }
+
     /// Resolves endpoints to nets after a (re)build.
     pub(crate) fn bind(&mut self, built: &BuiltNetlist, nets: &[NetRt]) {
         let mut watched = Vec::new();
