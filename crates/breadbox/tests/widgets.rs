@@ -401,3 +401,68 @@ fn widget_gallery_snapshot() {
     .unwrap();
     h.snapshot("widget-gallery");
 }
+
+#[test]
+fn code_editor_find_bar_counts_matches() {
+    let doc = widgets::CodeDoc::new(
+        "blink.ino",
+        "void loop() {\n  digitalWrite(13, HIGH);\n  delay(1000);\n  digitalWrite(13, LOW);\n}\n",
+    );
+    let mut view = widgets::EditorView::default();
+    view.open_find();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(700.0, 300.0))
+        .build_ui_state(
+            |ui, s: &mut (widgets::CodeDoc, widgets::EditorView)| {
+                styled(ui);
+                widgets::CodeEditor::new("f").show(ui, &mut s.0, &mut s.1);
+            },
+            (doc, view),
+        );
+    h.run();
+    h.get_by_label("Find").type_text("digitalwrite");
+    h.run();
+    assert!(h.query_by_label("1 of 2").is_some(), "match counter");
+    h.get_by_label("Next match").click();
+    h.run();
+    assert!(h.query_by_label("2 of 2").is_some());
+    h.get_by_label("Close find").click();
+    h.run();
+    assert!(!h.state().1.find.open);
+}
+
+#[test]
+fn collapsible_side_panel_collapses_and_reopens() {
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(800.0, 400.0))
+        .build_ui_state(
+            |ui, mode: &mut widgets::PanelMode| {
+                styled(ui);
+                widgets::collapsible_side(
+                    ui,
+                    "world",
+                    widgets::Side::Right,
+                    "World",
+                    mode,
+                    300.0,
+                    |ui, mode| {
+                        widgets::panel_title_with_collapse(
+                            ui,
+                            "World",
+                            "Pot 1 · indoor",
+                            widgets::Side::Right,
+                            mode,
+                        );
+                    },
+                );
+            },
+            widgets::PanelMode::Open,
+        );
+    h.run();
+    h.get_by_label("Collapse World").click();
+    h.run();
+    assert_eq!(*h.state(), widgets::PanelMode::Collapsed);
+    h.get_by_label("Show World").click();
+    h.run();
+    assert_eq!(*h.state(), widgets::PanelMode::Open);
+}

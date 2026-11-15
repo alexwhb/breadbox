@@ -257,3 +257,44 @@ fn light_theme_renders() {
     assert_eq!(h.state().ctx.theme, breadbox::theme::ThemeChoice::Light);
     screenshot(&mut h, "home-light");
 }
+
+#[test]
+fn pro_analysis_card_popover_disables_monte_carlo() {
+    let mut h = harness();
+    open_example(&mut h, "garden-node");
+    go(&mut h, "Pro");
+    assert!(wait_for(&mut h, 120.0, |h| has_label(h, "mc histogram")));
+    h.get_by_label_contains("Monte Carlo (.mc) — 100 runs · seed 7")
+        .click();
+    h.run_steps(2);
+    assert!(has_label(&h, "Apply"));
+    h.get_by_label("Enabled").click();
+    h.run_steps(1);
+    h.get_by_label("Apply").click();
+    h.run_steps(2);
+    assert!(has_label_containing(&h, "Monte Carlo (.mc) — off"));
+    assert!(
+        wait_for(&mut h, 120.0, |h| has_label(h, "tran plot")
+            && !has_label(h, "mc histogram")),
+        "the re-run should drop the histogram"
+    );
+    // and back on
+    h.get_by_label_contains("Monte Carlo (.mc) — off").click();
+    h.run_steps(2);
+    h.get_by_label("Enabled").click();
+    h.get_by_label("Apply").click();
+    assert!(wait_for(&mut h, 120.0, |h| has_label(h, "mc histogram")));
+}
+
+#[test]
+fn firmware_library_manager_opens_and_closes() {
+    let mut h = harness();
+    open_example(&mut h, "garden-node");
+    go(&mut h, "Firmware");
+    h.get_by_label("Manage libraries…").click();
+    h.run_steps(3);
+    assert!(has_label_containing(&h, "Library manager"));
+    h.get_by_label("Close").click();
+    h.run_steps(3);
+    assert!(!has_label_containing(&h, "Library manager"));
+}

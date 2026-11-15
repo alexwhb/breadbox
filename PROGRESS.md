@@ -381,12 +381,14 @@ pro-analysis,pro-schematic,pro-pcb,workbench,plugins,lessons,widgets}.png`.
 - `PRO-6` **done** for plots + netlist — Export .cir (ngspice-runnable, stand-ins inlined,
   `*!bb` directives), per-plot CSV / PNG (viewport screenshot crop) / SVG. Schematic export is
   the schematic editor's (phase 4).
-- `TEST-5` **done for my screens** — `cargo test -p breadbox`: 45 unit, 10 GUI (navigation
+- `TEST-5` **done for my screens** — `cargo test -p breadbox`: 45 unit, 12 GUI (navigation
   Home→Firmware→Pro→Home, garden-node upload → serial + MQTT + radio panel, blink breakpoint
   hit + step over + continue, Verify + real compile error mapped to the editor (skips without
   a toolchain), Pro auto-run → plots + op table, every screen rendered, keyboard shortcuts,
-  idle repaint, light theme), 6 widget tests (segmented, mini-segmented/checkbox/tabs, stop
-  slider, buttons, editor gutter, gallery snapshot). clippy `-D warnings` + fmt clean.
+  idle repaint, light theme, analysis-card popover disables .mc → histogram gone, library
+  manager modal), 8 widget tests (segmented, mini-segmented/checkbox/tabs, stop slider,
+  buttons, editor gutter, editor find, collapsible panel, gallery snapshot). clippy
+  `-D warnings` + fmt clean.
 
 Contracts for phase 4 (`ui-bench`): implement `bench::BenchLink` over `bb_sim::SimHandle` and
 register it as the `BenchFactory`; replace the Workbench / Pro Schematic placeholders in

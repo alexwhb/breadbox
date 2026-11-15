@@ -683,6 +683,7 @@ fn find_bar(ui: &mut Ui, p: &Palette, f: &mut FindState) {
                 .font(font::mono(12.5))
                 .desired_width(220.0),
         );
+        r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::TextInput, true, "Find"));
         if f.focus {
             r.request_focus();
             f.focus = false;

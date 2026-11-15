@@ -205,7 +205,8 @@ pub enum PanelMode {
 }
 
 /// A side panel that collapses to a 30 px `.tab-out` handle with a vertical label.
-/// Returns `None` when collapsed.
+/// The content gets the mode so it can host the collapse handle
+/// ([`panel_title_with_collapse`]). Returns `None` when collapsed.
 pub fn collapsible_side<R>(
     ui: &mut Ui,
     id: &str,
@@ -213,7 +214,7 @@ pub fn collapsible_side<R>(
     title: &str,
     mode: &mut PanelMode,
     width: f32,
-    content: impl FnOnce(&mut Ui) -> R,
+    content: impl FnOnce(&mut Ui, &mut PanelMode) -> R,
 ) -> Option<R> {
     let p = pal(ui);
     match *mode {
@@ -234,7 +235,7 @@ pub fn collapsible_side<R>(
                         Side::Right => [rect.left_top(), rect.left_bottom()],
                     };
                     ui.painter().line_segment(edge, Stroke::new(1.0, p.border));
-                    content(ui)
+                    content(ui, mode)
                 });
             Some(r.inner)
         }
