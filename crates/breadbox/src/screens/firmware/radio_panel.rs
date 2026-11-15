@@ -57,6 +57,7 @@ pub fn radio_panel(
     let mut cmds = Vec::new();
     ui.spacing_mut().item_spacing.y = 16.0;
     section_header_row(ui, "Radios", "virtual RF space");
+    crate::widgets::radio_tools::buttons(ui);
 
     // push the panel's conditions to a fresh space once
     if let Some(m) = model

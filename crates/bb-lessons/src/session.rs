@@ -63,7 +63,7 @@ pub enum Edit {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Verdict {
     pub correct: bool,
-    /// `Nailed it. The meter agrees: 13.6 mA.` or the hint.
+    /// `Nailed it. The meter agrees: 13.4 mA.` (the meter's reading) or the hint.
     pub text: String,
     pub expected: f64,
 }
@@ -263,6 +263,14 @@ impl Session {
             };
         };
         let expected = vars.get("answer").unwrap_or(f64::NAN);
+        // `{meter}` quotes the instrument's reading; without one (no bench) the answer stands in
+        let vars = if meter.is_none() && expected.is_finite() {
+            let mut v = vars;
+            v.set("meter", expected);
+            v
+        } else {
+            vars
+        };
         let correct = guess.is_finite()
             && expected.is_finite()
             && ((guess - expected).abs() <= p.tolerance * expected.abs().max(1e-12));

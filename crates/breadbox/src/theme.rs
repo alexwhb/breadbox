@@ -186,22 +186,96 @@ pub const LIGHT: Palette = Palette {
     selection: Color32::from_rgb(0xF6, 0xDB, 0xA8),
 };
 
+/// A theme plugin's palette (`PLUG-7`), replacing the dark or light token set while active.
+static PLUGIN_PALETTE: std::sync::RwLock<Option<&'static Palette>> = std::sync::RwLock::new(None);
+
+fn plugin_palette(dark: bool) -> Option<&'static Palette> {
+    PLUGIN_PALETTE
+        .read()
+        .ok()
+        .and_then(|g| *g)
+        .filter(|p| p.dark == dark)
+}
+
 /// Palette for the theme active in `ui`.
 pub fn pal(ui: &egui::Ui) -> &'static Palette {
-    if ui.visuals().dark_mode {
-        &DARK
-    } else {
-        &LIGHT
+    let dark = ui.visuals().dark_mode;
+    if let Some(p) = plugin_palette(dark) {
+        return p;
     }
+    if dark { &DARK } else { &LIGHT }
 }
 
 /// Palette for the theme active in `ctx`.
 pub fn pal_ctx(ctx: &egui::Context) -> &'static Palette {
-    if ctx.theme() == Theme::Dark {
-        &DARK
-    } else {
-        &LIGHT
+    let dark = ctx.theme() == Theme::Dark;
+    if let Some(p) = plugin_palette(dark) {
+        return p;
     }
+    if dark { &DARK } else { &LIGHT }
+}
+
+/// The base palette with a theme plugin's token overrides. Tokens use DESIGN.md names
+/// (`bg.app`, `text.muted`, `accent.soft`, …) or the short names theme plugins use (`bg`,
+/// `panel`, `text`, `muted`, `accent`, `cyan`, `danger`, `ok`, `border`).
+pub fn palette_with_tokens(dark: bool, tokens: &[(String, [u8; 4])]) -> Palette {
+    let mut p = if dark { DARK } else { LIGHT };
+    for (k, c) in tokens {
+        let col = Color32::from_rgba_unmultiplied(c[0], c[1], c[2], c[3]);
+        let k = k.to_ascii_lowercase().replace(['-', '_'], ".");
+        let slots: Vec<&mut Color32> = match k.as_str() {
+            "bg" | "bg.app" | "background" => vec![&mut p.bg_app, &mut p.bg_canvas],
+            "bg.canvas" | "canvas" => vec![&mut p.bg_canvas],
+            "bg.sunken" | "sunken" => vec![&mut p.bg_sunken],
+            "panel" | "bg.panel" => vec![&mut p.bg_panel, &mut p.bg_header, &mut p.bg_card],
+            "bg.header" | "header" => vec![&mut p.bg_header],
+            "bg.card" | "card" => vec![&mut p.bg_card],
+            "bg.raised" | "raised" => vec![&mut p.bg_raised, &mut p.bg_tile],
+            "bg.hover" | "hover" => vec![&mut p.bg_hover],
+            "bg.selected" | "selected" => vec![&mut p.bg_selected, &mut p.bg_row_selected],
+            "border" => vec![&mut p.border, &mut p.border_faint],
+            "border.strong" => vec![&mut p.border_strong],
+            "text" => vec![&mut p.text, &mut p.text_strong, &mut p.code_text],
+            "text.strong" => vec![&mut p.text_strong],
+            "text.dim" | "dim" => vec![&mut p.text_dim],
+            "muted" | "text.muted" => vec![&mut p.text_muted, &mut p.code_cm],
+            "faint" | "text.faint" => vec![&mut p.text_faint],
+            "accent" => vec![&mut p.accent],
+            "accent.soft" => vec![&mut p.accent_soft],
+            "accent.bg" => vec![&mut p.accent_bg, &mut p.code_current],
+            "accent.border" => vec![&mut p.accent_border],
+            "cyan" | "info" => vec![&mut p.info, &mut p.code_ty],
+            "ok" | "green" => vec![&mut p.ok],
+            "danger" | "red" => vec![&mut p.danger, &mut p.danger_soft],
+            "selection" => vec![&mut p.selection],
+            _ => vec![],
+        };
+        for s in slots {
+            *s = col;
+        }
+    }
+    p
+}
+
+/// Activates a theme plugin's palette (or restores the built-in token sets with `None`).
+pub fn set_plugin_palette(ctx: &egui::Context, palette: Option<Palette>) {
+    let leaked: Option<&'static Palette> = palette.map(|p| &*Box::leak(Box::new(p)));
+    if let Ok(mut g) = PLUGIN_PALETTE.write() {
+        *g = leaked;
+    }
+    for (theme, base) in [(Theme::Dark, &DARK), (Theme::Light, &LIGHT)] {
+        let p = leaked
+            .filter(|p| p.dark == (theme == Theme::Dark))
+            .unwrap_or(base);
+        let style = ctx.style_of(theme);
+        ctx.set_style_of(theme, style_for(p, &style));
+    }
+    ctx.request_repaint();
+}
+
+/// Whether a theme plugin's palette is active.
+pub fn plugin_palette_active() -> bool {
+    PLUGIN_PALETTE.read().ok().is_some_and(|g| g.is_some())
 }
 
 /// Layout sizes from DESIGN.md.

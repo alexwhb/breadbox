@@ -62,7 +62,7 @@ optional = true
 toggle_label = "Do the math myself"
 toggle_note = "Optional. The meter waits for your prediction."
 meter = "dmm1"
-correct_text = "Right. The meter agrees: {answer} V."
+correct_text = "Right. The meter agrees: {meter} V."
 default_hint = "V(out) = 5 × R2 ÷ (R1 + R2), with R1 = 10 kΩ."
 working = [
     "V(out) = 5 V × {R:g} ÷ (10000 + {R:g})",

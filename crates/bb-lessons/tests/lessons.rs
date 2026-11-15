@@ -222,7 +222,8 @@ fn lesson_three_step_three_is_the_design_verbatim() {
     // right answer → the design's message, a row, the checkpoint counts down
     let v = s.predict(13.6, Some(13.4));
     assert!(v.correct);
-    assert_eq!(v.text, "Nailed it. The meter agrees: 13.6 mA.");
+    // the message quotes the meter's reading, not the formula (13.6 mA)
+    assert_eq!(v.text, "Nailed it. The meter agrees: 13.4 mA.");
     assert!(!s.meter_hidden());
     assert!(s.record(13.4));
     let row = &s.state().rows[0];

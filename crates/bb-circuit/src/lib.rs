@@ -22,6 +22,7 @@ pub mod geometry;
 pub mod library;
 pub mod netlist;
 pub mod part;
+pub mod pcb;
 pub mod project;
 pub mod spice_io;
 pub mod symbols;

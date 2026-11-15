@@ -406,6 +406,8 @@ impl WorkbenchScreen {
                     }
                 }
             }
+            // radio tools: virtual phone + MQTT explorer
+            crate::widgets::radio_tools::rail_buttons(ui);
         });
     }
 

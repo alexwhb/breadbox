@@ -1,6 +1,6 @@
 {
   "size": [80, 160],
-  "color": "#F2C14E",
+  "color": "#3A3A3A",
   "art": "dmm.bench.svg",
   "elements": [
     {"type": "display", "id": "lcd", "rect": [8, 10, 64, 34], "digits": 4, "style": "lcd",
