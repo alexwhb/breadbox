@@ -60,6 +60,40 @@ pub struct AcView {
     pub mag: Vec<Trace>,
     pub phase: Vec<Trace>,
     pub plot: Plot,
+    /// First −3 dB crossing relative to the peak gain (a filter's corner), Hz.
+    pub corner_hz: Option<f64>,
+}
+
+/// The first frequency where `|H|` falls 3.01 dB below its peak (log-interpolated), after
+/// the peak for a low-pass / band-pass, before it for a high-pass.
+pub fn corner_frequency(mag_db: &[[f64; 2]]) -> Option<f64> {
+    if mag_db.len() < 2 {
+        return None;
+    }
+    let (ipk, pk) = mag_db
+        .iter()
+        .enumerate()
+        .max_by(|a, b| a.1[1].total_cmp(&b.1[1]))
+        .map(|(i, p)| (i, p[1]))?;
+    let level = pk - 10.0 * 2f64.log10();
+    let cross = |a: &[f64; 2], b: &[f64; 2]| -> f64 {
+        let t = (level - a[1]) / (b[1] - a[1]);
+        let (la, lb) = (a[0].max(1e-30).ln(), b[0].max(1e-30).ln());
+        (la + t * (lb - la)).exp()
+    };
+    // falling edge after the peak
+    for w in mag_db[ipk..].windows(2) {
+        if w[0][1] >= level && w[1][1] < level {
+            return Some(cross(&w[0], &w[1]));
+        }
+    }
+    // rising edge before it (high-pass)
+    for w in mag_db[..=ipk].windows(2).rev() {
+        if w[0][1] < level && w[1][1] >= level {
+            return Some(cross(&w[0], &w[1]));
+        }
+    }
+    None
 }
 
 #[derive(Debug, Clone)]
@@ -556,11 +590,21 @@ pub fn build_view(
                     ph.push([*fi, c.arg().to_degrees()]);
                 }
             }
+            let corner_hz = corner_frequency(&mag);
+            let title = match corner_hz {
+                Some(fc) => format!(
+                    ".ac — Bode of {} · −3 dB at {}",
+                    upper(&out),
+                    fmt_readout(fc, "Hz", 2)
+                ),
+                None => format!(".ac — Bode of {}", upper(&out)),
+            };
             AcView {
-                title: format!(".ac — Bode of {}", upper(&out)),
+                title,
                 mag: vec![Trace::new(format!("|{}| dB", upper(&out)), p.accent, mag)],
                 phase: vec![Trace::new(format!("φ {} °", upper(&out)), p.info, ph).width(1.6)],
                 plot: plot.clone(),
+                corner_hz,
             }
         });
 
@@ -796,6 +840,27 @@ pub fn mixed_info(text: &str) -> MixedInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn corner_of_a_first_order_low_pass_and_high_pass() {
+        let fc = 1000.0;
+        let lp: Vec<[f64; 2]> = (0..=60)
+            .map(|i| {
+                let f = 10f64.powf(1.0 + i as f64 / 15.0);
+                [f, -10.0 * (1.0 + (f / fc).powi(2)).log10()]
+            })
+            .collect();
+        let got = corner_frequency(&lp).unwrap();
+        assert!((got / fc - 1.0).abs() < 0.01, "{got}");
+        let hp: Vec<[f64; 2]> = lp
+            .iter()
+            .map(|p| [p[0], -10.0 * (1.0 + (fc / p[0]).powi(2)).log10()])
+            .collect();
+        let got = corner_frequency(&hp).unwrap();
+        assert!((got / fc - 1.0).abs() < 0.01, "{got}");
+        let flat: Vec<[f64; 2]> = lp.iter().map(|p| [p[0], 0.0]).collect();
+        assert_eq!(corner_frequency(&flat), None);
+    }
 
     #[test]
     fn text_params_are_stripped_from_instances_only() {

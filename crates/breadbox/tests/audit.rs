@@ -418,7 +418,7 @@ fn pro_shows_every_analysis_card_and_meas_tf_results() {
     )
     .unwrap();
     std::fs::write(
-        proj.dir.join("analyses/divider.cir"),
+        proj.dir.join("analyses/meas-tf.cir"),
         "* divider with a filter cap\nV1 in 0 PULSE(0 5 0 1u 1u 1m 2m) AC 1\nR1 in out 1k\nR2 out 0 1k\nC1 out 0 100n\n.tran 10u 4m\n.meas tran vmax MAX v(out)\n.meas tran vavg AVG v(out) FROM=1m TO=3m\n.tf v(out) V1\n.end\n",
     )
     .unwrap();

@@ -231,6 +231,10 @@ impl Project {
             }])
         } else {
             std::fs::create_dir_all(dir.join("analyses"))?;
+            std::fs::write(
+                dir.join("analyses").join(format!("{clean}.cir")),
+                starter_netlist(name),
+            )?;
             serde_json::json!([])
         };
         let json = serde_json::json!({
@@ -566,6 +570,22 @@ pub fn default_projects_dir() -> PathBuf {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."))
         .join("Documents/Breadbox")
+}
+
+/// The netlist a new Pro project starts with (`analyses/<name>.cir`, autosaved): a comment
+/// that says what to do, an RC low-pass to start from, and `.op`.
+pub fn starter_netlist(name: &str) -> String {
+    format!(
+        "* {name} — type a SPICE netlist; it is saved with the project.\n\
+         * Analyses on the right add / switch dot-cards (.tran, .dc, .ac, .mc, .noise, .op).\n\
+         *\n\
+         * For example, an RC low-pass (fc = 1 / (2 pi R C) = 1 kHz):\n\
+         * V1 in 0 DC 0 AC 1\n\
+         * R1 in out 1k\n\
+         * C1 out 0 159n\n\
+         .op\n\
+         .end\n"
+    )
 }
 
 #[cfg(test)]

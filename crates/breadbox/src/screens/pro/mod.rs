@@ -549,6 +549,25 @@ impl Screen for AnalysisScreen {
             v.sort();
             v.into_iter().next()
         });
+        // a writable project with an empty circuit and no netlist file gets its own starter
+        // netlist (older Pro projects; new ones are created with it) instead of the demo
+        let empty = app
+            .circuit
+            .as_ref()
+            .is_some_and(|c| c.project().parts.is_empty());
+        let file = file.or_else(|| {
+            let p = app.project.as_ref().filter(|p| !p.read_only && empty)?;
+            let dir = p.dir.join("analyses");
+            std::fs::create_dir_all(&dir).ok()?;
+            let stem = p
+                .dir
+                .file_stem()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "netlist".into());
+            let f = dir.join(format!("{stem}.cir"));
+            std::fs::write(&f, crate::project::starter_netlist(&p.name)).ok()?;
+            Some(f)
+        });
         match file {
             Some(f) => {
                 if self.load_file(f.clone()).is_err() {
@@ -1217,7 +1236,17 @@ impl AnalysisScreen {
                 "ac",
                 &a.title,
                 |ui, _| {
-                    plot::bode_plot(ui, "ac", &a.mag, &a.phase, 300.0);
+                    let markers = a
+                        .corner_hz
+                        .map(|fc| {
+                            vec![Marker::VLine {
+                                x: fc,
+                                label: format!("−3 dB · {}", plot::fmt_si(fc, "Hz")),
+                                color: p.info,
+                            }]
+                        })
+                        .unwrap_or_default();
+                    plot::bode_plot_marked(ui, "ac", &a.mag, &a.phase, 300.0, markers);
                 },
                 true,
                 app,

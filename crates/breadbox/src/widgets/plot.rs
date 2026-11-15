@@ -812,6 +812,18 @@ pub fn histogram_plot(ui: &mut Ui, id: &str, h: &Histogram, height: f32) -> Plot
 
 /// Bode plot: magnitude (dB) over phase (°), linked log-frequency axes.
 pub fn bode_plot(ui: &mut Ui, id: &str, mag: &[Trace], phase: &[Trace], height: f32) -> PlotOutput {
+    bode_plot_marked(ui, id, mag, phase, height, vec![])
+}
+
+/// Bode plot with markers on the magnitude panel (the −3 dB corner).
+pub fn bode_plot_marked(
+    ui: &mut Ui,
+    id: &str,
+    mag: &[Trace],
+    phase: &[Trace],
+    height: f32,
+    markers: Vec<Marker>,
+) -> PlotOutput {
     let a = LinePlot {
         id: &format!("{id}-mag"),
         traces: mag,
@@ -819,7 +831,7 @@ pub fn bode_plot(ui: &mut Ui, id: &str, mag: &[Trace], phase: &[Trace], height: 
         y: AxisSpec::linear("dB"),
         y2: None,
         height: height * 0.58,
-        markers: vec![],
+        markers,
         cursors: None,
     }
     .show(ui);
