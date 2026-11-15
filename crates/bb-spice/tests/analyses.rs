@@ -313,6 +313,32 @@ fn export_cir_round_trip() {
 }
 
 #[test]
+fn per_element_tolerance_survives_export_as_an_ngspice_comment() {
+    // `tol=` is Breadbox-only: ngspice rejects it on an instance ("unknown parameter (tol)"),
+    // so the exporter writes it after `;!bb` — a comment for ngspice, a parameter for bb-spice
+    let text = "mc\nV1 in 0 DC 10\nR1 in out 1k tol=10%\nR2 out 0 1k\n.op\n.mc 200 seed=3\n.end\n";
+    let nl = Netlist::parse(text).unwrap();
+    let out = nl.to_spice_text();
+    let r1 = out
+        .lines()
+        .find(|l| l.to_ascii_lowercase().starts_with("r1 "))
+        .unwrap();
+    let (card, bb) = r1
+        .split_once(';')
+        .expect("tol moved into the inline comment");
+    assert!(!card.to_ascii_lowercase().contains("tol"), "{r1}");
+    assert!(bb.starts_with("!bb tol="), "{r1}");
+    let nl2 = Netlist::parse(&out).unwrap_or_else(|e| panic!("{e}\n{out}"));
+    let (a, b) = (nl.run().unwrap(), nl2.run().unwrap());
+    let (da, db) = (
+        a.mc.as_ref().unwrap().distribution("v(out)").unwrap(),
+        b.mc.as_ref().unwrap().distribution("v(out)").unwrap(),
+    );
+    assert!(da.sigma > 0.05, "R1 varies: σ = {}", da.sigma);
+    assert_eq!(da.values, db.values, "same spread after the round trip");
+}
+
+#[test]
 fn raw_and_csv_export() {
     let r = run(
         "t\nV1 in 0 DC 1 AC 1\nR1 in out 1k\nC1 out 0 1u\n.op\n.ac dec 5 10 10k\n.tran 10u 1m\n",

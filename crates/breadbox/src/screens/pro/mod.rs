@@ -509,7 +509,7 @@ pub fn export_text(text: &str) -> String {
         }
     }
     match bb_spice::Netlist::parse(&with_stubs) {
-        Ok(nl) => nl.to_spice_text(),
+        Ok(nl) => nl.to_ngspice_text(&[]),
         Err(_) => text.to_string(),
     }
 }

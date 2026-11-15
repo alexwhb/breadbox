@@ -131,6 +131,16 @@ fn collect_ext(nl: &Netlist) -> Vec<String> {
 
 /// Writes the netlist, giving `ext()` parameters the supplied values (0 when missing).
 pub fn netlist_to_text_with(nl: &Netlist, ext: &HashMap<String, f64>) -> String {
+    netlist_to_text_opts(nl, ext, false)
+}
+
+/// `strict`: the file is meant for ngspice itself (Share → `.cir`), so Breadbox / LTspice
+/// conveniences ngspice rejects are rewritten (`.tran 0 10m` → a positive TSTEP).
+pub(crate) fn netlist_to_text_opts(
+    nl: &Netlist,
+    ext: &HashMap<String, f64>,
+    strict: bool,
+) -> String {
     let mut o = String::new();
     let title = if nl.title.is_empty() {
         "* breadbox netlist".to_string()
@@ -211,7 +221,17 @@ pub fn netlist_to_text_with(nl: &Netlist, ext: &HashMap<String, f64>) -> String 
         } else {
             BB_DIRECTIVE
         };
-        let _ = writeln!(o, "{prefix}{}", analysis_text(a));
+        let card = match a {
+            Analysis::Tran(t) if strict && t.tstep <= 0.0 => {
+                // ngspice: "TSTEP is invalid, must be greater than zero"
+                let span = (t.tstop - t.tstart).max(t.tstop);
+                let mut t = t.clone();
+                t.tstep = t.tmax.filter(|m| *m > 0.0).unwrap_or(span / 1000.0);
+                analysis_text(&Analysis::Tran(t))
+            }
+            _ => analysis_text(a),
+        };
+        let _ = writeln!(o, "{prefix}{card}");
     }
     for s in &nl.steps {
         let var = match &s.var {
@@ -405,10 +425,28 @@ fn control_text(c: &Control, current_ctrl: bool) -> String {
     }
 }
 
+/// Instance parameters ngspice does not know (Monte Carlo `tol=`): written after
+/// [`super::parse::BB_INLINE`] so ngspice reads a comment and bb-spice the parameter.
+const BB_ONLY_PARAMS: &[&str] = &["tol"];
+
 /// One element card as text.
 pub(crate) fn element_text(el: &ElementCard) -> String {
+    let (bb_only, std): (ParamList, ParamList) = el
+        .params
+        .iter()
+        .cloned()
+        .partition(|(k, _)| BB_ONLY_PARAMS.contains(&k.to_ascii_lowercase().as_str()));
+    let mut s = element_text_with(el, &std);
+    if !bb_only.is_empty() {
+        s.push_str(" ;!bb");
+        s.push_str(&params_text(&bb_only));
+    }
+    s
+}
+
+fn element_text_with(el: &ElementCard, params: &ParamList) -> String {
     let n = el.nodes.join(" ");
-    let p = params_text(&el.params);
+    let p = params_text(params);
     let name = &el.name;
     match &el.kind {
         ElemKind::Resistor { value, model }
@@ -470,7 +508,7 @@ pub(crate) fn element_text(el: &ElementCard) -> String {
             name: sub,
             text_params,
         } => {
-            let mut s = if el.params.is_empty() && text_params.is_empty() {
+            let mut s = if params.is_empty() && text_params.is_empty() {
                 format!("{name} {n} {sub}")
             } else {
                 format!("{name} {n} {sub} params:{p}")

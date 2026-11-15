@@ -71,8 +71,13 @@ pub fn export_cir(project: &Project, lib: &Library) -> Result<String, SpiceIoErr
     let built = netlist::build(project, lib, &NetlistOptions::pro(Some(&project.world)))?;
     let mut nl = built.netlist;
     merge_directives(&mut nl, &project.spice.directives)?;
+    if nl.analyses.is_empty() {
+        // something to run when the file is opened in ngspice (`-b` runs nothing otherwise)
+        nl.analyses
+            .push((bb_spice::Analysis::Op, bb_spice::Span::none()));
+    }
     // ext() variables frozen at the parts' values (a battery's EMF, a sensor's output), not 0
-    let text = nl.to_spice_text_with_ext(&built.ext);
+    let text = nl.to_ngspice_text(&built.ext);
     let notes: String = built
         .warnings
         .iter()
