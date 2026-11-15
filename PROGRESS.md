@@ -1035,3 +1035,18 @@ Close-out (2026-11-14): toolchain hang (`MCU-4`), `PLAT-1`, `WORLD-6`, bundle po
   copy registered: `isFilePackageAtPath` = true, default app = Breadbox, a plain `open <pkg>`
   (double-click) opens the project. `scripts/test-all.sh` has a **`bundle`** stage
   (`scripts/bundle-macos.sh --check`; `SKIP=bundle`, skipped by `--quick` and off macOS).
+- **Verification** — `scripts/test-all.sh` (`CARGO_TARGET_DIR=target/closeout-a`), two
+  consecutive runs in the main checkout at `e75447c` (only closeout-b's uncommitted doc edits
+  in the tree): **ALL GREEN** both times — fmt, clippy, `cargo test --workspace` 753 passed /
+  0 failed / 10 ignored (36 e2e scenarios; 226 s / 139 s), plugin wasm byte-identical, perf
+  gates MCU-3 23.7 / 24.0×, SIM-4 engine 16.5 / 16.3×, with the GUI 15.67 / 15.74× (max) and
+  1.00× (paced), SPICE-5 13.2 / 12.7 ms, Workbench frame 0.69 / 0.82 ms, PLAT-4 354 / 366 ms,
+  and the new `bundle` stage (52–54 s, incl. the Finder package checks).
+- Before that: run 1 in the shared tree failed on closeout-b's then-unformatted test file, on
+  my World-panel line that pushed "Program the world" off a 900 px window (fixed in `0fb2d31`)
+  and on check-bundle's "checkout untouched" while closeout-b committed mid-run. Open note: a
+  run from a worktree in `/private/tmp` showed `scripts/build-plugins.sh --check` reproduces
+  the committed wasm only from a checkout under `$HOME` (1-byte differences elsewhere, no
+  machine path leaked; not investigated further). Never share a target dir between the
+  checkout and a worktree: cargo's package-relative dep-info then reuses test binaries with
+  the worktree's `CARGO_MANIFEST_DIR` baked in.
