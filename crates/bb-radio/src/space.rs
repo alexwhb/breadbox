@@ -366,8 +366,18 @@ impl RadioSpace {
 
     // ================================================================ time
 
-    /// Earliest time anything radio needs attention.
+    /// Earliest time anything radio needs attention. A module's station with undelivered
+    /// network events (e.g. an IPv4 literal resolved without a packet) needs it now, so an
+    /// event-driven host polls the modem right away.
     pub fn next_wake(&self) -> Option<SimTime> {
+        let pending = self.slots.iter().any(|s| match &s.module {
+            Module::Esp01(m) => self.net.has_events(m.station),
+            Module::Host(h) => self.net.has_events(h.station),
+            _ => false,
+        });
+        if pending {
+            return Some(self.now);
+        }
         let mut t = [
             self.net.next_event_time(),
             self.ble.next_event_time(),

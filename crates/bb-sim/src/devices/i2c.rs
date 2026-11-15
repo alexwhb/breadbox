@@ -197,6 +197,37 @@ impl<R: I2cRegs> I2cSlave<R> {
     }
 }
 
+impl<R: I2cRegs> I2cSlave<R> {
+    /// One transaction-level transfer from an API-level master (ESP32 / Pico `Wire`): a write
+    /// phase (if any bytes), then a read phase of `read` bytes. `None` = address NACK.
+    pub fn transfer(
+        &mut self,
+        ctx: &mut dyn DeviceCtx,
+        addr: u8,
+        write: &[u8],
+        read: usize,
+    ) -> Option<Vec<u8>> {
+        if addr != self.regs.address() {
+            return None;
+        }
+        self.transactions += 1;
+        if !write.is_empty() || read == 0 {
+            self.regs.start(false, ctx);
+            for (i, b) in write.iter().enumerate() {
+                self.regs.write(*b, i, ctx);
+            }
+            if read == 0 {
+                self.regs.stop(ctx);
+                return Some(Vec::new());
+            }
+        }
+        self.regs.start(true, ctx);
+        let out = (0..read).map(|_| self.regs.read(ctx)).collect();
+        self.regs.stop(ctx);
+        Some(out)
+    }
+}
+
 fn parse_addr(s: &str, default: u8) -> u8 {
     let t = s.trim().trim_start_matches("0x").trim_start_matches("0X");
     u8::from_str_radix(t, 16).unwrap_or(default)
@@ -415,6 +446,15 @@ impl Bme280Dev {
 impl Device for Bme280Dev {
     fn kind(&self) -> &str {
         "bme280"
+    }
+    fn i2c_transfer(
+        &mut self,
+        ctx: &mut dyn DeviceCtx,
+        addr: u8,
+        write: &[u8],
+        read: usize,
+    ) -> Option<Vec<u8>> {
+        self.i2c.transfer(ctx, addr, write, read)
     }
     fn on_start(&mut self, ctx: &mut dyn DeviceCtx) {
         self.i2c.start(ctx, 3.3);
@@ -636,6 +676,15 @@ impl Ssd1306Dev {
 impl Device for Ssd1306Dev {
     fn kind(&self) -> &str {
         "ssd1306"
+    }
+    fn i2c_transfer(
+        &mut self,
+        ctx: &mut dyn DeviceCtx,
+        addr: u8,
+        write: &[u8],
+        read: usize,
+    ) -> Option<Vec<u8>> {
+        self.i2c.transfer(ctx, addr, write, read)
     }
     fn on_start(&mut self, ctx: &mut dyn DeviceCtx) {
         self.i2c.start(ctx, 3.3);

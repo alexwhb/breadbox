@@ -91,23 +91,41 @@ impl Bench {
             if self.mcus[mi].paused.is_some() {
                 continue;
             }
-            let m = &mut self.mcus[mi];
-            if m.core.now() >= target {
+            if self.mcus[mi].core.now() >= target {
                 continue;
             }
-            // API-level boards cannot stop for a sample: answer from the current solution
-            let api_level = m.core.engine() == "API-level";
-            let mut io = AdcIoBorrow {
-                inline: (inline_ok && m.pending.is_empty()) || api_level,
-                nets: &self.nets,
-                session: self.analog.session.as_ref(),
-                pins: &m.pins,
-                answered: 0,
-                services: &mut self.services,
-                part: &m.spec.part,
+            // API-level boards cannot stop for a sample: answer from the current solution; they
+            // also reach bench devices transaction by transaction (I²C, SPI)
+            let api_level = self.mcus[mi].core.engine() == "API-level";
+            let stop = if api_level {
+                let mut core: Box<dyn crate::mcu::McuCore> =
+                    std::mem::replace(&mut self.mcus[mi].core, Box::new(crate::mcu::Detached));
+                let mut io = BenchIo {
+                    bench: self,
+                    mi,
+                    answered: 0,
+                };
+                let stop = core.run_until(target, &mut io);
+                let answered = io.answered;
+                self.mcus[mi].core = core;
+                self.stats.adc_answered_inline += answered;
+                stop
+            } else {
+                let m = &mut self.mcus[mi];
+                let mut io = AdcIoBorrow {
+                    inline: inline_ok && m.pending.is_empty(),
+                    nets: &self.nets,
+                    session: self.analog.session.as_ref(),
+                    pins: &m.pins,
+                    answered: 0,
+                    services: &mut self.services,
+                    part: &m.spec.part,
+                };
+                let stop = m.core.run_until(target, &mut io);
+                self.stats.adc_answered_inline += io.answered;
+                stop
             };
-            let stop = m.core.run_until(target, &mut io);
-            self.stats.adc_answered_inline += io.answered;
+            let m = &mut self.mcus[mi];
             match stop {
                 McuStop::Reached => {}
                 McuStop::PinChange => {
@@ -178,6 +196,11 @@ impl Bench {
             if self.services[i].next_wake().is_some_and(|w| w <= t_sync) {
                 self.services[i].step(t_sync);
             }
+        }
+        self.service_outputs();
+        if self.next_wake_time().is_some_and(|w| w <= t_sync) {
+            // a service woke a device right now (radio frames to start sending)
+            self.process_due(t_sync)?;
         }
         self.after_sync(t_sync)?;
         Ok(())
@@ -443,9 +466,20 @@ impl Bench {
         let start = self.routed.min(self.events.len());
         for ev in &self.events[start..] {
             if let bb_core::DeviceEvent::Annotation { channel, text } = &ev.event {
-                // annotations go to the serial monitors (RF-8)
-                for m in self.mcus.iter_mut() {
-                    m.serial.annotation(ev.time, channel, text);
+                // annotations go to the serial monitor of the MCU wired to the source (RF-8)
+                match self.routes.get(&ev.source) {
+                    Some(mcus) => {
+                        for &mi in mcus {
+                            if let Some(m) = self.mcus.get_mut(mi) {
+                                m.serial.annotation(ev.time, channel, text);
+                            }
+                        }
+                    }
+                    None => {
+                        for m in self.mcus.iter_mut() {
+                            m.serial.annotation(ev.time, channel, text);
+                        }
+                    }
                 }
             }
         }
@@ -589,5 +623,76 @@ impl crate::mcu::McuIo for AdcIoBorrow<'_> {
         self.services
             .iter_mut()
             .find_map(|s| s.host_service(self.part, channel, request, at))
+    }
+}
+
+/// I/O for an API-level board with the whole bench at hand (its core is detached meanwhile).
+struct BenchIo<'a> {
+    bench: &'a mut Bench,
+    mi: usize,
+    answered: u64,
+}
+
+impl BenchIo<'_> {
+    fn net_of(&self, pin: usize) -> Option<bb_circuit::NetId> {
+        self.bench.mcus[self.mi].pins.get(pin)?.net
+    }
+    /// Devices with a pin on `net`.
+    fn devices_on(&self, net: bb_circuit::NetId) -> Vec<usize> {
+        (0..self.bench.devices.len())
+            .filter(|&d| self.bench.devices[d].nets.contains(&Some(net)))
+            .collect()
+    }
+}
+
+impl crate::mcu::McuIo for BenchIo<'_> {
+    fn adc_sample(&mut self, pin: usize, _time: SimTime) -> Option<f64> {
+        let net = self.net_of(pin)?;
+        if matches!(self.bench.nets[net.0].kind, NetKind::Isolated) {
+            return None;
+        }
+        self.answered += 1;
+        Some(self.bench.net_voltage(net))
+    }
+    fn service(&mut self, channel: u8, request: &[u8], at: SimTime) -> Option<Vec<u8>> {
+        let part = self.bench.mcus[self.mi].spec.part.clone();
+        self.bench
+            .services
+            .iter_mut()
+            .find_map(|s| s.host_service(&part, channel, request, at))
+    }
+    fn i2c(
+        &mut self,
+        sda: usize,
+        addr: u8,
+        write: &[u8],
+        read: usize,
+        at: SimTime,
+    ) -> Option<Vec<u8>> {
+        let net = self.net_of(sda)?;
+        let at = at.max(self.bench.time);
+        for d in self.devices_on(net) {
+            let r = self
+                .bench
+                .with_device(d, at, |dev, ctx| dev.i2c_transfer(ctx, addr, write, read));
+            if r.is_some() {
+                return r;
+            }
+        }
+        None
+    }
+    fn spi(&mut self, sck: usize, mosi: &[u8], at: SimTime) -> Option<Vec<u8>> {
+        let net = self.net_of(sck)?;
+        let at = at.max(self.bench.time);
+        let mut out = None;
+        for d in self.devices_on(net) {
+            let r = self
+                .bench
+                .with_device(d, at, |dev, ctx| dev.spi_transfer(ctx, mosi));
+            if out.is_none() {
+                out = r;
+            }
+        }
+        out
     }
 }

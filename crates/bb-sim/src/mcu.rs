@@ -61,6 +61,91 @@ pub trait McuIo {
         let _ = (channel, request, at);
         None
     }
+    /// Transaction-level I²C from an API-level board to the bench devices on the net of its
+    /// SDA pin `sda`: write `write`, then read `read` bytes. `None` = no device acknowledged.
+    fn i2c(
+        &mut self,
+        sda: usize,
+        addr: u8,
+        write: &[u8],
+        read: usize,
+        at: SimTime,
+    ) -> Option<Vec<u8>> {
+        let _ = (sda, addr, write, read, at);
+        None
+    }
+    /// Transaction-level SPI from an API-level board to the selected device on the net of its
+    /// SCK pin `sck`. `None` = nothing selected (MISO floats high).
+    fn spi(&mut self, sck: usize, mosi: &[u8], at: SimTime) -> Option<Vec<u8>> {
+        let _ = (sck, mosi, at);
+        None
+    }
+}
+
+/// Placeholder core while the real one runs with mutable access to the bench (zero-sized: no
+/// allocation).
+pub(crate) struct Detached;
+
+impl McuCore for Detached {
+    fn label(&self) -> String {
+        String::new()
+    }
+    fn engine(&self) -> &'static str {
+        "detached"
+    }
+    fn now(&self) -> SimTime {
+        SimTime::ZERO
+    }
+    fn pin_names(&self) -> Vec<String> {
+        Vec::new()
+    }
+    fn pin_index(&self, _name: &str) -> Option<usize> {
+        None
+    }
+    fn run_until(&mut self, _t: SimTime, _io: &mut dyn McuIo) -> McuStop {
+        McuStop::Reached
+    }
+    fn take_pin_events(&mut self) -> Vec<McuPinEvent> {
+        Vec::new()
+    }
+    fn pin_drive(&self, _pin: usize) -> LogicDrive {
+        LogicDrive::Input { pullup: false }
+    }
+    fn set_input(&mut self, _pin: usize, _level: Option<bool>) {}
+    fn schedule_input(&mut self, _pin: usize, _level: Option<bool>, _at: SimTime) {}
+    fn set_analog(&mut self, _pin: usize, _volts: f64) {}
+    fn supply_adc(&mut self, _volts: f64) {}
+    fn set_vcc(&mut self, _volts: f64) {}
+    fn set_aref(&mut self, _volts: f64) {}
+    fn set_reset_line(&mut self, _low: bool) {}
+    fn reset(&mut self) {}
+    fn reset_count(&self) -> u64 {
+        0
+    }
+    fn last_reset(&self) -> String {
+        String::new()
+    }
+    fn in_reset(&self) -> bool {
+        false
+    }
+    fn set_temperature(&mut self, _c: f64) {}
+    fn flash(&mut self, _image: &FirmwareImage) -> Result<(), String> {
+        Err("detached".into())
+    }
+    fn take_serial(&mut self) -> Vec<(usize, SimTime, u8)> {
+        Vec::new()
+    }
+    fn take_log(&mut self) -> Vec<(SimTime, String)> {
+        Vec::new()
+    }
+    fn serial_inject(&mut self, _port: usize, _bytes: &[u8]) {}
+    fn serial_tx_pin(&self, _port: usize) -> Option<usize> {
+        None
+    }
+    fn set_serial_waveform(&mut self, _port: usize, _on: bool) {}
+    fn serial_baud(&self, _port: usize) -> f64 {
+        0.0
+    }
 }
 
 /// One MCU (cycle-accurate or API-level).

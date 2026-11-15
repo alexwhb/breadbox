@@ -32,15 +32,17 @@ pub mod handle;
 pub mod host;
 pub mod instruments;
 pub mod mcu;
+pub mod radio;
 mod sched;
 pub mod serial;
 pub mod telemetry;
 
-pub use bench::{Bench, BenchOptions, BenchStats, Service};
+pub use bench::{Bench, BenchOptions, BenchStats, Service, ServiceFactory, ServiceNote};
 pub use devices::{DeviceRegistry, Factory};
 pub use handle::{Command, DebugCommand, SimHandle, Speed};
-pub use host::{HostMcu, RadioService};
+pub use host::HostMcu;
 pub use instruments::{MeterReading, ProbeReading, ScopeFrame, Trigger};
+pub use radio::{RadioCommand, RadioService, RadioTelemetry};
 pub use serial::{LineKind, SerialLine};
 pub use telemetry::{McuTelemetry, PartTelemetry, PowerReport, RunStatus, Telemetry};
 

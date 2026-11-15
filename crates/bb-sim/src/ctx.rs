@@ -133,6 +133,9 @@ impl DeviceCtx for DevCtx<'_> {
     fn rng(&mut self) -> &mut Rng {
         &mut self.bench.devices[self.dev].rng
     }
+    fn service(&mut self, name: &str) -> Option<&mut dyn std::any::Any> {
+        self.bench.service_mut(name)
+    }
     fn emit(&mut self, ev: DeviceEvent) {
         let source = self.bench.devices[self.dev].spec.reference.clone();
         match &ev {

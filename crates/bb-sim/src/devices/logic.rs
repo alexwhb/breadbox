@@ -80,6 +80,21 @@ impl Device for Hc595 {
     fn kind(&self) -> &str {
         "hc595"
     }
+    /// API-level SPI master (`SPI.transfer`) clocking bytes MSB first into the shift register;
+    /// the latch (STCP) is still a pin edge. Not selected while MR is held low.
+    fn spi_transfer(&mut self, ctx: &mut dyn DeviceCtx, mosi: &[u8]) -> Option<Vec<u8>> {
+        let vcc = supply(ctx, self.vcc);
+        if ok(self.mr) && !logic(ctx, self.mr, vcc) {
+            return None;
+        }
+        let mut miso = Vec::with_capacity(mosi.len());
+        for b in mosi {
+            miso.push(self.shift);
+            self.shift = *b;
+        }
+        self.outputs(ctx);
+        Some(miso)
+    }
     fn on_start(&mut self, ctx: &mut dyn DeviceCtx) {
         let vcc = supply(ctx, self.vcc);
         for p in [self.mr, self.shcp, self.stcp, self.oe] {

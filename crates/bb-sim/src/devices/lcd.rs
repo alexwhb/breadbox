@@ -433,6 +433,15 @@ impl Device for I2cLcd {
     fn kind(&self) -> &str {
         "hd44780_i2c"
     }
+    fn i2c_transfer(
+        &mut self,
+        ctx: &mut dyn DeviceCtx,
+        addr: u8,
+        write: &[u8],
+        read: usize,
+    ) -> Option<Vec<u8>> {
+        self.i2c.transfer(ctx, addr, write, read)
+    }
     fn on_start(&mut self, ctx: &mut dyn DeviceCtx) {
         let vcc = if ok(self.vcc) {
             ctx.pin_voltage(self.vcc)

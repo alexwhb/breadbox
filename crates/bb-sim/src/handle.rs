@@ -117,7 +117,27 @@ pub enum Command {
     UpdateProject(Box<Project>),
     RepairAll,
     Debug(DebugCommand),
+    /// Radios panel / virtual phone / MQTT explorer (RF-3, RF-6, RF-7).
+    Radio(crate::radio::RadioCommand),
+    /// Packet-log export (RF-4): the bytes go to `reply` (`pcapng` or `csv`).
+    ExportPacketLog {
+        format: String,
+        reply: Sender<Vec<u8>>,
+    },
+    /// Arbitrary access to the bench on the engine thread (plugin hosts, lessons, tests): the
+    /// closure runs between scheduler slices.
+    With(BenchFn),
     Shutdown,
+}
+
+/// A closure run on the engine thread with the bench (`Command::With`).
+#[derive(Clone)]
+pub struct BenchFn(pub Arc<dyn Fn(&mut Bench) + Send + Sync>);
+
+impl std::fmt::Debug for BenchFn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("BenchFn")
+    }
 }
 
 /// Handle to a bench running on its own thread.
@@ -447,6 +467,27 @@ impl Engine {
             }
             Command::RepairAll => self.bench.repair_all(),
             Command::Debug(d) => self.debug(d),
+            Command::Radio(rc) => {
+                let r = self.bench.radio_command(rc);
+                // keep the project's radio settings in sync for a later full reset
+                if let Some(svc) = self.bench.radio() {
+                    svc.project_settings().store(&mut self.project);
+                }
+                r
+            }
+            Command::ExportPacketLog { format, reply } => {
+                let bytes = match self.bench.radio() {
+                    Some(svc) if format == "csv" => svc.export_csv().into_bytes(),
+                    Some(svc) => svc.export_pcapng(),
+                    None => Vec::new(),
+                };
+                let _ = reply.send(bytes);
+                Ok(())
+            }
+            Command::With(f) => {
+                (f.0)(&mut self.bench);
+                Ok(())
+            }
             Command::Shutdown => Ok(()),
         };
         if let Err(e) = r {

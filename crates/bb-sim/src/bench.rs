@@ -44,6 +44,30 @@ pub trait Service: Send {
         let _ = (part, channel, request, at);
         None
     }
+    /// Device wake-ups the service needs (`(part id, time, token)` → `Device::on_wake`), e.g.
+    /// a radio module whose modem produced UART frames while the service stepped.
+    fn take_device_wakes(&mut self) -> Vec<(String, SimTime, u64)> {
+        Vec::new()
+    }
+    /// Serial-monitor annotations (RF-8) produced since the last call.
+    fn take_notes(&mut self) -> Vec<ServiceNote> {
+        Vec::new()
+    }
+}
+
+/// An annotation from a service (`wifi: AT+CWJAP="SIM-AP" → OK …`). The bench shows it in the
+/// serial monitor of the MCU(s) wired to `part` (all MCUs when unknown) and emits it as a
+/// [`crate::SimEvent`] from `source`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ServiceNote {
+    pub time: SimTime,
+    /// Part id of the radio (module or API-level board), if known.
+    pub part: Option<String>,
+    /// Designator shown as the event source (`U2`).
+    pub source: String,
+    /// `wifi`, `mqtt`, `net`, `ble`, `lora`.
+    pub channel: String,
+    pub text: String,
 }
 
 /// Creates a service for a new bench (called by [`Bench::new`], so services survive a full
@@ -68,7 +92,8 @@ pub struct BenchOptions {
     /// Host-compiled sketch executables for API-level boards (ESP32 / Pico) by part id
     /// (see [`crate::firmware::compile_host_project`]).
     pub host_firmware: HashMap<String, std::path::PathBuf>,
-    /// Services created with every bench (radio space, plugin hosts).
+    /// Services created with every bench. The default holds the radio space
+    /// ([`crate::radio::service_factory`]); plugin hosts add theirs.
     pub services: Vec<ServiceFactory>,
 }
 
@@ -82,7 +107,7 @@ impl Default for BenchOptions {
             registry: Arc::new(DeviceRegistry::builtin()),
             firmware: HashMap::new(),
             host_firmware: HashMap::new(),
-            services: Vec::new(),
+            services: vec![crate::radio::service_factory()],
         }
     }
 }
@@ -264,6 +289,8 @@ pub struct Bench {
     pub(crate) loads: Vec<bb_circuit::netlist::Load>,
     pub(crate) erc_cache: Option<(Vec<bb_circuit::ErcItem>, Vec<bb_circuit::ErcItem>)>,
     pub(crate) paused: Option<String>,
+    /// Designator → MCUs whose I/O pins share a net with that part (annotation routing).
+    pub(crate) routes: HashMap<String, Vec<usize>>,
     pub stats: BenchStats,
 }
 
@@ -317,6 +344,7 @@ impl Bench {
             erc_cache: None,
             host_firmware: opts.host_firmware.clone(),
             paused: None,
+            routes: HashMap::new(),
             stats: BenchStats::default(),
             project,
         };
@@ -650,7 +678,97 @@ impl Bench {
                 .is_some_and(|n| !matches!(self.nets[n.0].kind, NetKind::Isolated));
             self.mcus[mi].core.set_serial_waveform(0, wired);
         }
+        self.compute_routes();
         Ok(())
+    }
+
+    /// Which MCU(s) a part's annotations belong to: those sharing a signal net with it.
+    fn compute_routes(&mut self) {
+        let mut routes: HashMap<String, Vec<usize>> = HashMap::new();
+        let supply: Vec<NetId> = self.mcus.iter().filter_map(|m| m.spec.vcc_net).collect();
+        for (mi, m) in self.mcus.iter().enumerate() {
+            routes.entry(m.spec.reference.clone()).or_default().push(mi);
+        }
+        for d in &self.devices {
+            let roles = self.lib.get(&d.spec.def);
+            let mut nets = Vec::new();
+            for p in &d.spec.pins {
+                let power = roles
+                    .and_then(|def| def.pins.iter().find(|x| x.id == p.pin))
+                    .is_some_and(|x| {
+                        matches!(
+                            x.role,
+                            bb_circuit::part::PinRole::Ground
+                                | bb_circuit::part::PinRole::PowerIn
+                                | bb_circuit::part::PinRole::PowerOut
+                        )
+                    });
+                if let Some(n) = p.net
+                    && !power
+                    && !supply.contains(&n)
+                    && !matches!(&self.nets[n.0].kind, NetKind::Analog(name) if name == "0")
+                {
+                    nets.push(n);
+                }
+            }
+            let mcus: Vec<usize> = self
+                .mcus
+                .iter()
+                .enumerate()
+                .filter(|(_, m)| {
+                    m.pins
+                        .iter()
+                        .any(|p| p.net.is_some_and(|n| nets.contains(&n)))
+                })
+                .map(|(i, _)| i)
+                .collect();
+            if !mcus.is_empty() {
+                routes.insert(d.spec.reference.clone(), mcus);
+            }
+        }
+        self.routes = routes;
+    }
+
+    /// Schedules `Device::on_wake(token)` for the device of `part` at `at` (services).
+    pub(crate) fn wake_part(&mut self, part: &str, at: SimTime, token: u64) {
+        let Some(dev) = self.devices.iter().position(|d| d.spec.part == part) else {
+            return;
+        };
+        let generation = *self.devices[dev].token_gen.entry(token).or_insert(0);
+        self.push_wake(
+            at.max(self.time),
+            WakeKind::Device {
+                dev,
+                token,
+                generation,
+            },
+        );
+    }
+
+    /// Delivers service wake-ups and annotations.
+    pub(crate) fn service_outputs(&mut self) {
+        for i in 0..self.services.len() {
+            let wakes = self.services[i].take_device_wakes();
+            for (part, at, token) in wakes {
+                self.wake_part(&part, at, token);
+            }
+            for n in self.services[i].take_notes() {
+                let source = n
+                    .part
+                    .as_ref()
+                    .and_then(|p| self.project.part(p))
+                    .map(|p| p.reference.clone())
+                    .unwrap_or(n.source);
+                self.events.push(SimEvent {
+                    time: n.time,
+                    source,
+                    event: DeviceEvent::Annotation {
+                        channel: n.channel,
+                        text: n.text,
+                    },
+                });
+            }
+        }
     }
 
     fn watch_mcu_inputs(&mut self, mi: usize) {
@@ -880,6 +998,25 @@ impl Bench {
             .iter_mut()
             .find(|s| s.name() == name)
             .map(|s| s.as_any())
+    }
+
+    /// The bench's radio space (RF-*), if it has one.
+    pub fn radio(&mut self) -> Option<&mut crate::radio::RadioService> {
+        self.service_mut("radio")?
+            .downcast_mut::<crate::radio::RadioService>()
+    }
+
+    /// Applies a Radios-panel / phone command now.
+    pub fn radio_command(&mut self, cmd: crate::radio::RadioCommand) -> Result<(), SimError> {
+        let t = self.time;
+        let r = match self.radio() {
+            Some(svc) => svc
+                .command(cmd, t)
+                .map_err(|e| SimError::Build(format!("radio: {e}"))),
+            None => Err(SimError::NotFound("radio space".into())),
+        };
+        self.service_outputs();
+        r
     }
 
     pub(crate) fn log(&mut self, level: LogLevel, source: &str, text: &str) {

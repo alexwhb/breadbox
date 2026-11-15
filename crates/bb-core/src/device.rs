@@ -58,6 +58,12 @@ pub trait DeviceCtx {
     fn rng(&mut self) -> &mut Rng;
     /// Reports something to the user / the engine.
     fn emit(&mut self, ev: DeviceEvent);
+    /// A bench service by name (`"radio"` → `bb_sim::RadioService`, plugin hosts), for devices
+    /// that bridge pins to a shared subsystem (UART radio modules). Downcast with
+    /// `Any::downcast_mut`. `None` when the bench has no such service.
+    fn service(&mut self, _name: &str) -> Option<&mut dyn std::any::Any> {
+        None
+    }
 }
 
 /// A simulated behavioural part.
@@ -88,6 +94,24 @@ pub trait Device: Send {
         serde_json::Value::Null
     }
     fn load_state(&mut self, _s: &serde_json::Value) {}
+    /// Transaction-level I²C for API-level masters (ESP32 / Pico `Wire`): `write` bytes to
+    /// 7-bit `addr`, then read `read` bytes. `None` = not this device's address (NACK);
+    /// `Some(bytes)` (empty for a pure write) = acknowledged. Bit-level masters (AVR TWI) talk to
+    /// the device through its pins instead.
+    fn i2c_transfer(
+        &mut self,
+        _ctx: &mut dyn DeviceCtx,
+        _addr: u8,
+        _write: &[u8],
+        _read: usize,
+    ) -> Option<Vec<u8>> {
+        None
+    }
+    /// Transaction-level SPI for API-level masters: full-duplex exchange of `mosi`. The device
+    /// checks its own chip-select pin; `None` = not selected / not an SPI device.
+    fn spi_transfer(&mut self, _ctx: &mut dyn DeviceCtx, _mosi: &[u8]) -> Option<Vec<u8>> {
+        None
+    }
 }
 
 /// Interaction with a part on the bench.

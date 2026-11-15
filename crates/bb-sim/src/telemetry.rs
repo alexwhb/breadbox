@@ -104,6 +104,9 @@ pub struct Telemetry {
     /// `ERC 1 warning · DRC clean`.
     pub erc_summary: String,
     pub stats: crate::bench::BenchStats,
+    /// Radios panel + virtual phone (RF-6, RF-7); `None` without radios on the bench.
+    #[serde(default)]
+    pub radio: Option<crate::radio::RadioTelemetry>,
 }
 
 impl Bench {
@@ -261,6 +264,10 @@ impl Bench {
             drc: drc_items,
             erc_summary,
             stats: self.stats,
+            radio: self
+                .radio()
+                .filter(|r| r.is_active())
+                .map(|r| r.telemetry()),
         }
     }
 

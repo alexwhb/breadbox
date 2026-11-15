@@ -8,12 +8,14 @@ mod lcd;
 mod logic;
 mod motion;
 mod onewire;
+mod radio;
 mod uart;
 mod ws2812;
 
 pub use i2c::{I2cRegs, I2cSlave};
 pub use lcd::Hd44780;
-pub use uart::{AtStub, UartPort};
+pub use radio::RadioModule;
+pub use uart::{AtFlavor, AtStub, UartPort};
 
 use bb_circuit::PropValue;
 use bb_circuit::netlist::DeviceSpec;
@@ -42,6 +44,8 @@ impl DeviceRegistry {
         lcd::register(&mut r);
         ws2812::register(&mut r);
         uart::register(&mut r);
+        // real modems from the bench's radio space (replace the AT responders)
+        radio::register(&mut r);
         r
     }
     pub fn register(&mut self, id: &str, f: Factory) {

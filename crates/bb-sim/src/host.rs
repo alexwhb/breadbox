@@ -13,17 +13,16 @@
 //! * EN / RUN held low and supply brown-out freeze the board; release restarts the sketch.
 //!   Board time then runs behind bench time by the time spent in reset (`offset`).
 
-use crate::bench::Service;
 use crate::mcu::{LogicDrive, McuCore, McuIo, McuPinEvent, McuStop};
 use bb_avr::FirmwareImage;
 use bb_core::SimTime;
 use bb_firmware::host::{
-    HostBoard, HostBoardSpec, HostConfig, HostEvent, HostIo, HostKind, HostPinState, HostStop, Pull,
+    HostBoard, HostBoardSpec, HostConfig, HostEvent, HostIo, HostKind, HostPinState, HostStop,
+    I2cStatus, Pull,
 };
-use bb_radio::geo::Pos;
-use bb_radio::{DeviceId, RadioSpace};
-use std::any::Any;
+use bb_radio::uart::{UartConfig, UartDecoder, UartEncoder};
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::path::Path;
 
 /// Supply below which an API-level board stops (brown-out), and above which it restarts.
@@ -49,6 +48,18 @@ impl Pwm {
     }
 }
 
+/// A hardware UART other than the USB serial (`Serial1`, `Serial2`) on its default pins: bytes
+/// the sketch writes become a real waveform on TX; edges on RX are decoded into its input.
+struct PinUart {
+    port: u8,
+    rx: Option<usize>,
+    tx: Option<usize>,
+    enc: UartEncoder,
+    dec: UartDecoder,
+    baud: u32,
+    used: bool,
+}
+
 /// An ESP32 / Pico sketch on the bench.
 pub struct HostMcu {
     board: HostBoard,
@@ -69,6 +80,13 @@ pub struct HostMcu {
     dead: Option<String>,
     resets: u64,
     last_reset: String,
+    uarts: Vec<PinUart>,
+    /// Scheduled level changes (UART bits) by bench time.
+    edges: VecDeque<(SimTime, usize, bool)>,
+    /// Bytes of ports ≥ 1 for `take_serial` (UI).
+    serial_out: Vec<(usize, SimTime, u8)>,
+    sda: Option<usize>,
+    sck: Option<usize>,
 }
 
 impl HostMcu {
@@ -84,6 +102,31 @@ impl HostMcu {
         let gpio: Vec<u8> = spec.pins.iter().map(|p| p.gpio).collect();
         let by_gpio = gpio.iter().enumerate().map(|(i, g)| (*g, i)).collect();
         let n = names.len();
+        let idx = |g: u8| gpio.iter().position(|x| *x == g);
+        // UART pins: ESP32 port p ↔ spec.serial[p]; on the Pico port 0 is USB and port p ≥ 1 is
+        // spec.serial[p - 1]
+        let mut uarts = Vec::new();
+        for (i, (rx, tx)) in spec.serial.iter().enumerate() {
+            let port = match kind {
+                HostKind::Pico => i as u8 + 1,
+                HostKind::Esp32DevKit => i as u8,
+            };
+            if port == 0 {
+                continue;
+            }
+            let cfg = UartConfig::new(115_200);
+            uarts.push(PinUart {
+                port,
+                rx: idx(*rx),
+                tx: idx(*tx),
+                enc: UartEncoder::new(cfg),
+                dec: UartDecoder::new(cfg),
+                baud: 115_200,
+                used: false,
+            });
+        }
+        let sda = idx(spec.sda);
+        let sck = idx(spec.sck);
         Ok(HostMcu {
             board: hb,
             spec,
@@ -101,7 +144,84 @@ impl HostMcu {
             dead: None,
             resets: 0,
             last_reset: "power-on".into(),
+            uarts,
+            edges: VecDeque::new(),
+            serial_out: Vec::new(),
+            sda,
+            sck,
         })
+    }
+
+    /// Serial1/2 output → TX waveforms; follows the configured baud.
+    fn pump_uarts(&mut self) {
+        let off = self.offset;
+        for u in 0..self.uarts.len() {
+            let port = self.uarts[u].port;
+            if let Some(b) = self.board.serial_baud(port)
+                && b != self.uarts[u].baud
+                && b > 0
+            {
+                let cfg = UartConfig::new(b);
+                self.uarts[u].baud = b;
+                self.uarts[u].enc = UartEncoder::new(cfg);
+                if !self.uarts[u].dec.busy() {
+                    self.uarts[u].dec.set_config(cfg);
+                }
+            }
+            let bytes = self.board.take_serial(port);
+            if bytes.is_empty() {
+                continue;
+            }
+            let frame = SimTime::from_secs_f64(10.0 / self.uarts[u].baud.max(1) as f64);
+            for (t, b) in bytes {
+                let t = t + off;
+                self.serial_out.push((port as usize, t, b));
+                let Some(tx) = self.uarts[u].tx else { continue };
+                if !self.uarts[u].used {
+                    self.uarts[u].used = true;
+                    let start = t.saturating_sub(frame);
+                    self.set_drive(tx, LogicDrive::Output { high: true }, start);
+                }
+                for (et, level) in self.uarts[u].enc.encode(&[b], t.saturating_sub(frame)) {
+                    self.edges.push_back((et, tx, level));
+                }
+            }
+        }
+        self.edges.make_contiguous().sort_by_key(|e| e.0);
+    }
+
+    /// Delivers decoded Serial1/2 input to the sketch up to `now`.
+    fn uart_input(&mut self, now: SimTime) {
+        for u in 0..self.uarts.len() {
+            let bytes: Vec<u8> = self.uarts[u]
+                .dec
+                .poll(now)
+                .into_iter()
+                .filter(|b| b.ok())
+                .map(|b| b.data as u8)
+                .collect();
+            if !bytes.is_empty() {
+                let port = self.uarts[u].port;
+                self.board.serial_inject(port, &bytes);
+            }
+        }
+    }
+
+    fn next_uart_decision(&self) -> Option<SimTime> {
+        self.uarts
+            .iter()
+            .filter_map(|u| u.dec.next_decision())
+            .min()
+    }
+
+    fn uart_rx_edge(&mut self, pin: usize, level: Option<bool>, at: SimTime) {
+        for u in self.uarts.iter_mut() {
+            if u.rx == Some(pin)
+                && let Some(l) = level
+            {
+                u.dec.edge(at, l);
+            }
+        }
     }
 
     /// The board catalogue entry (pins, ADC, PWM, buses).
@@ -192,12 +312,25 @@ impl HostMcu {
     }
 
     fn next_pwm_edge(&self) -> Option<SimTime> {
-        self.pwm.iter().flatten().map(Pwm::next_edge).min()
+        let p = self.pwm.iter().flatten().map(Pwm::next_edge).min();
+        let e = self.edges.front().map(|e| e.0);
+        match (p, e) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        }
     }
 
     /// Emits every PWM edge due by `now`. Returns whether any was emitted.
     fn pwm_due(&mut self, now: SimTime) -> bool {
         let mut any = false;
+        while let Some(&(t, pin, level)) = self.edges.front() {
+            if t > now {
+                break;
+            }
+            self.edges.pop_front();
+            self.set_drive(pin, LogicDrive::Output { high: level }, t);
+            any = true;
+        }
         for idx in 0..self.pwm.len() {
             while let Some(mut p) = self.pwm[idx] {
                 let e = p.next_edge();
@@ -251,6 +384,8 @@ struct HostIoAdapter<'a> {
     io: &'a mut dyn McuIo,
     by_gpio: &'a HashMap<u8, usize>,
     offset: SimTime,
+    sda: Option<usize>,
+    sck: Option<usize>,
 }
 
 impl HostIo for HostIoAdapter<'_> {
@@ -262,6 +397,26 @@ impl HostIo for HostIoAdapter<'_> {
         self.io
             .service(channel, request, at + self.offset)
             .unwrap_or_else(|| (-1i32).to_le_bytes().to_vec())
+    }
+    fn i2c_write(&mut self, bus: u8, addr: u8, data: &[u8], at: SimTime) -> I2cStatus {
+        let Some(sda) = self.sda.filter(|_| bus == 0) else {
+            return I2cStatus::AddrNack;
+        };
+        match self.io.i2c(sda, addr, data, 0, at + self.offset) {
+            Some(_) => I2cStatus::Ok,
+            None => I2cStatus::AddrNack,
+        }
+    }
+    fn i2c_read(&mut self, bus: u8, addr: u8, len: usize, at: SimTime) -> Option<Vec<u8>> {
+        let sda = self.sda.filter(|_| bus == 0)?;
+        self.io.i2c(sda, addr, &[], len, at + self.offset)
+    }
+    fn spi_transfer(&mut self, bus: u8, data: &[u8], at: SimTime) -> Vec<u8> {
+        let r = match self.sck.filter(|_| bus == 0) {
+            Some(sck) => self.io.spi(sck, data, at + self.offset),
+            None => None,
+        };
+        r.unwrap_or_else(|| vec![0xff; data.len()])
     }
 }
 
@@ -296,25 +451,36 @@ impl McuCore for HostMcu {
                 };
             }
             let now = self.bench_now();
+            self.uart_input(now);
             if self.pwm_due(now) {
                 return McuStop::PinChange;
             }
             if now >= t {
                 return McuStop::Reached;
             }
-            let run_to = self.next_pwm_edge().map_or(t, |e| e.min(t));
+            let mut run_to = self.next_pwm_edge().map_or(t, |e| e.min(t));
+            if let Some(d) = self.next_uart_decision()
+                && d > now
+            {
+                run_to = run_to.min(d);
+            }
             let stop = {
                 let mut a = HostIoAdapter {
                     io: &mut *io,
                     by_gpio: &self.by_gpio,
                     offset: self.offset,
+                    sda: self.sda,
+                    sck: self.sck,
                 };
                 self.board.run(
                     run_to.saturating_sub(self.offset).max(self.board.time()),
                     &mut a,
                 )
             };
-            let changed = self.collect();
+            let mut changed = self.collect();
+            let before = self.events.len();
+            self.pump_uarts();
+            changed |= self.events.len() > before;
             match stop {
                 HostStop::ReachedTime | HostStop::Output => {
                     if changed {
@@ -371,11 +537,14 @@ impl McuCore for HostMcu {
             .unwrap_or(LogicDrive::Input { pullup: false })
     }
     fn set_input(&mut self, pin: usize, level: Option<bool>) {
+        let now = self.now();
+        self.uart_rx_edge(pin, level, now);
         if let Some(g) = self.gpio.get(pin) {
             self.board.set_pin_input(*g, level);
         }
     }
     fn schedule_input(&mut self, pin: usize, level: Option<bool>, at: SimTime) {
+        self.uart_rx_edge(pin, level, at);
         if let Some(g) = self.gpio.get(pin) {
             let at = at.saturating_sub(self.offset);
             if at <= self.board.time() {
@@ -443,12 +612,15 @@ impl McuCore for HostMcu {
         self.restart("power-on (flashed)", Some(exe))
     }
     fn take_serial(&mut self) -> Vec<(usize, SimTime, u8)> {
-        let mut out = Vec::new();
-        for port in 0..self.spec.serial.len().max(1) {
-            for (t, b) in self.board.take_serial(port as u8) {
-                out.push((port, t + self.offset, b));
-            }
-        }
+        // port 0 (USB serial) straight from the board; Serial1/2 were turned into pin waveforms
+        let mut out: Vec<(usize, SimTime, u8)> = self
+            .board
+            .take_serial(0)
+            .into_iter()
+            .map(|(t, b)| (0, t + self.offset, b))
+            .collect();
+        self.pump_uarts();
+        out.append(&mut self.serial_out);
         out
     }
     fn take_log(&mut self) -> Vec<(SimTime, String)> {
@@ -473,52 +645,4 @@ impl McuCore for HostMcu {
     }
 }
 
-/// The radio space as a bench service: steps the shared air/network and serves host boards'
-/// Wi-Fi / socket / BLE requests (`MCU-6` × `RF-*`).
-pub struct RadioService {
-    pub space: RadioSpace,
-    hosts: HashMap<String, DeviceId>,
-}
-
-impl RadioService {
-    pub fn new(space: RadioSpace) -> RadioService {
-        RadioService {
-            space,
-            hosts: HashMap::new(),
-        }
-    }
-    /// Gives the board part `part` (id, e.g. `"u1"`) a radio at `pos`.
-    pub fn add_host(&mut self, part: &str, label: &str, pos: Pos) -> DeviceId {
-        let id = self.space.add_host_radio(label, pos);
-        self.hosts.insert(part.to_string(), id);
-        id
-    }
-    pub fn host(&self, part: &str) -> Option<DeviceId> {
-        self.hosts.get(part).copied()
-    }
-}
-
-impl Service for RadioService {
-    fn name(&self) -> &str {
-        "radio"
-    }
-    fn next_wake(&self) -> Option<SimTime> {
-        self.space.next_wake()
-    }
-    fn step(&mut self, now: SimTime) {
-        self.space.advance(now);
-    }
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
-    fn host_service(
-        &mut self,
-        part: &str,
-        channel: u8,
-        request: &[u8],
-        at: SimTime,
-    ) -> Option<Vec<u8>> {
-        let id = *self.hosts.get(part)?;
-        Some(self.space.host_service(id, channel, request, at))
-    }
-}
+pub use crate::radio::RadioService;

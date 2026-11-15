@@ -103,10 +103,16 @@ fn finish(cur: &mut String, quoted: &mut bool) -> AtArg {
     }
 }
 
-/// Parses an `AT…` line (without CR/LF). `None` if it doesn't start with `AT`.
+/// Parses an `AT…` line (without CR/LF). `None` if it doesn't start with `AT`. Never panics,
+/// whatever bytes arrive.
 pub fn parse(line: &str) -> Option<AtCommand> {
     let t = line.trim_matches(|c: char| c == '\r' || c == '\n' || c == ' ');
-    if t.len() < 2 || !t[..2].eq_ignore_ascii_case("AT") {
+    // byte-wise: garbage from a resetting MCU may start with multi-byte characters
+    if !t
+        .as_bytes()
+        .get(..2)
+        .is_some_and(|p| p.eq_ignore_ascii_case(b"AT"))
+    {
         return None;
     }
     let rest = &t[2..];
@@ -159,5 +165,16 @@ mod tests {
         assert_eq!(parse("AT+X=1,,3").unwrap().args()[1], AtArg::Empty);
         assert!(parse("hello").is_none());
         assert_eq!(parse("at+gmr").unwrap().name, "+GMR");
+    }
+}
+
+#[cfg(test)]
+mod garbage_tests {
+    #[test]
+    fn non_ascii_garbage_is_not_a_command() {
+        assert!(super::parse("\u{fffd}AT").is_none());
+        assert!(super::parse("\u{fffd}").is_none());
+        assert!(super::parse("A").is_none());
+        assert!(super::parse("at+gmr").is_some());
     }
 }

@@ -87,9 +87,11 @@ fn esp32_weather_reads_the_dht22_device_and_publishes_over_mqtt() {
     let Some(mut opts) = build(&project, &dir) else {
         return;
     };
-    // the radio space as a bench service, re-created with every bench
+    // a custom radio space (replacing the default one from the project settings), re-created
+    // with every bench
     let dash = Arc::new(AtomicU64::new(0));
     let dash2 = dash.clone();
+    opts.services.clear();
     opts.services.push(Arc::new(move |_p: &Project| {
         let mut svc = RadioService::new(RadioSpace::default());
         svc.add_host("u1", "U1", Pos::new(2.0, 1.0));
