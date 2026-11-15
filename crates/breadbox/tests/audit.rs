@@ -767,3 +767,111 @@ fn serial_monitor_radio_annotations_toggle() {
     h.run_steps(3);
     assert!(has_label_containing(&h, "mqtt: PUB"), "shown again");
 }
+
+/// WORLD-6: the World panel's "Sensor noise & ADC quantization" switch picks realistic or
+/// ideal measurement for the whole bench — the panel says which, the running AVR's ADC follows
+/// at once, and the Inspector shows it on the board ("ADC"; sensors' "Noise" row:
+/// `inspector::tests`).
+#[test]
+fn world_noise_switch_picks_realistic_or_ideal_measurement() {
+    scratch();
+    let mut h = harness();
+    open_example(&mut h, "garden-node");
+    assert!(wait_for(&mut h, 30.0, |h| h
+        .state_mut()
+        .ctx
+        .sim()
+        .is_some()));
+    let live_realistic = |h: &mut H| {
+        h.state_mut()
+            .ctx
+            .sim()
+            .unwrap()
+            .with_bench(|b| {
+                b.mcu("u1")
+                    .and_then(|m| m.as_avr().map(|a| a.adc_model()))
+                    .map(|m| matches!(m, bb_avr::AdcModel::Realistic(_)))
+            })
+            .flatten()
+    };
+    // garden-node ships with realistic measurement
+    assert!(has_label_containing(
+        &h,
+        "Realistic: sensor noise + ADC offset"
+    ));
+    assert_eq!(live_realistic(&mut h), Some(true));
+    h.get_by_label("Sensor noise & ADC quantization").click();
+    h.run_steps(3);
+    assert!(has_label_containing(
+        &h,
+        "Ideal: noise-free sensors, exact ADC codes"
+    ));
+    assert!(
+        !h.state()
+            .ctx
+            .circuit
+            .as_ref()
+            .unwrap()
+            .project()
+            .world
+            .noise
+    );
+    assert_eq!(
+        live_realistic(&mut h),
+        Some(false),
+        "the running ADC follows"
+    );
+    // the Inspector says the same on the board and on a sensor
+    h.get_by_label("World").click();
+    h.run_steps(3);
+    let click_part = |h: &mut H, id: &str| {
+        let pos = {
+            let d = h.state().ctx.circuit.as_ref().unwrap();
+            let p = d.project().part(id).unwrap();
+            let leads = bb_circuit::Project::bench_leads(d.lib.get(&p.part).unwrap(), p).unwrap();
+            let n = leads.len() as f64;
+            let (x, y) = leads
+                .iter()
+                .fold((0.0, 0.0), |(x, y), l| (x + l.1 / n, y + l.2 / n));
+            h.state()
+                .ctx
+                .egui
+                .data(|d| {
+                    d.get_temp::<breadbox::canvas::pen::View>(eframe::egui::Id::unique(
+                        "bench-view",
+                    ))
+                })
+                .expect("bench view")
+                .to_screen(x, y)
+        };
+        h.hover_at(pos);
+        h.run_steps(1);
+        for pressed in [true, false] {
+            h.event(eframe::egui::Event::PointerButton {
+                pos,
+                button: eframe::egui::PointerButton::Primary,
+                pressed,
+                modifiers: eframe::egui::Modifiers::NONE,
+            });
+            h.run_steps(1);
+        }
+        h.run_steps(2);
+    };
+    click_part(&mut h, "u1");
+    assert!(has_label_containing(&h, "INSPECTOR · U1"), "UNO selected");
+    assert!(has_label_containing(&h, "ideal · exact codes"));
+    // back on: realistic everywhere
+    h.get_by_label("World").click();
+    h.run_steps(3);
+    h.get_by_label("Sensor noise & ADC quantization").click();
+    h.run_steps(3);
+    assert!(has_label_containing(
+        &h,
+        "Realistic: sensor noise + ADC offset"
+    ));
+    assert!(has_label_containing(
+        &h,
+        "realistic · offset / gain error, INL, ±1 LSB noise"
+    ));
+    assert_eq!(live_realistic(&mut h), Some(true));
+}

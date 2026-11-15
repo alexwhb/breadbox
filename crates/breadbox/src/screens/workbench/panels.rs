@@ -299,6 +299,15 @@ impl Panels {
                 sends.push(("world.noise".into(), noise as u8 as f64));
                 commit = true;
             }
+            // WORLD-6: what the switch means, in the Inspector's words
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(measurement_text(noise))
+                        .font(font::ui(11.0))
+                        .color(p.text_faint),
+                )
+                .wrap(),
+            );
         });
         let mut toggle_more = false;
         ui.horizontal(|ui| {
@@ -740,5 +749,16 @@ fn waveforms(ui: &mut Ui, app: &mut AppCtx) {
                 sim.send(c);
             }
         });
+    }
+}
+
+/// `WORLD-6` in words, shared by the World panel and the Inspector: on = realistic sensors and
+/// ADC, off = ideal ones. Firmware reads integer codes either way; probes and meters always
+/// show the continuous voltage.
+pub fn measurement_text(realistic: bool) -> &'static str {
+    if realistic {
+        "Realistic: sensor noise + ADC offset / gain error, INL / DNL and ±1 LSB noise (seeded)."
+    } else {
+        "Ideal: noise-free sensors, exact ADC codes floor(V / Vref · 1024)."
     }
 }

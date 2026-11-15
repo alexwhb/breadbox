@@ -151,7 +151,9 @@ fn reflash_keeps_the_bench_state() {
         after.iter().all(|m| *m < 30.0),
         "moisture continues from the pre-flash sensor state: {after:?}"
     );
-    assert!((after.last().unwrap() - 15.0).abs() <= 1.5, "{after:?}");
+    // ±2.5 %: the sensor is still converging, and the realistic ADC (WORLD-6: offset / gain
+    // error up to ±2 LSB, INL, ±1 LSB noise) moves a reading by up to ~5 codes ≈ 1 %
+    assert!((after.last().unwrap() - 15.0).abs() <= 2.5, "{after:?}");
     // the ESP-01 was not reset: the sketch's join succeeds again and publishes
     let joins = sim
         .lines_of("U1", LineKind::Net)

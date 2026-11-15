@@ -204,3 +204,201 @@ fn adc_noise_is_seeded_and_deterministic() {
         assert!((field(line, "A2") - 512).abs() <= 10, "{line}");
     }
 }
+
+// ------------------------------------------------------------------ WORLD-6: transfer function
+
+/// Every channel sees a voltage that sweeps 0 → 5.4 V (past AVcc, to exercise clamping) and
+/// wraps; records what each conversion was handed, in order.
+#[derive(Default)]
+struct Ramp {
+    supplied: Vec<f64>,
+}
+
+impl bb_avr::AvrIo for Ramp {
+    fn adc_sample(&mut self, _pin: Pin, cycle: u64) -> Option<f64> {
+        let v = (cycle as f64 * 3.7e-5) % 5.4;
+        self.supplied.push(v);
+        Some(v)
+    }
+}
+
+/// Every printed code of `adc_read` (A0…A5 per line), in conversion order.
+fn printed_codes(out: &str) -> Vec<i64> {
+    out.lines()
+        .filter(|l| l.contains("A5="))
+        .flat_map(|l| (0..6).map(move |i| field(l, &format!("A{i}"))))
+        .collect()
+}
+
+fn ideal(v: f64) -> i64 {
+    ((v * 1024.0 / 5.0).floor() as i64).clamp(0, 1023)
+}
+
+/// Runs `adc_read` for 1 s on the ramp with an ADC model; (codes, voltages handed over).
+fn ramp_run(model: bb_avr::AdcModel, seed: u64) -> (Vec<i64>, Vec<f64>) {
+    let mut cfg = AvrConfig::new(Mcu::Atmega328p);
+    cfg.stop_on = StopOn {
+        pin_change: false,
+        ..StopOn::default()
+    };
+    cfg.adc_model = model;
+    cfg.seed = seed;
+    let mut avr = Avr::new(cfg);
+    avr.load_hex(&std::fs::read_to_string(fixture_path("adc_read", "uno", "hex")).unwrap())
+        .unwrap();
+    let mut io = Ramp::default();
+    let mut ev = Vec::new();
+    run_until(&mut avr, ms(1000.0), &mut io, &mut ev);
+    let codes = printed_codes(&usart_text(&mut avr, 0));
+    assert!(codes.len() >= 100, "only {} codes", codes.len());
+    assert!(io.supplied.len() >= codes.len());
+    (codes, io.supplied)
+}
+
+#[test]
+fn ideal_adc_returns_exact_codes_for_a_ramp() {
+    let (codes, v) = ramp_run(bb_avr::AdcModel::Ideal, 7);
+    for (i, &c) in codes.iter().enumerate() {
+        assert_eq!(c, ideal(v[i]), "conversion {i}: {:.4} V", v[i]);
+    }
+    // the ramp covered the range, including the clamp above AVcc
+    assert!(codes.iter().any(|&c| c < 100));
+    assert!(codes.contains(&1023));
+    // ideal is not seeded: any seed gives the same codes
+    assert_eq!(ramp_run(bb_avr::AdcModel::Ideal, 99).0, codes);
+}
+
+#[test]
+fn realistic_adc_errors_are_bounded_and_seeded() {
+    let model = bb_avr::AdcModel::realistic();
+    let (a, v) = ramp_run(model, 7);
+    let (a2, _) = ramp_run(model, 7);
+    let (b, _) = ramp_run(model, 8);
+    assert_eq!(a, a2, "same seed → identical codes");
+    assert_ne!(a, b, "another chip (seed) → other errors");
+    let mut differ = 0;
+    for (i, &c) in a.iter().enumerate() {
+        let e = c - ideal(v[i]);
+        // offset 2 + gain 2 + INL 0.5 + noise 1 LSB (+1 for flooring)
+        assert!(
+            e.abs() <= 6,
+            "conversion {i}: {c} vs ideal {} ({:.4} V)",
+            ideal(v[i]),
+            v[i]
+        );
+        assert!((0..=1023).contains(&c));
+        differ += (e != 0) as usize;
+    }
+    assert!(
+        differ * 4 > a.len(),
+        "only {differ} of {} codes differ from ideal",
+        a.len()
+    );
+}
+
+#[test]
+fn realistic_adc_noise_flickers_a_steady_input_by_at_most_one_code() {
+    let run = |model: bb_avr::AdcModel| -> Vec<i64> {
+        let mut cfg = AvrConfig::new(Mcu::Atmega328p);
+        cfg.stop_on = StopOn {
+            pin_change: false,
+            ..StopOn::default()
+        };
+        cfg.adc_model = model;
+        cfg.seed = 3;
+        let mut avr = Avr::new(cfg);
+        avr.load_hex(&std::fs::read_to_string(fixture_path("adc_read", "uno", "hex")).unwrap())
+            .unwrap();
+        let mut io = volts();
+        let mut ev = Vec::new();
+        run_until(&mut avr, ms(1000.0), &mut io, &mut ev);
+        usart_text(&mut avr, 0)
+            .lines()
+            .filter(|l| l.contains("A2="))
+            .map(|l| field(l, "A2"))
+            .collect()
+    };
+    // 2.5 V on A2
+    let ideal_codes = run(bb_avr::AdcModel::Ideal);
+    assert!(ideal_codes.iter().all(|&c| c == 512), "{ideal_codes:?}");
+    let real = run(bb_avr::AdcModel::realistic());
+    let (lo, hi) = (*real.iter().min().unwrap(), *real.iter().max().unwrap());
+    assert!(hi - lo >= 1, "no conversion noise: {real:?}");
+    assert!(hi - lo <= 2, "noise beyond ±1 code: {real:?}");
+}
+
+/// Datasheet-style measurement of one chip's transfer function: a slow, noise-free sweep →
+/// code transitions → INL / DNL after removing offset and gain (end-point fit).
+#[test]
+fn realistic_chip_inl_and_dnl_stay_within_half_an_lsb() {
+    let e = bb_avr::AdcErrors::DATASHEET;
+    let mut offsets = Vec::new();
+    for seed in 0..24u64 {
+        let chip = bb_avr::AdcChip::new(seed, &e);
+        assert!(chip.offset.abs() <= e.offset_lsb && chip.gain.abs() <= e.gain_lsb);
+        offsets.push(chip.offset);
+        // the same seed is the same chip
+        assert_eq!(
+            bb_avr::AdcChip::new(seed, &e).convert(300.3, 0.0, 0, 1023),
+            chip.convert(300.3, 0.0, 0, 1023)
+        );
+        // sweep in 1/64 LSB steps: where does each code begin?
+        let mut first = vec![None::<f64>; 1024];
+        let mut last = 0;
+        let steps = 1030 * 64;
+        for s in 0..steps {
+            let x = s as f64 / 64.0 - 3.0;
+            let c = chip.convert(x, 0.0, 0, 1023);
+            assert!(c >= last, "seed {seed}: not monotonic at {x}");
+            last = c;
+            if first[c as usize].is_none() {
+                first[c as usize] = Some(x);
+            }
+        }
+        assert!(
+            first.iter().all(|f| f.is_some()),
+            "seed {seed}: missing codes"
+        );
+        // remove offset + gain with the end points (codes 1 and 1023), like a datasheet
+        let t = |c: usize| first[c].unwrap();
+        let lsb = (t(1023) - t(1)) / 1022.0;
+        for c in 1..1023 {
+            let inl = (t(c) - t(1)) / lsb - (c as f64 - 1.0);
+            assert!(
+                inl.abs() <= 0.5 + 0.05,
+                "seed {seed}: INL {inl:.3} at code {c}"
+            );
+            let dnl = (t(c + 1) - t(c)) / lsb - 1.0;
+            assert!(
+                dnl.abs() <= 0.5 + 0.05,
+                "seed {seed}: DNL {dnl:.3} at code {c}"
+            );
+        }
+    }
+    // chips differ
+    offsets.sort_by(f64::total_cmp);
+    offsets.dedup();
+    assert!(offsets.len() > 20);
+}
+
+#[test]
+fn the_adc_model_switches_while_running() {
+    let mut avr = load("adc_read", "uno");
+    avr.set_stop_on(StopOn {
+        pin_change: false,
+        ..StopOn::default()
+    });
+    assert_eq!(avr.adc_model(), bb_avr::AdcModel::Ideal);
+    let mut io = volts();
+    let mut ev = Vec::new();
+    run_until(&mut avr, ms(300.0), &mut io, &mut ev);
+    avr.set_adc_model(bb_avr::AdcModel::realistic());
+    let _ = usart_text(&mut avr, 0);
+    run_until(&mut avr, ms(1300.0), &mut io, &mut ev);
+    let a2: Vec<i64> = usart_text(&mut avr, 0)
+        .lines()
+        .filter(|l| l.contains("A2="))
+        .map(|l| field(l, "A2"))
+        .collect();
+    assert!(a2.iter().any(|&c| c != 512), "still ideal: {a2:?}");
+}

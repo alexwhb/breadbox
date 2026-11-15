@@ -34,6 +34,7 @@ mod twi;
 mod usart;
 mod variant;
 
+pub use adc::AdcChip;
 pub use avr::Avr;
 pub use debug::{CallFrame, CallKind, StepFilter, Watchpoint};
 pub use decode::{Op, decode, is_two_word};
@@ -267,6 +268,55 @@ pub enum Bootloader {
     None,
 }
 
+/// The ADC's transfer function: sampled voltage → code (`WORLD-6`). Firmware always reads
+/// integer codes; this decides how faithful they are.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum AdcModel {
+    /// A perfect converter: exactly `floor(V / Vref · 1024)` clamped to 0…1023 (differential
+    /// channels: `floor(ΔV · gain / Vref · 512)` clamped to −512…511). No randomness.
+    #[default]
+    Ideal,
+    /// A real chip: static offset / gain error and integral / differential non-linearity
+    /// (drawn once per chip from the seed) plus per-conversion noise (from the seeded RNG).
+    Realistic(AdcErrors),
+}
+
+impl AdcModel {
+    /// The ATmega328P / 2560 datasheet-style converter ([`AdcErrors::DATASHEET`]).
+    pub fn realistic() -> AdcModel {
+        AdcModel::Realistic(AdcErrors::DATASHEET)
+    }
+}
+
+/// Error budget of a realistic ADC, in LSB.
+///
+/// Per chip (fixed for a seed): offset drawn from ±`offset_lsb`, full-scale gain error from
+/// ±`gain_lsb`, and an integral non-linearity of a bow (up to half of `inl_lsb`) plus a
+/// per-code ripple (up to a quarter), so every code transition sits within ±`inl_lsb` of the
+/// end-point line and code widths (DNL) stay within about ±`inl_lsb` / 2 — monotonic, no
+/// missing codes. Per conversion: Gaussian noise of σ = `noise_lsb`, clipped to
+/// ±`noise_max_lsb`, so a steady input reads within ±1 code of its noise-free code.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AdcErrors {
+    pub offset_lsb: f64,
+    pub gain_lsb: f64,
+    pub inl_lsb: f64,
+    pub noise_lsb: f64,
+    pub noise_max_lsb: f64,
+}
+
+impl AdcErrors {
+    /// ATmega328P datasheet, "ADC Characteristics" (typical): offset error 2 LSB, gain
+    /// error 2 LSB, INL 0.5 LSB, DNL 0.25 LSB; conversion noise ±1 LSB.
+    pub const DATASHEET: AdcErrors = AdcErrors {
+        offset_lsb: 2.0,
+        gain_lsb: 2.0,
+        inl_lsb: 0.5,
+        noise_lsb: 0.4,
+        noise_max_lsb: 1.0,
+    };
+}
+
 /// Emulator configuration.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AvrConfig {
@@ -285,9 +335,13 @@ pub struct AvrConfig {
     /// Delay after a power-on/brown-out reset is released before the core starts (65 ms + 16K
     /// CK on Arduino fuses). Not applied to the initial power-up at cycle 0.
     pub reset_delay_cycles: u64,
-    /// Gaussian ADC noise (standard deviation, in LSB). 0 = ideal quantization.
+    /// How sampled voltages become codes (`WORLD-6`): [`AdcModel::Ideal`] (default) or a
+    /// realistic converter. Changeable while running ([`Avr::set_adc_model`]).
+    pub adc_model: AdcModel,
+    /// Extra Gaussian ADC noise (standard deviation, in LSB) on top of `adc_model`. 0 = none.
     pub adc_noise_lsb: f64,
-    /// Seed for every random source (ADC noise). Same seed → identical run.
+    /// Seed for every random source (ADC noise, the chip's ADC errors). Same seed → identical
+    /// run.
     pub seed: u64,
     /// Keep a shadow call stack (exact call stack for the debugger at ~zero cost).
     pub shadow_stack: bool,
@@ -304,6 +358,7 @@ impl AvrConfig {
             bod_level: Some(2.7),
             startup_cycles: 16 * 1024,
             reset_delay_cycles: 16 * 1024 + 14 + 65 * 16_000,
+            adc_model: AdcModel::Ideal,
             adc_noise_lsb: 0.0,
             seed: 0,
             shadow_stack: true,

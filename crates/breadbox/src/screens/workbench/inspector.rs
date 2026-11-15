@@ -53,6 +53,28 @@ pub fn expand(def: &PartDef, part: &PartInstance, tpl: &str) -> String {
     out
 }
 
+/// `WORLD-6` on the Inspector: an AVR board's ADC and a sensor's noise follow the World
+/// panel's "Sensor noise & ADC quantization" switch (realistic / ideal).
+pub fn measurement_row(def: &PartDef, realistic: bool) -> Option<(String, String)> {
+    if def.model.mcu.as_ref().is_some_and(|m| m.core == "avr") {
+        let v = if realistic {
+            "realistic · offset / gain error, INL, ±1 LSB noise"
+        } else {
+            "ideal · exact codes"
+        };
+        Some(("ADC".into(), v.into()))
+    } else if def.category == bb_circuit::Category::Sensors {
+        let v = if realistic {
+            "realistic (World)"
+        } else {
+            "ideal, none (World)"
+        };
+        Some(("Noise".into(), v.into()))
+    } else {
+        None
+    }
+}
+
 fn compact(x: f64) -> String {
     if (x - x.round()).abs() < 1e-9 && x.abs() < 1e9 {
         format!("{}", x.round() as i64)
@@ -243,6 +265,8 @@ impl Inspector {
                 rows.push(("Reading".into(), text.clone()));
             }
         }
+        // WORLD-6: how this part is measured (the World panel's noise switch)
+        rows.extend(measurement_row(&def, doc.project().world.noise));
         widgets::kv_grid(ui, "insp-kv", &rows, 120.0);
         // health
         let (label, color, reason) = match pt.as_ref().map(|p| &p.visual.health) {
@@ -549,6 +573,31 @@ fn band_name(d: i32) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn measurement_rows_follow_the_world_switch() {
+        let lib = bb_circuit::Library::builtin();
+        let uno = lib.get("uno").unwrap();
+        let soil = lib.get("capsoil").unwrap();
+        let res = lib.get("resistor").unwrap();
+        assert_eq!(
+            measurement_row(uno, true).unwrap(),
+            (
+                "ADC".to_string(),
+                "realistic · offset / gain error, INL, ±1 LSB noise".to_string()
+            )
+        );
+        assert_eq!(
+            measurement_row(uno, false).unwrap().1,
+            "ideal · exact codes"
+        );
+        assert_eq!(measurement_row(soil, true).unwrap().0, "Noise");
+        assert_eq!(
+            measurement_row(soil, false).unwrap().1,
+            "ideal, none (World)"
+        );
+        assert!(measurement_row(res, true).is_none());
+    }
 
     #[test]
     fn inspector_templates_expand_with_units() {

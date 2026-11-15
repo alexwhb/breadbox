@@ -220,3 +220,69 @@ fn replay_is_deterministic_and_seeds_matter() {
     let c = run(8);
     assert_ne!(a.0, c.0, "a different seed changes the sensor noise");
 }
+
+/// `WORLD-6`: "Sensor noise & ADC quantization" on = realistic measurement (sensor noise + a
+/// datasheet-style ADC: offset / gain error, INL / DNL, ±1 LSB conversion noise), off = ideal
+/// (noise-free sensor, exact `floor(V / Vref · 1024)`). The firmware reads integer codes either
+/// way.
+///
+/// Ideal still follows the circuit: on the full garden node the PWM night LED loads the 5 V
+/// rail, so AVcc — the ADC's reference — sags a few mV whenever the LED is on at the sample
+/// instant and the code can toggle between two neighbours, identically for every seed. With
+/// a steady supply (night LED removed) the ideal reading is one constant code; realistic
+/// readings jitter on either bench and depend on the seed (the chip and its noise).
+#[test]
+fn soil_raw_jitters_only_with_realistic_measurement() {
+    let run = |noise: bool, seed: u64, steady_supply: bool| -> Vec<f64> {
+        let dir = root().join("examples/garden-node");
+        let mut project = Project::load(&dir).unwrap();
+        if steady_supply {
+            project.parts.retain(|p| p.id != "d1");
+        }
+        let opts = BenchOptions {
+            seed: Some(seed),
+            firmware: bb_sim::firmware::project_images(&project, &dir),
+            ..Default::default()
+        };
+        let mut b = Bench::new(project, lib(), opts).unwrap();
+        b.set_world("world.noise", noise as u8 as f64);
+        b.run_until(SimTime::from_secs(10)).unwrap();
+        readings(&b)
+            .iter()
+            .filter(|r| r.0 >= 1.0)
+            .map(|r| r.1)
+            .collect()
+    };
+    let jitters =
+        |v: &[f64]| v.windows(2).any(|w| w[1] > w[0]) && v.windows(2).any(|w| w[1] < w[0]);
+    // steady supply: ideal = one code, realistic = neighbouring codes
+    for seed in [3, 11] {
+        let ideal = run(false, seed, true);
+        assert!(ideal.len() >= 15, "{ideal:?}");
+        assert!(
+            ideal.iter().all(|&c| c == ideal[0]),
+            "ideal jitters: {ideal:?}"
+        );
+        // 1.8805 V from the sensor's own 3.3 V regulator over the board's ~4.96 V AVcc
+        assert!((385.0..=392.0).contains(&ideal[0]), "{ideal:?}");
+        let real = run(true, seed, true);
+        assert!(jitters(&real), "realistic readings do not jitter: {real:?}");
+        assert!(
+            real.iter().all(|r| (r - ideal[0]).abs() <= 8.0),
+            "{real:?} vs ideal {}",
+            ideal[0]
+        );
+    }
+    // the full garden node: ideal has no randomness at all (any seed, same readings) …
+    let a = run(false, 3, false);
+    assert_eq!(
+        a,
+        run(false, 11, false),
+        "ideal readings depend on the seed"
+    );
+    assert!(a.windows(2).all(|w| (w[1] - w[0]).abs() <= 1.0), "{a:?}");
+    // … realistic does (another chip, other noise)
+    let r3 = run(true, 3, false);
+    assert_ne!(r3, run(true, 11, false));
+    assert!(jitters(&r3), "{r3:?}");
+}

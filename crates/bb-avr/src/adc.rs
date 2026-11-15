@@ -9,7 +9,81 @@
 
 use crate::avr::{Avr, NEVER, NO_VEC};
 use crate::variant::{Irq, Variant};
-use crate::{AvrIo, Pin, StopReason};
+use crate::{AdcErrors, AdcModel, AvrIo, Pin, StopReason};
+
+/// One chip's static ADC errors, derived from the seed alone (no RNG state is consumed, so
+/// they never change during a run and switching models keeps the same chip).
+#[derive(Debug, Clone, Copy)]
+pub struct AdcChip {
+    seed: u64,
+    /// Offset error (LSB).
+    pub offset: f64,
+    /// Gain error at full scale (LSB at code 1024).
+    pub gain: f64,
+    /// Amplitude of the INL bow (LSB).
+    bow: f64,
+    /// Amplitude of the per-code INL ripple (LSB).
+    ripple: f64,
+}
+
+/// splitmix64: a well-mixed hash of `x`.
+fn mix(mut x: u64) -> u64 {
+    x = x.wrapping_add(0x9E37_79B9_7F4A_7C15);
+    x = (x ^ (x >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    x = (x ^ (x >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    x ^ (x >> 31)
+}
+
+/// Uniform in [−1, 1) from a hash.
+fn unit(h: u64) -> f64 {
+    (h >> 11) as f64 / (1u64 << 52) as f64 - 1.0
+}
+
+impl AdcChip {
+    pub fn new(seed: u64, e: &AdcErrors) -> AdcChip {
+        let s = mix(seed ^ 0xADC0_ADC0_ADC0_ADC0);
+        AdcChip {
+            seed: s,
+            offset: e.offset_lsb * unit(mix(s ^ 1)),
+            gain: e.gain_lsb * unit(mix(s ^ 2)),
+            // bow + 2 × ripple ≤ inl_lsb: INL stays inside ±inl_lsb even measured against the
+            // end-point line (whose ends carry ripple), DNL inside ±inl_lsb / 2
+            bow: 0.5 * e.inl_lsb * unit(mix(s ^ 3)),
+            ripple: 0.25 * e.inl_lsb,
+        }
+    }
+
+    /// Integral non-linearity of the transition into code position `k` (1…1023), in LSB:
+    /// a bow over the range plus a fixed per-code ripple.
+    pub fn inl(&self, k: i64) -> f64 {
+        let bow = self.bow * (std::f64::consts::PI * k as f64 / 1024.0).sin();
+        bow + self.ripple * unit(mix(self.seed ^ (k as u64).wrapping_mul(0x1000_0000_01B3)))
+    }
+
+    /// Input level (LSB, after offset / gain) at which code `c` begins; `lo` is the bottom
+    /// code (0, or −512 for differential channels), so positions run 0…1023.
+    pub fn transition(&self, c: i64, lo: i64) -> f64 {
+        c as f64 + self.inl(c - lo)
+    }
+
+    /// Code for an ideal input level `x` (LSB) plus `noise` (LSB), in `lo..=hi`.
+    pub fn convert(&self, x: f64, noise: f64, lo: i32, hi: i32) -> i32 {
+        let (lo, hi) = (lo as i64, hi as i64);
+        let y = x + self.offset + self.gain * (x / 1024.0) + noise;
+        if !y.is_finite() {
+            return lo as i32;
+        }
+        // positions count from the bottom code (differential channels start at −512)
+        let mut c = (y.floor() as i64).clamp(lo, hi);
+        while c < hi && self.transition(c + 1, lo) <= y {
+            c += 1;
+        }
+        while c > lo && self.transition(c, lo) > y {
+            c -= 1;
+        }
+        c as i32
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum AdcSel {
@@ -346,12 +420,23 @@ impl Avr {
         self.adc_update_next();
     }
 
+    /// Sampled voltage → code through the configured [`crate::AdcModel`] (`WORLD-6`).
     fn adc_quantize(&mut self, v: f64, refv: f64, full: f64, lo: i32, hi: i32) -> i32 {
         let mut x = if refv > 0.0 { v * full / refv } else { 0.0 };
         if self.cfg.adc_noise_lsb > 0.0 {
             x += self.gaussian() * self.cfg.adc_noise_lsb;
         }
-        (x.floor() as i64).clamp(lo as i64, hi as i64) as i32
+        match self.cfg.adc_model {
+            AdcModel::Ideal => (x.floor() as i64).clamp(lo as i64, hi as i64) as i32,
+            AdcModel::Realistic(e) => {
+                let noise = if e.noise_lsb > 0.0 {
+                    (self.gaussian() * e.noise_lsb).clamp(-e.noise_max_lsb, e.noise_max_lsb)
+                } else {
+                    0.0
+                };
+                AdcChip::new(self.cfg.seed, &e).convert(x, noise, lo, hi)
+            }
+        }
     }
 
     pub(crate) fn adc_ack(&mut self) {

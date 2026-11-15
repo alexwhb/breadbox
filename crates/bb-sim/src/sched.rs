@@ -444,6 +444,8 @@ impl Bench {
                     for m in self.mcus.iter_mut() {
                         m.core.set_temperature(tc);
                     }
+                    // the noise switch may have changed (script, timeline, direct edit)
+                    self.sync_adc_models();
                     self.push_wake(wake.time + self.world_dt, WakeKind::World);
                 }
             }

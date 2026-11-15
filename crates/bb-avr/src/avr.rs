@@ -473,6 +473,18 @@ impl Avr {
         self.temperature_c = celsius;
     }
 
+    /// Switches the ADC transfer function (`WORLD-6`); takes effect at the next conversion.
+    /// The chip's static errors depend only on the seed, so switching back and forth keeps
+    /// the same chip.
+    pub fn set_adc_model(&mut self, model: crate::AdcModel) {
+        self.cfg.adc_model = model;
+    }
+
+    /// The current ADC transfer function.
+    pub fn adc_model(&self) -> crate::AdcModel {
+        self.cfg.adc_model
+    }
+
     /// The cause of the most recent reset.
     pub fn last_reset_cause(&self) -> ResetCause {
         self.last_reset

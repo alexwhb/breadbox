@@ -318,6 +318,16 @@ pub struct Bench {
     pub stats: BenchStats,
 }
 
+/// The ADC transfer function for the world's noise switch (`WORLD-6`): a datasheet-style
+/// realistic converter when on, an ideal one when off.
+pub fn adc_model_for(noise: bool) -> bb_avr::AdcModel {
+    if noise {
+        bb_avr::AdcModel::realistic()
+    } else {
+        bb_avr::AdcModel::Ideal
+    }
+}
+
 fn net_target_level(v: f64, lo: f64, hi: f64, was_high: bool) -> bool {
     if was_high { v >= lo } else { v > hi }
 }
@@ -420,14 +430,13 @@ impl Bench {
         i: usize,
         image: Option<&bb_avr::FirmwareImage>,
     ) -> Result<McuRt, SimError> {
-        let noise = self.world.config().noise;
+        let model = adc_model_for(self.world.config().noise);
         let core: Box<dyn McuCore> = if spec.core == "avr" {
-            let mut m = AvrMcu::new(
-                &spec.board,
-                self.seed.wrapping_add(i as u64 * 7919),
-                if noise { 0.5 } else { 0.0 },
-            )
-            .map_err(SimError::Build)?;
+            let mut m = AvrMcu::new(&spec.board, self.seed.wrapping_add(i as u64 * 7919), 0.0)
+                .map_err(SimError::Build)?;
+            if let Some(avr) = m.as_avr() {
+                avr.set_adc_model(model);
+            }
             if let Some(img) = image {
                 m.flash(img).map_err(SimError::Build)?;
             }
@@ -1701,6 +1710,23 @@ impl Bench {
     /// Sets a world variable (World panel slider).
     pub fn set_world(&mut self, key: &str, value: f64) {
         self.world.set(key, value);
+        if key == "world.noise" {
+            self.sync_adc_models();
+        }
+    }
+
+    /// Points every AVR's ADC at the transfer function the world's "Sensor noise & ADC
+    /// quantization" switch asks for (`WORLD-6`): realistic when on, ideal when off. Called
+    /// when the switch is set and on every world step (scripts, timelines, direct edits).
+    pub(crate) fn sync_adc_models(&mut self) {
+        let model = adc_model_for(self.world.config().noise);
+        for m in self.mcus.iter_mut() {
+            if let Some(avr) = m.core.as_avr()
+                && avr.adc_model() != model
+            {
+                avr.set_adc_model(model);
+            }
+        }
     }
     pub fn water(&mut self, pot: &str, ml: f64) {
         WorldMut::water(&mut self.world, pot, ml);
