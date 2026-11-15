@@ -116,6 +116,16 @@ fn garden_node_runs_on_the_bench_with_serial_and_world_slider() {
             .any(|p| p.label.starts_with("Soil sensor"))
     );
     assert!(!tel.scopes.is_empty());
+    // Probes & power + the Advanced palette
+    h.get_by_label("Probes & power").click();
+    h.get_by_label("Advanced").click();
+    h.run_steps(4);
+    assert!(has_label_containing(&h, "Total board draw"));
+    assert!(has_label_containing(&h, "USB budget"));
+    screenshot(&mut h, "workbench-power");
+    h.get_by_label("Serial monitor").click();
+    h.get_by_label("Simple").click();
+    h.run_steps(3);
     for p in &tel.parts {
         if let bb_core::Look::Led {
             brightness,
@@ -616,4 +626,115 @@ fn perf_workbench_frame_time_with_garden_node_running() {
         sim / wall > 0.9,
         "garden-node fell behind real time with the UI open"
     );
+}
+
+fn click_at(h: &mut H, pos: egui::Pos2) {
+    h.hover_at(pos);
+    h.run_steps(1);
+    for pressed in [true, false] {
+        h.event(egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        });
+        h.run_steps(1);
+    }
+    h.run_steps(2);
+}
+
+#[test]
+fn probe_tool_keyboard_edits_and_per_mcu_serial_tabs() {
+    let mut h = harness();
+    open_example(&mut h, "blink");
+    // probe tool: Probes panel → Add probe → click a header pin
+    let probes0 = doc(&h).project().probes.len();
+    click_first(&h, "Probes");
+    h.run_steps(2);
+    h.get_by_label("Add probe").click();
+    h.run_steps(2);
+    let d13 = pin_screen(&h, "u1", "D13");
+    click_at(&mut h, d13);
+    assert_eq!(doc(&h).project().probes.len(), probes0 + 1, "probe added");
+    assert!(
+        doc(&h)
+            .project()
+            .probes
+            .last()
+            .unwrap()
+            .label
+            .contains("D13")
+    );
+    // select a part and use the keyboard: R rotates, ⌘D duplicates, ⌫ deletes
+    let lib = doc(&h).lib.clone();
+    let led = {
+        let st = h.state_mut();
+        let d = st.ctx.circuit.as_mut().unwrap();
+        let id = d.editor.add_part(&lib, "led", 20.0, 40.0).unwrap();
+        d.touched();
+        id
+    };
+    h.run_steps(2);
+    let (x, y) = {
+        let d = doc(&h);
+        let p = d.project().part(&led).unwrap();
+        let b = crate_bounds(d, p);
+        ((b.0 + b.2) / 2.0, b.1 + 0.6)
+    };
+    let pos = view(&h).to_screen(x, y);
+    click_at(&mut h, pos);
+    h.key_press(egui::Key::R);
+    h.run_steps(2);
+    assert_eq!(
+        doc(&h)
+            .project()
+            .part(&led)
+            .unwrap()
+            .bench
+            .as_ref()
+            .unwrap()
+            .at
+            .rot,
+        90.0
+    );
+    let leds = |h: &H| {
+        doc(h)
+            .project()
+            .parts
+            .iter()
+            .filter(|p| p.part == "led")
+            .count()
+    };
+    let n0 = leds(&h);
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::D);
+    h.run_steps(2);
+    assert_eq!(leds(&h), n0 + 1, "duplicated");
+    h.key_press(egui::Key::Backspace);
+    h.run_steps(2);
+    assert_eq!(leds(&h), n0, "the duplicate (selected) was deleted");
+    // a second board: the serial monitor gets one tab per MCU (MCU-7)
+    {
+        let st = h.state_mut();
+        let d = st.ctx.circuit.as_mut().unwrap();
+        d.editor.add_part(&lib, "nano", 10.0, 50.0).unwrap();
+        d.touched();
+    }
+    h.run_steps(4);
+    assert!(
+        has_label(&h, "U1") && has_label(&h, "U2"),
+        "per-MCU serial tabs"
+    );
+    let targets = h.state_mut().ctx.bench_link().targets();
+    assert_eq!(targets.len(), 2, "both boards are bench targets");
+}
+
+/// World bounds (x0, y0, x1, y1) of a part's body.
+fn crate_bounds(
+    d: &breadbox::circuit::CircuitDoc,
+    p: &bb_circuit::PartInstance,
+) -> (f64, f64, f64, f64) {
+    let def = d.lib.get(&p.part).unwrap();
+    let leads = bb_circuit::Project::bench_leads(def, p).unwrap();
+    let b = breadbox::canvas::scene::world_bounds(def, &p.bench.as_ref().unwrap().at, &leads);
+    (b.x0, b.y0, b.x1, b.y1)
 }

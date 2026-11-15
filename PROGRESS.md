@@ -471,8 +471,9 @@ firmware-phone}.png`.
   (mini scope + DMM go through it); `BenchCanvas` / `SchematicCanvas` are embeddable widgets;
   `SimBench::factory_with(library, options_hook)` + `CircuitDoc::set_library` take plugin parts
   and device factories.
-- `TEST-5` — `cargo test -p breadbox`: 67 unit, 12 GUI (`tests/gui.rs`), 8 widget, 10
-  workbench (`tests/workbench.rs`: garden-node run + serial + J1 inspector; schematic toggle +
+- `TEST-5` — `cargo test -p breadbox`: 67 unit, 12 GUI (`tests/gui.rs`), 8 widget, 10 + 1
+  workbench (`tests/workbench.rs`: garden-node run + serial + J1 inspector + Probes & power +
+  Advanced palette; probe tool + R / ⌘D / ⌫ + per-MCU serial tabs; schematic toggle +
   Pro schematic; palette drag + jumper wire + ratsnest + undo/redo + inspector 4k7 + colour
   bands; soil slider → `moisture=0%`; LED on the rail burns out with smoke; Firmware upload on
   the live bench + Pro synced netlist + bench probes; ESP32 host board + FlashHost; virtual

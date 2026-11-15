@@ -362,20 +362,22 @@ fn probes_power(ui: &mut Ui, app: &mut AppCtx) {
                 let net = r.net.clone().unwrap_or_default();
                 let sub = match r.quantity {
                     bb_circuit::project::Quantity::Voltage => {
-                        let adc = if net.starts_with('A') && net.len() <= 3 {
+                        if net.starts_with('A') && net.len() <= 3 {
                             format!(
-                                "ADC {:.0} / 1023 · ",
-                                (r.value / 5.0 * 1023.0).clamp(0.0, 1023.0)
+                                "ADC {:.0} / 1023 · {:.2}–{:.2} V",
+                                (r.value / 5.0 * 1023.0).clamp(0.0, 1023.0),
+                                r.min,
+                                r.max
                             )
                         } else {
-                            String::new()
-                        };
-                        format!(
-                            "{adc}min {:.2} · max {:.2} · avg {:.2}",
-                            r.min, r.max, r.avg
-                        )
+                            format!("net {net} · {:.2}–{:.2} V", r.min, r.max)
+                        }
                     }
-                    _ => format!("net {net} · avg {}", bb_core::si::format(r.avg, &r.unit)),
+                    bb_circuit::project::Quantity::Duty => {
+                        format!("PWM on {net} · avg {:.2} V", r.avg)
+                    }
+                    bb_circuit::project::Quantity::Logic => format!("digital {net}"),
+                    _ => format!("net {net}"),
                 };
                 cards.push((r.label.clone(), probe_text(r), sub));
             }

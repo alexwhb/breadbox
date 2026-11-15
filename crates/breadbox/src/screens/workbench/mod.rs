@@ -199,7 +199,22 @@ impl WorkbenchScreen {
             );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.spacing_mut().item_spacing.x = 14.0;
-                // zoom
+                // zoom (+ the symbol standard on the schematic)
+                if self.state.view == BenchView::Schematic
+                    && let Some(doc) = app.circuit.as_mut()
+                {
+                    let mut iec = doc.project().schematic.iec;
+                    if widgets::mini_segmented(
+                        ui,
+                        "Symbols",
+                        &mut iec,
+                        &[Seg::new(false, "ANSI"), Seg::new(true, "IEC")],
+                    ) {
+                        doc.editor.project.schematic.iec = iec;
+                        doc.editor.generation += 1;
+                        doc.touched();
+                    }
+                }
                 let zoom = match self.state.view {
                     BenchView::Breadboard => self.canvas.view.zoom_pct(),
                     BenchView::Schematic => self.schematic.zoom_pct(),

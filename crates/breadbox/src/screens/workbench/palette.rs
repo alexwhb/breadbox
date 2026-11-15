@@ -401,9 +401,14 @@ impl Palette {
         } else {
             d.name.clone()
         };
-        let g = ui
-            .painter()
-            .layout(desc, font::ui(11.0), p.text_muted, w - 44.0);
+        let mut job = egui::text::LayoutJob::simple_singleline(desc, font::ui(11.0), p.text_muted);
+        job.wrap = egui::text::TextWrapping {
+            max_width: w - 44.0,
+            max_rows: 1,
+            break_anywhere: true,
+            overflow_character: Some('…'),
+        };
+        let g = ui.painter().layout_job(job);
         ui.painter().with_clip_rect(r).galley(
             pos2(r.left() + 36.0, r.top() + 21.0),
             g,
