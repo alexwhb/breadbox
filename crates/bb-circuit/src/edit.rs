@@ -72,6 +72,8 @@ pub enum Op {
         before: (String, String),
         after: (String, String),
     },
+    /// Pro analysis cards (`project.spice.directives`).
+    Directives { before: String, after: String },
 }
 
 impl Op {
@@ -139,6 +141,10 @@ impl Op {
                 before: after,
                 after: before,
             },
+            Op::Directives { before, after } => Op::Directives {
+                before: after,
+                after: before,
+            },
         }
     }
 
@@ -161,7 +167,11 @@ impl Op {
                 _ => true,
             },
             Op::SchWire { .. } | Op::Label { .. } => true,
-            Op::Probe { .. } | Op::Instrument { .. } | Op::World { .. } | Op::Meta { .. } => false,
+            Op::Probe { .. }
+            | Op::Instrument { .. }
+            | Op::World { .. }
+            | Op::Meta { .. }
+            | Op::Directives { .. } => false,
         }
     }
 }
@@ -230,6 +240,7 @@ fn apply_op(p: &mut Project, op: &mut Op) {
             p.name = after.0.clone();
             p.description = after.1.clone();
         }
+        Op::Directives { after, .. } => p.spice.directives = after.clone(),
     }
 }
 
@@ -632,6 +643,19 @@ impl Editor {
             });
             self.commit(tx);
         }
+    }
+
+    /// Replaces the Pro analysis cards (`.tran`, `.ac`, `*off .mc …`) as an undoable change.
+    pub fn set_directives(&mut self, text: &str) {
+        if text == self.project.spice.directives {
+            return;
+        }
+        let mut tx = Transaction::new("Analyses");
+        tx.ops.push(Op::Directives {
+            before: self.project.spice.directives.clone(),
+            after: text.to_string(),
+        });
+        self.commit(tx);
     }
 
     /// Records the current world settings (sliders) as an undoable change.

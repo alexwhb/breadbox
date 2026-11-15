@@ -613,6 +613,10 @@ pub fn build(
                 for (i, _) in connected.iter().enumerate() {
                     sub.push_str(&format!(" p{}", i + 1));
                 }
+                if opts.mcu_params {
+                    // the X line passes `sync=…`: declare it (an unknown parameter warns)
+                    sub.push_str(" params: sync=1u");
+                }
                 sub.push('\n');
                 for (i, _) in connected.iter().enumerate() {
                     sub.push_str(&format!("R{} p{} vss 1G\n", i + 1, i + 1));

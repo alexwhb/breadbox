@@ -190,6 +190,13 @@ impl AnalysisScreen {
                             }
                             self.synced_gen = None;
                         }
+                        sync::EditMapping::Cards { props, cards } => {
+                            if let Err(e) = sync::apply(doc, &props) {
+                                app.toasts.error(format!("{e}"));
+                            }
+                            sync::apply_cards(doc, &cards);
+                            self.synced_gen = None;
+                        }
                         sync::EditMapping::Detach => {
                             doc.detached_netlist = Some(self.doc.text.clone());
                             doc.touched();

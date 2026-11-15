@@ -71,7 +71,8 @@ pub fn export_cir(project: &Project, lib: &Library) -> Result<String, SpiceIoErr
     let built = netlist::build(project, lib, &NetlistOptions::pro(Some(&project.world)))?;
     let mut nl = built.netlist;
     merge_directives(&mut nl, &project.spice.directives)?;
-    let text = nl.to_spice_text();
+    // ext() variables frozen at the parts' values (a battery's EMF, a sensor's output), not 0
+    let text = nl.to_spice_text_with_ext(&built.ext);
     let notes: String = built
         .warnings
         .iter()
@@ -91,7 +92,7 @@ pub fn pro_display_text(project: &Project, lib: &Library) -> Result<String, Spic
     let built = netlist::build(project, lib, &opts)?;
     let mut nl = built.netlist;
     merge_directives(&mut nl, &project.spice.directives)?;
-    Ok(nl.to_spice_text())
+    Ok(nl.to_spice_text_with_ext(&built.ext))
 }
 
 /// Joins `+` continuation lines and drops comments; keeps line order.
