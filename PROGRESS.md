@@ -1165,3 +1165,44 @@ Open / notes:
   usually finishes sooner.
 - Scope cursors are only covered through the panel state; Mega Timer4, vibration motor and
   servo slew remain untested (SPEC-AUDIT notes).
+
+### text-b
+UI text sweep (`docs/UI-TEXT.md`) of **Firmware** (sidebar, editor chrome, toolbar, Output /
+Serial / Debug incl. Memory + I/O, library manager, toolchain dialog, Radios panel, virtual
+phone, MQTT explorer), **Pro** (netlist header, analysis cards / popovers, plots, schematic bar,
+PCB panel, plugin analyses), **Plugins** (nav, detail, prompt, catalog chrome, toasts) and
+**Lessons** chrome (nav, code steps, lesson editor). Lesson content, plugin descriptions and
+the design's own copy (Radios captions, BLE card, Mixed-signal paragraph, "More to add" caption,
+sandbox footer) are unchanged.
+
+- Sentences in panels → tooltips or Help: e.g. the Output / Serial placeholders ("Verify
+  compiles the sketch; …" → `No output yet`, Verify / Upload tooltips), the no-MCU card (→ `Open
+  Workbench` + `Open blink example`), "Example project — edits stay in memory. ⌘S saves a copy."
+  (→ `Example · not saved` + tooltip), the Debug empty states (`Hex views are AVR-only`, `No
+  memory snapshot yet`, `Running · Pause to inspect`), the I/O + pointer legends (`changed`
+  + tooltip), "No radio on this bench" paragraph, Placement caption ("drag the bench · arrows
+  nudge 0.5 m" → floor-plan tooltip), phone / MQTT empty states, the PCB routing paragraph and
+  Gerber note (→ Select / Route / Via / Export tooltips), the schematic bar ("— same netlist as
+  the bench", wiring hint → sheet-name tooltip), the plugin loading-callout placeholder, the
+  lesson editor's step-kind / goals / capture / lesson-pack paragraphs. Toasts and log lines
+  shortened (BLE hat, packet-log export, plugin placement / edit / reload, free play, lesson
+  build log).
+- Overlap: every row with right-aligned controls lays the controls out first and truncates the
+  left text (full text on hover): radio card titles, phone scan rows and characteristic values,
+  MQTT message rows, serial status line, debug status, memory / I/O captions, netlist header,
+  plot-card headers (+ the `.tran` cursor readout), plugin-analysis cards, schematic sheet name,
+  Plugins "More to add" caption. Painted list rows (sketch files, Plugins nav, Lessons nav,
+  lesson-editor steps) cut long names with an ellipsis; the Lessons track header wraps like the
+  design. The phone opens left of the MQTT explorer instead of under it. The toolchain detail
+  in the Firmware sidebar is at most two lines (all of it on hover and in Output). The plugin
+  detail's Disable / Uninstall moved behind a "⋯" menu (design shows two buttons).
+- Help: `docs/guide/{firmware,pro,plugins,lessons}.md` written (text-a's top-bar "?" opens them).
+- Shared widgets: none of my own. Cherry-picked text-a's `e65d046` (`Btn::accessible_name`,
+  `section_header_row` truncation) and used `accessible_name` for `Connect`, `Place`, `Capture
+  bench`, `Open in Pro` so test / VoiceOver names stay. Outside my screens: one toast in
+  `app.rs` (`apply_plugins` reload) and one assertion in `tests/workbench.rs` (Pro schematic
+  bar), both agreed with text-a.
+- Screenshots: refreshed `firmware*.png`, `radios-placement`, `phone`, new `mqtt.png`
+  (`tests/radio_tools.rs`), `pro-*.png`, `pcb`, `plugins`, `lessons*.png`; `home*`,
+  `workbench*`, `widgets`, `session-*` are left to text-a / the lead (regenerate `session-*`
+  after the merge).
