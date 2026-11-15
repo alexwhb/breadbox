@@ -134,7 +134,7 @@ pub fn show(ctx: &egui::Context, app: &mut AppCtx) {
         egui::Window::new("Virtual phone")
             .id(Id::unique("phone-window"))
             .open(&mut open)
-            .default_pos(ctx.content_rect().right_top() + vec2(-720.0, 80.0))
+            .default_pos(ctx.content_rect().right_top() + vec2(-770.0, 80.0))
             .resizable(false)
             .collapsible(false)
             .title_bar(false)
@@ -226,9 +226,18 @@ fn phone(
             ui.spacing_mut().item_spacing.y = 8.0;
             // status bar + notch
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("9:41").font(font::semibold(12.0)).color(p.text));
+                ui.label(
+                    egui::RichText::new("9:41")
+                        .font(font::semibold(12.0))
+                        .color(p.text),
+                );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if Btn::plain("Close phone").icon_only(Icon::Close).height(22.0).show(ui).clicked() {
+                    if Btn::plain("Close phone")
+                        .icon_only(Icon::Close)
+                        .height(22.0)
+                        .show(ui)
+                        .clicked()
+                    {
                         t.phone = false;
                     }
                     Icon::Bluetooth.show(ui, 13.0, p.info);
@@ -241,17 +250,28 @@ fn phone(
                 },
                 None => ("Virtual phone".to_string(), "no bench running"),
             };
-            let tr = ui.label(egui::RichText::new(&title).font(font::heading(18.0)).color(p.text));
+            let tr = ui.label(
+                egui::RichText::new(&title)
+                    .font(font::heading(18.0))
+                    .color(p.text),
+            );
             let tt = format!("Phone: {title}");
             tr.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Heading, true, &tt));
-            ui.label(egui::RichText::new(sub).font(font::ui(11.5)).color(p.text_muted));
+            ui.label(
+                egui::RichText::new(sub)
+                    .font(font::ui(11.5))
+                    .color(p.text_muted),
+            );
             let Some(r) = radio else {
-                ui.add_space(20.0);
-                ui.label(egui::RichText::new("Open a project and press Run: radios on the bench (HM-10, HC-05, ESP32 BLE) show up here.").font(font::ui(12.5)).color(p.text_faint));
                 return;
             };
             if !r.has_ble {
-                ui.label(egui::RichText::new("No BLE radio on this bench. Add an HM-10 / HC-05 module or an ESP32 and run the sketch.").font(font::ui(12.5)).color(p.text_faint));
+                ui.label(
+                    egui::RichText::new("No BLE radio on this bench")
+                        .font(font::ui(12.5))
+                        .color(p.text_faint),
+                )
+                .on_hover_text("Add an HM-10, HC-05 or ESP32 to the bench and run it.");
             }
             let ph = &r.phone;
             match ph.connected {
@@ -259,7 +279,11 @@ fn phone(
                     if ph.scan.is_empty() {
                         ui.horizontal(|ui| {
                             widgets::spinner(ui, 12.0);
-                            ui.label(egui::RichText::new("Scanning…").font(font::ui(12.5)).color(p.text_muted));
+                            ui.label(
+                                egui::RichText::new("Scanning…")
+                                    .font(font::ui(12.5))
+                                    .color(p.text_muted),
+                            );
                         });
                     }
                     for d in &ph.scan {
@@ -270,23 +294,72 @@ fn phone(
                             .show(ui, |ui| {
                                 ui.set_width(ui.available_width());
                                 ui.horizontal(|ui| {
-                                    ui.vertical(|ui| {
-                                        ui.spacing_mut().item_spacing.y = 2.0;
-                                        ui.label(egui::RichText::new(&d.name).font(font::medium(13.5)).color(p.text));
-                                        ui.label(egui::RichText::new(format!("{} · {} · {}", d.kind, d.addr, d.services.join(", "))).font(font::mono(10.5)).color(p.text_muted));
-                                    });
-                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                        let b = Btn::amber("Connect").height(26.0).show(ui);
-                                        let l = format!("Phone: connect {}", d.name);
-                                        b.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &l));
-                                        if b.clicked() {
-                                            cmds.push(RadioCommand::Phone(PhoneCommand::Connect { id: d.id, pin: None }));
-                                        }
-                                        let rl = ui.label(egui::RichText::new(format!("{} dBm", d.rssi)).font(font::mono(11.0)).color(p.text_muted));
-                                        let rr = format!("{} RSSI {} dBm", d.name, d.rssi);
-                                        rl.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, &rr));
-                                        rssi_bars(ui, d.rssi);
-                                    });
+                                    ui.with_layout(
+                                        egui::Layout::right_to_left(egui::Align::Center),
+                                        |ui| {
+                                            let b = Btn::amber("Connect").height(26.0).show(ui);
+                                            let l = format!("Phone: connect {}", d.name);
+                                            b.widget_info(|| {
+                                                egui::WidgetInfo::labeled(
+                                                    egui::Role::Button,
+                                                    true,
+                                                    &l,
+                                                )
+                                            });
+                                            if b.clicked() {
+                                                cmds.push(RadioCommand::Phone(
+                                                    PhoneCommand::Connect {
+                                                        id: d.id,
+                                                        pin: None,
+                                                    },
+                                                ));
+                                            }
+                                            let rl = ui.label(
+                                                egui::RichText::new(format!("{} dBm", d.rssi))
+                                                    .font(font::mono(11.0))
+                                                    .color(p.text_muted),
+                                            );
+                                            let rr = format!("{} RSSI {} dBm", d.name, d.rssi);
+                                            rl.widget_info(|| {
+                                                egui::WidgetInfo::labeled(
+                                                    egui::Role::Label,
+                                                    true,
+                                                    &rr,
+                                                )
+                                            });
+                                            rssi_bars(ui, d.rssi);
+                                            // name + details in what is left, cut with an ellipsis
+                                            ui.with_layout(
+                                                egui::Layout::left_to_right(egui::Align::Center),
+                                                |ui| {
+                                                    ui.vertical(|ui| {
+                                                        ui.spacing_mut().item_spacing.y = 2.0;
+                                                        ui.add(
+                                                            egui::Label::new(
+                                                                egui::RichText::new(&d.name)
+                                                                    .font(font::medium(13.5))
+                                                                    .color(p.text),
+                                                            )
+                                                            .truncate(),
+                                                        );
+                                                        ui.add(
+                                                            egui::Label::new(
+                                                                egui::RichText::new(format!(
+                                                                    "{} · {} · {}",
+                                                                    d.kind,
+                                                                    d.addr,
+                                                                    d.services.join(", ")
+                                                                ))
+                                                                .font(font::mono(10.5))
+                                                                .color(p.text_muted),
+                                                            )
+                                                            .truncate(),
+                                                        );
+                                                    });
+                                                },
+                                            );
+                                        },
+                                    );
                                 });
                             });
                     }
@@ -298,7 +371,11 @@ fn phone(
                         }
                     });
                     ui.horizontal(|ui| {
-                        for (tab, name) in [(PhoneTab::Gatt, "Services"), (PhoneTab::Terminal, "Terminal"), (PhoneTab::Log, "Log")] {
+                        for (tab, name) in [
+                            (PhoneTab::Gatt, "Services"),
+                            (PhoneTab::Terminal, "Terminal"),
+                            (PhoneTab::Log, "Log"),
+                        ] {
                             if widgets::tab(ui, name, t.phone_tab == tab).clicked() {
                                 t.phone_tab = tab;
                                 if tab == PhoneTab::Terminal {
@@ -353,7 +430,7 @@ fn gatt(ui: &mut Ui, t: &mut RadioTools, r: &RadioTelemetry, cmds: &mut Vec<Radi
                             ui.set_width(ui.available_width());
                             ui.spacing_mut().item_spacing.y = 4.0;
                             let name = c.description.clone().unwrap_or_else(|| c.uuid.clone());
-                            ui.horizontal(|ui| {
+                            ui.horizontal_wrapped(|ui| {
                                 ui.label(
                                     egui::RichText::new(&name)
                                         .font(font::medium(12.5))
@@ -471,7 +548,7 @@ fn terminal(ui: &mut Ui, t: &mut RadioTools, r: &RadioTelemetry, cmds: &mut Vec<
                 .show(ui, |ui| {
                     ui.set_width(ui.available_width());
                     let text = if r.phone.terminal.is_empty() {
-                        "(nothing received yet)"
+                        "nothing received yet"
                     } else {
                         r.phone.terminal.as_str()
                     };
@@ -531,11 +608,9 @@ fn mqtt(
     );
     let Some(r) = radio else {
         ui.label(
-            egui::RichText::new(
-                "Open a project and press Run: the bench's MQTT traffic shows up here.",
-            )
-            .font(font::ui(12.5))
-            .color(p.text_faint),
+            egui::RichText::new("Bench not running")
+                .font(font::ui(12.5))
+                .color(p.text_faint),
         );
         return;
     };
@@ -550,6 +625,7 @@ fn mqtt(
         te.widget_info(|| {
             egui::WidgetInfo::labeled(egui::Role::TextInput, true, "Subscribe topic")
         });
+        let te = te.on_hover_text("+ matches one topic level, # matches everything below");
         let enter = te.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
         if (Btn::ghost("Subscribe").height(26.0).show(ui).clicked() || enter)
             && !t.sub.trim().is_empty()
@@ -580,7 +656,7 @@ fn mqtt(
         }
         if subs.is_empty() {
             ui.label(
-                egui::RichText::new("No subscriptions: add `#` to see everything.")
+                egui::RichText::new("No subscriptions")
                     .font(font::ui(12.0))
                     .color(p.text_faint),
             );
@@ -611,6 +687,9 @@ fn mqtt(
                 .stick_to_bottom(true)
                 .show(ui, |ui| {
                     ui.set_width(ui.available_width());
+                    // one compact line per message
+                    ui.spacing_mut().interact_size.y = 18.0;
+                    ui.spacing_mut().item_spacing.y = 4.0;
                     let rows: Vec<_> = r
                         .mqtt
                         .iter()
@@ -643,19 +722,33 @@ fn mqtt(
                             tl.widget_info(|| {
                                 egui::WidgetInfo::labeled(egui::Role::Label, true, &tt)
                             });
-                            ui.label(
-                                egui::RichText::new(&m.payload)
-                                    .font(font::mono(11.0))
-                                    .color(p.text_dim),
-                            );
                             let mut meta = format!("{} B · QoS {}", m.payload.len(), m.qos);
                             if m.retain {
                                 meta.push_str(" · retained");
                             }
-                            ui.label(
-                                egui::RichText::new(meta)
-                                    .font(font::mono(10.0))
-                                    .color(p.text_faint),
+                            // size / QoS at the right edge, the payload cut to fit between
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    ui.label(
+                                        egui::RichText::new(meta)
+                                            .font(font::mono(10.0))
+                                            .color(p.text_faint),
+                                    );
+                                    ui.with_layout(
+                                        egui::Layout::left_to_right(egui::Align::Center),
+                                        |ui| {
+                                            ui.add(
+                                                egui::Label::new(
+                                                    egui::RichText::new(&m.payload)
+                                                        .font(font::mono(11.0))
+                                                        .color(p.text_dim),
+                                                )
+                                                .truncate(),
+                                            );
+                                        },
+                                    );
+                                },
                             );
                         });
                     }

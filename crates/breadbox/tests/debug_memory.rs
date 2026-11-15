@@ -204,14 +204,8 @@ fn api_level_boards_explain_the_missing_hex_views() {
     h.run_steps(2);
     h.get_by_label("Memory").click();
     h.run_steps(2);
-    assert!(has_label_containing(
-        &h,
-        "Hex views need the cycle-accurate AVR core"
-    ));
+    assert!(has_label(&h, "Hex views are AVR-only"));
     h.get_by_label("I/O registers").click();
     h.run_steps(2);
-    assert!(has_label_containing(
-        &h,
-        "Hex views need the cycle-accurate AVR core"
-    ));
+    assert!(has_label(&h, "Hex views are AVR-only"));
 }

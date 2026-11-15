@@ -33,7 +33,9 @@ pub fn net_label_control(
         }
         return;
     }
-    let r = Btn::mini("Net label").show(ui);
+    let r = Btn::mini("Net label")
+        .tooltip("Same name anywhere = same net")
+        .show(ui);
     if r.clicked() && name.trim().is_empty() {
         *name = SchematicCanvas::suggest_label(doc);
     }
@@ -41,12 +43,6 @@ pub fn net_label_control(
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
         .show(|ui| {
             ui.set_min_width(220.0);
-            ui.label(
-                egui::RichText::new("Same name anywhere = same net")
-                    .font(font::ui(11.5))
-                    .color(pal(ui).text_muted),
-            );
-            ui.add_space(4.0);
             let te = ui.add(
                 egui::TextEdit::singleline(name)
                     .font(font::mono(12.5))
@@ -58,7 +54,9 @@ pub fn net_label_control(
             });
             let enter = te.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
             ui.add_space(4.0);
-            let place = Btn::amber("Place on a pin or wire")
+            let place = Btn::amber("Place")
+                .accessible_name("Place on a pin or wire")
+                .tooltip("Then click a pin or wire")
                 .full_width()
                 .show(ui)
                 .clicked();
@@ -212,11 +210,7 @@ impl Screen for ProSchematicScreen {
                 .as_ref()
                 .map(|p| p.name.clone())
                 .unwrap_or_default();
-            ui.label(
-                egui::RichText::new(format!("Sheet 1 · {name}.sch — same netlist as the bench"))
-                    .font(font::ui(12.0))
-                    .color(p.text_muted),
-            );
+            // controls first (right edge), then the sheet name cut into what is left
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.spacing_mut().item_spacing.x = 10.0;
                 ui.label(
@@ -241,15 +235,27 @@ impl Screen for ProSchematicScreen {
                         doc.touched();
                     }
                 }
-                let hint = match &self.canvas.label_tool {
-                    Some(n) => format!("click a pin or wire to drop {n} · Esc cancels"),
-                    None => "drag from a pin to draw a wire · R rotates".into(),
-                };
-                ui.label(
-                    egui::RichText::new(hint)
-                        .font(font::ui(11.0))
-                        .color(p.text_faint),
-                );
+                // while placing a net label the bar says so (the mode is otherwise invisible)
+                if let Some(n) = &self.canvas.label_tool {
+                    ui.label(
+                        egui::RichText::new(format!("drop {n} on a pin or wire · Esc cancels"))
+                            .font(font::ui(11.5))
+                            .color(p.accent_soft),
+                    );
+                }
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(format!("Sheet 1 · {name}.sch"))
+                                .font(font::ui(12.0))
+                                .color(p.text_muted),
+                        )
+                        .truncate(),
+                    )
+                    .on_hover_text(
+                        "Same netlist as the bench; drag from a pin to wire, R rotates.",
+                    );
+                });
             });
         });
         if let Some(doc) = app.circuit.as_mut() {

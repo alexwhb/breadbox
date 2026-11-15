@@ -179,14 +179,10 @@ pub fn radio_panel(
 
     let cards = model.map(|m| m.cards.as_slice()).unwrap_or(&[]);
     if cards.is_empty() {
-        empty_card(
-            ui,
-            p,
-            Icon::Wifi,
-            "No radio on this bench",
-            "Add an ESP-01 Wi-Fi module (or an ESP32) on the Workbench and it joins SIM-AP here: DHCP, DNS, MQTT on the built-in broker.",
-            None,
-        );
+        let tip = "Place an ESP-01 or ESP32 on the Workbench; it joins SIM-AP (DHCP, DNS, MQTT).";
+        empty_card(ui, p, Icon::Wifi, "No radio on this bench", None, None)
+            .response
+            .on_hover_text(tip);
     }
     for c in cards.iter().filter(|c| c.kind != RadioKind::Ble) {
         widgets::inner_card_frame(p, false)
@@ -202,11 +198,7 @@ pub fn radio_panel(
                         _ => Icon::Wifi,
                     };
                     icon.show(ui, 18.0, p.info);
-                    ui.label(
-                        egui::RichText::new(format!("{} · {}", c.label, c.title))
-                            .font(font::heading(14.0))
-                            .color(p.text),
-                    );
+                    // the status tag first, so a long title is cut instead of running under it
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let tone = match c.tone {
                             StatusTone::Ok => Tone::Ok,
@@ -215,6 +207,16 @@ pub fn radio_panel(
                             StatusTone::Off => Tone::Neutral,
                         };
                         widgets::tag(ui, &c.status, tone);
+                        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(format!("{} · {}", c.label, c.title))
+                                        .font(font::heading(14.0))
+                                        .color(p.text),
+                                )
+                                .truncate(),
+                            );
+                        });
                     });
                 });
                 widgets::kv_grid(ui, &format!("radio-{}", c.label), &c.rows, 120.0);
@@ -227,20 +229,11 @@ pub fn radio_panel(
     {
         ui.vertical(|ui| {
             ui.spacing_mut().item_spacing.y = 6.0;
-            ui.horizontal(|ui| {
-                ui.label(
-                    egui::RichText::new("Placement")
-                        .font(font::semibold(12.0))
-                        .color(p.text_muted),
-                );
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(
-                        egui::RichText::new("drag the bench · arrows nudge 0.5 m")
-                            .font(font::ui(11.0))
-                            .color(p.text_faint),
-                    );
-                });
-            });
+            ui.label(
+                egui::RichText::new("Placement")
+                    .font(font::semibold(12.0))
+                    .color(p.text_muted),
+            );
             let mut dropped = None;
             floor_plan(ui, p, st, pl, &mut cmds, &mut dropped);
             if let Some(pos) = dropped {
@@ -425,9 +418,11 @@ pub fn radio_panel(
                 p,
                 Icon::Bluetooth,
                 "Bluetooth LE",
-                "No BLE radio on this bench. Add a BLE hat and a virtual phone appears as a central — scan, connect, read GATT characteristics.",
+                Some("No BLE radio on this bench. Add a BLE hat and a virtual phone appears as a central — scan, connect, read GATT characteristics."),
                 Some("Add BLE hat"),
-            ) {
+            )
+            .clicked
+            {
                 cmds.push(RadioCommand::AddBleHat);
             }
         }
@@ -498,7 +493,7 @@ fn walls_ui(
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if Btn::mini("Add wall")
                 .icon(Icon::Plus)
-                .tooltip("An interior wall across the line from the access point to the bench")
+                .tooltip("Adds an interior wall between the access point and the bench")
                 .show(ui)
                 .clicked()
             {
@@ -627,6 +622,8 @@ fn floor_plan(
         .unwrap_or(pl.bench);
     let w = ui.available_width();
     let (rect, canvas) = ui.allocate_exact_size(vec2(w, 150.0), Sense::click_and_drag());
+    let canvas =
+        canvas.on_hover_text("Drag the bench or click to place it; arrow keys nudge it 0.5 m.");
     canvas.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Image, true, "Floor plan"));
     let dragging = st.bench_drag.is_some();
     let view = match st.plan_view {
@@ -811,7 +808,7 @@ pub fn add_ble_hat(doc: &mut CircuitDoc) -> Result<BleHatReport, String> {
             crate::project::board_kind(&p.part).is_some()
                 && lib.get(&p.part).is_some_and(|d| d.is_mcu())
         })
-        .ok_or("Place a board (UNO, Nano, Mega, ESP32 or Pico) on the bench first.")?
+        .ok_or("Place a board on the bench first")?
         .clone();
     let bdef = lib
         .get(&board.part)
@@ -982,22 +979,32 @@ fn phone_ui(
     if phone.connected.is_none() {
         if phone.scan.is_empty() {
             ui.label(
-                egui::RichText::new("No advertisers in range.")
+                egui::RichText::new("No advertisers in range")
                     .font(font::ui(12.0))
                     .color(p.text_faint),
             );
         }
         for d in &phone.scan {
             ui.horizontal(|ui| {
-                ui.label(
-                    egui::RichText::new(format!("{} · {} dBm", d.name, d.rssi))
-                        .font(font::mono(12.0))
-                        .color(p.text),
-                );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if Btn::mini(&format!("Connect {}", d.name)).show(ui).clicked() {
+                    let name = format!("Connect {}", d.name);
+                    if Btn::mini("Connect")
+                        .accessible_name(&name)
+                        .show(ui)
+                        .clicked()
+                    {
                         cmds.push(RadioCommand::Phone(PhoneAction::Connect(d.id)));
                     }
+                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(format!("{} · {} dBm", d.name, d.rssi))
+                                    .font(font::mono(12.0))
+                                    .color(p.text),
+                            )
+                            .truncate(),
+                        );
+                    });
                 });
             });
         }
@@ -1024,14 +1031,7 @@ fn phone_ui(
             } else {
                 c.value.as_str()
             };
-            ui.add(
-                egui::Label::new(
-                    egui::RichText::new(v)
-                        .font(font::mono(12.0))
-                        .color(p.accent_soft),
-                )
-                .truncate(),
-            );
+            // buttons first, then the value cut into the space that is left
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if c.props.iter().any(|x| x.contains("notify"))
                     && Btn::mini(if c.notifying { "Stop" } else { "Notify" })
@@ -1048,6 +1048,16 @@ fn phone_ui(
                 {
                     cmds.push(RadioCommand::Phone(PhoneAction::Read(c.handle)));
                 }
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(v)
+                                .font(font::mono(12.0))
+                                .color(p.accent_soft),
+                        )
+                        .truncate(),
+                    );
+                });
             });
         });
     }
@@ -1191,15 +1201,21 @@ fn packet_log(ui: &mut Ui, p: &Palette, model: Option<&RadioPanelModel>) {
         });
 }
 
-/// Dashed empty-state card; returns true if its button was clicked.
+/// What [`empty_card`] reports: whether its button was clicked, and the card (for a tooltip).
+struct EmptyCard {
+    clicked: bool,
+    response: egui::Response,
+}
+
+/// Dashed empty-state card: a title, optional body text and an optional button.
 fn empty_card(
     ui: &mut Ui,
     p: &Palette,
     icon: Icon,
     title: &str,
-    text: &str,
+    text: Option<&str>,
     button: Option<&str>,
-) -> bool {
+) -> EmptyCard {
     let w = ui.available_width();
     let mut clicked = false;
     let resp = ui.allocate_ui(vec2(w, 0.0), |ui| {
@@ -1217,14 +1233,16 @@ fn empty_card(
                             .color(p.text),
                     );
                 });
-                ui.add(
-                    egui::Label::new(
-                        egui::RichText::new(text)
-                            .font(font::ui(12.0))
-                            .color(p.text_muted),
-                    )
-                    .wrap(),
-                );
+                if let Some(text) = text {
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(text)
+                                .font(font::ui(12.0))
+                                .color(p.text_muted),
+                        )
+                        .wrap(),
+                    );
+                }
                 if let Some(b) = button
                     && Btn::ghost(b).show(ui).clicked()
                 {
@@ -1234,7 +1252,10 @@ fn empty_card(
     });
     let r: Rect = resp.response.rect;
     widgets::controls::dashed_rect(ui.painter(), r, 8.0, p.border_strong);
-    clicked
+    EmptyCard {
+        clicked,
+        response: resp.response,
+    }
 }
 
 #[cfg(test)]

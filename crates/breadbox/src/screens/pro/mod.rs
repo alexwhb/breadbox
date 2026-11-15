@@ -464,7 +464,7 @@ impl AnalysisScreen {
                 Err(e) => {
                     let cancelled = e.message.to_ascii_lowercase().contains("cancel");
                     self.error = Some(if cancelled {
-                        "Run cancelled.".into()
+                        "Run cancelled".into()
                     } else {
                         e.message.clone()
                     });
@@ -912,11 +912,7 @@ impl AnalysisScreen {
             } else {
                 self.doc.name.clone()
             };
-            ui.label(
-                egui::RichText::new(name)
-                    .font(font::ui(12.0))
-                    .color(p.text_strong),
-            );
+            // buttons + source caption first, then the file name cut into what is left
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if Btn::plain("Open .cir…")
                     .icon_only(Icon::Folder)
@@ -935,9 +931,7 @@ impl AnalysisScreen {
                     }
                 }
                 let tip = match self.file_detached() {
-                    Some(w) => format!(
-                        "Not in the schematic: {w}. Re-sync rewrites the netlist from the schematic."
-                    ),
+                    Some(w) => format!("Not in the schematic: {w}; Re-sync rewrites the netlist"),
                     None => "Rewrite the netlist from the schematic".into(),
                 };
                 if (self.source == NetlistSource::Detached || self.file_detached().is_some())
@@ -965,6 +959,16 @@ impl AnalysisScreen {
                         .font(font::ui(12.0))
                         .color(p.text_muted),
                 );
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(name)
+                                .font(font::ui(12.0))
+                                .color(p.text_strong),
+                        )
+                        .truncate(),
+                    );
+                });
             });
         });
         ui.allocate_rect(bar, Sense::hover());
@@ -1138,11 +1142,9 @@ impl AnalysisScreen {
                             });
                         if defs.is_empty() {
                             ui.label(
-                                egui::RichText::new(
-                                    "Solves the DC bias point; results fill the .op table.",
-                                )
-                                .font(font::ui(12.0))
-                                .color(p.text_muted),
+                                egui::RichText::new("DC bias point · fills the .op table")
+                                    .font(font::ui(12.0))
+                                    .color(p.text_muted),
                             );
                         }
                         let preview = format!("{} {}", kind.keyword(), kind.from_fields(fields));
@@ -1208,14 +1210,9 @@ impl AnalysisScreen {
             ui.spacing_mut().item_spacing.y = 10.0;
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 14.0;
-                ui.label(
-                    egui::RichText::new(title)
-                        .font(font::heading(15.0))
-                        .color(p.text),
-                );
-                extra(ui);
-                if exports {
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                // the export menu first (right edge), then title + legend in what is left
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if exports {
                         let resp = Btn::plain(&format!("Export {id}"))
                             .icon_only(Icon::Dots)
                             .height(22.0)
@@ -1231,8 +1228,16 @@ impl AnalysisScreen {
                                 export = Some(ExportKind::Svg);
                             }
                         });
+                    }
+                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                        ui.label(
+                            egui::RichText::new(title)
+                                .font(font::heading(15.0))
+                                .color(p.text),
+                        );
+                        extra(ui);
                     });
-                }
+                });
             });
             content(ui, self)
         });
@@ -1252,7 +1257,7 @@ impl AnalysisScreen {
             } else {
                 self.error
                     .clone()
-                    .unwrap_or_else(|| "Run analyses to see plots.".into())
+                    .unwrap_or_else(|| "Run analyses to see plots".into())
             };
             ui.label(
                 egui::RichText::new(msg)
@@ -1315,11 +1320,14 @@ impl AnalysisScreen {
                         legend_swatch(ui, tr.color, &tr.name);
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.add_space(30.0);
-                        ui.label(
-                            egui::RichText::new(&readout)
-                                .font(font::mono(12.0))
-                                .color(p.text_muted),
+                        ui.add_space(8.0);
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(&readout)
+                                    .font(font::mono(12.0))
+                                    .color(p.text_muted),
+                            )
+                            .truncate(),
                         );
                     });
                 },

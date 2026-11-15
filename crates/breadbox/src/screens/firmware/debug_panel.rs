@@ -62,15 +62,15 @@ pub fn debug_toolbar(ui: &mut Ui, vm: Option<&DebugViewModel>) -> Option<DebugCo
             }
             (DebugState::Running, _) => ("running".to_string(), p.ok),
             (DebugState::Halted(e), _) => (format!("halted: {e}"), p.danger_soft),
-            _ => (
-                "no firmware on the bench yet — Upload to sim".to_string(),
-                p.text_muted,
-            ),
+            _ => ("no firmware yet".to_string(), p.text_muted),
         };
-        ui.label(
-            egui::RichText::new(text)
-                .font(font::mono(12.0))
-                .color(color),
+        ui.add(
+            egui::Label::new(
+                egui::RichText::new(text)
+                    .font(font::mono(12.0))
+                    .color(color),
+            )
+            .truncate(),
         );
     });
     cmd
@@ -252,15 +252,8 @@ pub fn debug_tab(
                 });
                 if let Some(m) = mem {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        caption(
-                            ui,
-                            p,
-                            &format!(
-                                "{} · {} registers · amber = changed since the previous pause",
-                                m.mcu,
-                                m.io.len()
-                            ),
-                        );
+                        caption(ui, p, &format!("{} · {} registers", m.mcu, m.io.len()))
+                            .on_hover_text("Amber values changed since the previous pause.");
                     });
                 }
             }
@@ -275,46 +268,42 @@ pub fn debug_tab(
         }
         DebugView::Memory | DebugView::Io if api_level => {
             let board = target.map(|t| t.board.as_str()).unwrap_or("This board");
-            empty(
-                ui,
-                p,
-                &format!(
-                    "Hex views need the cycle-accurate AVR core. {board} runs API-level (its sketch is compiled for this computer), so there is no SRAM, flash, EEPROM or I/O space to show."
-                ),
-            );
+            empty(ui, p, "Hex views are AVR-only").on_hover_text(format!(
+                "{board} runs API-level, so it has no SRAM, flash, EEPROM or I/O space to show."
+            ));
             false
         }
         DebugView::Memory => {
             match mem {
                 Some(m) => memory_view(ui, p, st, m),
-                None => empty(
-                    ui,
-                    p,
-                    "No memory snapshot yet — Upload to sim (or run the bench) and the AVR's SRAM, flash and EEPROM appear here.",
-                ),
+                None => {
+                    empty(ui, p, "No memory snapshot yet");
+                }
             }
             true
         }
         DebugView::Io => {
             match mem {
                 Some(m) => io_view(ui, p, st, m),
-                None => empty(
-                    ui,
-                    p,
-                    "No I/O snapshot yet — Upload to sim (or run the bench) to see the AVR's I/O registers.",
-                ),
+                None => {
+                    empty(ui, p, "No I/O snapshot yet");
+                }
             }
             true
         }
     }
 }
 
-fn caption(ui: &mut Ui, p: &Palette, text: &str) {
-    ui.label(
-        egui::RichText::new(text)
-            .font(font::ui(11.5))
-            .color(p.text_faint),
-    );
+/// A faint caption, cut with an ellipsis when the row is short (full text on hover).
+fn caption(ui: &mut Ui, p: &Palette, text: &str) -> egui::Response {
+    ui.add(
+        egui::Label::new(
+            egui::RichText::new(text)
+                .font(font::ui(11.5))
+                .color(p.text_faint),
+        )
+        .truncate(),
+    )
 }
 
 /// Region selector, "Go to address" field, region caption.
@@ -569,7 +558,7 @@ fn memory_view(ui: &mut Ui, p: &Palette, st: &mut DebugPanelState, m: &MemoryVie
                         Stroke::new(1.0, p.accent),
                         StrokeKind::Inside,
                     );
-                    caption(ui, p, "changed since the previous pause");
+                    caption(ui, p, "changed").on_hover_text("Changed since the previous pause");
                 });
             }
             caption(
@@ -702,7 +691,7 @@ fn io_view(ui: &mut Ui, p: &Palette, st: &DebugPanelState, m: &MemoryView) {
             .then_with(|| a.0.cmp(b.0))
     });
     if groups.is_empty() {
-        empty(ui, p, "No register matches the filter.");
+        empty(ui, p, "No matching registers");
         return;
     }
     const COL_W: f32 = 236.0;
@@ -808,16 +797,14 @@ fn io_row(ui: &mut Ui, p: &Palette, r: &IoRegView, mono: &FontId, w: f32, h: f32
 pub fn debug_view(ui: &mut Ui, vm: Option<&DebugViewModel>) {
     let p = pal(ui);
     let Some(vm) = vm else {
-        empty(ui, p, "Upload firmware to start a debugging session.");
+        empty(ui, p, "No firmware on the bench");
         return;
     };
     if !vm.is_paused() {
         let msg = match &vm.state {
-            DebugState::Running => {
-                "Running — set a breakpoint (click the gutter with Step · breakpoints on) or press Pause to inspect variables."
-            }
-            DebugState::NoFirmware => "Upload firmware to start a debugging session.",
-            _ => "Not paused.",
+            DebugState::Running => "Running · Pause to inspect",
+            DebugState::NoFirmware => "No firmware on the bench",
+            _ => "Not paused",
         };
         empty(ui, p, msg);
         return;
@@ -866,14 +853,14 @@ pub fn debug_view(ui: &mut Ui, vm: Option<&DebugViewModel>) {
                 });
                 ui.vertical(|ui| {
                     ui.set_width(col * 1.3);
-                    section_header(
-                        ui,
-                        if vm.debug_build {
-                            "Variables"
-                        } else {
-                            "Variables (release build: few locals)"
-                        },
-                    );
+                    ui.horizontal(|ui| {
+                        section_header(ui, "Variables");
+                        if !vm.debug_build {
+                            caption(ui, p, "release build").on_hover_text(
+                                "Release builds keep few locals; Step · breakpoints uploads a -Og build.",
+                            );
+                        }
+                    });
                     let mut rows: Vec<Row> = vm
                         .locals
                         .iter()
@@ -964,12 +951,12 @@ fn compact() -> TableStyle {
     }
 }
 
-fn empty(ui: &mut Ui, p: &Palette, msg: &str) {
+fn empty(ui: &mut Ui, p: &Palette, msg: &str) -> egui::Response {
     ui.label(
         egui::RichText::new(msg)
             .font(font::ui(12.5))
             .color(p.text_muted),
-    );
+    )
 }
 
 #[cfg(test)]

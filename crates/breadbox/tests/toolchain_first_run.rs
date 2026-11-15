@@ -105,10 +105,7 @@ fn first_run_offers_the_install_and_reports_a_failed_download() {
     // Verify without a toolchain: the output says so and the install dialog opens
     h.state_mut().ctx.command(Command::Verify);
     h.run_steps(4);
-    assert!(has_label_containing(
-        &h,
-        "No firmware toolchain yet — install it to compile sketches."
-    ));
+    assert!(has_label_containing(&h, "No toolchain installed"));
     assert!(has_label(&h, "Install the firmware toolchain"));
     assert!(has_label_containing(&h, "Downloads arduino-cli"));
     // the download fails (offline): the dialog says why and the button comes back

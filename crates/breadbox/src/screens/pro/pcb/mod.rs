@@ -255,14 +255,30 @@ impl PcbScreen {
         ui.spacing_mut().item_spacing.y = 12.0;
         widgets::section_header(ui, "Tools");
         ui.horizontal(|ui| {
-            for (t, label, icon) in [
-                (PcbTool::Select, "Select", Icon::Inspector),
-                (PcbTool::Route, "Route", Icon::Wire),
-                (PcbTool::Via, "Via", Icon::Plus),
+            for (t, label, icon, tip) in [
+                (
+                    PcbTool::Select,
+                    "Select",
+                    Icon::Inspector,
+                    "Drag footprints; R rotates, ⌫ deletes a trace or via",
+                ),
+                (
+                    PcbTool::Route,
+                    "Route",
+                    Icon::Wire,
+                    "Click a pad, the corners, then the target pad; V adds a via, Esc cancels",
+                ),
+                (
+                    PcbTool::Via,
+                    "Via",
+                    Icon::Plus,
+                    "Click the board to drop a via",
+                ),
             ] {
                 if Btn::ghost(label)
                     .icon(icon)
                     .selected(self.tool == t)
+                    .tooltip(tip)
                     .show(ui)
                     .clicked()
                 {
@@ -304,17 +320,20 @@ impl PcbScreen {
             ],
         );
         self.width = w as f64 / 100.0;
-        ui.label(
-            egui::RichText::new("Route: click a pad, click corners, click the target pad. V drops a via and switches layer, Esc cancels. Select: drag footprints, R rotates, ⌫ deletes a trace or via.")
-                .font(font::ui(11.5))
-                .color(p.text_faint),
-        );
         widgets::section_header(ui, "Board");
         ui.horizontal(|ui| {
-            if Btn::ghost("Auto-place").show(ui).clicked() {
+            if Btn::ghost("Auto-place")
+                .tooltip("Re-place every footprint in rows and size the outline around them")
+                .show(ui)
+                .clicked()
+            {
                 self.auto_place(app, true);
             }
-            if Btn::ghost("Fit outline").show(ui).clicked() {
+            if Btn::ghost("Fit outline")
+                .tooltip("Size the outline around the footprints, traces and vias")
+                .show(ui)
+                .clicked()
+            {
                 self.edit(app, pcb::fit_outline);
             }
         });
@@ -370,6 +389,9 @@ impl PcbScreen {
         widgets::section_header(ui, "Fabrication");
         if Btn::amber("Export Gerbers…")
             .icon(Icon::Download)
+            .tooltip(
+                "Gerber RS-274X copper, mask, silkscreen and outline, plus an Excellon drill file",
+            )
             .show(ui)
             .clicked()
         {
@@ -388,11 +410,6 @@ impl PcbScreen {
                 }
             }
         }
-        ui.label(
-            egui::RichText::new("Gerber RS-274X: top/bottom copper, solder mask, silkscreen, outline + Excellon drill.")
-                .font(font::ui(11.5))
-                .color(p.text_faint),
-        );
     }
 
     fn canvas(&mut self, ui: &mut Ui, app: &mut AppCtx, rect: Rect) {
@@ -402,7 +419,7 @@ impl PcbScreen {
             ui.painter().text(
                 rect.center(),
                 Align2::CENTER_CENTER,
-                "Open a project to lay out its PCB",
+                "No project open",
                 font::ui(14.0),
                 p.text_faint,
             );

@@ -299,7 +299,7 @@ fn make_your_own_lesson_from_the_bench_appears_in_lessons() {
     h.get_by_label("Validate").click();
     h.run_steps(2);
     assert!(
-        has_label_containing(&h, "Ready: the lesson loads"),
+        has_label_containing(&h, "Ready · every step"),
         "validation problems: {:?}",
         h.query_all_by_label_contains("Problem:")
             .map(|n| n

@@ -456,7 +456,7 @@ impl LessonRun {
         };
         let Some(fqbn) = bb_lessons::code::fqbn_for(self.doc.project(), &self.lib, &step_code.mcu)
         else {
-            self.build_log = vec![format!("No board `{}` on this bench.", step_code.mcu)];
+            self.build_log = vec![format!("No board `{}` on this bench", step_code.mcu)];
             return;
         };
         let src = code.text.clone();
@@ -509,16 +509,14 @@ impl LessonRun {
                     (true, Some(img)) => self.flash(&mcu, img),
                     _ => self
                         .build_log
-                        .push("The sketch didn't compile — see the errors above.".into()),
+                        .push("Compile failed · see the errors above".into()),
                 }
             }
             Err(e) => {
                 self.build_log.push(e);
                 if self.reference_image().is_some() {
-                    self.build_log.push(
-                        "No Arduino toolchain here — you can load the lesson's reference build instead."
-                            .into(),
-                    );
+                    self.build_log
+                        .push("No toolchain · load the reference build instead".into());
                 }
             }
         }
