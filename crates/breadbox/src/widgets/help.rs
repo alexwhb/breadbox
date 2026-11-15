@@ -1,6 +1,9 @@
-//! Help → the bundled documentation in a window (`APP-4`): the Breadbox guide (README), the
-//! Plugin SDK and the lesson format, rendered by the Markdown widget from the app resources
+//! Help → the bundled documentation in a window (`APP-4`): the Breadbox guide (README), one
+//! page per screen (`docs/guide/*.md`, opened by each screen's "?" button), the Plugin SDK and
+//! the lesson format, rendered by the Markdown widget from the app resources
 //! (`Contents/Resources/docs` in the bundle, the repository in development).
+//!
+//! UI text stays short (see `docs/UI-TEXT.md`); anything that needs a paragraph lives here.
 
 use crate::app::AppCtx;
 use crate::theme::{font, pal};
@@ -14,20 +17,40 @@ pub enum HelpTopic {
     /// README: what Breadbox is, getting started, building.
     #[default]
     Guide,
+    /// `docs/guide/workbench.md`: bench, wiring, world, instruments, probes, serial.
+    Workbench,
+    /// `docs/guide/firmware.md`: sketches, Verify / Upload, debugging, radios.
+    Firmware,
+    /// `docs/guide/pro.md`: netlist, analyses, schematic, PCB.
+    Pro,
+    /// `docs/guide/plugins.md`: catalog, permissions, instruments, local plugins.
+    Plugins,
+    /// `docs/guide/lessons.md`: tracks, math mode, the lesson editor.
+    Lessons,
     PluginSdk,
     LessonFormat,
 }
 
 impl HelpTopic {
-    pub const ALL: [HelpTopic; 3] = [
+    pub const ALL: [HelpTopic; 8] = [
         HelpTopic::Guide,
+        HelpTopic::Workbench,
+        HelpTopic::Firmware,
+        HelpTopic::Pro,
+        HelpTopic::Plugins,
+        HelpTopic::Lessons,
         HelpTopic::PluginSdk,
         HelpTopic::LessonFormat,
     ];
 
     pub fn title(self) -> &'static str {
         match self {
-            HelpTopic::Guide => "Breadbox guide",
+            HelpTopic::Guide => "Getting started",
+            HelpTopic::Workbench => "Workbench",
+            HelpTopic::Firmware => "Firmware",
+            HelpTopic::Pro => "Pro mode",
+            HelpTopic::Plugins => "Plugins",
+            HelpTopic::Lessons => "Lessons",
             HelpTopic::PluginSdk => "Plugin SDK",
             HelpTopic::LessonFormat => "Lesson format",
         }
@@ -37,6 +60,11 @@ impl HelpTopic {
     fn files(self) -> &'static [&'static str] {
         match self {
             HelpTopic::Guide => &["docs/README.md", "README.md"],
+            HelpTopic::Workbench => &["docs/guide/workbench.md"],
+            HelpTopic::Firmware => &["docs/guide/firmware.md"],
+            HelpTopic::Pro => &["docs/guide/pro.md"],
+            HelpTopic::Plugins => &["docs/guide/plugins.md"],
+            HelpTopic::Lessons => &["docs/guide/lessons.md"],
             HelpTopic::PluginSdk => &["docs/PLUGIN-SDK.md"],
             HelpTopic::LessonFormat => &["docs/LESSON-FORMAT.md"],
         }
@@ -95,23 +123,27 @@ pub fn show(ctx: &egui::Context, app: &mut AppCtx) {
         .resizable(true)
         .show(ctx, |ui| {
             let p = pal(ui);
-            ui.horizontal(|ui| {
-                let segs: Vec<widgets::Seg<HelpTopic>> = HelpTopic::ALL
-                    .iter()
-                    .map(|t| widgets::Seg::new(*t, t.title()))
-                    .collect();
-                widgets::segmented(ui, "Help topic", &mut topic, &segs);
-            });
-            ui.add_space(6.0);
-            ui.separator();
-            egui::ScrollArea::vertical()
-                .id_salt(("help-scroll", topic))
-                .auto_shrink([false, false])
-                .show(ui, |ui| {
-                    ui.style_mut().override_font_id = Some(font::ui(13.0));
-                    ui.visuals_mut().override_text_color = Some(p.text_dim);
-                    markdown::show(ui, &text);
+            ui.horizontal_top(|ui| {
+                // topic list on the left (eight topics don't fit a segmented control)
+                ui.vertical(|ui| {
+                    ui.set_width(160.0);
+                    for t in HelpTopic::ALL {
+                        let r = widgets::menu_item(ui, t.title(), t == topic, true);
+                        if r {
+                            topic = t;
+                        }
+                    }
                 });
+                ui.separator();
+                egui::ScrollArea::vertical()
+                    .id_salt(("help-scroll", topic))
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        ui.style_mut().override_font_id = Some(font::ui(13.0));
+                        ui.visuals_mut().override_text_color = Some(p.text_dim);
+                        markdown::show(ui, &text);
+                    });
+            });
         });
     app.help = open.then_some(topic);
 }

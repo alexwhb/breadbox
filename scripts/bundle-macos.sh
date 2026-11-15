@@ -17,7 +17,7 @@
 #   lessons/             lesson tracks: TOML, start benches, prebuilt firmware, sketches
 #   plugins/             first-party plugins (manifests, .wasm, art, sources) + SDK examples
 #   crates/bb-plugin-sdk the guest SDK the plugin sources build against
-#   docs/                README, PLUGIN-SDK, LESSON-FORMAT, plugin.schema.json
+#   docs/                README, guide/ (per-screen help), PLUGIN-SDK, LESSON-FORMAT, plugin.schema.json
 #   fonts/               Inter, JetBrains Mono, Space Grotesk + their OFL licences
 #   hostcore/            the Arduino host core for ESP32 / Pico builds (the app compiles its
 #                        embedded copy; this is the readable reference)
@@ -93,6 +93,8 @@ copy crates/bb-firmware/hostcore "$res/hostcore"
 copy assets/fonts "$res/fonts"
 mkdir -p "$res/docs"
 cp README.md docs/PLUGIN-SDK.md docs/LESSON-FORMAT.md docs/plugin.schema.json "$res/docs/"
+mkdir -p "$res/docs/guide"
+cp docs/guide/*.md "$res/docs/guide/"
 
 # third-party notices: every crate linked into the app (normal dependencies, this platform)
 mkdir -p "$res/licenses"
