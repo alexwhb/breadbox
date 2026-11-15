@@ -353,9 +353,8 @@ impl AppCtx {
                 .request_repaint_after(crate::plugins::HOT_RELOAD_EVERY);
         }
         for name in std::mem::take(&mut self.plugins.reloaded) {
-            self.toasts.info(format!(
-                "Reloaded {name} — the bench restarted with the new version"
-            ));
+            self.toasts
+                .info(format!("Reloaded {name} · bench restarted"));
         }
         if self.plugins.applied == self.plugins.generation {
             return;

@@ -182,7 +182,7 @@ fn breadboard_and_schematic_views_toggle_and_pro_schematic_renders() {
     ));
     h.run_steps(5);
     assert!(has_label(&h, "Schematic canvas"));
-    assert!(has_label_containing(&h, "same netlist as the bench"));
+    assert!(has_label_containing(&h, "Sheet 1 · garden-node.sch"));
     screenshot(&mut h, "pro-schematic");
 }
 

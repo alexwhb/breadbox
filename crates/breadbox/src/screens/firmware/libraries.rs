@@ -57,13 +57,14 @@ impl LibraryManager {
             |ui| {
                 ui.spacing_mut().item_spacing.y = 10.0;
                 let Some(tc) = tc.clone() else {
-                    ui.label(egui::RichText::new("Install the toolchain first — the library index comes with arduino-cli.").color(p.text_muted));
+                    ui.label(egui::RichText::new("Toolchain not installed").color(p.text_muted))
+                        .on_hover_text("The library index comes with arduino-cli; install the toolchain first.");
                     return;
                 };
                 ui.horizontal(|ui| {
                     let r = ui.add(
                         egui::TextEdit::singleline(&mut self.query)
-                            .hint_text("Search the Arduino Library Manager (e.g. ArduinoJson)")
+                            .hint_text("Search libraries (e.g. ArduinoJson)")
                             .font(font::ui(13.0))
                             .desired_width(400.0),
                     );
@@ -208,7 +209,11 @@ impl InstallDialog {
                 ui.spacing_mut().item_spacing.y = 10.0;
                 let reason = match &app.toolchain.state {
                     ToolchainState::Missing { reason, .. } => {
-                        format!("Breadbox compiles sketches with arduino-cli + avr-gcc — {reason}.")
+                        let mut r = reason.clone();
+                        if let Some(c) = r.get(..1) {
+                            r.replace_range(..1, &c.to_uppercase());
+                        }
+                        r
                     }
                     ToolchainState::Failed(e) => format!("The last install failed: {e}"),
                     ToolchainState::Ready(t) => format!(
@@ -217,9 +222,9 @@ impl InstallDialog {
                         t.cli_version
                     ),
                     ToolchainState::Installing => "Installing…".into(),
-                    ToolchainState::Detecting => "Looking for an existing install…".into(),
+                    ToolchainState::Detecting => "Looking for an install…".into(),
                     ToolchainState::Unresponsive(e) => e.clone(),
-                    ToolchainState::Disabled => "Toolchain detection is off.".into(),
+                    ToolchainState::Disabled => "Toolchain detection is off".into(),
                 };
                 ui.add(
                     egui::Label::new(
@@ -230,10 +235,13 @@ impl InstallDialog {
                     .wrap(),
                 );
                 ui.label(
-                egui::RichText::new("Downloads arduino-cli and the arduino:avr core into ~/Library/Application Support/Breadbox/toolchain (≈ 150 MB). On Apple Silicon without Rosetta a native avr-gcc is installed with Homebrew.")
-                    .font(font::ui(12.0))
-                    .color(p.text_muted),
-            );
+                    egui::RichText::new("Downloads arduino-cli and the AVR core (≈ 150 MB)")
+                        .font(font::ui(12.0))
+                        .color(p.text_muted),
+                )
+                .on_hover_text(
+                    "Into ~/Library/Application Support/Breadbox/toolchain; on Apple Silicon without Rosetta, Homebrew adds a native avr-gcc.",
+                );
                 if let Some(pr) = app.toolchain.install_progress() {
                     progress(ui, pr.fraction, &pr.step);
                     let tail: Vec<String> = pr.log.iter().rev().take(6).rev().cloned().collect();

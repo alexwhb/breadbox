@@ -288,19 +288,28 @@ impl LessonEditor {
                         font::mono(11.0),
                         p.text_muted,
                     );
-                    ui.painter().text(
-                        pos2(r.left() + 28.0, r.center().y),
-                        egui::Align2::LEFT_CENTER,
-                        &s.title,
-                        font::ui(13.0),
-                        if on { p.accent_soft } else { p.text_dim },
-                    );
-                    ui.painter().text(
+                    let kind_r = ui.painter().text(
                         pos2(r.right() - 8.0, r.center().y),
                         egui::Align2::RIGHT_CENTER,
                         s.kind.to_uppercase(),
                         font::mono_medium(9.5),
                         p.info,
+                    );
+                    // the title stops (with an ellipsis) before the kind tag
+                    let color = if on { p.accent_soft } else { p.text_dim };
+                    let mut job = egui::text::LayoutJob::simple_singleline(
+                        s.title.clone(),
+                        font::ui(13.0),
+                        color,
+                    );
+                    job.wrap = egui::text::TextWrapping::truncate_at_width(
+                        (kind_r.left() - 10.0 - (r.left() + 28.0)).max(20.0),
+                    );
+                    let g = ui.painter().layout_job(job);
+                    ui.painter().galley(
+                        pos2(r.left() + 28.0, r.center().y - g.size().y / 2.0),
+                        g,
+                        color,
                     );
                     let lab = format!("Step {}: {}", i + 1, s.title);
                     resp.widget_info(|| {
@@ -352,133 +361,202 @@ impl LessonEditor {
             });
         // ---- middle: the selected step
         let mut mc = widgets::child_ui(ui, mid.shrink(22.0));
-        egui::ScrollArea::vertical().id_salt("les-ed-mid").auto_shrink([false, false]).show(&mut mc, |ui| {
-            ui.set_width(ui.available_width());
-            ui.spacing_mut().item_spacing.y = 12.0;
-            let sel = self.selected;
-            if self.draft.lesson.steps.get(sel).is_none() {
-                ui.label(egui::RichText::new("Add a first step: “explain” says what the circuit does, “build” asks for wiring, “measure” reads an instrument, “quiz” asks a question.").font(font::ui(13.0)).color(p.text_muted));
-                return;
-            }
-            let mut suggestions_part: Vec<Suggestion> = Vec::new();
-            let mut suggestions_pins: Vec<Suggestion> = Vec::new();
-            if self.pick_part.is_some() {
-                suggestions_part = self.part_suggestions(app, run);
-            }
-            if self.pin_a.contains('.') && self.pin_b.contains('.') {
-                let lib = app.plugins.library();
-                suggestions_pins = self.draft.suggest_for_pins(&lib, self.pin_a.trim(), self.pin_b.trim(), None);
-            }
-            let parts: Vec<(String, String)> = self
-                .draft
-                .project
-                .parts
-                .iter()
-                .map(|p| (p.id.clone(), format!("{} · {}", p.reference, p.part)))
-                .collect();
-            let Some(step) = self.draft.step_mut(sel) else { return };
-            ui.horizontal(|ui| {
-                ui.label(egui::RichText::new(format!("Step {}", sel + 1)).font(font::heading(18.0)).color(p.text));
-                widgets::kind_tag(ui, &step.kind.to_uppercase());
-            });
-            field(ui, "Step title", &mut step.title);
-            ui.label(egui::RichText::new("What to tell the learner").font(font::ui(12.0)).color(p.text_muted));
-            let r = ui.add(egui::TextEdit::multiline(&mut step.body).desired_rows(5).desired_width(f32::INFINITY).font(font::ui(13.0)));
-            r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::MultilineTextInput, true, "Step text"));
-            let mut formula = step.formula.clone().unwrap_or_default();
-            field(ui, "Formula (optional)", &mut formula);
-            step.formula = (!formula.trim().is_empty()).then_some(formula);
-            if let Some(q) = step.quiz.as_mut() {
-                widgets::section_header(ui, "Question");
-                field(ui, "Question", &mut q.question);
-                for (i, o) in q.options.iter_mut().enumerate() {
-                    field(ui, &format!("Answer {}", i + 1), o);
+        egui::ScrollArea::vertical()
+            .id_salt("les-ed-mid")
+            .auto_shrink([false, false])
+            .show(&mut mc, |ui| {
+                ui.set_width(ui.available_width());
+                ui.spacing_mut().item_spacing.y = 12.0;
+                let sel = self.selected;
+                if self.draft.lesson.steps.get(sel).is_none() {
+                    ui.label(
+                        egui::RichText::new("No steps yet")
+                            .font(font::ui(13.0))
+                            .color(p.text_muted),
+                    );
+                    return;
                 }
+                let mut suggestions_part: Vec<Suggestion> = Vec::new();
+                let mut suggestions_pins: Vec<Suggestion> = Vec::new();
+                if self.pick_part.is_some() {
+                    suggestions_part = self.part_suggestions(app, run);
+                }
+                if self.pin_a.contains('.') && self.pin_b.contains('.') {
+                    let lib = app.plugins.library();
+                    suggestions_pins = self.draft.suggest_for_pins(
+                        &lib,
+                        self.pin_a.trim(),
+                        self.pin_b.trim(),
+                        None,
+                    );
+                }
+                let parts: Vec<(String, String)> = self
+                    .draft
+                    .project
+                    .parts
+                    .iter()
+                    .map(|p| (p.id.clone(), format!("{} · {}", p.reference, p.part)))
+                    .collect();
+                let Some(step) = self.draft.step_mut(sel) else {
+                    return;
+                };
                 ui.horizontal(|ui| {
-                    if Btn::mini("Add answer").show(ui).clicked() {
-                        q.options.push(String::new());
+                    ui.label(
+                        egui::RichText::new(format!("Step {}", sel + 1))
+                            .font(font::heading(18.0))
+                            .color(p.text),
+                    );
+                    widgets::kind_tag(ui, &step.kind.to_uppercase());
+                });
+                field(ui, "Step title", &mut step.title);
+                ui.label(
+                    egui::RichText::new("Text")
+                        .font(font::ui(12.0))
+                        .color(p.text_muted),
+                );
+                let r = ui.add(
+                    egui::TextEdit::multiline(&mut step.body)
+                        .desired_rows(5)
+                        .desired_width(f32::INFINITY)
+                        .font(font::ui(13.0)),
+                );
+                r.widget_info(|| {
+                    egui::WidgetInfo::labeled(egui::Role::MultilineTextInput, true, "Step text")
+                });
+                let mut formula = step.formula.clone().unwrap_or_default();
+                field(ui, "Formula (optional)", &mut formula);
+                step.formula = (!formula.trim().is_empty()).then_some(formula);
+                if let Some(q) = step.quiz.as_mut() {
+                    widgets::section_header(ui, "Question");
+                    field(ui, "Question", &mut q.question);
+                    for (i, o) in q.options.iter_mut().enumerate() {
+                        field(ui, &format!("Answer {}", i + 1), o);
                     }
-                    let mut a = q.answer as f64;
-                    ui.label(egui::RichText::new("Right answer #").font(font::ui(12.0)).color(p.text_muted));
-                    if ui.add(egui::DragValue::new(&mut a).range(1.0..=q.options.len().max(1) as f64).custom_formatter(|v, _| format!("{}", v as usize + 1)).custom_parser(|s| s.parse::<f64>().ok().map(|v| v - 1.0))).changed() {
-                        q.answer = (a.max(0.0) as usize).min(q.options.len().saturating_sub(1));
+                    ui.horizontal(|ui| {
+                        if Btn::mini("Add answer").show(ui).clicked() {
+                            q.options.push(String::new());
+                        }
+                        let mut a = q.answer as f64;
+                        ui.label(
+                            egui::RichText::new("Right answer #")
+                                .font(font::ui(12.0))
+                                .color(p.text_muted),
+                        );
+                        if ui
+                            .add(
+                                egui::DragValue::new(&mut a)
+                                    .range(1.0..=q.options.len().max(1) as f64)
+                                    .custom_formatter(|v, _| format!("{}", v as usize + 1))
+                                    .custom_parser(|s| s.parse::<f64>().ok().map(|v| v - 1.0)),
+                            )
+                            .changed()
+                        {
+                            q.answer = (a.max(0.0) as usize).min(q.options.len().saturating_sub(1));
+                        }
+                    });
+                }
+                if let Some(pr) = step.predict.as_mut() {
+                    widgets::section_header(ui, "Prediction");
+                    field(ui, "Prompt", &mut pr.prompt);
+                    field(ui, "Answer (expression)", &mut pr.answer);
+                    field(ui, "Unit", &mut pr.unit);
+                }
+                // goals
+                widgets::section_header(ui, "Goals");
+                let mut remove = None;
+                for (i, c) in step.checks.iter().enumerate() {
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            egui::RichText::new(check_label(c))
+                                .font(font::mono(12.0))
+                                .color(p.text_dim),
+                        );
+                        if Btn::mini("Remove").show(ui).clicked() {
+                            remove = Some(i);
+                        }
+                    });
+                }
+                if let Some(i) = remove {
+                    step.checks.remove(i);
+                }
+                if step.checks.is_empty() {
+                    ui.label(
+                        egui::RichText::new("No goals yet")
+                            .font(font::ui(12.0))
+                            .color(p.text_faint),
+                    )
+                    .on_hover_text("Without goals the learner reads this step and presses Next.");
+                }
+                widgets::section_header(ui, "Add goals from the bench");
+                ui.label(
+                    egui::RichText::new("Pick a part")
+                        .font(font::ui(12.0))
+                        .color(p.text_muted),
+                );
+                ui.horizontal_wrapped(|ui| {
+                    for (id, name) in &parts {
+                        let on = self.pick_part.as_deref() == Some(id.as_str());
+                        let r = widgets::filter_chip(ui, name, on);
+                        if r.clicked() {
+                            self.pick_part = if on { None } else { Some(id.clone()) };
+                        }
                     }
                 });
-            }
-            if let Some(pr) = step.predict.as_mut() {
-                widgets::section_header(ui, "Prediction");
-                field(ui, "Prompt", &mut pr.prompt);
-                field(ui, "Answer (expression)", &mut pr.answer);
-                field(ui, "Unit", &mut pr.unit);
-            }
-            // goals
-            widgets::section_header(ui, "Goals");
-            let mut remove = None;
-            for (i, c) in step.checks.iter().enumerate() {
+                if parts.is_empty() {
+                    ui.label(
+                        egui::RichText::new("No captured bench yet")
+                            .font(font::ui(12.0))
+                            .color(p.text_faint),
+                    );
+                }
+                let mut add: Option<Check> = None;
+                for s in suggestions_part.iter().chain(suggestions_pins.iter()) {
+                    ui.horizontal(|ui| {
+                        let b = Btn::mini("Add").icon(Icon::Plus).show(ui);
+                        let lab = format!("Add goal: {}", s.label);
+                        b.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &lab));
+                        if b.clicked() {
+                            add = Some(s.check.clone());
+                        }
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(&s.label)
+                                    .font(font::ui(12.5))
+                                    .color(p.text_dim),
+                            )
+                            .truncate(),
+                        );
+                    });
+                }
+                ui.label(
+                    egui::RichText::new("Or two pins")
+                        .font(font::ui(12.0))
+                        .color(p.text_muted),
+                );
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new(check_label(c)).font(font::mono(12.0)).color(p.text_dim));
-                    if Btn::mini("Remove").show(ui).clicked() {
-                        remove = Some(i);
-                    }
+                    small_field(ui, "Pin A", &mut self.pin_a, "r1.1");
+                    small_field(ui, "Pin B", &mut self.pin_b, "d1.a");
                 });
-            }
-            if let Some(i) = remove {
-                step.checks.remove(i);
-            }
-            if step.checks.is_empty() {
-                ui.label(egui::RichText::new("No goals yet: the learner just reads this step and presses Next.").font(font::ui(12.0)).color(p.text_faint));
-            }
-            widgets::section_header(ui, "Add goals from the bench");
-            ui.label(egui::RichText::new("Pick a part").font(font::ui(12.0)).color(p.text_muted));
-            ui.horizontal_wrapped(|ui| {
-                for (id, name) in &parts {
-                    let on = self.pick_part.as_deref() == Some(id.as_str());
-                    let r = widgets::filter_chip(ui, name, on);
-                    if r.clicked() {
-                        self.pick_part = if on { None } else { Some(id.clone()) };
+                if let Some(c) = add {
+                    self.draft.add_check(sel, c);
+                    // goals picked from the bench hold on the captured circuit: the worked
+                    // solution ("Show me how") runs the bench so they settle
+                    if let Some(st) = self.draft.step_mut(sel)
+                        && st.solution.is_empty()
+                    {
+                        st.solution
+                            .push(bb_lessons::format::Action::Run { seconds: 1.0 });
                     }
+                    self.problems = None;
                 }
             });
-            if parts.is_empty() {
-                ui.label(egui::RichText::new("Capture a bench first (right).").font(font::ui(12.0)).color(p.text_faint));
-            }
-            let mut add: Option<Check> = None;
-            for s in suggestions_part.iter().chain(suggestions_pins.iter()) {
-                ui.horizontal(|ui| {
-                    let b = Btn::mini("Add").icon(Icon::Plus).show(ui);
-                    let lab = format!("Add goal: {}", s.label);
-                    b.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &lab));
-                    if b.clicked() {
-                        add = Some(s.check.clone());
-                    }
-                    ui.label(egui::RichText::new(&s.label).font(font::ui(12.5)).color(p.text_dim));
-                });
-            }
-            ui.label(egui::RichText::new("…or two pins (part.pin)").font(font::ui(12.0)).color(p.text_muted));
-            ui.horizontal(|ui| {
-                small_field(ui, "Pin A", &mut self.pin_a, "r1.1");
-                small_field(ui, "Pin B", &mut self.pin_b, "d1.a");
-            });
-            if let Some(c) = add {
-                self.draft.add_check(sel, c);
-                // goals picked from the bench hold on the captured circuit: the worked
-                // solution ("Show me how") runs the bench so they settle
-                if let Some(st) = self.draft.step_mut(sel)
-                    && st.solution.is_empty()
-                {
-                    st.solution
-                        .push(bb_lessons::format::Action::Run { seconds: 1.0 });
-                }
-                self.problems = None;
-            }
-        });
         // ---- right: start circuit, validation, save
         let mut rc = widgets::child_ui(ui, right.shrink(20.0));
         rc.spacing_mut().item_spacing.y = 12.0;
         widgets::section_header(&mut rc, "Start circuit");
         let pr = &self.draft.project;
         let summary = if pr.parts.is_empty() {
-            "Empty bench — capture one.".to_string()
+            "Empty bench".to_string()
         } else {
             format!(
                 "{} parts · {} wires{}",
@@ -497,20 +575,18 @@ impl LessonEditor {
         );
         r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, &summary));
         let src = current_bench(app, run).map(|(_, f)| f);
-        let cap = Btn::ghost("Capture the current bench")
+        let cap_tip = src
+            .as_ref()
+            .map(|f| format!("Copy {f} as the lesson's start circuit"));
+        let cap = Btn::ghost("Capture bench")
+            .accessible_name("Capture the current bench")
             .icon(Icon::Download)
             .enabled(src.is_some())
+            .tooltip(cap_tip.as_deref().unwrap_or("Open a bench to capture"))
             .show(&mut rc);
         if cap.clicked() {
             self.capture(app, run);
             self.problems = None;
-        }
-        if let Some(f) = &src {
-            rc.label(
-                egui::RichText::new(format!("Captures {f}."))
-                    .font(font::ui(11.5))
-                    .color(p.text_faint),
-            );
         }
         widgets::section_header(&mut rc, "Check & save");
         if Btn::ghost("Validate").show(&mut rc).clicked() {
@@ -521,7 +597,7 @@ impl LessonEditor {
         if let Some(pb) = &self.problems {
             if pb.is_empty() {
                 rc.label(
-                    egui::RichText::new("Ready: the lesson loads and every step can be completed.")
+                    egui::RichText::new("Ready · every step can be completed")
                         .font(font::ui(12.5))
                         .color(p.ok),
                 );
@@ -541,14 +617,17 @@ impl LessonEditor {
         if Btn::amber("Save lesson pack").show(&mut rc).clicked() {
             match self.save(app) {
                 Ok(dir) => app.toasts.success(format!(
-                    "Saved “{}” — it's in Lessons now ({})",
+                    "Saved “{}” to Lessons ({})",
                     self.title,
                     dir.display()
                 )),
                 Err(e) => app.toasts.error(e),
             }
         }
-        if Btn::ghost("Package .bbplugin…").show(&mut rc).clicked()
+        if Btn::ghost("Package .bbplugin…")
+            .tooltip("Share it; others install it from Plugins → Load local plugin…")
+            .show(&mut rc)
+            .clicked()
             && let Some(path) = crate::platform::save_file(
                 "Share the lesson pack",
                 &format!("{}.bbplugin", slug(&self.pack_name)),
@@ -561,7 +640,6 @@ impl LessonEditor {
                 Err(e) => app.toasts.error(e),
             }
         }
-        rc.label(egui::RichText::new("A lesson pack is a plugin (kind lesson-pack): share the .bbplugin and others install it from Plugins → Load local plugin….").font(font::ui(11.5)).color(p.text_faint));
         let _ = Arc::<()>::default;
     }
 }

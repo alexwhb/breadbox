@@ -250,14 +250,13 @@ impl PluginsScreen {
     /// "Place on bench": the plugin's (first) part on the open project's bench.
     pub fn place_on_bench(&mut self, app: &mut AppCtx, plugin: &str) -> bool {
         if app.project.is_none() {
-            app.toasts
-                .info("Open a project or an example first — then place it on its bench.");
+            app.toasts.info("Open a project first");
             return false;
         }
         let host = app.plugins.host();
         let parts = host.parts_of(plugin);
         let Some(def) = parts.first().cloned() else {
-            app.toasts.info("This plugin has no part to place.");
+            app.toasts.info("No part to place");
             return false;
         };
         let lib = app.plugins.library();
@@ -271,7 +270,7 @@ impl PluginsScreen {
             Ok(r) => {
                 let how = match (&r.replaced, r.clipped.is_empty()) {
                     (Some(_), _) => format!(
-                        "{} is now the {} — its probes stay on the same nodes",
+                        "{} is now the {} · probes kept",
                         r.reference,
                         app.plugins
                             .registry
@@ -279,9 +278,9 @@ impl PluginsScreen {
                             .map(|p| p.manifest.display_name())
                             .unwrap_or_default()
                     ),
-                    (None, false) => format!("{} placed with its probes clipped on", r.reference),
+                    (None, false) => format!("Placed {} · probes clipped on", r.reference),
                     (None, true) => format!(
-                        "{} placed — drag its probe tips onto any two nodes",
+                        "Placed {} · drag its probe tips onto two nodes",
                         r.reference
                     ),
                 };
@@ -327,7 +326,7 @@ impl PluginsScreen {
             dev
         };
         app.toasts.info(format!(
-            "Editing a local copy in {} — saved changes reload on the bench automatically.",
+            "Editing a copy in {} · saves reload live",
             dir.display()
         ));
         if open_folder {
@@ -542,12 +541,10 @@ impl PluginsScreen {
                     if is_inst && manifest.as_ref().is_some_and(|m| m.spice.load.is_some()) {
                         match self.callout.as_ref().filter(|c| c.0 == e.id) {
                             Some((_, text)) => callout_box(ui, text, true),
-                            None => callout_box(
-                                ui,
-                                "Place it on a running bench and clip its probes onto two nodes: this shows how much its input impedance shifts the node, as it would on a real bench.",
-                                false,
+                            None => callout_box(ui, "No loading readout yet", false).on_hover_text(
+                                "Place it on a running bench and clip its probes onto two nodes to see how much it shifts the node.",
                             ),
-                        }
+                        };
                     }
                     // actions
                     ui.horizontal_wrapped(|ui| {
@@ -606,7 +603,7 @@ impl PluginsScreen {
                             }
                         }
                         if e.kinds.contains(&Kind::Analysis) && active && app.project.is_some()
-                            && Btn::ghost("Open in Pro → Analysis").show(ui).clicked()
+                            && Btn::ghost("Open in Pro").accessible_name("Open in Pro → Analysis").show(ui).clicked()
                         {
                             app.navigate(Route::Pro(ProTab::Analysis));
                         }
@@ -615,23 +612,24 @@ impl PluginsScreen {
                         {
                             app.navigate(Route::Lessons);
                         }
+                        // the rarer actions live behind "⋯" (the design shows two buttons)
                         if installed {
                             let enabled = !matches!(e.status, CatalogStatus::Disabled);
-                            if Btn::plain(if enabled { "Disable" } else { "Enable" })
-                                .show(ui)
-                                .clicked()
-                            {
-                                match app.plugins.registry.set_enabled(&e.id, !enabled) {
-                                    Ok(()) => app.plugins.changed(),
-                                    Err(err) => app.toasts.error(format!("{err}")),
+                            let more = Btn::plain("More actions")
+                                .icon_only(Icon::Dots)
+                                .height(32.0)
+                                .show(ui);
+                            egui::Popup::menu(&more).show(|ui| {
+                                if widgets::menu_item(ui, if enabled { "Disable" } else { "Enable" }, false, true) {
+                                    match app.plugins.registry.set_enabled(&e.id, !enabled) {
+                                        Ok(()) => app.plugins.changed(),
+                                        Err(err) => app.toasts.error(format!("{err}")),
+                                    }
                                 }
-                            }
-                            let r = Btn::plain("Uninstall").show(ui);
-                            let lbl = format!("Uninstall {}", e.name);
-                            r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &lbl));
-                            if r.clicked() {
-                                self.confirm_uninstall = Some(e.id.clone());
-                            }
+                                if widgets::menu_item(ui, "Uninstall…", false, true) {
+                                    self.confirm_uninstall = Some(e.id.clone());
+                                }
+                            });
                         }
                     });
                     if let Some(m) = &manifest
@@ -649,16 +647,9 @@ impl PluginsScreen {
                                 .color(p.text_faint),
                         );
                     }
-                    if is_inst && !active && installed {
-                        ui.label(
-                            egui::RichText::new("Enable it to use it on the bench.")
-                                .font(font::ui(12.0))
-                                .color(p.text_muted),
-                        );
-                    }
                     if e.kinds.contains(&Kind::WorldModel) && active {
                         ui.label(
-                            egui::RichText::new("Runs on every bench while it is enabled.")
+                            egui::RichText::new("Active on every bench")
                                 .font(font::ui(12.0))
                                 .color(p.text_muted),
                         );
@@ -682,11 +673,15 @@ impl PluginsScreen {
                     .font(font::heading(18.0))
                     .color(p.text),
             );
+            ui.add_space(8.0);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.label(
-                    egui::RichText::new("Every plugin is a sandboxed package: parts, instruments, world models or solvers")
-                        .font(font::ui(12.0))
-                        .color(p.text_muted),
+                ui.add(
+                    egui::Label::new(
+                        egui::RichText::new("Every plugin is a sandboxed package: parts, instruments, world models or solvers")
+                            .font(font::ui(12.0))
+                            .color(p.text_muted),
+                    )
+                    .truncate(),
                 );
             });
         });
@@ -700,7 +695,7 @@ impl PluginsScreen {
         cards.sort_by_key(|e| e.category != self.category);
         if cards.is_empty() {
             ui.label(
-                egui::RichText::new("No plugins match your search.")
+                egui::RichText::new("No matching plugins")
                     .font(font::ui(13.0))
                     .color(p.text_faint),
             );
@@ -762,7 +757,7 @@ impl PluginsScreen {
                         CatalogStatus::Disabled => ("Enable", true),
                         CatalogStatus::NeedsApproval { .. } => ("Approve…", true),
                         CatalogStatus::UpdateAvailable { .. } => ("Update", true),
-                        CatalogStatus::Planned { .. } => ("Not in this version", false),
+                        CatalogStatus::Planned { .. } => ("Planned", false),
                         CatalogStatus::Error { .. } => ("Unavailable", false),
                     };
                     let r = Btn::ghost(label).enabled(enabled).show(ui);
@@ -889,7 +884,7 @@ impl PluginsScreen {
                 if pr.permissions.is_empty() {
                     ui.label(
                         egui::RichText::new(format!(
-                            "{} {} needs no permissions: it cannot read or change your circuit.",
+                            "{} {} asks for no permissions",
                             pr.name, pr.version
                         ))
                         .font(font::ui(13.0))
@@ -904,7 +899,7 @@ impl PluginsScreen {
                     for perm in &pr.permissions {
                         widgets::inner_card_frame(p, false).show(ui, |ui| {
                             ui.set_width(ui.available_width());
-                            ui.horizontal(|ui| {
+                            ui.horizontal_wrapped(|ui| {
                                 ui.label(
                                     egui::RichText::new(perm.id())
                                         .font(font::mono_medium(12.0))
@@ -961,10 +956,10 @@ impl PluginsScreen {
                 380.0,
                 |ui| {
                     ui.label(
-                    egui::RichText::new("Benches that use its parts show them as unknown until you install it again.")
-                        .font(font::ui(13.0))
-                        .color(p.text_dim),
-                );
+                        egui::RichText::new("Benches using its parts will show them as unknown")
+                            .font(font::ui(13.0))
+                            .color(p.text_dim),
+                    );
                     ui.add_space(6.0);
                     ui.horizontal(|ui| {
                         if Btn::danger("Uninstall").show(ui).clicked() {
@@ -1103,16 +1098,24 @@ fn nav_row(ui: &mut Ui, text: &str, on: bool, a11y: &str) -> egui::Response {
         ui.painter()
             .rect_filled(r, CornerRadius::same(6), p.bg_hover);
     }
-    ui.painter().text(
-        pos2(r.left() + 10.0, r.center().y),
-        Align2::LEFT_CENTER,
-        text,
-        font::ui(13.0),
+    // one line, cut with an ellipsis before the row's right edge (full name on hover)
+    let mut job =
+        egui::text::LayoutJob::simple_singleline(text.to_string(), font::ui(13.0), p.text_dim);
+    job.wrap = egui::text::TextWrapping::truncate_at_width(r.width() - 28.0);
+    let g = ui.painter().layout_job(job);
+    let elided = g.elided;
+    ui.painter().galley(
+        pos2(r.left() + 10.0, r.center().y - g.size().y / 2.0),
+        g,
         p.text_dim,
     );
     let a = a11y.to_string();
     resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, true, on, &a));
-    resp
+    if elided {
+        resp.on_hover_text(text)
+    } else {
+        resp
+    }
 }
 
 fn specs_grid(ui: &mut Ui, cells: &[(String, String)]) {
@@ -1157,7 +1160,7 @@ fn specs_grid(ui: &mut Ui, cells: &[(String, String)]) {
 }
 
 /// The amber monospace callout (`Probing A0 (J1 out): …`); `live` = false is a muted hint.
-fn callout_box(ui: &mut Ui, text: &str, live: bool) {
+fn callout_box(ui: &mut Ui, text: &str, live: bool) -> egui::Response {
     let p = pal(ui);
     let (fill, stroke, color) = if live {
         (
@@ -1185,6 +1188,7 @@ fn callout_box(ui: &mut Ui, text: &str, live: bool) {
     let t = text.to_string();
     resp.response
         .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, &t));
+    resp.response
 }
 
 /// Art for plugins without a front panel: a large icon tile.
@@ -1315,7 +1319,7 @@ impl Screen for PluginsScreen {
                                 Some(e) => self.detail(ui, app, e),
                                 None => {
                                     ui.label(
-                                        egui::RichText::new("No plugins match your search.")
+                                        egui::RichText::new("No matching plugins")
                                             .font(font::ui(13.0))
                                             .color(p.text_faint),
                                     );

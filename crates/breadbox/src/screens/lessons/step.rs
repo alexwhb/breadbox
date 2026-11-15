@@ -452,7 +452,8 @@ impl LessonsScreen {
                         if !run.build_log.is_empty() {
                             let tail: Vec<&String> = run.build_log.iter().rev().take(6).collect();
                             for l in tail.into_iter().rev() {
-                                let col = if l.contains("error") || l.contains("didn't") {
+                                let col = if l.contains("error") || l.starts_with("Compile failed")
+                                {
                                     p.danger_soft
                                 } else if l.starts_with("Flashed") {
                                     p.ok

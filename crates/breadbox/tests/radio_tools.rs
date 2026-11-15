@@ -1,7 +1,7 @@
 //! Virtual phone (`RF-6`) + MQTT explorer (`RF-7`) GUI tests: ble-button's HM-10 is scanned,
 //! connected and subscribed by the phone, which receives the button's notification; the
 //! explorer subscribes with a wildcard and sees garden-node's `garden/pot1`. Saves
-//! `docs/screenshots/phone.png`.
+//! `docs/screenshots/phone.png` and `mqtt.png`.
 
 mod common;
 
@@ -133,4 +133,6 @@ fn mqtt_explorer_sees_garden_pot1() {
             .is_some()),
         "own publish not seen"
     );
+    h.state_mut().ctx.toasts.clear();
+    screenshot(&mut h, "mqtt");
 }

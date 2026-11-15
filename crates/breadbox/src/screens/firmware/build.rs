@@ -179,7 +179,7 @@ pub fn run_build_cancellable(
                         host_exe: None,
                     }
                 }
-                Err(FirmwareError::Cancelled(_)) => failed("Build cancelled.".into(), req.debug),
+                Err(FirmwareError::Cancelled(_)) => failed("Build cancelled".into(), req.debug),
                 Err(e) => failed(e.to_string(), req.debug),
             }
         }

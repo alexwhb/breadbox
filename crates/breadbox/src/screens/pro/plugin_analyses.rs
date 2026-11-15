@@ -56,11 +56,7 @@ pub fn section(ui: &mut Ui, app: &mut AppCtx, netlist: &str) {
             ui.set_width(ui.available_width());
             ui.spacing_mut().item_spacing.y = 4.0;
             ui.horizontal(|ui| {
-                ui.label(
-                    egui::RichText::new(&info.name)
-                        .font(font::semibold(13.0))
-                        .color(p.text),
-                );
+                // Run first (right edge), then the name cut into what is left
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let b = Btn::mini("Run").show(ui);
                     let l = format!("Run {}", info.name);
@@ -74,14 +70,22 @@ pub fn section(ui: &mut Ui, app: &mut AppCtx, netlist: &str) {
                             .map_err(|e| e.to_string());
                         shown.insert(id.clone(), r);
                     }
+                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(&info.name)
+                                    .font(font::semibold(13.0))
+                                    .color(p.text),
+                            )
+                            .truncate(),
+                        );
+                    });
                 });
             });
+            // the plugin's own description: two lines here, all of it on hover
             if !info.description.is_empty() {
-                ui.label(
-                    egui::RichText::new(&info.description)
-                        .font(font::ui(12.0))
-                        .color(p.text_muted),
-                );
+                widgets::wrapped_text(ui, &info.description, font::ui(12.0), p.text_muted, 2)
+                    .on_hover_text(&info.description);
             }
             if !info.options.is_empty() {
                 let o: Vec<String> = info

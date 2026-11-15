@@ -209,10 +209,8 @@ impl LessonsScreen {
             Ok(dir) => match app.open_project(&dir) {
                 Ok(()) => {
                     app.navigate(Route::Workbench);
-                    app.toasts.success(format!(
-                        "Free play: a copy of the lesson bench in {}",
-                        dir.display()
-                    ));
+                    app.toasts
+                        .success(format!("Free play copy in {}", dir.display()));
                     Some(dir)
                 }
                 Err(e) => {
@@ -403,13 +401,20 @@ fn fmt(size: f32, color: Color32) -> egui::TextFormat {
 fn section(ui: &mut Ui, text: &str, top: f32) {
     let p = pal(ui);
     ui.add_space(top);
-    let g = widgets::galley_spaced(
-        ui,
+    // wraps inside the nav like the design (`TRACK 1 · ELECTRICITY YOU CAN / SEE`)
+    let mut job = egui::text::LayoutJob::default();
+    job.append(
         &text.to_uppercase(),
-        font::semibold(11.0),
-        p.text_muted,
-        0.9,
+        0.0,
+        egui::TextFormat {
+            font_id: font::semibold(11.0),
+            color: p.text_muted,
+            extra_letter_spacing: 0.9,
+            ..Default::default()
+        },
     );
+    job.wrap.max_width = ui.available_width() - 20.0;
+    let g = ui.painter().layout_job(job);
     let (r, _) = ui.allocate_exact_size(
         vec2(ui.available_width(), g.size().y + 10.0),
         Sense::hover(),
@@ -476,13 +481,14 @@ fn lesson_row(
         x += 32.0;
     }
     let color = if current { p.accent_soft } else { p.text_dim };
-    ui.painter().text(
-        pos2(x, r.center().y),
-        Align2::LEFT_CENTER,
-        title,
-        font::ui(13.0),
-        color,
-    );
+    // one line, cut with an ellipsis at the nav's edge
+    let mut job =
+        egui::text::LayoutJob::simple_singleline(title.to_string(), font::ui(13.0), color);
+    job.wrap = egui::text::TextWrapping::truncate_at_width((r.right() - 8.0 - x).max(20.0));
+    let g = ui.painter().layout_job(job);
+    let elided = g.elided;
+    ui.painter()
+        .galley(pos2(x, r.center().y - g.size().y / 2.0), g, color);
     let label = match (n, done) {
         (Some(n), true) => format!("Lesson {n}: {title} (done)"),
         (Some(n), false) => format!("Lesson {n}: {title}"),
@@ -492,7 +498,11 @@ fn lesson_row(
     if resp.hovered() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }
-    resp
+    if elided {
+        resp.on_hover_text(title)
+    } else {
+        resp
+    }
 }
 
 impl Screen for LessonsScreen {

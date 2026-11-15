@@ -253,7 +253,7 @@ impl FirmwareScreen {
         let Some(sk) = &self.sketch else {
             self.output.push(OutputLine::new(
                 LineTone::Warning,
-                "No sketch for this target.",
+                "No sketch for this target",
             ));
             return;
         };
@@ -272,20 +272,18 @@ impl FirmwareScreen {
                     match &app.toolchain.state {
                         ToolchainState::Detecting => self.output.push(OutputLine::new(
                             LineTone::Muted,
-                            "Still looking for the toolchain — try again in a moment.",
+                            "Still detecting the toolchain…",
                         )),
                         ToolchainState::Disabled => self.output.push(OutputLine::new(
                             LineTone::Warning,
-                            "Toolchain detection is off.",
+                            "Toolchain detection is off",
                         )),
                         ToolchainState::Unresponsive(e) => self
                             .output
                             .push(OutputLine::new(LineTone::Error, e.clone())),
                         _ => {
-                            self.output.push(OutputLine::new(
-                                LineTone::Warning,
-                                "No firmware toolchain yet — install it to compile sketches.",
-                            ));
+                            self.output
+                                .push(OutputLine::new(LineTone::Warning, "No toolchain installed"));
                             self.install.open = true;
                         }
                     }
@@ -379,7 +377,7 @@ impl FirmwareScreen {
         } else if upload_after {
             self.output.push(OutputLine::new(
                 LineTone::Error,
-                "Upload skipped: the sketch did not compile.",
+                "Upload skipped: the sketch has errors",
             ));
         }
     }
@@ -470,8 +468,16 @@ impl FirmwareScreen {
             Some(path) => {
                 let is_elf = path.extension().is_some_and(|e| e == "elf");
                 let fw = Firmware {
-                    elf: if is_elf { std::fs::read(&path).ok().map(Arc::new) } else { None },
-                    hex: if is_elf { None } else { std::fs::read_to_string(&path).ok() },
+                    elf: if is_elf {
+                        std::fs::read(&path).ok().map(Arc::new)
+                    } else {
+                        None
+                    },
+                    hex: if is_elf {
+                        None
+                    } else {
+                        std::fs::read_to_string(&path).ok()
+                    },
                     origin: format!("prebuilt {}", path.display()),
                     debug_build: false,
                     host_exe: None,
@@ -480,12 +486,15 @@ impl FirmwareScreen {
                     .strip_prefix(app.resources.root.clone().unwrap_or_default())
                     .map(|p| p.display().to_string())
                     .unwrap_or_else(|_| path.display().to_string());
-                self.output.push(OutputLine::new(LineTone::Muted, format!("Using prebuilt firmware {shown} (toolchain not installed)")));
+                self.output.push(OutputLine::new(
+                    LineTone::Muted,
+                    format!("No toolchain · using prebuilt {shown}"),
+                ));
                 self.flash(app, &t.id, fw);
             }
             None => self.output.push(OutputLine::new(
                 LineTone::Error,
-                "No toolchain and no prebuilt firmware for this sketch — install the toolchain to compile it.",
+                "No toolchain or prebuilt firmware for this sketch",
             )),
         }
     }
@@ -668,38 +677,63 @@ impl Screen for FirmwareScreen {
             if Btn::ghost("Step · breakpoints")
                 .selected(self.step_mode)
                 .enabled(has_target)
-                .tooltip("Debug builds (-Og) + source breakpoints: click the gutter to set one")
+                .tooltip("Build with -Og and stop at breakpoints; click the gutter to set one")
                 .show(ui)
                 .clicked()
             {
                 self.step_mode = !self.step_mode;
-                let n: usize = self.sketch.as_ref().map(|s| s.docs.iter().map(|d| d.breakpoints.len()).sum()).unwrap_or(0);
+                let n: usize = self
+                    .sketch
+                    .as_ref()
+                    .map(|s| s.docs.iter().map(|d| d.breakpoints.len()).sum())
+                    .unwrap_or(0);
                 self.output.push(OutputLine::new(
                     LineTone::Note,
                     if self.step_mode {
-                        format!("Step mode on — {n} breakpoint{} armed; Upload rebuilds with -Og for source-level debugging", if n == 1 { "" } else { "s" })
+                        format!(
+                            "Step mode on · {n} breakpoint{} armed · next upload builds with -Og",
+                            if n == 1 { "" } else { "s" }
+                        )
                     } else {
-                        "Step mode off — breakpoints disarmed".into()
+                        "Step mode off · breakpoints disarmed".into()
                     },
                 ));
                 self.push_breakpoints(app);
                 if !self.step_mode
                     && let (Some(t), true) = (self.target.clone(), app.bench.is_active())
                 {
-                    app.bench_link().debug(&t, crate::bench::DebugCommand::Continue);
+                    app.bench_link()
+                        .debug(&t, crate::bench::DebugCommand::Continue);
                 }
             }
             let busy = self.build.is_some();
-            if Btn::amber("Upload to sim").enabled(has_target && !busy).show(ui).clicked() {
+            if Btn::amber("Upload to sim")
+                .enabled(has_target && !busy)
+                .tooltip("Compile if needed, then flash the bench (⌘U)")
+                .show(ui)
+                .clicked()
+            {
                 self.upload(app);
             }
-            if Btn::ghost("Verify").enabled(has_target && !busy).show(ui).clicked() {
+            if Btn::ghost("Verify")
+                .enabled(has_target && !busy)
+                .tooltip("Compile the sketch (⌘B)")
+                .show(ui)
+                .clicked()
+            {
                 self.start_verify(app, false);
             }
             // target selector
-            let label = self.current_target().map(|t| t.label.clone()).unwrap_or_else(|| "no MCU in this project".into());
+            let label = self
+                .current_target()
+                .map(|t| t.label.clone())
+                .unwrap_or_else(|| "No MCU".into());
             let targets = self.targets.clone();
-            let radios = app.project.as_ref().map(|p| p.radios.clone()).unwrap_or_default();
+            let radios = app
+                .project
+                .as_ref()
+                .map(|p| p.radios.clone())
+                .unwrap_or_default();
             let current = self.target.clone();
             let board = self.compile_board();
             let (_, picked) = widgets::select(ui, "Target", &label, 210.0, |ui| {
@@ -720,7 +754,11 @@ impl Screen for FirmwareScreen {
                 }
                 if !targets.is_empty() {
                     ui.separator();
-                    ui.label(egui::RichText::new("Compile for board").font(font::ui(11.0)).color(p.text_muted));
+                    ui.label(
+                        egui::RichText::new("Compile for board")
+                            .font(font::ui(11.0))
+                            .color(p.text_muted),
+                    );
                     for (fqbn, name, _) in compile_boards() {
                         if menu_item(ui, &name, board.as_deref() == Some(fqbn.as_str()), true) {
                             pick = Some((None, Some(fqbn)));
@@ -738,7 +776,11 @@ impl Screen for FirmwareScreen {
                     self.board_override.insert(t, b);
                 }
             }
-            ui.label(egui::RichText::new("Target").font(font::ui(12.0)).color(p.text_muted));
+            ui.label(
+                egui::RichText::new("Target")
+                    .font(font::ui(12.0))
+                    .color(p.text_muted),
+            );
         });
     }
 
@@ -1045,6 +1087,7 @@ impl FirmwareScreen {
             }
             _ => None,
         };
+        // at most two lines here; the whole message on hover (and in the Output tab on Verify)
         if let Some((text, color)) = detail {
             ui.add_space(4.0);
             let w = ui.available_width() - 20.0;
@@ -1052,12 +1095,7 @@ impl FirmwareScreen {
                 ui.add_space(8.0);
                 ui.vertical(|ui| {
                     ui.set_max_width(w);
-                    ui.add(
-                        egui::Label::new(
-                            egui::RichText::new(text).font(font::ui(11.5)).color(color),
-                        )
-                        .wrap(),
-                    );
+                    widgets::wrapped_text(ui, &text, font::ui(11.5), color, 2).on_hover_text(&text);
                 });
             });
         }
@@ -1108,16 +1146,12 @@ impl FirmwareScreen {
             ui.add_space(12.0);
             ui.horizontal(|ui| {
                 ui.add_space(8.0);
-                ui.add(
-                    egui::Label::new(
-                        egui::RichText::new(
-                            "Example project — edits stay in memory. ⌘S saves a copy.",
-                        )
-                        .font(font::ui(11.0))
+                ui.label(
+                    egui::RichText::new("Example · not saved")
+                        .font(font::ui(11.5))
                         .color(p.text_faint),
-                    )
-                    .wrap(),
-                );
+                )
+                .on_hover_text("Edits stay in memory; ⌘S saves a copy of the project.");
             });
         }
     }
@@ -1127,10 +1161,7 @@ impl FirmwareScreen {
         let vm = self.debug_vm(app).cloned();
         let Some(sk) = self.sketch.as_mut() else {
             ui.centered_and_justified(|ui| {
-                ui.label(
-                    egui::RichText::new("This MCU has no sketch folder in the project.")
-                        .color(p.text_muted),
-                );
+                ui.label(egui::RichText::new("No sketch for this MCU").color(p.text_muted));
             });
             return;
         };
@@ -1210,9 +1241,7 @@ impl FirmwareScreen {
             if !self.step_mode && on {
                 self.output.push(OutputLine::new(
                     LineTone::Muted,
-                    format!(
-                        "Breakpoint on line {line} saved — turn on Step · breakpoints to arm it"
-                    ),
+                    format!("Breakpoint on line {line} saved · Step · breakpoints is off"),
                 ));
             }
             self.push_breakpoints(app);
@@ -1283,14 +1312,17 @@ impl FirmwareScreen {
                         } else {
                             "stopped"
                         };
-                        ui.label(
-                            egui::RichText::new(format!(
-                                "{} · 115200 baud · NL · t = {} · {state}",
-                                self.target.as_deref().unwrap_or("-"),
-                                crate::bench::clock_label(t)
-                            ))
-                            .font(font::mono(12.0))
-                            .color(p.text_muted),
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(format!(
+                                    "{} · 115200 baud · NL · t = {} · {state}",
+                                    self.target.as_deref().unwrap_or("-"),
+                                    crate::bench::clock_label(t)
+                                ))
+                                .font(font::mono(12.0))
+                                .color(p.text_muted),
+                            )
+                            .truncate(),
                         );
                     }
                     BottomTab::Debug => {}
@@ -1300,22 +1332,38 @@ impl FirmwareScreen {
         ui.add_space(8.0);
         match self.bottom {
             BottomTab::Output => {
-                egui::ScrollArea::vertical().id_salt("fw-output-scroll").stick_to_bottom(true).auto_shrink([false, false]).show(ui, |ui| {
-                    ui.spacing_mut().item_spacing.y = 0.0;
-                    if self.output.is_empty() {
-                        ui.label(egui::RichText::new("Verify compiles the sketch; Upload to sim flashes it into the bench.").font(font::mono(12.5)).color(p.text_faint));
-                    }
-                    for l in &self.output {
-                        let c = match l.kind {
-                            LineTone::Muted => p.text_muted,
-                            LineTone::Normal => p.text_dim,
-                            LineTone::Note | LineTone::Warning => p.accent,
-                            LineTone::Error => p.danger_soft,
-                            LineTone::Success => p.ok,
-                        };
-                        ui.add(egui::Label::new(egui::RichText::new(&l.text).font(font::mono(12.5)).line_height(Some(21.0)).color(c)).wrap());
-                    }
-                });
+                egui::ScrollArea::vertical()
+                    .id_salt("fw-output-scroll")
+                    .stick_to_bottom(true)
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        ui.spacing_mut().item_spacing.y = 0.0;
+                        if self.output.is_empty() {
+                            ui.label(
+                                egui::RichText::new("No output yet")
+                                    .font(font::mono(12.5))
+                                    .color(p.text_faint),
+                            );
+                        }
+                        for l in &self.output {
+                            let c = match l.kind {
+                                LineTone::Muted => p.text_muted,
+                                LineTone::Normal => p.text_dim,
+                                LineTone::Note | LineTone::Warning => p.accent,
+                                LineTone::Error => p.danger_soft,
+                                LineTone::Success => p.ok,
+                            };
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(&l.text)
+                                        .font(font::mono(12.5))
+                                        .line_height(Some(21.0))
+                                        .color(c),
+                                )
+                                .wrap(),
+                            );
+                        }
+                    });
             }
             BottomTab::Serial => {
                 let h = ui.available_height() - 36.0;
@@ -1335,11 +1383,9 @@ impl FirmwareScreen {
                             .collect();
                         if lines.is_empty() {
                             ui.label(
-                                egui::RichText::new(
-                                    "Serial output appears here after Upload to sim.",
-                                )
-                                .font(font::mono(12.5))
-                                .color(p.text_faint),
+                                egui::RichText::new("No serial output yet")
+                                    .font(font::mono(12.5))
+                                    .color(p.text_faint),
                             );
                         }
                         let start = lines.len().saturating_sub(800);
@@ -1365,12 +1411,17 @@ impl FirmwareScreen {
                         }
                     });
                 ui.horizontal(|ui| {
+                    let hint =
+                        format!("Send to {}…", self.target.as_deref().unwrap_or("the board"));
                     let r = ui.add(
                         egui::TextEdit::singleline(&mut self.serial_input)
-                            .hint_text("Send to the board (Enter)")
+                            .hint_text(hint)
                             .font(font::mono(12.5))
                             .desired_width(ui.available_width() - 80.0),
                     );
+                    r.widget_info(|| {
+                        egui::WidgetInfo::labeled(egui::Role::TextInput, true, "Send to the board")
+                    });
                     let send = (r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)))
                         | Btn::ghost("Send").small().show(ui).clicked();
                     if send && !self.serial_input.is_empty() {
@@ -1430,8 +1481,7 @@ fn radio_actions(app: &mut AppCtx, out: radio_panel::RadioPanelOutput) {
 /// the virtual phone sees it advertise.
 fn add_ble_hat(app: &mut AppCtx) {
     let Some(doc) = app.circuit.as_mut() else {
-        app.toasts
-            .info("Open a project with a board first, then add the BLE hat.");
+        app.toasts.info("Open a project first");
         return;
     };
     // the bench is not running yet but the circuit already has a BLE module: just run it
@@ -1443,17 +1493,14 @@ fn add_ble_hat(app: &mut AppCtx) {
         .map(|p| p.reference.clone());
     let added = match existing {
         Some(r) => {
-            app.toasts.info(format!(
-                "{r} is already a BLE radio on this bench — running it so the virtual phone can scan"
-            ));
+            app.toasts
+                .info(format!("{r} is already a BLE radio · running the bench"));
             true
         }
         None => match radio_panel::add_ble_hat(doc) {
             Ok(r) => {
-                app.toasts.success(format!(
-                    "Added {} · HM-10 BLE next to {} ({}) — the virtual phone sees HMSoft",
-                    r.reference, r.board, r.wiring
-                ));
+                app.toasts
+                    .success(format!("Added {} · HM-10 next to {}", r.reference, r.board));
                 true
             }
             Err(e) => {
@@ -1495,16 +1542,11 @@ fn export_packet_log(app: &mut AppCtx, f: radio_panel::LogFormat) {
     };
     let Some(path) = path else { return };
     let Some(bytes) = app.sim().and_then(|s| s.export_packet_log(f.engine_name())) else {
-        app.toasts
-            .error("This bench has no packet log to export (no radio space).");
+        app.toasts.error("No packet log on this bench");
         return;
     };
     match std::fs::write(&path, &bytes) {
-        Ok(()) => app.toasts.success(format!(
-            "Saved the packet log ({} bytes) to {}",
-            bytes.len(),
-            path.display()
-        )),
+        Ok(()) => app.toasts.success(format!("Saved {}", path.display())),
         Err(e) => app
             .toasts
             .error(format!("Could not save {}: {e}", path.display())),
@@ -1522,19 +1564,27 @@ fn file_row(ui: &mut Ui, p: &Palette, text: &str, selected: bool) -> egui::Respo
         ui.painter()
             .rect_filled(r, CornerRadius::same(5), p.bg_hover);
     }
-    ui.painter().text(
-        pos2(r.left() + 8.0, r.center().y),
-        egui::Align2::LEFT_CENTER,
-        text,
-        font::ui(13.0),
+    // one line, cut with an ellipsis at the sidebar's edge (full name on hover)
+    let mut job =
+        egui::text::LayoutJob::simple_singleline(text.to_string(), font::ui(13.0), p.text_dim);
+    job.wrap = egui::text::TextWrapping::truncate_at_width(r.width() - 16.0);
+    let g = ui.painter().layout_job(job);
+    let elided = g.elided;
+    ui.painter().galley(
+        pos2(r.left() + 8.0, r.center().y - g.size().y / 2.0),
+        g,
         p.text_dim,
     );
-    resp
+    if elided {
+        resp.on_hover_text(text)
+    } else {
+        resp
+    }
 }
 
 fn empty_state(ui: &mut Ui, p: &Palette, app: &mut AppCtx) {
     let area = ui.max_rect();
-    let card = Rect::from_center_size(area.center(), vec2(460.0, 190.0));
+    let card = Rect::from_center_size(area.center(), vec2(420.0, 124.0));
     ui.painter().rect(
         card,
         CornerRadius::same(12),
@@ -1549,8 +1599,15 @@ fn empty_state(ui: &mut Ui, p: &Palette, app: &mut AppCtx) {
             .font(font::heading(18.0))
             .color(p.text_strong),
     );
-    c.label(egui::RichText::new("Place an UNO, Nano, Mega, ESP32 or Pico on the Workbench and its sketch opens here. Or open an example with firmware.").font(font::ui(13.0)).color(p.text_muted));
+    c.add_space(4.0);
     c.horizontal(|ui| {
+        if Btn::ghost("Open Workbench")
+            .tooltip("Place an UNO, Nano, Mega, ESP32 or Pico; its sketch opens here.")
+            .show(ui)
+            .clicked()
+        {
+            app.navigate(crate::router::Route::Workbench);
+        }
         if Btn::ghost("Open blink example").show(ui).clicked()
             && let Some(ex) = app.examples.iter().find(|e| e.name == "blink")
         {
