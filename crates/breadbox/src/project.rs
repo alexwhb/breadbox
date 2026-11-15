@@ -127,6 +127,29 @@ impl Project {
         })?;
         let json: serde_json::Value = serde_json::from_str(&text)
             .with_context(|| format!("{}: invalid JSON", file.display()))?;
+        Ok(Project::from_value(dir, json))
+    }
+
+    /// Re-reads name, MCUs and radios from the edited circuit (boards added on the bench).
+    pub fn refresh_from(&mut self, circuit: &bb_circuit::Project) {
+        if let Ok(json) = serde_json::to_value(circuit) {
+            let read_only = self.read_only;
+            let mcus_before = self.mcus.clone();
+            *self = Project::from_value(&self.dir.clone(), json);
+            self.read_only = read_only;
+            // keep prebuilt images that pointed outside the folder
+            for m in self.mcus.iter_mut() {
+                if let Some(b) = mcus_before.iter().find(|b| b.reference == m.reference)
+                    && m.image.is_none()
+                {
+                    m.image = b.image.clone();
+                }
+            }
+        }
+    }
+
+    /// Builds the view from `project.json` contents.
+    pub fn from_value(dir: &Path, json: serde_json::Value) -> Project {
         let name = json["name"]
             .as_str()
             .map(str::to_string)
@@ -157,7 +180,7 @@ impl Project {
                 }
             }
         }
-        Ok(Project {
+        Project {
             dir: dir.to_path_buf(),
             name,
             mode,
@@ -166,7 +189,7 @@ impl Project {
             mcus,
             radios,
             json,
-        })
+        }
     }
 
     /// Creates `<parent>/<name>.breadbox/` with a minimal `project.json` (+ an UNO with a

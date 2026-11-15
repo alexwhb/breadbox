@@ -21,6 +21,9 @@ bb-spice = { workspace = true }
 bb-avr = { workspace = true }
 bb-firmware = { workspace = true }
 bb-radio = { workspace = true }
+bb-circuit = { workspace = true }
+bb-world = { workspace = true }
+bb-sim = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
@@ -35,6 +38,9 @@ egui_plot = "0.38.0"
 env_logger = "0.11"
 image = { version = "0.25", default-features = false, features = ["png"] }
 rfd = "0.18.0"
+crossbeam-channel = "0.5"
+zip = { version = "9", default-features = false, features = ["deflate"] }
+rodio = { version = "0.21", default-features = false, features = ["playback"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 muda = "0.21.2"

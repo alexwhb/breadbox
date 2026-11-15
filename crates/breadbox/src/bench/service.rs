@@ -8,6 +8,10 @@ use std::collections::HashMap;
 
 pub struct BenchService {
     factory: BenchFactory,
+    /// Bundled prebuilt firmware (passed to new benches).
+    pub fixtures: Option<PathBuf>,
+    /// Benches play audio (off in tests).
+    pub audio: bool,
     link: Option<Box<dyn BenchLink>>,
     project_dir: Option<PathBuf>,
     pub speed: SimSpeed,
@@ -30,6 +34,8 @@ impl BenchService {
     pub fn new(factory: BenchFactory, speed: SimSpeed) -> BenchService {
         BenchService {
             factory,
+            fixtures: None,
+            audio: false,
             link: None,
             project_dir: None,
             speed,
@@ -52,6 +58,17 @@ impl BenchService {
 
     /// The link for `project`, created on first use.
     pub fn link(&mut self, project: Option<&Project>, repaint: &Repaint) -> &mut dyn BenchLink {
+        self.link_with(project, None, repaint)
+    }
+
+    /// The link for `project`; a new bench simulates `circuit` (the in-memory document) when
+    /// given, else the project's `project.json`.
+    pub fn link_with(
+        &mut self,
+        project: Option<&Project>,
+        circuit: Option<bb_circuit::Project>,
+        repaint: &Repaint,
+    ) -> &mut dyn BenchLink {
         let dir = project.map(|p| p.dir.clone());
         if self.link.is_none() || self.project_dir != dir {
             self.shutdown();
@@ -61,6 +78,9 @@ impl BenchService {
                 radios: project.map(|p| p.radios.clone()).unwrap_or_default(),
                 repaint: repaint.clone(),
                 speed: self.speed,
+                circuit,
+                fixtures: self.fixtures.clone(),
+                audio: self.audio,
             };
             self.link = Some((self.factory)(&spec));
             self.project_dir = dir;
@@ -71,6 +91,11 @@ impl BenchService {
     /// The link if one exists.
     pub fn existing(&mut self) -> Option<&mut (dyn BenchLink + 'static)> {
         self.link.as_deref_mut()
+    }
+
+    /// The co-simulation bench, if the link is one (and exists).
+    pub fn sim(&mut self) -> Option<&mut super::sim::SimBench> {
+        self.link.as_deref_mut().and_then(|l| l.as_sim())
     }
 
     pub fn is_active(&self) -> bool {

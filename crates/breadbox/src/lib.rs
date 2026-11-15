@@ -3,6 +3,8 @@
 
 pub mod app;
 pub mod bench;
+pub mod canvas;
+pub mod circuit;
 pub mod jobs;
 pub mod platform;
 pub mod project;

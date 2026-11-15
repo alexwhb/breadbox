@@ -7,16 +7,20 @@
 //! * [`avr::AvrBench`] (this crate) — one `bb_avr::Avr` running real firmware with a
 //!   `bb_firmware::Debugger`, optionally wired to an ESP-01 radio module from `bb-radio` (the
 //!   garden-node setup). No circuit: analog inputs are fixed voltages.
-//! * the full co-simulation link over `bb_sim::SimHandle` (phase 4, `ui-bench` agent) — the
-//!   same trait, so the Firmware screen, debugger and Radios panel work unchanged.
+//! * [`sim::SimBench`] — the app's default: the full co-simulation over `bb_sim::SimHandle`
+//!   (analog circuit, MCUs, devices, world, radios, instruments). The same trait, so the
+//!   Firmware screen, debugger and Radios panel work unchanged; the Workbench reaches its extra
+//!   API (telemetry, world, circuit updates) through [`BenchLink::as_sim`].
 //!
 //! Contract rules: every method returns quickly (the bench runs on its own thread); `poll`
 //! is called once per UI frame while a screen that shows bench state is visible and drains
 //! the serial/event queues; the link calls the repaint callback it was created with whenever
 //! new data is available, so an idle UI costs nothing.
 
+pub mod audio;
 pub mod avr;
 pub mod service;
+pub mod sim;
 
 use bb_core::SimTime;
 use std::path::PathBuf;
@@ -53,6 +57,8 @@ pub struct Firmware {
     pub origin: String,
     /// Built with `-Og -fno-lto` for debugging.
     pub debug_build: bool,
+    /// Host-compiled sketch executable for API-level boards (ESP32 / Pico).
+    pub host_exe: Option<PathBuf>,
 }
 
 /// Result of a successful upload.
@@ -536,6 +542,11 @@ pub trait BenchLink: Send {
     fn radio(&mut self, cmd: RadioCommand);
     /// Drains queued output and returns the latest view models. Never blocks for long.
     fn poll(&mut self) -> BenchUpdate;
+    /// The co-simulation bench behind this link (the Workbench's telemetry, world, circuit
+    /// updates); `None` for benches without a circuit.
+    fn as_sim(&mut self) -> Option<&mut sim::SimBench> {
+        None
+    }
 }
 
 /// Inputs to a bench factory.
@@ -549,10 +560,16 @@ pub struct BenchSpec {
     pub radios: Vec<(String, String)>,
     pub repaint: Repaint,
     pub speed: SimSpeed,
+    /// The circuit as edited in memory (unsaved edits, read-only examples); `None` loads
+    /// `project.json` from `project_dir`.
+    pub circuit: Option<bb_circuit::Project>,
+    /// Bundled prebuilt firmware (`examples/fixtures`), flashed when the bench starts.
+    pub fixtures: Option<PathBuf>,
+    /// Play buzzers / relay clicks through the default audio output.
+    pub audio: bool,
 }
 
-/// Creates the bench for a project. The app uses [`avr::AvrBench::factory`] until `bb-sim`'s
-/// link registers itself here.
+/// Creates the bench for a project. The app's default is [`sim::SimBench::factory`].
 pub type BenchFactory = Arc<dyn Fn(&BenchSpec) -> Box<dyn BenchLink> + Send + Sync>;
 
 #[cfg(test)]

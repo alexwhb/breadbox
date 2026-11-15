@@ -1,9 +1,10 @@
 //! The eframe app: shared services ([`AppCtx`]), the top bar (`APP-1`), screen routing,
 //! menu + keyboard commands (`APP-2`, `APP-4`), persistence (`APP-5`).
 
-use crate::bench::avr::AvrBench;
 use crate::bench::service::BenchService;
+use crate::bench::sim::SimBench;
 use crate::bench::{BenchFactory, BenchLink, Repaint, SimSpeed};
+use crate::circuit::CircuitDoc;
 use crate::platform;
 use crate::project::{self, ExampleInfo, Project, ProjectMode, RecentProject, Resources};
 use crate::router::{Command, ProTab, Route, ScreenRegistry, ScreenSlot};
@@ -32,6 +33,8 @@ pub struct AppOptions {
     pub resources: Option<Resources>,
     pub bench_factory: Option<BenchFactory>,
     pub sim_speed: SimSpeed,
+    /// Bench audio (buzzers, relay clicks) through the default output device.
+    pub audio: bool,
 }
 
 impl Default for AppOptions {
@@ -43,6 +46,7 @@ impl Default for AppOptions {
             resources: None,
             bench_factory: None,
             sim_speed: SimSpeed::RealTime(1.0),
+            audio: true,
         }
     }
 }
@@ -58,6 +62,7 @@ impl AppOptions {
             resources: None,
             bench_factory: None,
             sim_speed: SimSpeed::Max,
+            audio: false,
         }
     }
 }
@@ -78,6 +83,8 @@ pub struct AppCtx {
     pub egui: egui::Context,
     pub route: Route,
     pub project: Option<Project>,
+    /// The open project's circuit document (shared by Workbench, schematic and Pro).
+    pub circuit: Option<CircuitDoc>,
     pub resources: Resources,
     pub examples: Vec<ExampleInfo>,
     pub recent: Vec<RecentProject>,
@@ -88,6 +95,8 @@ pub struct AppCtx {
     pub repaint: Repaint,
     /// Bumped whenever the open project changes.
     pub project_generation: u64,
+    /// Circuit electrical generation the bench last saw.
+    bench_generation: u64,
     pending: Vec<Command>,
     nav: Option<Route>,
     native_menu: bool,
@@ -116,13 +125,71 @@ impl AppCtx {
         if let Some(p) = &p {
             project::touch_recent(&mut self.recent, p);
         }
+        self.circuit = p.as_ref().and_then(|p| {
+            CircuitDoc::load(&p.dir, p.read_only)
+                .map_err(|e| log::warn!("circuit of {}: {e:#}", p.dir.display()))
+                .ok()
+        });
+        self.bench_generation = self
+            .circuit
+            .as_ref()
+            .map(|c| c.electrical_generation())
+            .unwrap_or(0);
         self.project = p;
         self.project_generation += 1;
     }
 
     /// The bench link for the open project (created on first use).
     pub fn bench_link(&mut self) -> &mut dyn BenchLink {
-        self.bench.link(self.project.as_ref(), &self.repaint)
+        let circuit = if self.bench.is_active() {
+            None
+        } else {
+            self.circuit.as_ref().map(|c| c.project().clone())
+        };
+        if let Some(c) = &self.circuit {
+            self.bench_generation = c.electrical_generation();
+        }
+        self.bench
+            .link_with(self.project.as_ref(), circuit, &self.repaint)
+    }
+
+    /// The co-simulation bench for the open project (created on first use).
+    pub fn sim(&mut self) -> Option<&mut crate::bench::sim::SimBench> {
+        self.project.as_ref()?;
+        self.bench_link();
+        self.bench.sim()
+    }
+
+    /// Pushes circuit edits to the running bench and autosaves (called once per frame).
+    pub fn sync_circuit(&mut self) {
+        let Some(doc) = self.circuit.as_mut() else {
+            return;
+        };
+        let g = doc.electrical_generation();
+        if g != self.bench_generation && self.bench.is_active() {
+            let p = doc.project().clone();
+            if let Some(sim) = self.bench.sim() {
+                sim.update_project(p);
+            }
+            self.bench_generation = g;
+            // boards added / removed change the Firmware screen's targets
+            if let (Some(proj), Some(doc)) = (self.project.as_mut(), self.circuit.as_ref()) {
+                proj.refresh_from(doc.project());
+            }
+        }
+        let Some(doc) = self.circuit.as_mut() else {
+            return;
+        };
+        match doc.autosave() {
+            Some(Err(e)) => self.toasts.error(format!("Autosave failed: {e:#}")),
+            Some(Ok(())) => {}
+            None => {
+                if let Some(d) = doc.autosave_due_in() {
+                    self.egui
+                        .request_repaint_after(d + std::time::Duration::from_millis(20));
+                }
+            }
+        }
     }
 
     /// True if keyboard focus is in a text field (editor shortcuts then belong to it).
@@ -170,7 +237,7 @@ impl BreadboxApp {
             .examples()
             .map(|d| project::scan_examples(&d))
             .unwrap_or_default();
-        let factory = opts.bench_factory.clone().unwrap_or_else(AvrBench::factory);
+        let factory = opts.bench_factory.clone().unwrap_or_else(SimBench::factory);
         let menu = if opts.native_menu {
             platform::NativeMenu::install(ctx)
         } else {
@@ -184,10 +251,17 @@ impl BreadboxApp {
             recent: persisted.recent.clone(),
             toasts: Toasts::default(),
             toolchain: ToolchainService::new(repaint.clone(), opts.detect_toolchain),
-            bench: BenchService::new(factory, opts.sim_speed),
+            bench: {
+                let mut b = BenchService::new(factory, opts.sim_speed);
+                b.fixtures = resources.fixtures();
+                b.audio = opts.audio;
+                b
+            },
             theme: persisted.theme,
             repaint,
             project_generation: 0,
+            bench_generation: 0,
+            circuit: None,
             pending: Vec::new(),
             nav: None,
             native_menu: menu.is_some(),
@@ -305,6 +379,7 @@ impl BreadboxApp {
             }
         });
         self.process_commands();
+        self.ctx.sync_circuit();
         self.route_changes();
         self.ctx.toasts.show(&ctx);
         if let Some(m) = &self.menu {
@@ -604,7 +679,15 @@ impl BreadboxApp {
                     let suggested = format!("{}-copy.breadbox", p.name);
                     if let Some(dest) = platform::save_folder("Save project as", &suggested) {
                         match p.save_as(&dest) {
-                            Ok(np) => {
+                            Ok(mut np) => {
+                                // in-memory circuit edits go with the copy
+                                if let Some(doc) = &self.ctx.circuit
+                                    && let Err(e) = doc.project().save(&np.dir)
+                                {
+                                    log::warn!("save copy: {e}");
+                                } else if let Ok(fresh) = Project::load(&np.dir) {
+                                    np = fresh;
+                                }
                                 self.ctx
                                     .toasts
                                     .success(format!("Saved a copy to {}", np.dir.display()));
@@ -616,7 +699,10 @@ impl BreadboxApp {
                         }
                     }
                 } else if self.ctx.project.is_some() {
-                    self.ctx.toasts.success("Saved");
+                    match self.ctx.circuit.as_mut().map(|c| c.save()) {
+                        Some(Err(e)) => self.ctx.toasts.error(format!("Save failed: {e:#}")),
+                        _ => self.ctx.toasts.success("Saved"),
+                    }
                 }
             }
             Command::RunPause => {

@@ -418,6 +418,7 @@ impl FirmwareScreen {
                     .unwrap_or("sketch")
             ),
             debug_build: b.result.debug,
+            host_exe: None,
         };
         self.flash(app, &t.id, fw);
     }
@@ -441,6 +442,7 @@ impl FirmwareScreen {
                     hex: if is_elf { None } else { std::fs::read_to_string(&path).ok() },
                     origin: format!("prebuilt {}", path.display()),
                     debug_build: false,
+                    host_exe: None,
                 };
                 let shown = path
                     .strip_prefix(app.resources.root.clone().unwrap_or_default())

@@ -988,6 +988,9 @@ mod tests {
             radios,
             repaint: Arc::new(|| {}),
             speed: SimSpeed::Max,
+            circuit: None,
+            fixtures: None,
+            audio: false,
         }
     }
 
@@ -1024,6 +1027,7 @@ mod tests {
                     hex: None,
                     origin: "fixture".into(),
                     debug_build: false,
+                    host_exe: None,
                 },
             )
             .unwrap();
@@ -1074,6 +1078,7 @@ mod tests {
                 hex: None,
                 origin: "fixture".into(),
                 debug_build: false,
+                host_exe: None,
             },
         )
         .unwrap();
