@@ -590,6 +590,26 @@ mod tests {
     use super::*;
 
     #[test]
+    fn embedded_hostcore_matches_the_source_tree() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("hostcore");
+        let mut on_disk: Vec<String> = std::fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        on_disk.sort();
+        let mut embedded: Vec<String> = HOSTCORE.iter().map(|(n, _)| n.to_string()).collect();
+        embedded.sort();
+        assert_eq!(
+            embedded, on_disk,
+            "regenerate HOSTCORE in host/compile.rs after adding/removing hostcore files"
+        );
+        for (n, text) in HOSTCORE {
+            assert_eq!(*text, std::fs::read_to_string(dir.join(n)).unwrap(), "{n}");
+        }
+    }
+
+    #[test]
     fn finds_prototypes_like_arduino() {
         let src = "#include <WiFi.h>\n// void commented() {}\nconst char* s = \"void fake() {\";\nint add(int a, int b = 2) {\n  return a + b;\n}\nstatic void blink(uint8_t pin)\n{\n  if (pin) { digitalWrite(pin, HIGH); }\n}\nstruct P { int x; };\nvoid setup() { blink(add(1)); }\nvoid loop() {}\nbool Foo::bar() { return true; }\n";
         let p = find_prototypes(src);
