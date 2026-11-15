@@ -135,12 +135,28 @@ pub enum Command {
     RunPause,
     /// Simulate → Reset.
     ResetSim,
+    /// Simulate → Reset MCU Only: every board restarts its firmware; the circuit, world and
+    /// radios keep their state (`SIM-3`).
+    ResetMcu,
+    /// Simulate → Step: pause, then run exactly one sync quantum or one millisecond (`SIM-3`).
+    StepSim(StepSize),
+    /// File → Import .cir…: an ngspice / LTspice netlist becomes a new Pro project (`PRJ-4`).
+    ImportCir,
     Verify,
     Upload,
     RunAnalyses,
     ExportCir,
     About,
     OpenDocs,
+}
+
+/// How far Simulate → Step advances the paused bench.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StepSize {
+    /// One co-simulation sync quantum (project setting, 1 µs by default).
+    Quantum,
+    /// One millisecond of simulated time.
+    Millisecond,
 }
 
 /// A screen. All methods but `ui` are optional.

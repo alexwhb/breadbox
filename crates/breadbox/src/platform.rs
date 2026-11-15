@@ -59,6 +59,10 @@ fn command_for(id: &str) -> Option<Command> {
         "theme-light" => Command::SetTheme(ThemeChoice::Light),
         "run" => Command::RunPause,
         "reset" => Command::ResetSim,
+        "reset-mcu" => Command::ResetMcu,
+        "step-quantum" => Command::StepSim(crate::router::StepSize::Quantum),
+        "step-ms" => Command::StepSim(crate::router::StepSize::Millisecond),
+        "import-cir" => Command::ImportCir,
         "verify" => Command::Verify,
         "upload" => Command::Upload,
         "analyses" => Command::RunAnalyses,
@@ -120,6 +124,7 @@ mod mac {
                     ),
                     &item("new-pro", "New Pro Project…", None),
                     &item("open", "Open Project…", Some((cmd, Code::KeyO))),
+                    &item("import-cir", "Import .cir Netlist…", None),
                     &PredefinedMenuItem::separator(),
                     &item("save", "Save", Some((cmd, Code::KeyS))),
                     &item("save-as", "Save As…", Some((cmd_shift, Code::KeyS))),
@@ -172,7 +177,10 @@ mod mac {
                 true,
                 &[
                     &item("run", "Run / Pause", Some((cmd, Code::KeyR))),
+                    &item("step-quantum", "Step One Quantum", None),
+                    &item("step-ms", "Step 1 ms", None),
                     &item("reset", "Reset Bench", None),
+                    &item("reset-mcu", "Reset MCU Only", None),
                     &PredefinedMenuItem::separator(),
                     &item("verify", "Verify Sketch", Some((cmd, Code::KeyB))),
                     &item("upload", "Upload to Sim", Some((cmd, Code::KeyU))),
@@ -269,6 +277,12 @@ mod tests {
             command_for("pro"),
             Some(Command::Navigate(Route::Pro(ProTab::Analysis)))
         );
+        assert_eq!(
+            command_for("step-ms"),
+            Some(Command::StepSim(crate::router::StepSize::Millisecond))
+        );
+        assert_eq!(command_for("reset-mcu"), Some(Command::ResetMcu));
+        assert_eq!(command_for("import-cir"), Some(Command::ImportCir));
         assert_eq!(command_for("nope"), None);
     }
 }

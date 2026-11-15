@@ -65,6 +65,140 @@ impl RailPanel {
     }
 }
 
+/// What the simulation menu asked for.
+enum SimAction {
+    Step(crate::router::StepSize),
+    Reset,
+    ResetMcu(String),
+    Settings(bb_circuit::project::Settings),
+}
+
+/// Sync quanta offered in the simulation menu (µs, `SIM-1`).
+const QUANTA_US: [(f64, &str); 4] = [
+    (1.0, "1 µs"),
+    (10.0, "10 µs"),
+    (100.0, "100 µs"),
+    (1000.0, "1 ms"),
+];
+
+/// The header's simulation menu (`WB-1`, `SIM-1`, `SIM-3`): speed, single steps (one quantum /
+/// one millisecond), reset the bench or one MCU, and the seed + sync quantum the next run uses.
+fn sim_menu(ui: &mut Ui, app: &mut AppCtx, chosen: &mut Option<SimSpeed>) -> Option<SimAction> {
+    let p = pal(ui);
+    let mut action = None;
+    let caption = |ui: &mut Ui, t: &str| {
+        ui.add_space(4.0);
+        ui.label(
+            egui::RichText::new(t.to_ascii_uppercase())
+                .font(font::semibold(10.5))
+                .color(p.text_faint),
+        );
+    };
+    caption(ui, "Speed");
+    for (l, s) in SPEEDS {
+        if widgets::menu_item(ui, l, app.bench.speed == s, true) {
+            *chosen = Some(s);
+        }
+    }
+    let settings = app
+        .circuit
+        .as_ref()
+        .map(|d| d.project().settings.clone())
+        .unwrap_or_default();
+    let q_label = QUANTA_US
+        .iter()
+        .find(|(v, _)| (v - settings.sync_quantum_us).abs() < 1e-9)
+        .map(|(_, l)| l.to_string())
+        .unwrap_or_else(|| format!("{} µs", settings.sync_quantum_us));
+    ui.separator();
+    caption(ui, "Step (pauses first)");
+    ui.horizontal(|ui| {
+        if Btn::mini(&format!("Step {q_label}"))
+            .icon(Icon::Play)
+            .show(ui)
+            .on_hover_text("Run one sync quantum, then pause")
+            .clicked()
+        {
+            action = Some(SimAction::Step(crate::router::StepSize::Quantum));
+        }
+        if Btn::mini("Step 1 ms")
+            .icon(Icon::Play)
+            .show(ui)
+            .on_hover_text("Run one millisecond, then pause")
+            .clicked()
+        {
+            action = Some(SimAction::Step(crate::router::StepSize::Millisecond));
+        }
+    });
+    ui.separator();
+    caption(ui, "Reset");
+    if widgets::menu_item(ui, "Reset bench", false, true) {
+        action = Some(SimAction::Reset);
+    }
+    let targets = app.bench_link().targets();
+    for t in &targets {
+        if widgets::menu_item(ui, &format!("Reset MCU only · {}", t.id), false, true) {
+            action = Some(SimAction::ResetMcu(t.id.clone()));
+        }
+    }
+    ui.separator();
+    caption(ui, "Determinism");
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new("Seed")
+                .font(font::ui(12.5))
+                .color(p.text_dim),
+        );
+        // the value being edited lives in temp memory until the drag / typing ends
+        let id = egui::Id::unique("wb-seed-edit");
+        let mut seed = ui.data(|d| d.get_temp::<u64>(id)).unwrap_or(settings.seed);
+        let r = ui.add(egui::DragValue::new(&mut seed).range(0..=u32::MAX as u64));
+        r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::SpinButton, true, "Seed value"));
+        ui.data_mut(|d| d.insert_temp(id, seed));
+        let done =
+            r.drag_stopped() || r.lost_focus() || (r.changed() && !r.dragged() && !r.has_focus());
+        if done {
+            ui.data_mut(|d| d.remove::<u64>(id));
+            if seed != settings.seed {
+                let mut st = settings.clone();
+                st.seed = seed;
+                action = Some(SimAction::Settings(st));
+            }
+        }
+    });
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new("Sync quantum")
+                .font(font::ui(12.5))
+                .color(p.text_dim),
+        );
+        // index into QUANTA_US (a custom value from the project file shows none selected)
+        let cur = QUANTA_US
+            .iter()
+            .position(|(v, _)| (v - settings.sync_quantum_us).abs() < 1e-9)
+            .unwrap_or(usize::MAX);
+        let mut pick = cur;
+        let segs: Vec<Seg<usize>> = QUANTA_US
+            .iter()
+            .enumerate()
+            .map(|(i, (_, l))| Seg::new(i, l))
+            .collect();
+        if widgets::mini_segmented(ui, "Sync quantum", &mut pick, &segs) && pick != cur {
+            let mut st = settings.clone();
+            st.sync_quantum_us = QUANTA_US[pick].0;
+            action = Some(SimAction::Settings(st));
+        }
+    });
+    ui.label(
+        egui::RichText::new(
+            "Changing the seed or quantum restarts the bench; the same seed replays the same run.",
+        )
+        .font(font::ui(11.0))
+        .color(p.text_faint),
+    );
+    action
+}
+
 /// Speeds of the header menu.
 pub const SPEEDS: [(&str, SimSpeed); 6] = [
     ("0.1×", SimSpeed::RealTime(0.1)),
@@ -484,16 +618,23 @@ impl Screen for WorkbenchScreen {
                 egui::WidgetInfo::labeled(egui::Role::ComboBox, true, format!("Speed: {sp}"))
             });
             let mut chosen = None;
-            egui::Popup::menu(&sr).show(|ui| {
-                ui.set_min_width(150.0);
-                for (l, s) in SPEEDS {
-                    if widgets::menu_item(ui, l, app.bench.speed == s, true) {
-                        chosen = Some(s);
-                    }
-                }
-            });
+            let mut action = None;
+            egui::Popup::menu(&sr)
+                .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+                .show(|ui| {
+                    ui.set_min_width(220.0);
+                    action = sim_menu(ui, app, &mut chosen);
+                });
             if let Some(s) = chosen {
                 app.bench.set_speed(s);
+                egui::Popup::close_all(ui.ctx());
+            }
+            match action {
+                Some(SimAction::Step(size)) => app.step_sim(size),
+                Some(SimAction::Reset) => app.command(Command::ResetSim),
+                Some(SimAction::ResetMcu(t)) => app.reset_mcu(Some(&t)),
+                Some(SimAction::Settings(st)) => app.apply_sim_settings(st),
+                None => {}
             }
             // clock
             let t = app.bench.sim_time;

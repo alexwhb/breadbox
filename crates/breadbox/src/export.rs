@@ -70,6 +70,50 @@ fn collect(root: &Path, dir: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
     Ok(())
 }
 
+/// File extensions treated as SPICE netlists by Open / Import (`PRJ-4`).
+pub const CIR_EXTENSIONS: [&str; 5] = ["cir", "net", "sp", "spice", "ckt"];
+
+/// Imports an ngspice / LTspice-style netlist as a new Pro project `parent/<name>.breadbox`
+/// (a fresh name if it exists): parts with an auto-placed schematic, analysis cards from the
+/// netlist's dot-cards, and the original netlist kept in `analyses/`. Returns the folder.
+pub fn import_cir_project(cir: &Path, parent: &Path, lib: &Library) -> Result<PathBuf> {
+    let text = std::fs::read_to_string(cir).with_context(|| cir.display().to_string())?;
+    let stem = cir
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "imported".into());
+    let base: String = stem
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    let base = if base.is_empty() {
+        "imported".to_string()
+    } else {
+        base
+    };
+    let project = bb_circuit::spice_io::import_cir(&text, &stem, lib)
+        .map_err(|e| anyhow::anyhow!("{}: {e}", cir.display()))?;
+    let mut dest = parent.join(format!("{base}.breadbox"));
+    let mut n = 2;
+    while dest.exists() {
+        dest = parent.join(format!("{base}-{n}.breadbox"));
+        n += 1;
+    }
+    project
+        .save(&dest)
+        .map_err(|e| anyhow::anyhow!("{}: {e}", dest.display()))?;
+    let analyses = dest.join("analyses");
+    std::fs::create_dir_all(&analyses)?;
+    std::fs::write(analyses.join(format!("{base}.original.cir")), &text)?;
+    Ok(dest)
+}
+
 /// Unpacks a `.breadbox.zip` into `parent/<name>.breadbox` (a fresh name if it exists) and
 /// returns the project folder. Prebuilt images bundled from an example are re-pointed.
 pub fn import_bundle(zip_path: &Path, parent: &Path) -> Result<PathBuf> {
