@@ -9,11 +9,14 @@
 //! * [`Debugger`] — breakpoints with hit conditions, stepping by source line, call stack and
 //!   variables over a [`bb_avr::Avr`], usable while an outer scheduler drives the core.
 //! * [`Board`] — UNO R3 / Nano / Mega 2560 pin mapping.
+//! * [`host`] — ESP32 DevKit / Raspberry Pi Pico API-level emulation (`MCU-6`): host-compiled
+//!   sketches running in lock-step with simulated time ([`host::HostBoard`]).
 
 pub mod boards;
 pub mod compile;
 pub mod debugger;
 pub mod debuginfo;
+pub mod host;
 pub mod toolchain;
 
 pub use boards::{Board, BoardPin, Header, Pwm};
