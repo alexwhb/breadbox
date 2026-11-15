@@ -171,10 +171,22 @@ fn cir_exports_run_in_ngspice_and_agree_with_bb_spice() {
     for name in example_names() {
         let (p, _) = example(&name);
         let text = breadbox::export::cir(&p, &lib()).unwrap();
-        let nl = Netlist::parse(&text).unwrap_or_else(|e| panic!("{name}: {e}\n{text}"));
-        let ours = nl
+        Netlist::parse(&text).unwrap_or_else(|e| panic!("{name}: {e}\n{text}"));
+        // ngspice skips Breadbox-only `*!bb .step` cards (a stepped .op runs once per value
+        // in bb-spice), so the bb-spice side of the comparison runs the nominal circuit too
+        let nominal: String = text
+            .lines()
+            .filter(|l| {
+                !l.trim_start()
+                    .to_ascii_lowercase()
+                    .starts_with("*!bb .step")
+            })
+            .map(|l| format!("{l}\n"))
+            .collect();
+        let ours = Netlist::parse(&nominal)
+            .unwrap_or_else(|e| panic!("{name}: {e}\n{nominal}"))
             .run()
-            .unwrap_or_else(|e| panic!("{name}: bb-spice: {e}\n{text}"));
+            .unwrap_or_else(|e| panic!("{name}: bb-spice: {e}\n{nominal}"));
         let Some(ng) = &ng else { continue };
         let cir = scratch.path().join(format!("{name}.cir"));
         let raw = scratch.path().join(format!("{name}.raw"));

@@ -155,7 +155,7 @@ pub fn garden_node(lib: &Library) -> Project {
         ..WorldConfig::default()
     };
     b.project.spice.directives =
-        ".tran 0 10m 0 1u\n.dc lux 1 10k dec 40\n.step param R1v list 4.7k 10k 22k\n.mc 100 tol=5% seed=7\n.op\n".into();
+        ".tran 0 10m 0 1u\n.dc lux 1 10k dec 40\n.step R1 list 4.7k 10k 22k\n.mc 100 tol=5% seed=7\n.op\n".into();
     // schematic laid out like the design: sensor left, MCU centre, LDR divider between, the
     // two LED chains right, the Wi-Fi module far right
     for (id, x, y, rot) in [

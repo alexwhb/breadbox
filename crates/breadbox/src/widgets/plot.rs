@@ -641,9 +641,19 @@ impl<'a> LinePlot<'a> {
                         3.0,
                         3.0,
                     ));
+                    // label left of the line; flipped right when it would leave the plot
+                    let w = painter
+                        .layout_no_wrap(label.clone(), tick_font(), *color)
+                        .size()
+                        .x;
+                    let (lx, align) = if px - 4.0 - w < frame.left() {
+                        (px + 4.0, egui::Align2::LEFT_CENTER)
+                    } else {
+                        (px - 4.0, egui::Align2::RIGHT_CENTER)
+                    };
                     painter.text(
-                        pos2(px - 4.0, frame.top() + 12.0),
-                        egui::Align2::RIGHT_CENTER,
+                        pos2(lx, frame.top() + 12.0),
+                        align,
                         label,
                         tick_font(),
                         *color,
@@ -665,9 +675,19 @@ impl<'a> LinePlot<'a> {
                         3.0,
                     ));
                     painter.circle(pos, 4.5, p.bg_app, Stroke::new(2.0, *color));
+                    // label right of the point; flipped left when it would leave the plot
+                    let w = painter
+                        .layout_no_wrap(label.clone(), tick_font(), p.accent_soft)
+                        .size()
+                        .x;
+                    let (lx, align) = if pos.x + 8.0 + w > frame.right() {
+                        (pos.x - 8.0, egui::Align2::RIGHT_CENTER)
+                    } else {
+                        (pos.x + 8.0, egui::Align2::LEFT_CENTER)
+                    };
                     painter.text(
-                        pos + vec2(8.0, 14.0),
-                        egui::Align2::LEFT_CENTER,
+                        pos2(lx, pos.y + 14.0),
+                        align,
                         label,
                         tick_font(),
                         p.accent_soft,

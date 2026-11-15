@@ -608,7 +608,7 @@
     }
   ],
   "spice": {
-    "directives": ".tran 0 10m 0 1u\n.dc lux 1 10k dec 40\n.step param R1v list 4.7k 10k 22k\n.mc 100 tol=5% seed=7\n.op\n"
+    "directives": ".tran 0 10m 0 1u\n.dc lux 1 10k dec 40\n.step R1 list 4.7k 10k 22k\n.mc 100 tol=5% seed=7\n.op\n"
   },
   "settings": {
     "seed": 1,

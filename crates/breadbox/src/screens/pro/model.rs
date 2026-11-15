@@ -288,12 +288,37 @@ fn nominal_run(results: &Results, text: &str) -> usize {
         .unwrap_or(0)
 }
 
-/// `.param name=value` numeric values (lower-case names).
+/// Nominal values a `.step` can vary, lower-case names: `.param name=value`, plus the plain
+/// numeric value of R / C / L elements (`r1 a1 0 10000` → `r1 = 10000`), so `.step R1 list …`
+/// also finds its nominal run.
 pub fn nominal_params(text: &str) -> HashMap<String, f64> {
     let mut m = HashMap::new();
+    // top-level elements only: a subcircuit's own `r1` is a different element
+    let mut depth = 0usize;
     for l in text.lines() {
         let t = l.trim();
-        if !t.to_ascii_lowercase().starts_with(".param") {
+        let lower = t.to_ascii_lowercase();
+        if lower.starts_with(".subckt") {
+            depth += 1;
+            continue;
+        }
+        if lower.starts_with(".ends") {
+            depth = depth.saturating_sub(1);
+            continue;
+        }
+        if depth > 0 {
+            continue;
+        }
+        if lower.starts_with(['r', 'c', 'l']) {
+            let toks: Vec<&str> = t.split_whitespace().collect();
+            if toks.len() >= 4
+                && let Ok(x) = bb_core::si::parse(toks[3])
+            {
+                m.entry(toks[0].to_ascii_lowercase()).or_insert(x);
+            }
+            continue;
+        }
+        if !lower.starts_with(".param") {
             continue;
         }
         for tok in t.split_whitespace().skip(1) {

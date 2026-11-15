@@ -1263,6 +1263,54 @@ pub fn net_values(
     out
 }
 
+/// Where the live-value chips go: one per probed net, beside the net's first pin anchor,
+/// nudged up or down in chip-height steps until it clears the chips already placed (adjacent
+/// pins such as A0 / A1 are closer than a chip is tall).
+pub fn value_chips(sheet: &Sheet, values: &[(String, String)]) -> Vec<(WRect, String)> {
+    const H: f64 = 1.5;
+    const GAP: f64 = 0.2;
+    let mut wanted: Vec<(WRect, String)> = Vec::new();
+    let mut done = HashSet::new();
+    for (net, text) in values {
+        if !done.insert(net.clone()) {
+            continue;
+        }
+        if let Some(a) = sheet.anchors.iter().find(|a| a.5.as_deref() == Some(net)) {
+            let (dx, dy) = dir_vec(a.4);
+            let at = (a.2 + dx * 1.2, a.3 + dy * 1.2 - 1.6);
+            let w = text.chars().count() as f64 * 0.62 + 1.0;
+            let x0 = if dx < 0.0 { at.0 - w } else { at.0 };
+            wanted.push((
+                WRect::new(x0, at.1 - H / 2.0, x0 + w, at.1 + H / 2.0),
+                text.clone(),
+            ));
+        }
+    }
+    // top to bottom, so a column of pins keeps its order
+    wanted.sort_by(|a, b| a.0.y0.total_cmp(&b.0.y0));
+    let mut placed: Vec<(WRect, String)> = Vec::new();
+    for (r, text) in wanted {
+        let step = H + GAP;
+        let free = |c: &WRect| {
+            placed.iter().all(|(p, _)| {
+                // a small margin so neighbours don't touch
+                !WRect::new(p.x0 - GAP, p.y0 - GAP, p.x1 + GAP, p.y1 + GAP).intersects(c)
+            })
+        };
+        let moved = |k: f64| WRect::new(r.x0, r.y0 + k * step, r.x1, r.y1 + k * step);
+        let spot = (0..12)
+            .flat_map(|i| {
+                let i = i as f64;
+                if i == 0.0 { vec![0.0] } else { vec![i, -i] }
+            })
+            .map(moved)
+            .find(|c| free(c))
+            .unwrap_or(r);
+        placed.push((spot, text));
+    }
+    placed
+}
+
 /// Draws the whole sheet on `d` (paper, symbols, wires, flags, values, ERC, title block).
 #[allow(clippy::too_many_arguments)]
 pub fn draw_sheet(
@@ -1314,31 +1362,16 @@ pub fn draw_sheet(
         }
     }
     // live values: a chip at the first anchor of each probed net
-    let mut done = HashSet::new();
-    for (net, text) in values {
-        if !done.insert(net.clone()) {
-            continue;
-        }
-        if let Some(a) = sheet.anchors.iter().find(|a| a.5.as_deref() == Some(net)) {
-            let (dx, dy) = dir_vec(a.4);
-            let at = (a.2 + dx * 1.2, a.3 + dy * 1.2 - 1.6);
-            let w = text.chars().count() as f64 * 0.62 + 1.0;
-            let x0 = if dx < 0.0 { at.0 - w } else { at.0 };
-            d.rect(
-                WRect::new(x0, at.1 - 0.75, x0 + w, at.1 + 0.75),
-                0.25,
-                Some(rgb(0xDCE8FA)),
-                None,
-            );
-            d.text(
-                (x0 + w / 2.0, at.1),
-                text,
-                0.82,
-                true,
-                rgb(0x1F5FB8),
-                Align2::CENTER_CENTER,
-            );
-        }
+    for (rect, text) in value_chips(sheet, values) {
+        d.rect(rect, 0.25, Some(rgb(0xDCE8FA)), None);
+        d.text(
+            ((rect.x0 + rect.x1) / 2.0, (rect.y0 + rect.y1) / 2.0),
+            &text,
+            0.82,
+            true,
+            rgb(0x1F5FB8),
+            Align2::CENTER_CENTER,
+        );
     }
     // ERC + title block, bottom right of the paper
     let (bx, by) = (paper.x1 - 25.0, paper.y1 - 5.0);
@@ -2088,6 +2121,47 @@ fn unused(_: BTreeMap<u8, u8>) {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Adjacent probed pins (garden-node's A0 / A1 and D9 / D8, 1 unit apart) used to draw
+    /// their live-value chips on top of each other.
+    #[test]
+    fn value_chips_never_overlap_and_keep_pin_order() {
+        let anchor = |pin: &str, y: f64, net: &str| -> Anchor {
+            (
+                "u1".into(),
+                pin.into(),
+                10.0,
+                y,
+                PinDir::Left,
+                Some(net.into()),
+            )
+        };
+        let sheet = Sheet {
+            anchors: vec![
+                anchor("A0", 20.0, "A0"),
+                anchor("A1", 21.0, "A1"),
+                anchor("A2", 22.0, "A2"),
+            ],
+            ..Default::default()
+        };
+        let values = vec![
+            ("A1".to_string(), "A1 2.60 V".to_string()),
+            ("A0".to_string(), "A0 1.89 V".to_string()),
+            ("A2".to_string(), "A2 0.00 V".to_string()),
+        ];
+        let chips = value_chips(&sheet, &values);
+        assert_eq!(chips.len(), 3);
+        for (i, (a, _)) in chips.iter().enumerate() {
+            for (b, _) in &chips[i + 1..] {
+                assert!(!a.intersects(b), "{a:?} overlaps {b:?}");
+            }
+        }
+        let y = |t: &str| chips.iter().find(|c| c.1.starts_with(t)).unwrap().0.y0;
+        assert!(
+            y("A0") < y("A1") && y("A1") < y("A2"),
+            "chips keep the pins' order"
+        );
+    }
 
     #[test]
     fn routes_are_orthogonal() {
