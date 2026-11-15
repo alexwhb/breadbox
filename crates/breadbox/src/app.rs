@@ -130,11 +130,7 @@ impl AppCtx {
                 .map_err(|e| log::warn!("circuit of {}: {e:#}", p.dir.display()))
                 .ok()
         });
-        self.bench_generation = self
-            .circuit
-            .as_ref()
-            .map(|c| c.electrical_generation())
-            .unwrap_or(0);
+        self.bench_generation = self.circuit.as_ref().map(|c| c.generation()).unwrap_or(0);
         self.project = p;
         self.project_generation += 1;
     }
@@ -146,8 +142,10 @@ impl AppCtx {
         } else {
             self.circuit.as_ref().map(|c| c.project().clone())
         };
-        if let Some(c) = &self.circuit {
-            self.bench_generation = c.electrical_generation();
+        if let Some(c) = &self.circuit
+            && !self.bench.is_active()
+        {
+            self.bench_generation = c.generation();
         }
         self.bench
             .link_with(self.project.as_ref(), circuit, &self.repaint)
@@ -160,12 +158,23 @@ impl AppCtx {
         self.bench.sim()
     }
 
+    /// The bench already has the document's current revision (a live `SetPartParam` edit).
+    pub fn mark_bench_synced(&mut self) {
+        if let Some(doc) = &self.circuit {
+            self.bench_generation = doc.generation();
+            let p = doc.project().clone();
+            if let Some(sim) = self.bench.sim() {
+                sim.adopt_project(p);
+            }
+        }
+    }
+
     /// Pushes circuit edits to the running bench and autosaves (called once per frame).
     pub fn sync_circuit(&mut self) {
         let Some(doc) = self.circuit.as_mut() else {
             return;
         };
-        let g = doc.electrical_generation();
+        let g = doc.generation();
         if g != self.bench_generation && self.bench.is_active() {
             let p = doc.project().clone();
             if let Some(sim) = self.bench.sim() {
@@ -745,6 +754,27 @@ impl BreadboxApp {
     }
 
     pub fn open_path(&mut self, dir: &Path) {
+        // a shared `.breadbox.zip` bundle unpacks into ~/Documents/Breadbox first (PRJ-5)
+        let unpacked;
+        let dir = if dir
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("zip"))
+        {
+            let parent = project::default_projects_dir();
+            let _ = std::fs::create_dir_all(&parent);
+            match crate::export::import_bundle(dir, &parent) {
+                Ok(d) => {
+                    unpacked = d;
+                    unpacked.as_path()
+                }
+                Err(e) => {
+                    self.ctx.toasts.error(format!("{e:#}"));
+                    return;
+                }
+            }
+        } else {
+            dir
+        };
         match self.ctx.open_project(dir) {
             Ok(()) => {
                 let p = self.ctx.project.as_ref().expect("project");

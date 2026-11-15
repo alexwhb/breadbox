@@ -5,6 +5,7 @@ pub mod firmware;
 pub mod home;
 pub mod placeholder;
 pub mod pro;
+pub mod workbench;
 
 use crate::router::{ScreenRegistry, ScreenSlot};
 use crate::widgets::Icon;
@@ -25,23 +26,11 @@ pub fn default_registry() -> ScreenRegistry {
     // ---- slots filled by later phases (replace the placeholder with the real screen) ----
     r.register(
         ScreenSlot::Workbench,
-        Box::new(Placeholder::new(
-            ScreenSlot::Workbench,
-            "Workbench",
-            Icon::Breadboard,
-            "The 2.5D breadboard bench and the schematic view of the same circuit: parts palette, jumper wires, live probes, world and inspector rail, serial monitor dock.",
-            "ui-bench (phase 4)",
-        )),
+        Box::new(workbench::WorkbenchScreen::default()),
     );
     r.register(
         ScreenSlot::ProSchematic,
-        Box::new(Placeholder::new(
-            ScreenSlot::ProSchematic,
-            "Schematic",
-            Icon::SegSchematic,
-            "The full schematic editor (IEC/ANSI symbols, net labels, auto-placement) over the shared netlist.",
-            "ui-bench (phase 4)",
-        )),
+        Box::new(pro::schematic::ProSchematicScreen::default()),
     );
     r.register(
         ScreenSlot::ProPcb,

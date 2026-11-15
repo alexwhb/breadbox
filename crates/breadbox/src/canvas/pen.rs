@@ -150,6 +150,15 @@ pub fn darken(c: Color32, t: f32) -> Color32 {
     )
 }
 
+/// A light bloom queued to be drawn after wires (so LEDs glow over the jumpers).
+#[derive(Debug, Clone, Copy)]
+pub struct Glow {
+    pub center: Pos2,
+    pub radius: f32,
+    pub color: Color32,
+    pub intensity: f32,
+}
+
 /// Draws in world units through a view and an optional part-local placement.
 #[derive(Clone)]
 pub struct Pen<'a> {
@@ -159,6 +168,8 @@ pub struct Pen<'a> {
     pub local: Placement,
     /// Multiplies every colour's alpha (ghost previews while dragging).
     pub alpha: f32,
+    /// When set, glows are queued here instead of drawn immediately.
+    pub glows: Option<&'a std::cell::RefCell<Vec<Glow>>>,
 }
 
 impl<'a> Pen<'a> {
@@ -168,7 +179,15 @@ impl<'a> Pen<'a> {
             view,
             local: Placement::default(),
             alpha: 1.0,
+            glows: None,
         }
+    }
+
+    /// Queues glows into `q` (drawn later with [`draw_glow`]).
+    pub fn deferring(&self, q: &'a std::cell::RefCell<Vec<Glow>>) -> Pen<'a> {
+        let mut p = self.clone();
+        p.glows = Some(q);
+        p
     }
 
     /// The same pen drawing in a part's local coordinates.
@@ -178,6 +197,7 @@ impl<'a> Pen<'a> {
             view: self.view,
             local,
             alpha: self.alpha,
+            glows: self.glows,
         }
     }
 
@@ -351,21 +371,39 @@ impl<'a> Pen<'a> {
         }
         let c = self.p(x, y);
         let rad = self.len(r).max(1.0);
+        let g = Glow {
+            center: c,
+            radius: rad,
+            color: self.c(color),
+            intensity: intensity * self.alpha,
+        };
+        match self.glows {
+            Some(q) => q.borrow_mut().push(g),
+            None => draw_glow(self.painter, g),
+        }
+    }
+}
+
+/// Paints a radial bloom.
+pub fn draw_glow(painter: &Painter, g: Glow) {
+    {
+        let (c, rad, color) = (g.center, g.radius, g.color);
+        let intensity = g.intensity;
         let mut mesh = Mesh::default();
         let a = intensity.clamp(0.0, 1.0);
-        mesh.colored_vertex(c, self.c(with_alpha(color, a)));
+        mesh.colored_vertex(c, with_alpha(color, a));
         // two rings: a hot core and a soft falloff
         let n = 40;
         let mid = 0.38;
         for i in 0..n {
             let t = i as f32 / n as f32 * std::f32::consts::TAU;
             let d = vec2(t.cos(), t.sin());
-            mesh.colored_vertex(c + d * rad * mid, self.c(with_alpha(color, a * 0.55)));
+            mesh.colored_vertex(c + d * rad * mid, with_alpha(color, a * 0.55));
         }
         for i in 0..n {
             let t = i as f32 / n as f32 * std::f32::consts::TAU;
             let d = vec2(t.cos(), t.sin());
-            mesh.colored_vertex(c + d * rad, self.c(with_alpha(color, 0.0)));
+            mesh.colored_vertex(c + d * rad, with_alpha(color, 0.0));
         }
         let n = n as u32;
         for i in 0..n {
@@ -374,9 +412,11 @@ impl<'a> Pen<'a> {
             mesh.add_triangle(1 + i, 1 + n + i, 1 + n + j);
             mesh.add_triangle(1 + i, 1 + n + j, 1 + j);
         }
-        self.painter.add(Shape::mesh(mesh));
+        painter.add(Shape::mesh(mesh));
     }
+}
 
+impl<'a> Pen<'a> {
     pub fn ellipse(&self, x: f64, y: f64, rx: f64, ry: f64, fill: Color32) {
         let c = self.p(x, y);
         let (a, b) = (self.len(rx).max(0.5), self.len(ry).max(0.5));

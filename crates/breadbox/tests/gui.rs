@@ -125,10 +125,12 @@ fn pro_analysis_runs_demo_and_populates_plots() {
     h.run_steps(3);
     screenshot(&mut h, "pro-analysis");
     assert!(has_label_containing(&h, "3 steps · "));
+    // the netlist is synced from the circuit (USB cable + board load: VCC ≈ 4.98 V)
     assert!(
-        has_label_containing(&h, "V(A1) 2.59") || has_label_containing(&h, "V(A1) 2.60"),
+        has_label_containing(&h, "V(A1) 2.5") || has_label_containing(&h, "V(A1) 2.6"),
         "op table row"
     );
+    assert!(has_label_containing(&h, "synced from schematic"));
     assert!(has_label_containing(
         &h,
         "Transient (.tran) — 0 → 10 ms · step 1 µs"
@@ -162,8 +164,8 @@ fn navigate_home_firmware_pro_home() {
 fn every_screen_renders_and_is_saved() {
     let mut h = harness();
     open_example(&mut h, "garden-node");
-    assert!(has_label_containing(&h, "SCREEN SLOT · Workbench"));
-    screenshot(&mut h, "workbench");
+    // the Workbench and Pro → Schematic are real screens now (tests/workbench.rs renders them)
+    assert!(has_label(&h, "Bench canvas"));
     go(&mut h, "Plugins");
     assert!(has_label_containing(&h, "SCREEN SLOT · Plugins"));
     screenshot(&mut h, "plugins");
@@ -177,7 +179,7 @@ fn every_screen_renders_and_is_saved() {
         h.state().ctx.route,
         breadbox::router::Route::Pro(breadbox::router::ProTab::Schematic)
     );
-    screenshot(&mut h, "pro-schematic");
+    assert!(has_label(&h, "Schematic canvas"));
     h.get_by_label("PCB").click();
     h.run_steps(3);
     screenshot(&mut h, "pro-pcb");

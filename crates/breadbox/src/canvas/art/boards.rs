@@ -339,13 +339,7 @@ pub fn pico(p: &Pen, cx: &ArtCtx) {
         silk(),
         Align2::LEFT_CENTER,
     );
-    board_led(
-        p,
-        2.0,
-        1.6,
-        rgb(0x5CFF8A),
-        l.max(if power { 0.0 } else { 0.0 }),
-    );
+    board_led(p, 2.0, 1.6, rgb(0x5CFF8A), if power { l } else { 0.0 });
     p.text(14.8, 3.5, "Raspberry Pi Pico", 0.62, font::medium, silk());
     pin_labels(p, cx, 0.0, true);
     pin_labels(p, cx, 7.0, false);

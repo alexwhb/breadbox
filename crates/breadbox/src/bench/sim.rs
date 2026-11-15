@@ -339,28 +339,64 @@ impl SimBench {
         &self.project
     }
 
-    /// Applies a circuit edit, keeping MCU firmware, world and device state (SIM-7).
+    /// Applies a circuit edit, keeping MCU firmware, world and device state (SIM-7):
+    /// electrical changes rebuild the netlist (`UpdateProject`), probe changes add / remove
+    /// live probes, instrument changes re-clip the bench instruments.
     pub fn update_project(&mut self, project: CircuitProject) {
         if project == self.project {
             return;
         }
         let boards_changed = mcu_set(&project) != mcu_set(&self.project);
+        let electrical = project.parts != self.project.parts
+            || project.wires != self.project.wires
+            || project.schematic != self.project.schematic;
+        let instruments = project.instruments != self.project.instruments;
+        let old_probes = std::mem::take(&mut self.project.probes);
+        let new_probes = project.probes.clone();
         self.project = project;
         self.refresh_targets();
-        match &self.handle {
-            Some(h) if !boards_changed => {
-                h.send(Command::UpdateProject(Box::new(self.project.clone())));
-                self.kick();
+        let Some(h) = self.handle.clone() else {
+            self.spawn(None);
+            return;
+        };
+        if boards_changed {
+            // a board was added / removed: start over with the new circuit
+            let was_running = self.running;
+            self.spawn(None);
+            if was_running {
+                self.set_running(true);
             }
-            _ => {
-                // a board was added / removed (or the bench never built): start over
-                let was_running = self.running;
-                self.spawn(None);
-                if was_running {
-                    self.set_running(true);
-                }
+            return;
+        }
+        for p in &old_probes {
+            if !new_probes.iter().any(|q| q == p) {
+                h.send(Command::RemoveProbe(p.id.clone()));
             }
         }
+        for p in &new_probes {
+            if !old_probes.iter().any(|q| q == p) {
+                if old_probes.iter().any(|q| q.id == p.id) {
+                    h.send(Command::RemoveProbe(p.id.clone()));
+                }
+                h.send(Command::AddProbe(p.clone()));
+            }
+        }
+        if instruments {
+            let defs = self.project.instruments.clone();
+            h.send(Command::With(BenchFn(Arc::new(move |b| {
+                b.instruments_mut().set_instruments(&defs);
+            }))));
+        }
+        if electrical || instruments {
+            h.send(Command::UpdateProject(Box::new(self.project.clone())));
+        }
+        self.kick();
+    }
+
+    /// Records a circuit revision whose changes already reached the engine (live
+    /// `SetPartParam` edits) without rebuilding.
+    pub fn adopt_project(&mut self, project: CircuitProject) {
+        self.project = project;
     }
 
     /// Part id ↔ designator.
@@ -483,12 +519,11 @@ impl SimBench {
             DeviceEvent::Stress { reason } => self
                 .events
                 .push(BenchEvent::Note(format!("{src} stressed: {reason}"))),
-            DeviceEvent::Log { level, text } => match level {
-                LogLevel::Warn | LogLevel::Error => {
-                    self.events.push(BenchEvent::Note(format!("{src}: {text}")))
-                }
-                _ => {}
-            },
+            DeviceEvent::Log {
+                level: LogLevel::Warn | LogLevel::Error,
+                text,
+            } => self.events.push(BenchEvent::Note(format!("{src}: {text}"))),
+            DeviceEvent::Log { .. } => {}
             DeviceEvent::Erc { message, .. } => self
                 .events
                 .push(BenchEvent::Note(format!("ERC: {message}"))),

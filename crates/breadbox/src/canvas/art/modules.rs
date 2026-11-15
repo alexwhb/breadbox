@@ -682,32 +682,41 @@ pub fn pot_soil(p: &Pen, cx: &ArtCtx, pass: Pass) {
         p.shadow(WRect::new(1.2, 2.0, 14.8, 14.6), 1.0, 18.0, 8.0, 0.55);
         p.rect(WRect::new(0.0, 0.4, 16.0, 2.4), 0.45, rgb(0x9E4A2A));
         p.ellipse(8.0, 1.4, 7.3, 0.85, soil);
-        // the plant
+        // the plant: a stem and broad leaves that droop as the soil dries
         let droop = (1.0 - m / 60.0) * 42.0;
-        let green = crate::theme::mix(rgb(0x6E8A3A), rgb(0x3E8B45), t.powf(0.5));
+        let green = crate::theme::mix(rgb(0x7E8F3E), rgb(0x3E8B45), t.powf(0.5));
         p.bezier(
-            [(5.2, 1.3), (4.8, -1.8), (5.8, -4.6), (5.2, -8.0)],
-            p.px(0.5, 2.0),
-            darken(green, 0.1),
+            [(5.4, 1.3), (4.9, -2.6), (6.0, -6.0), (5.3, -10.5)],
+            p.px(0.6, 2.5),
+            green,
         );
-        leaf(p, (5.2, -2.6), -12.0 + droop, false, 6.6, rgb(0x4FA357), t);
-        leaf(p, (5.2, -1.2), -12.0 + droop, true, 6.6, rgb(0x459A4D), t);
+        leaf(p, (5.3, -3.0), -12.0 + droop, false, 8.4, rgb(0x4FA357), t);
+        leaf(p, (5.3, -1.4), -12.0 + droop, true, 8.0, rgb(0x459A4D), t);
         leaf(
             p,
-            (5.2, -5.6),
-            -64.0 + droop * 0.7,
+            (5.3, -6.6),
+            -58.0 + droop * 0.7,
             false,
-            4.6,
+            6.2,
             rgb(0x5BB563),
             t,
         );
         leaf(
             p,
-            (5.1, -7.4),
-            -110.0 + droop * 0.5,
+            (5.4, -9.0),
+            -112.0 + droop * 0.5,
             true,
-            3.6,
+            5.0,
             rgb(0x5BB563),
+            t,
+        );
+        leaf(
+            p,
+            (5.3, -10.4),
+            -76.0 + droop * 0.4,
+            false,
+            3.8,
+            rgb(0x66C06E),
             t,
         );
     } else {
@@ -784,8 +793,10 @@ fn leaf(p: &Pen, at: (f64, f64), rot_deg: f64, mirror: bool, len: f64, color: Co
         })
         .collect();
     let col = crate::theme::mix(rgb(0x9A9A4A), color, wet.powf(0.4));
+    let sh: Vec<(f64, f64)> = pts.iter().map(|(x, y)| (x + 0.3, y + 0.5)).collect();
+    p.poly(&sh, Color32::from_black_alpha(60));
     p.poly(&pts, col);
-    p.line(pts[0], pts[3], p.px(0.06, 0.6), darken(col, 0.25));
+    p.line(pts[0], pts[3], p.px(0.08, 0.8), lighten(col, 0.25));
 }
 
 pub fn lamp(p: &Pen, cx: &ArtCtx) {
@@ -818,11 +829,11 @@ pub fn hand(p: &Pen, _cx: &ArtCtx) {
 
 /// The built-in 2-channel mini scope (CH1/CH2/GND jacks on top, live trace, caption).
 pub fn mini_scope(p: &Pen, cx: &ArtCtx) {
-    let body = WRect::new(-1.0, -1.0, 15.0, 9.0);
+    let body = WRect::new(-1.0, -1.0, 19.0, 10.0);
     p.shadow(body, 0.7, 14.0, 7.0, 0.6);
     p.grad(body, 0.7, rgb(0x2C2C2C), rgb(0x1F1F1F));
     p.rect_stroke(body, 0.7, p.px(0.08, 1.0), rgb(0x3A3A3A));
-    let screen = WRect::new(-0.3, 1.0, 10.4, 6.6);
+    let screen = WRect::new(-0.2, 1.0, 13.8, 7.6);
     p.rect(screen, 0.25, rgb(0x040604));
     // graticule: 10 × 8 divisions
     let gc = rgb(0x1B2A1B);
@@ -849,20 +860,20 @@ pub fn mini_scope(p: &Pen, cx: &ArtCtx) {
                 (x, y)
             })
             .collect();
-        p.polyline(&pts, p.px(0.14, 1.4), colors[ch]);
+        p.polyline(&pts, p.px(0.16, 1.5), colors[ch]);
     }
     // knobs
-    for (y, ang) in [(2.6, -0.9f64), (5.4, 0.7)] {
-        p.disc(12.4, y, 1.0, rgb(0x2E2E2E), rgb(0x141414));
-        p.circle_stroke(12.4, y, 1.0, p.px(0.06, 0.8), rgb(0x454545));
+    for (y, ang) in [(2.6, -0.9f64), (5.6, 0.7)] {
+        p.disc(16.4, y, 1.15, rgb(0x2E2E2E), rgb(0x141414));
+        p.circle_stroke(16.4, y, 1.15, p.px(0.06, 0.8), rgb(0x454545));
         p.line(
-            (12.4, y),
-            (12.4 + ang.cos() * 0.8, y + ang.sin() * 0.8),
+            (16.4, y),
+            (16.4 + ang.cos() * 0.9, y + ang.sin() * 0.9),
             p.px(0.14, 1.2),
             rgb(0xD9D9D9),
         );
     }
-    p.text(12.4, 7.0, "CH1", 0.6, font::mono, rgb(0xF2D03B));
+    p.text(16.4, 7.6, "CH1", 0.6, font::mono, rgb(0xF2D03B));
     // jacks
     for (l, c, name) in [
         (0usize, rgb(0xF2D03B), "CH1"),
@@ -883,10 +894,10 @@ pub fn mini_scope(p: &Pen, cx: &ArtCtx) {
         iv.caption.clone()
     };
     p.text_at(
-        -0.3,
-        8.0,
+        -0.2,
+        8.85,
         &cap,
-        0.72,
+        0.8,
         font::mono,
         rgb(0xEAEAEA),
         Align2::LEFT_CENTER,

@@ -156,6 +156,28 @@ pub fn garden_node(lib: &Library) -> Project {
     };
     b.project.spice.directives =
         ".tran 0 10m 0 1u\n.dc lux 1 10k dec 40\n.step param R1v list 4.7k 10k 22k\n.mc 100 tol=5% seed=7\n.op\n".into();
+    // schematic laid out like the design: sensor left, MCU centre, LDR divider between, the
+    // two LED chains right, the Wi-Fi module far right
+    for (id, x, y, rot) in [
+        ("u1", 40.0, 30.0, 0.0),
+        ("j1", 22.0, 25.5, 0.0),
+        ("ldr1", 31.0, 21.0, 90.0),
+        ("r1", 31.0, 31.0, 90.0),
+        ("r2", 52.0, 34.5, 0.0),
+        ("d1", 58.0, 37.5, 90.0),
+        ("r3", 52.0, 44.0, 0.0),
+        ("d2", 58.0, 47.0, 90.0),
+        ("u2", 72.0, 30.0, 0.0),
+    ] {
+        if let Some(p) = b.project.part_mut(id) {
+            p.schematic = Some(bb_circuit::geometry::Placement {
+                x,
+                y,
+                rot,
+                flip: false,
+            });
+        }
+    }
     b.finish()
 }
 

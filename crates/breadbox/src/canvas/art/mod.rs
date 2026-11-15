@@ -13,6 +13,8 @@ mod modules;
 mod passives;
 
 pub use breadboard::breadboard_holes_visible;
+pub use passives::ohms_label;
+pub use passives::pot_knob as passives_pot_knob;
 
 use super::pen::{Pen, WRect, darken, lighten, rgb, with_alpha};
 use crate::theme::font;
@@ -199,7 +201,7 @@ pub fn local_bounds(def: &PartDef) -> WRect {
         "source" | "spice_box" => WRect::new(-0.6, -2.6, lx1 + 0.6, 0.5),
         "pot_soil" => WRect::new(0.0, -6.0, w, h),
         "desk_lamp" | "hand" => WRect::new(0.0, 0.0, w, h),
-        "mini_scope" => WRect::new(-1.0, -1.0, 15.0, 9.0),
+        "mini_scope" => WRect::new(-1.0, -1.0, 19.0, 10.0),
         "dmm" => WRect::new(-1.0, -1.0, 12.0, 15.6),
         _ => {
             if w > 0.0 || h > 0.0 {
@@ -356,25 +358,28 @@ fn overlay_health(pen: &Pen, cx: &ArtCtx) {
             with_alpha(rgb(0xF2A33A), pulse),
         );
     }
-    if v.smoke > 0.02 {
-        smoke(pen, wb, v.smoke, cx.t, cx.part.id.len() as f64);
-    }
 }
 
 /// Magic smoke: soft grey puffs rising and widening above the part.
 pub fn smoke(pen: &Pen, wb: WRect, amount: f32, t: f64, seed: f64) {
     let (mx, _) = wb.center();
     let top = wb.y0;
-    let n = 9;
+    let n = 14;
     for i in 0..n {
-        let phase = ((t * 0.55 + i as f64 / n as f64 + seed * 0.13) % 1.0 + 1.0) % 1.0;
-        let rise = phase * 7.0;
-        let drift = ((i as f64 * 2.3 + t * 0.9 + seed).sin()) * (0.4 + phase * 1.6);
-        let r = 0.5 + phase * 2.2;
-        let a = amount * (1.0 - phase as f32).powf(1.4) * 0.55;
-        let g = 0x6E + ((1.0 - phase) * 40.0) as u32;
+        let phase = ((t * 0.45 + i as f64 / n as f64 + seed * 0.13) % 1.0 + 1.0) % 1.0;
+        let rise = phase * 9.0;
+        let drift = ((i as f64 * 2.3 + t * 0.8 + seed).sin()) * (0.5 + phase * 2.2);
+        let r = 0.7 + phase * 3.2;
+        let a = (amount.max(0.35) * (1.0 - phase as f32).powf(1.2) * 0.62).min(0.7);
+        let g = 0x9C + ((1.0 - phase) * 50.0) as u32;
         let c = rgb(g << 16 | g << 8 | g);
-        pen.circle(mx + drift, top - 0.4 - rise, r, with_alpha(c, a));
+        pen.circle(mx + drift, top - 0.2 - rise, r, with_alpha(c, a));
+        pen.circle(
+            mx + drift - r * 0.3,
+            top - 0.3 - rise - r * 0.25,
+            r * 0.55,
+            with_alpha(lighten(c, 0.3), a * 0.6),
+        );
     }
 }
 

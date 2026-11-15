@@ -1365,6 +1365,39 @@ pub fn menu_item(ui: &mut Ui, text: &str, selected: bool, enabled: bool) -> bool
     clicked
 }
 
+/// Compact dropdown for dense bars (serial monitor): mono label + chevron, 24 px tall, no
+/// box until hovered. Returns the item picked by `items`.
+pub fn mini_select<R>(
+    ui: &mut Ui,
+    label: &str,
+    selected_text: &str,
+    items: impl FnOnce(&mut Ui) -> Option<R>,
+) -> Option<R> {
+    let p = pal(ui);
+    let g = galley(ui, selected_text, font::mono(12.0), p.text_dim);
+    let (rect, resp) = ui.allocate_exact_size(vec2(g.size().x + 30.0, 24.0), Sense::click());
+    let l = format!("{label}: {selected_text}");
+    resp.widget_info(|| WidgetInfo::labeled(Role::ComboBox, true, &l));
+    if resp.hovered() {
+        ui.painter()
+            .rect_filled(rect, CornerRadius::same(5), p.bg_hover);
+    }
+    ui.painter().galley(
+        pos2(rect.left() + 8.0, rect.center().y - g.size().y / 2.0),
+        g,
+        p.text_dim,
+    );
+    Icon::ChevronDown.paint(
+        ui.painter(),
+        Rect::from_center_size(pos2(rect.right() - 11.0, rect.center().y), vec2(10.0, 10.0)),
+        p.text_muted,
+    );
+    egui::Popup::menu(&resp)
+        .width(160.0)
+        .show(items)
+        .and_then(|r| r.inner)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

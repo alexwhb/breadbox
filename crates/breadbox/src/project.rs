@@ -502,6 +502,9 @@ pub fn touch_recent(list: &mut Vec<RecentProject>, p: &Project) {
 
 /// Default folder for new projects: `~/Documents/Breadbox`.
 pub fn default_projects_dir() -> PathBuf {
+    if let Some(d) = std::env::var_os("BREADBOX_PROJECTS_DIR") {
+        return PathBuf::from(d);
+    }
     std::env::var_os("HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."))

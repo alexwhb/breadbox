@@ -105,8 +105,8 @@ pub fn breadboard(p: &Pen, cx: &ArtCtx) {
 /// All holes as one mesh (fast: ~830 quads).
 fn holes(p: &Pen, cols: u32, rail_holes: u32) {
     let s = p.len(0.36).max(1.2);
-    let hole = rgb(0x3A352D);
-    let rim = rgb(0xCFC7B8);
+    let hole = rgb(0x6F685C);
+    let rim = rgb(0xFBF9F4);
     let mut mesh = Mesh::default();
     let mut quad = |x: f64, y: f64| {
         let c = p.p(x, y);

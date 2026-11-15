@@ -40,6 +40,7 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 rfd = "0.18.0"
 crossbeam-channel = "0.5"
 zip = { version = "9", default-features = false, features = ["deflate"] }
+resvg = { version = "0.48", default-features = false, features = ["text"] }
 rodio = { version = "0.21", default-features = false, features = ["playback"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]

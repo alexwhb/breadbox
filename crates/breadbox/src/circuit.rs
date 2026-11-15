@@ -86,9 +86,21 @@ impl CircuitDoc {
         self.editor.electrical_generation
     }
 
-    /// Call after every edit through `editor` (autosave timer).
+    /// Call after every edit through `editor` (autosave timer). Parts added on the bench get
+    /// a place in the schematic right away (WB-7 auto-placement).
     pub fn touched(&mut self) {
         self.last_edit = Some(Instant::now());
+        let lib = self.lib.clone();
+        let unplaced = self.editor.project.parts.iter().any(|p| {
+            p.schematic.is_none()
+                && lib
+                    .get(&p.part)
+                    .is_some_and(|d| d.schematic.symbol != "none")
+        });
+        if unplaced && self.editor.project.auto_place_schematic(&lib) > 0 {
+            self.editor.generation += 1;
+            self.editor.electrical_generation += 1;
+        }
     }
 
     /// Connectivity of the current revision (cached per electrical generation).

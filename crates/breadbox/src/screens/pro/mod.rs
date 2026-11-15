@@ -5,6 +5,8 @@
 pub mod cards;
 pub mod demo;
 pub mod model;
+pub mod schematic;
+pub mod sync;
 
 use crate::app::AppCtx;
 use crate::jobs::Job;
@@ -32,6 +34,10 @@ pub enum NetlistSource {
     Demo,
     /// A `.cir` file (project `analyses/` or opened).
     File(PathBuf),
+    /// Generated from the shared circuit (`PRO-2` "synced from schematic").
+    Synced,
+    /// A synced netlist edited in ways the circuit cannot represent (Re-sync restores it).
+    Detached,
 }
 
 /// Export menu choices.
@@ -62,6 +68,10 @@ pub struct AnalysisScreen {
     show_all_op: bool,
     auto_ran: bool,
     pub runs_started: u32,
+    /// Document generation the synced text was made from.
+    synced_gen: Option<u64>,
+    /// The synced text as generated (edits are compared against it).
+    synced_text: String,
 }
 
 impl Default for AnalysisScreen {
@@ -88,6 +98,8 @@ impl Default for AnalysisScreen {
             show_all_op: false,
             auto_ran: false,
             runs_started: 0,
+            synced_gen: None,
+            synced_text: String::new(),
         }
     }
 }
@@ -112,6 +124,110 @@ impl AnalysisScreen {
         Ok(())
     }
 
+    /// Loads (or refreshes) the netlist synced from the shared circuit.
+    pub fn load_synced(&mut self, app: &mut AppCtx) -> bool {
+        let tel = app.bench.sim().and_then(|s| s.telemetry());
+        let Some(doc) = app.circuit.as_ref() else {
+            return false;
+        };
+        if doc.project().parts.is_empty() {
+            return false;
+        }
+        let text = match sync::synced_netlist(doc, tel.as_deref()) {
+            Ok(t) => t,
+            Err(e) => {
+                self.error = Some(format!("Netlister: {e}"));
+                return false;
+            }
+        };
+        let name = format!("{}.cir", doc.project().name);
+        let gen_ = doc.generation();
+        let profile = sync_profile(doc);
+        if let Some(detached) = doc.detached_netlist.clone() {
+            let mut cd = CodeDoc::new(name, detached);
+            cd.lang = widgets::Lang::Spice;
+            self.doc = cd;
+            self.source = NetlistSource::Detached;
+            self.source_label = "detached from the schematic".into();
+        } else {
+            if self.source == NetlistSource::Synced && self.doc.text == text {
+                self.synced_gen = Some(gen_);
+                return true;
+            }
+            let mut cd = CodeDoc::new(name, text.clone());
+            cd.lang = widgets::Lang::Spice;
+            self.doc = cd;
+            self.source = NetlistSource::Synced;
+            self.source_label = "synced from schematic".into();
+        }
+        self.synced_text = text;
+        self.synced_gen = Some(gen_);
+        self.profile = profile;
+        self.parsed_version = 0;
+        true
+    }
+
+    /// Keeps a synced netlist current and maps edits back into the circuit.
+    fn sync_tick(&mut self, app: &mut AppCtx) {
+        match self.source {
+            NetlistSource::Synced => {
+                // user edits: map value changes back once typing pauses
+                if self.doc.text != self.synced_text {
+                    let idle = self
+                        .last_edit
+                        .is_none_or(|t| t.elapsed() > Duration::from_millis(700));
+                    if !idle {
+                        app.egui.request_repaint_after(Duration::from_millis(720));
+                        return;
+                    }
+                    let Some(doc) = app.circuit.as_mut() else {
+                        return;
+                    };
+                    match sync::map_edit(doc.project(), &self.synced_text, &self.doc.text) {
+                        sync::EditMapping::Props(props) => {
+                            if let Err(e) = sync::apply(doc, &props) {
+                                app.toasts.error(format!("{e}"));
+                            }
+                            self.synced_gen = None;
+                        }
+                        sync::EditMapping::Detach => {
+                            doc.detached_netlist = Some(self.doc.text.clone());
+                            doc.touched();
+                            self.source = NetlistSource::Detached;
+                            self.source_label = "detached from the schematic".into();
+                        }
+                        sync::EditMapping::None => {}
+                    }
+                    return;
+                }
+                let g = app.circuit.as_ref().map(|d| d.generation());
+                if g != self.synced_gen {
+                    self.load_synced(app);
+                }
+            }
+            NetlistSource::Detached => {
+                if let Some(doc) = app.circuit.as_mut()
+                    && doc.detached_netlist.as_deref() != Some(self.doc.text.as_str())
+                {
+                    doc.detached_netlist = Some(self.doc.text.clone());
+                    doc.touched();
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Drops a detached netlist and regenerates it from the schematic.
+    pub fn resync(&mut self, app: &mut AppCtx) {
+        if let Some(doc) = app.circuit.as_mut() {
+            doc.detached_netlist = None;
+            doc.touched();
+        }
+        self.source = NetlistSource::Synced;
+        self.synced_gen = None;
+        self.load_synced(app);
+    }
+
     fn load_demo(&mut self) {
         *self = AnalysisScreen {
             runs_started: self.runs_started,
@@ -127,7 +243,7 @@ impl AnalysisScreen {
         let file = self.doc.name.clone();
         let base = match &self.source {
             NetlistSource::File(p) => p.parent().map(|d| d.to_path_buf()),
-            NetlistSource::Demo => None,
+            NetlistSource::Demo | NetlistSource::Synced | NetlistSource::Detached => None,
         };
         let profile = self.profile.clone();
         let cancel = CancelToken::new();
@@ -367,6 +483,10 @@ impl AnalysisScreen {
 
 /// ngspice-compatible export: stand-ins included so ngspice can run it; Breadbox-only cards
 /// become `*!bb` directives.
+fn sync_profile(doc: &crate::circuit::CircuitDoc) -> Profile {
+    sync::profile_for(doc)
+}
+
 pub fn export_text(text: &str) -> String {
     let (prepared, lib) = model::prepare(text);
     let mut with_stubs = prepared.clone();
@@ -412,11 +532,14 @@ impl Screen for AnalysisScreen {
                 }
             }
             None => {
-                if self.source != NetlistSource::Demo {
+                // the circuit's own netlist, synced from the schematic (PRO-2)
+                self.source = NetlistSource::Demo;
+                if !self.load_synced(app) {
                     self.load_demo();
                 }
             }
         }
+        self.result = None;
         self.auto_ran = false;
     }
 
@@ -507,6 +630,7 @@ impl Screen for AnalysisScreen {
         let p = pal(ui);
         self.poll();
         self.after_edit(app);
+        self.sync_tick(app);
         if let Some(slot) = &self.png {
             let done = slot.lock().ok().and_then(|mut g| g.take());
             if let Some(r) = done {
@@ -607,7 +731,13 @@ impl AnalysisScreen {
                         Err(e) => app.toasts.error(format!("{e}")),
                     }
                 }
-                if self.source != NetlistSource::Demo
+                if self.source == NetlistSource::Detached
+                    && Btn::mini("Re-sync").icon(Icon::Refresh).show(ui).clicked()
+                {
+                    self.resync(app);
+                    self.start_run(app);
+                }
+                if matches!(self.source, NetlistSource::File(_))
                     && Btn::plain("Load the demo netlist")
                         .icon_only(Icon::Restart)
                         .height(24.0)

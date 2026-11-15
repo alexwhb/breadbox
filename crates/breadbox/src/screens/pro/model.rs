@@ -121,7 +121,8 @@ pub fn prepare(text: &str) -> (String, Option<Arc<bb_spice::Library>>) {
         .map(|(name, _)| *name)
         .collect();
     if needs.is_empty() {
-        return (text.to_string(), None);
+        // file-name instance parameters (`fw=garden-node.hex`) are for the co-simulation only
+        return (strip_text_params(text), None);
     }
     let lib_text: String = demo::STUB_PARTS
         .iter()

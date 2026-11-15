@@ -304,7 +304,7 @@ fn legs_to(pen: &Pen, cx: &ArtCtx, base: f64, spread: f64) {
 }
 
 pub fn led(pen: &Pen, cx: &ArtCtx) {
-    let (mx, base) = stand(cx, 2.4);
+    let (mx, base) = stand(cx, 1.6);
     legs_to(pen, cx, base, 0.5);
     let color = led_color(&cx.prop_text("color"));
     let b = match cx.look() {
@@ -312,11 +312,13 @@ pub fn led(pen: &Pen, cx: &ArtCtx) {
         _ => 0.0,
     };
     let b = if cx.damaged() { 0.0 } else { b.clamp(0.0, 1.0) };
+    // perceived brightness: a few mA already look bright
+    let lum = if b > 0.002 { b.powf(0.45) } else { 0.0 };
     let dim = darken(color, 0.58);
     let body_c = if cx.damaged() {
         rgb(0x3A2E28)
     } else {
-        lit(dim, color, b.powf(0.6))
+        lit(dim, color, lum)
     };
     let dome = WRect::new(mx - 1.0, base - 3.1, mx + 1.0, base + 0.05);
     pen.shadow(dome, 1.0, 5.0, 3.0, 0.5);
@@ -336,14 +338,8 @@ pub fn led(pen: &Pen, cx: &ArtCtx) {
         0.55,
         with_alpha(Color32::WHITE, 0.45),
     );
-    if b > 0.02 {
-        pen.glow(
-            mx,
-            base - 1.8,
-            2.4 + 4.2 * b as f64,
-            color,
-            0.92 * b.powf(0.7),
-        );
+    if lum > 0.02 {
+        pen.glow(mx, base - 1.8, 2.8 + 6.5 * lum as f64, color, 0.95 * lum);
     }
     above_label(pen, cx, mx, base - 3.4, &cx.part.reference);
 }
