@@ -185,6 +185,10 @@ pub struct CharView {
     pub value: Vec<u8>,
     pub value_text: String,
     pub notifying: bool,
+    /// A notify on / off the phone has sent that has not reached the peripheral yet (its CCCD
+    /// write goes out in the next connection event); the UI shows the toggle as pending.
+    #[serde(default)]
+    pub notify_pending: Option<bool>,
     pub description: Option<String>,
 }
 
@@ -198,7 +202,7 @@ pub struct ServiceView {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PhoneRow {
     pub time: SimTime,
-    /// `connected`, `disconnected`, `notify`, `read`, `write`, `terminal`, `error`.
+    /// `connected`, `disconnected`, `subscribed`, `notify`, `read`, `write`, `terminal`, `error`.
     pub kind: String,
     pub device: Option<u32>,
     pub handle: Option<u16>,
@@ -659,6 +663,23 @@ impl RadioService {
                 data: vec![],
                 text: "write ok".into(),
             },
+            PhoneEvent::Subscribed { id, handle, on } => {
+                let uuid = self
+                    .space
+                    .ble
+                    .gatt(id)
+                    .and_then(|g| g.char(handle))
+                    .map(|c| c.uuid.to_string())
+                    .unwrap_or_else(|| format!("0x{handle:04X}"));
+                PhoneRow {
+                    time,
+                    kind: "subscribed".into(),
+                    device: Some(id.0),
+                    handle: Some(handle),
+                    data: vec![],
+                    text: format!("notifications {} · {uuid}", if on { "on" } else { "off" }),
+                }
+            }
             PhoneEvent::Terminal { id, data } => {
                 self.terminal.extend_from_slice(&data);
                 if self.terminal.len() > 16_384 {
@@ -867,6 +888,7 @@ impl RadioService {
                                 value_text: String::from_utf8_lossy(&c.value).into_owned(),
                                 value: c.value,
                                 notifying: c.notifying,
+                                notify_pending: ble.subscribe_pending(c.handle),
                                 description: c.description,
                             })
                             .collect(),

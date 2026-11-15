@@ -258,6 +258,12 @@ pub enum PhoneEvent {
         id: PeripheralId,
         handle: u16,
     },
+    /// The phone's CCCD write reached the peripheral: notifications are on / off.
+    Subscribed {
+        id: PeripheralId,
+        handle: u16,
+        on: bool,
+    },
     /// Bytes arrived in the Bluetooth serial terminal.
     Terminal {
         id: PeripheralId,
@@ -402,11 +408,48 @@ impl BleSpace {
         });
     }
 
-    /// Next connection event at or after `t` (phase-locked to the connection interval).
+    /// The phone's (master's) packet in the next connection event after `t` (phase-locked to
+    /// the connection interval).
     fn conn_event(&mut self, t: SimTime) -> SimTime {
-        let ci = self.conn_interval.as_ps().max(1);
-        let next = (t.as_ps() / ci + 1) * ci;
-        SimTime::from_ps(next) + SimTime::from_us(150 + self.rng.below(300) as u64)
+        Self::anchor_after(self.conn_interval, t)
+            + SimTime::from_us(150 + self.rng.below(300) as u64)
+    }
+
+    /// The peripheral's (slave's) packet in the next connection event after `t`: it always
+    /// follows the master's packet of the same event, so a CCCD write the phone sends in that
+    /// event is in effect before the peripheral's notification goes out.
+    fn peripheral_event(&mut self, t: SimTime) -> SimTime {
+        Self::anchor_after(self.conn_interval, t)
+            + SimTime::from_us(600 + self.rng.below(300) as u64)
+    }
+
+    fn anchor_after(ci: SimTime, t: SimTime) -> SimTime {
+        let ci = ci.as_ps().max(1);
+        SimTime::from_ps((t.as_ps() / ci + 1) * ci)
+    }
+
+    /// A CCCD write for `(p, handle)` that is queued at or before `by` (the latest one wins).
+    fn pending_cccd(&self, p: PeripheralId, handle: u16, by: SimTime) -> Option<bool> {
+        self.queue
+            .iter()
+            .filter(|s| s.at <= by)
+            .filter_map(|s| match s.ev {
+                BleEv::Subscribe {
+                    p: q,
+                    handle: h,
+                    on,
+                } if q == p && h == handle => Some((s.at, s.seq, on)),
+                _ => None,
+            })
+            .max_by_key(|&(at, seq, _)| (at, seq))
+            .map(|(_, _, on)| on)
+    }
+
+    /// The notification state the phone asked for on `handle` of the connected peripheral but
+    /// that has not reached it yet (the UI shows the toggle as pending).
+    pub fn subscribe_pending(&self, handle: u16) -> Option<bool> {
+        let id = self.phone_connected()?;
+        self.pending_cccd(id, handle, SimTime::MAX)
     }
 
     fn per(&self, id: PeripheralId) -> Result<&Peripheral, BleError> {
@@ -548,18 +591,28 @@ impl BleSpace {
     }
 
     /// Sends a notification (if the phone subscribed). Values longer than 20 bytes are split.
+    ///
+    /// The notification goes out in the peripheral's half of the next connection event, so the
+    /// CCCD state that counts is the one in effect then: a subscribe the phone has already
+    /// queued for that event (or earlier) applies, even if the peripheral has not processed it
+    /// at `now`.
     pub fn notify(&mut self, id: PeripheralId, handle: u16, data: &[u8], now: SimTime) -> bool {
         self.advance(now);
-        let ok = self
-            .per(id)
-            .is_ok_and(|p| p.connected && p.gatt.char(handle).is_some_and(|c| c.notifying));
         if let Some(c) = self.gatt_mut(id).and_then(|g| g.char_mut(handle)) {
             c.value = data.to_vec();
         }
-        if !ok {
+        let Ok(p) = self.per(id) else { return false };
+        let Some(c) = p.gatt.char(handle) else {
+            return false;
+        };
+        let (connected, notifying) = (p.connected, c.notifying);
+        if !connected {
             return false;
         }
-        let mut t = self.conn_event(now);
+        let mut t = self.peripheral_event(now);
+        if !self.pending_cccd(id, handle, t).unwrap_or(notifying) {
+            return false;
+        }
         for chunk in data.chunks(20) {
             self.schedule(
                 t,
@@ -921,7 +974,11 @@ impl BleSpace {
                 ));
             }
             BleEv::Notify { p, handle, data } => {
-                if !self.is_connected(p) || self.phone_conn != Some(p) {
+                let notifying = self
+                    .gatt(p)
+                    .and_then(|g| g.char(handle))
+                    .is_some_and(|c| c.notifying);
+                if !self.is_connected(p) || self.phone_conn != Some(p) || !notifying {
                     return;
                 }
                 let shown = printable(&data);
@@ -969,6 +1026,10 @@ impl BleSpace {
                 if let Ok(per) = self.per_mut(p) {
                     per.events
                         .push_back(PeripheralEvent::Subscribed { handle, on });
+                }
+                if self.phone_conn == Some(p) {
+                    self.phone_events
+                        .push((now, PhoneEvent::Subscribed { id: p, handle, on }));
                 }
             }
             BleEv::SppToPeripheral { p, data } => {

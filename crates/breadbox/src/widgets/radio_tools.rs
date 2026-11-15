@@ -391,23 +391,29 @@ fn gatt(ui: &mut Ui, t: &mut RadioTools, r: &RadioTelemetry, cmds: &mut Vec<Radi
                                     }
                                 }
                                 if c.props.iter().any(|x| x == "notify" || x == "indicate") {
-                                    let b =
-                                        Btn::mini(if c.notifying { "Notify on" } else { "Notify" })
-                                            .selected(c.notifying)
-                                            .show(ui);
+                                    // The toggle follows what the phone asked for; until the
+                                    // CCCD write reaches the module it reads "Turning on…".
+                                    let want = c.notify_pending.unwrap_or(c.notifying);
+                                    let text = match c.notify_pending {
+                                        Some(true) => "Turning on…",
+                                        Some(false) => "Turning off…",
+                                        None if c.notifying => "Notify on",
+                                        None => "Notify",
+                                    };
+                                    let b = Btn::mini(text).selected(want).show(ui);
                                     let l = format!("Notify {}", c.uuid);
                                     b.widget_info(|| {
                                         egui::WidgetInfo::selected(
                                             egui::Role::Button,
                                             true,
-                                            c.notifying,
+                                            want,
                                             &l,
                                         )
                                     });
                                     if b.clicked() {
                                         cmds.push(RadioCommand::Phone(PhoneCommand::Subscribe {
                                             handle: c.handle,
-                                            on: !c.notifying,
+                                            on: !want,
                                         }));
                                     }
                                 }

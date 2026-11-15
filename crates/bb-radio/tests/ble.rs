@@ -114,6 +114,28 @@ fn gatt_and_phone_read_write_notify() {
         })
         .collect();
     assert_eq!(notes, vec![vec![7u8; 20], vec![7u8; 10]]);
+    // Unsubscribe and notify at the same instant: the CCCD write goes out in the master's
+    // half of the next connection event, before the peripheral's packet → nothing arrives.
+    ble.subscribe(temp, false, ms(300)).unwrap();
+    assert_eq!(ble.subscribe_pending(temp), Some(false));
+    assert!(!ble.notify(p, temp, &[9], ms(300)));
+    ble.advance(ms(340));
+    assert_eq!(ble.subscribe_pending(temp), None);
+    let ev = ble.take_phone_events();
+    assert!(
+        ev.iter().any(|e| e.1
+            == PhoneEvent::Subscribed {
+                id: p,
+                handle: temp,
+                on: false
+            }),
+        "{ev:?}"
+    );
+    assert!(
+        !ev.iter()
+            .any(|e| matches!(e.1, PhoneEvent::Notification { .. })),
+        "{ev:?}"
+    );
     // Peripheral power-off drops the link.
     ble.set_powered(p, false, ms(300));
     assert!(
@@ -395,4 +417,47 @@ fn ble_button_firmware_with_virtual_phone() {
     b.space.ble.disconnect(t);
     b.run_until(t + ms(100));
     assert!(b.lines.iter().any(|l| l.1 == "phone disconnected"));
+}
+
+/// The phone subscribes and the peripheral notifies before the CCCD write has reached it (the
+/// same instant, or a few ms later — e.g. a button pressed right after "Notify" on a fast or
+/// paused bench): the CCCD goes out in the master's packet of the next connection event and the
+/// notification in the peripheral's packet of that event or a later one, so it is delivered.
+#[test]
+fn notify_right_after_subscribe_is_delivered() {
+    for gap_us in [0u64, 1, 500, 5_000, 29_000, 31_000] {
+        let mut ble = BleSpace::new(7);
+        let p = ble.add_peripheral("U2", Pos::new(1.0, 0.0));
+        let g = ble.gatt_mut(p).unwrap();
+        let svc = g.add_service(HM10_SERVICE);
+        let h = g.add_characteristic(
+            svc,
+            HM10_CHAR,
+            props::READ | props::WRITE_NO_RESPONSE | props::NOTIFY,
+            b"",
+        );
+        ble.set_advertising(p, true);
+        ble.connect(p, None, ms(0)).unwrap();
+        ble.advance(ms(200));
+        ble.take_phone_events();
+        let t0 = ms(200) + SimTime::from_us(7_777);
+        ble.subscribe(h, true, t0).unwrap();
+        assert_eq!(ble.subscribe_pending(h), Some(true));
+        assert!(
+            ble.notify(p, h, b"pressed #1\n", t0 + SimTime::from_us(gap_us)),
+            "gap {gap_us} µs"
+        );
+        ble.advance(ms(400));
+        let ev = ble.take_phone_events();
+        let sub = ev
+            .iter()
+            .position(|e| matches!(e.1, PhoneEvent::Subscribed { on: true, .. }));
+        let note = ev.iter().position(
+            |e| matches!(&e.1, PhoneEvent::Notification { data, .. } if data == b"pressed #1\n"),
+        );
+        assert!(
+            sub.is_some() && note.is_some() && sub < note,
+            "gap {gap_us} µs: {ev:?}"
+        );
+    }
 }
