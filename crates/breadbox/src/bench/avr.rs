@@ -33,6 +33,8 @@ enum Cmd {
     Serial(Vec<u8>),
     Radio(RadioCommand),
     Analog(String, f64),
+    /// The Memory / I/O view is watching: refresh the memory snapshot while running.
+    WatchMemory,
     Quit,
 }
 
@@ -54,6 +56,7 @@ pub struct AvrBench {
     target: BenchTarget,
     thread: Option<JoinHandle<()>>,
     running: bool,
+    watch_sent: Option<Instant>,
 }
 
 impl AvrBench {
@@ -106,6 +109,7 @@ impl AvrBench {
             target,
             thread,
             running: false,
+            watch_sent: None,
         }
     }
 
@@ -200,6 +204,18 @@ impl BenchLink for AvrBench {
         let _ = self.tx.send(Cmd::Radio(cmd));
     }
 
+    fn watch_memory(&mut self, target: &str) {
+        if target != self.target.id
+            || self
+                .watch_sent
+                .is_some_and(|t| t.elapsed() < Duration::from_millis(300))
+        {
+            return;
+        }
+        self.watch_sent = Some(Instant::now());
+        let _ = self.tx.send(Cmd::WatchMemory);
+    }
+
     fn poll(&mut self) -> BenchUpdate {
         let mut s = self.shared.lock().unwrap_or_else(|e| e.into_inner());
         self.running = s.running;
@@ -267,6 +283,13 @@ struct Worker {
     out_events: Vec<BenchEvent>,
     last_publish: Instant,
     debug_dirty: bool,
+    /// Flash cache + last-pause snapshot for the Memory / I/O views.
+    mem: MemoryHistory,
+    /// The Memory / I/O view watches until then.
+    watch_until: Option<Instant>,
+    last_mem: Instant,
+    /// Bench position on the floor plan (metres).
+    bench_pos: (f64, f64),
 }
 
 fn new_avr(board: &Board) -> Avr {
@@ -342,6 +365,10 @@ impl Worker {
             out_events: Vec::new(),
             last_publish: Instant::now(),
             debug_dirty: true,
+            mem: MemoryHistory::default(),
+            watch_until: None,
+            last_mem: Instant::now(),
+            bench_pos: (3.2, 0.0),
         }
     }
 
@@ -376,6 +403,12 @@ impl Worker {
             }
             if self.active() {
                 self.slice();
+                if self.watch_until.is_some_and(|t| Instant::now() < t)
+                    && self.last_mem.elapsed() > Duration::from_millis(250)
+                {
+                    self.last_mem = Instant::now();
+                    self.debug_dirty = true;
+                }
             }
             // publish at ≤ 30 Hz while running, otherwise only when something changed (an idle
             // bench must not wake the UI)
@@ -435,6 +468,9 @@ impl Worker {
                 if let Some(p) = self.board.pin_by_name(&name).and_then(|p| p.pin) {
                     self.adc.insert(p, v);
                 }
+            }
+            Cmd::WatchMemory => {
+                self.watch_until = Some(Instant::now() + Duration::from_secs(1));
             }
             Cmd::Quit => {}
         }
@@ -623,6 +659,13 @@ impl Worker {
                     .explorer_publish(&topic, payload.as_bytes(), 0, false);
             }
             RadioCommand::MqttSubscribe(f) => r.space.explorer_subscribe(&f),
+            RadioCommand::SetBenchPos { x, y } => {
+                self.bench_pos = (x, y);
+                let ids: Vec<_> = r.space.devices().into_iter().map(|d| d.0).collect();
+                for id in ids {
+                    r.space.set_position(id, Pos::new(x, y));
+                }
+            }
             RadioCommand::Phone(_) => {}
         }
     }
@@ -804,6 +847,10 @@ impl Worker {
             cycle: self.avr.cycle(),
         };
         vm.registers = regs;
+        vm.memory = Some(memory_snapshot(
+            &self.avr,
+            self.mem.known_flash_gen(&self.target.id),
+        ));
         if let Some(dbg) = &self.dbg {
             vm.breakpoints = self
                 .bp_specs
@@ -891,12 +938,17 @@ impl Worker {
     }
 
     fn publish(&mut self, force: bool) {
-        let debug = (self.debug_dirty || force).then(|| self.debug_vm());
+        let debug = (self.debug_dirty || force).then(|| {
+            let mut vm = self.debug_vm();
+            self.mem.apply(&mut vm);
+            vm
+        });
         let pins = self.pins();
-        let radio = self
-            .radio
-            .as_ref()
-            .map(|r| RadioPanelModel::from_space(&r.space, LOG_LIMIT));
+        let radio = self.radio.as_ref().map(|r| {
+            let mut m = RadioPanelModel::from_space(&r.space, LOG_LIMIT);
+            m.placement = Some(placement_from_space(&r.space, self.bench_pos));
+            m
+        });
         {
             let mut s = self.shared.lock().unwrap_or_else(|e| e.into_inner());
             s.running = self.active();

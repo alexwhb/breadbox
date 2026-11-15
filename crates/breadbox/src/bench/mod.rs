@@ -145,6 +145,11 @@ pub enum RadioCommand {
     MqttSubscribe(String),
     /// The virtual phone (BLE central, `RF-6`).
     Phone(PhoneAction),
+    /// Moves the bench (and every radio on it) on the floor plan, metres (`RF-1`).
+    SetBenchPos {
+        x: f64,
+        y: f64,
+    },
 }
 
 /// Virtual-phone actions.
@@ -312,11 +317,194 @@ pub struct DebugViewModel {
     pub breakpoints: Vec<BreakpointView>,
     /// Firmware built for debugging (`-Og`)? Release builds show few locals.
     pub debug_build: bool,
+    /// SRAM / flash / EEPROM + I/O registers of the AVR core (`None` for API-level boards or
+    /// before the first snapshot). Taken at every pause and, while the Debug tab's Memory or
+    /// I/O view watches the target, a few times a second while running.
+    pub memory: Option<MemoryView>,
 }
 
 impl DebugViewModel {
     pub fn is_paused(&self) -> bool {
         matches!(self.state, DebugState::Paused { .. })
+    }
+}
+
+/// One I/O register in the debugger's I/O view (`PORTB 0x25 0x20 0010 0000`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct IoRegView {
+    pub name: &'static str,
+    /// Data-space address.
+    pub addr: u16,
+    /// `"Port B"`, `"Timer/Counter1"`, `"USART0"`, …
+    pub peripheral: &'static str,
+    pub value: u8,
+    /// Value at the previous pause (`None` before the second pause).
+    pub prev: Option<u8>,
+}
+
+impl IoRegView {
+    /// `0010 0000`.
+    pub fn bits(&self) -> String {
+        format!("{:04b} {:04b}", self.value >> 4, self.value & 0x0F)
+    }
+    /// Changed since the previous pause?
+    pub fn changed(&self) -> bool {
+        self.prev.is_some_and(|p| p != self.value)
+    }
+}
+
+/// Memory snapshot of one AVR core for the hex views (`MCU-5`). Buffers are shared (`Arc`)
+/// so the per-frame view-model copies stay cheap; flash is cached per firmware.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct MemoryView {
+    /// `"ATmega328P"`.
+    pub mcu: String,
+    /// Data address of the first SRAM byte (`0x100` on the 328P, `0x200` on the 2560).
+    pub sram_start: u16,
+    /// SRAM (`sram_start..=RAMEND`).
+    pub sram: Arc<Vec<u8>>,
+    pub eeprom: Arc<Vec<u8>>,
+    /// Program memory (bytes). Fetched once per firmware (`flash_gen`).
+    pub flash: Arc<Vec<u8>>,
+    /// `bb_avr::Avr::flash_generation` of `flash`.
+    pub flash_gen: u64,
+    /// Programmed bytes (up to the last non-erased word).
+    pub flash_used: usize,
+    pub io: Vec<IoRegView>,
+    /// SRAM / EEPROM at the previous pause: bytes that differ are highlighted.
+    pub prev_sram: Option<Arc<Vec<u8>>>,
+    pub prev_eeprom: Option<Arc<Vec<u8>>>,
+    /// Stack pointer and the X (r27:r26), Y (r29:r28), Z (r31:r30) pointer registers.
+    pub sp: u16,
+    pub x: u16,
+    pub y: u16,
+    pub z: u16,
+    /// Core cycle the snapshot was taken at.
+    pub cycle: u64,
+}
+
+impl MemoryView {
+    /// One past the last SRAM data address.
+    pub fn sram_end(&self) -> u32 {
+        self.sram_start as u32 + self.sram.len() as u32
+    }
+    /// Pointer registers that point into SRAM: `("SP", addr)`, `("X", addr)`, …
+    pub fn pointers(&self) -> [(&'static str, u16); 4] {
+        [("SP", self.sp), ("X", self.x), ("Y", self.y), ("Z", self.z)]
+    }
+}
+
+/// Takes a [`MemoryView`] of `avr` (engine thread). Flash is copied only when its generation
+/// differs from `known_flash_gen` (the caller keeps the cached copy).
+pub fn memory_snapshot(avr: &bb_avr::Avr, known_flash_gen: Option<u64>) -> MemoryView {
+    let mcu = avr.mcu();
+    let flash_gen = avr.flash_generation();
+    let (flash, flash_used) = if known_flash_gen == Some(flash_gen) {
+        (Arc::default(), 0)
+    } else {
+        let f = avr.flash_bytes();
+        let used = f
+            .chunks(2)
+            .rposition(|w| w.iter().any(|b| *b != 0xFF))
+            .map(|i| (i + 1) * 2)
+            .unwrap_or(0);
+        (Arc::new(f), used)
+    };
+    let pair = |lo: usize| u16::from_le_bytes([avr.reg(lo), avr.reg(lo + 1)]);
+    MemoryView {
+        mcu: mcu.name().to_string(),
+        sram_start: mcu.sram_start() as u16,
+        sram: Arc::new(avr.sram().to_vec()),
+        eeprom: Arc::new(avr.eeprom().to_vec()),
+        flash,
+        flash_gen,
+        flash_used,
+        io: bb_avr::io_registers(mcu)
+            .iter()
+            .map(|r| IoRegView {
+                name: r.name,
+                addr: r.addr,
+                peripheral: r.peripheral,
+                value: avr.peek(r.addr),
+                prev: None,
+            })
+            .collect(),
+        prev_sram: None,
+        prev_eeprom: None,
+        sp: avr.sp(),
+        x: pair(26),
+        y: pair(28),
+        z: pair(30),
+        cycle: avr.cycle(),
+    }
+}
+
+/// Per-target memory bookkeeping on the UI side of a link: the cached flash copy and the
+/// snapshot of the last pause (for "changed since the previous pause").
+#[derive(Debug, Default)]
+pub struct MemoryHistory {
+    flash: std::collections::HashMap<String, (u64, Arc<Vec<u8>>, usize)>,
+    last_pause: std::collections::HashMap<String, MemoryView>,
+}
+
+impl MemoryHistory {
+    /// Flash generation already cached for `target` (pass to [`memory_snapshot`]).
+    pub fn known_flash_gen(&self, target: &str) -> Option<u64> {
+        self.flash.get(target).map(|f| f.0)
+    }
+
+    /// Fills `vm.memory` from the caches (flash, previous pause) and remembers pauses.
+    pub fn apply(&mut self, vm: &mut DebugViewModel) {
+        let paused = vm.is_paused();
+        let Some(m) = vm.memory.as_mut() else {
+            return;
+        };
+        let target = vm.target.clone();
+        if m.flash.is_empty() {
+            if let Some((g, f, used)) = self.flash.get(&target)
+                && *g == m.flash_gen
+            {
+                m.flash = f.clone();
+                m.flash_used = *used;
+            }
+        } else {
+            self.flash
+                .insert(target.clone(), (m.flash_gen, m.flash.clone(), m.flash_used));
+        }
+        let last = self
+            .last_pause
+            .get(&target)
+            .filter(|l| l.flash_gen == m.flash_gen && l.mcu == m.mcu);
+        match last {
+            // the same pause again (a refresh): keep its comparison base
+            Some(l) if paused && l.cycle == m.cycle => {
+                m.prev_sram = l.prev_sram.clone();
+                m.prev_eeprom = l.prev_eeprom.clone();
+                for (r, lr) in m.io.iter_mut().zip(&l.io) {
+                    r.prev = lr.prev;
+                }
+            }
+            // a new pause, or running: compare with the last pause
+            Some(l) => {
+                m.prev_sram = Some(l.sram.clone());
+                m.prev_eeprom = Some(l.eeprom.clone());
+                for (r, lr) in m.io.iter_mut().zip(&l.io) {
+                    r.prev = Some(lr.value);
+                }
+            }
+            None => {}
+        }
+        if paused {
+            let keep = self
+                .last_pause
+                .get(&target)
+                .is_none_or(|l| l.cycle != m.cycle || l.flash_gen != m.flash_gen);
+            if keep {
+                let mut snap = m.clone();
+                snap.flash = Arc::default();
+                self.last_pause.insert(target, snap);
+            }
+        }
     }
 }
 
@@ -400,6 +588,47 @@ impl Default for NetConditionsView {
     }
 }
 
+/// An access point on the floor plan with its link to the bench.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ApPlacement {
+    pub ssid: String,
+    pub channel: u8,
+    /// Metres.
+    pub x: f64,
+    pub y: f64,
+    /// Bench ↔ AP distance (m), walls crossed, RSSI at the bench (dBm).
+    pub distance_m: f64,
+    pub walls: u32,
+    pub rssi_dbm: f64,
+}
+
+/// A wall on the floor plan (metres).
+#[derive(Debug, Clone, PartialEq)]
+pub struct WallView {
+    pub a: (f64, f64),
+    pub b: (f64, f64),
+    pub loss_db: f64,
+    pub label: String,
+}
+
+/// Station placement (`RF-1`): where the bench stands relative to the access points.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct PlacementView {
+    /// Bench position, metres.
+    pub bench: (f64, f64),
+    pub aps: Vec<ApPlacement>,
+    pub walls: Vec<WallView>,
+}
+
+impl PlacementView {
+    /// The access point with the strongest signal at the bench.
+    pub fn best_ap(&self) -> Option<&ApPlacement> {
+        self.aps
+            .iter()
+            .max_by(|a, b| a.rssi_dbm.total_cmp(&b.rssi_dbm))
+    }
+}
+
 /// Bluetooth LE card: devices the virtual phone can see.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct BleView {
@@ -451,6 +680,8 @@ pub struct RadioPanelModel {
     pub ble: Option<BleView>,
     /// Messages seen by the MQTT explorer.
     pub mqtt: Vec<(String, String)>,
+    /// Floor plan: access points, walls, bench position (`RF-1`).
+    pub placement: Option<PlacementView>,
 }
 
 impl RadioPanelModel {
@@ -526,11 +757,48 @@ impl RadioPanelModel {
             },
             ble,
             mqtt: Vec::new(),
+            placement: None,
         }
     }
 
     pub fn has_radios(&self) -> bool {
         !self.cards.is_empty()
+    }
+}
+
+/// The floor plan of a live `bb_radio::RadioSpace` with the bench at `bench` (metres).
+pub fn placement_from_space(space: &bb_radio::RadioSpace, bench: (f64, f64)) -> PlacementView {
+    let net = &space.net;
+    let at = bb_radio::geo::Pos::new(bench.0, bench.1);
+    PlacementView {
+        bench,
+        aps: net
+            .access_points()
+            .iter()
+            .map(|a| {
+                let l = net.geometry.link(&net.path_loss, a.tx_dbm, a.pos, at);
+                ApPlacement {
+                    ssid: a.ssid.clone(),
+                    channel: a.channel,
+                    x: a.pos.x,
+                    y: a.pos.y,
+                    distance_m: l.distance_m,
+                    walls: l.walls,
+                    rssi_dbm: l.rssi_dbm,
+                }
+            })
+            .collect(),
+        walls: net
+            .geometry
+            .walls
+            .iter()
+            .map(|w| WallView {
+                a: (w.a.x, w.a.y),
+                b: (w.b.x, w.b.y),
+                loss_db: w.loss_db,
+                label: w.label.clone(),
+            })
+            .collect(),
     }
 }
 
@@ -596,6 +864,10 @@ pub trait BenchLink: Send {
     fn as_sim(&mut self) -> Option<&mut sim::SimBench> {
         None
     }
+    /// The Debug tab's Memory / I/O view is showing `target`: keep its [`MemoryView`] fresh
+    /// (a few snapshots a second while running). Call every frame the view is visible; the
+    /// watch lapses about a second after the last call.
+    fn watch_memory(&mut self, _target: &str) {}
 }
 
 /// Inputs to a bench factory.
@@ -638,6 +910,64 @@ mod tests {
     fn clock_labels() {
         assert_eq!(clock_label(SimTime::from_ms(12_500)), "00:12.500");
         assert_eq!(clock_label(SimTime::from_ms(61_001)), "01:01.001");
+    }
+
+    #[test]
+    fn memory_history_highlights_changes_since_the_previous_pause() {
+        let mut avr = bb_avr::Avr::with_mcu(bb_avr::Mcu::Atmega328p);
+        avr.load_program_words(&[0x0000, 0xCFFF]);
+        let mut h = MemoryHistory::default();
+        let paused = |avr: &bb_avr::Avr, h: &MemoryHistory| DebugViewModel {
+            target: "U1".into(),
+            state: DebugState::Paused {
+                reason: "step".into(),
+            },
+            memory: Some(memory_snapshot(avr, h.known_flash_gen("U1"))),
+            ..Default::default()
+        };
+        // first pause: flash fetched and cached, nothing to compare with
+        let mut a = paused(&avr, &h);
+        h.apply(&mut a);
+        let m = a.memory.as_ref().unwrap();
+        assert_eq!(m.sram_start, 0x100);
+        assert_eq!(m.sram.len(), 2048);
+        assert_eq!(m.eeprom.len(), 1024);
+        assert_eq!(m.flash.len(), 32 * 1024);
+        assert_eq!(m.flash_used, 4);
+        assert!(m.prev_sram.is_none());
+        let portb = m.io.iter().find(|r| r.name == "PORTB").unwrap();
+        assert_eq!((portb.addr, portb.value, portb.prev), (0x25, 0, None));
+        // second pause: flash comes from the cache, changes are visible
+        avr.poke(0x25, 0x20);
+        avr.poke(0x123, 0x42);
+        avr.set_reg(26, 0x23);
+        avr.set_reg(27, 0x01);
+        avr.set_pc(2); // a different cycle stands in for "later"
+        let mut b = paused(&avr, &h);
+        b.memory.as_mut().unwrap().cycle += 100;
+        assert!(b.memory.as_ref().unwrap().flash.is_empty(), "not refetched");
+        h.apply(&mut b);
+        let m = b.memory.as_ref().unwrap();
+        assert_eq!(m.flash.len(), 32 * 1024, "filled from the cache");
+        assert_eq!(m.x, 0x0123);
+        let prev = m.prev_sram.as_ref().unwrap();
+        assert_eq!((prev[0x23], m.sram[0x23]), (0, 0x42));
+        let portb = m.io.iter().find(|r| r.name == "PORTB").unwrap();
+        assert_eq!(portb.bits(), "0010 0000");
+        assert!(portb.changed());
+        // the same pause refreshed keeps its comparison base
+        let mut c = b.clone();
+        c.memory.as_mut().unwrap().prev_sram = None;
+        h.apply(&mut c);
+        assert!(c.memory.as_ref().unwrap().prev_sram.is_some());
+        assert!(
+            c.memory
+                .as_ref()
+                .unwrap()
+                .io
+                .iter()
+                .any(|r| r.name == "PORTB" && r.changed())
+        );
     }
 
     #[test]
