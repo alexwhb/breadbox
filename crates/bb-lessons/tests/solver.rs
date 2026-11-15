@@ -90,3 +90,52 @@ fn solver_completes_track_radios() {
 fn solver_completes_track_spice() {
     solve_track("spice");
 }
+
+/// "Sketch compiles": every code step's starter and reference solution build with the Arduino
+/// toolchain, and the freshly compiled solution (not the prebuilt image) passes the step's
+/// goals on the bench. Skipped when no toolchain is installed.
+#[test]
+fn code_steps_compile_and_the_compiled_solution_passes() {
+    if bb_firmware::Toolchain::detect().is_err() {
+        eprintln!("no Arduino toolchain; skipping");
+        return;
+    }
+    let cat = Catalog::builtin();
+    let h = host();
+    let lib = h.library();
+    let mut n = 0;
+    for l in cat.all() {
+        let Some(at) = l.lesson.steps.iter().position(|s| s.code.is_some()) else {
+            continue;
+        };
+        let code = l.lesson.steps[at].code.clone().unwrap();
+        let mut r = Runner::new(l, &h).unwrap();
+        // solve up to the code step
+        while r.session.step < at {
+            let res = r.solve_step().unwrap();
+            assert!(res.iter().all(|c| c.ok), "{}: {res:?}", l.lesson.id);
+            r.next_step();
+        }
+        let fqbn = bb_lessons::code::fqbn_for(r.session.project(), &lib, &code.mcu)
+            .unwrap_or_else(|| panic!("{}: {} is not an AVR board", l.lesson.id, code.mcu));
+        let starter = bb_lessons::code::compile(&code.starter, &fqbn).unwrap();
+        assert!(starter.success, "{} starter:\n{}", l.lesson.id, starter.log);
+        let build = bb_lessons::code::compile(&code.solution, &fqbn).unwrap();
+        assert!(build.success, "{} solution:\n{}", l.lesson.id, build.log);
+        r.upload(&code.mcu, build.image.as_ref().unwrap()).unwrap();
+        let step = r.session.current().clone();
+        r.run(step.run.max(1.0)).unwrap();
+        let res = r.evaluate();
+        assert!(
+            res.iter().all(|c| c.ok),
+            "{}: compiled solution: {res:?}",
+            l.lesson.id
+        );
+        eprintln!(
+            "{:>28}: starter + solution compile; compiled solution passes",
+            l.lesson.id
+        );
+        n += 1;
+    }
+    assert_eq!(n, 4, "code steps");
+}

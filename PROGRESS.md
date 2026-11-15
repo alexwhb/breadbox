@@ -497,7 +497,7 @@ Deviations / notes:
 
 ### plugins
 Phase 3 — radio/host-board glue, `bb-plugin`, `bb-plugin-sdk`, first-party plugins, `bb-lessons`.
-(In progress — lessons next.)
+**All five items done.**
 
 - Radio glue **done** — `bb_sim::devices::RadioModule` (esp01/hm10/hc05/rylr896: UART pins
   decoded with exact bit timing following the module's baud, TX frames as Thevenin edges,
@@ -510,7 +510,38 @@ Phase 3 — radio/host-board glue, `bb-plugin`, `bb-plugin-sdk`, first-party plu
 - `PLUG-1/2/7` **done** (engine) — see ARCHITECTURE §7. `PLUG-3` SDK **done** (docs in progress).
   `PLUG-5` **done** — 7 first-party plugins built to wasm and committed + 5 SDK examples.
 
-APIs for the UI (details in ARCHITECTURE §6c/§7):
+- `LES-1/3/4` + model side of `LES-5/6` **done** — `bb-lessons` (ARCHITECTURE §7b,
+  `docs/LESSON-FORMAT.md`): TOML format with 8 step kinds, 23 check types (circuit, bench,
+  instruments incl. the DMM plugin, serial, pin frequency/duty, MQTT, phone, SPICE), 21
+  worked-solution actions; `Session` (the design's step 3 verbatim: choice, "Do the math
+  myself", 4 conditional hints, "Show me the working", measurements table + checkpoint,
+  damage card), headless `Runner` (scripted solver), `Progress`, `editor::Draft` (capture
+  bench → steps → suggested checks → lesson-pack plugin). Content: 5 tracks / 24 lessons
+  (Electricity you can see 8, Sensors 4, Microcontrollers 4, Radios & IoT 4, Pro SPICE 4),
+  every start circuit a real project (`write_benches` example), AVR sketches prebuilt
+  (`lessons/build-firmware.sh`).
+
+APIs for the UI (details in ARCHITECTURE §6c/§7/§7b):
+- Lessons screen: `bb_lessons::Catalog::builtin()` + `add_packs(&host.lesson_dirs())` → tracks
+  (`def.label/title`, lessons in order), `Progress::load(Progress::default_path())` for the
+  ✓ marks / resume. Open a lesson: `Session::new(&loaded, host.library())`; bench project =
+  `session.project()`, firmware `loaded.images(&p)` + `loaded.host_firmware(&p, &lib)`, world
+  from `lesson.bench.world`. Step panel: `label()`, `current()` (title, body, formula,
+  callouts → canvas callouts, choice, predict, table, quiz, code), `render(text, meter)`,
+  `choose(i)` → send the returned `Edit` (`SetProp` → `Command::SetPartParam`, `Project` →
+  `UpdateProject`), `set_math`, `meter_hidden()` (show "----"), `predict(guess, meter)` →
+  `Verdict.text`, `working()` / `toggle_working()`, `record(meter)` when the meter settles,
+  `checkpoint()`, `answer_quiz`, damage card when `Telemetry` shows the part damaged
+  (`damage_title/text/repair_label`; Repair → `Command::RepairAll` + `choose(default)`),
+  goals: `check::prepare` on step entry and `check::evaluate_step(step, project, lib,
+  Some(bench), state)` inside `Command::With`; `next_step()` / `prev_step()`, `next_label()`,
+  "Open in free play" → `free_play()`. "Show me how" can replay `step.solution` actions.
+  Code steps: `code::fqbn_for(project, lib, mcu)` + `code::compile(source, fqbn)` → `Build {
+  success, image, diagnostics, log }` → `Command::Flash` → `set_firmware_loaded(true)`.
+- Make your own lesson: `editor::Draft::new(title, track)` / `open(..)`, `capture_bench(&p)`,
+  `add_step(kind, title)`, `suggest_for_part(lib, part, bench.readings(part))`,
+  `suggest_for_pins(lib, a, b, volts)`, `add_check`, `validate(lib)`, `save_pack(dir, PackInfo)`
+  (then `Registry::load_local`), `package(..)` for sharing.
 - Radios panel / phone: `Telemetry.radio: Option<RadioTelemetry>` (cards, packet log rows,
   conditions, APs, `has_ble` empty state, phone scan/services/log/terminal, MQTT explorer
   rows, LAN bridge status) and `Command::Radio(RadioCommand::{SetConditions,
@@ -536,7 +567,13 @@ APIs for the UI (details in ARCHITECTURE §6c/§7):
   readouts). Controls → `Command::Input { part, input: UserInput::Value { key: <control id>,
   value } }` (rotary/switch = index, knob = value, button = 1).
 
-Tests so far: bb-plugin 7 unit + sandbox 6 + registry 4 + dmm 4 + instruments 4 + packs 8;
+Tests: bb-lessons 1 unit + lessons 9 (all 24 lessons validate, Track 1 = the design's
+list, lesson 3 step 3 verbatim, "None" pops the LED and Repair restores it, progress,
+editor round-trip, make-your-own → lesson-pack plugin → installed → solved, doc sync) +
+solver 6 (the scripted solver completes all 24 lessons through the public engine API; every
+code step's starter and solution compile with the Arduino toolchain and the freshly compiled
+solution passes its goals);
+bb-plugin 7 unit + sandbox 6 + registry 4 + dmm 4 + instruments 4 + packs 8 + schema 3;
 bb-sim + radio 5 + host_bridges 4; bb-spice +1 (watch mid-trail).
 
 Changes outside my crates (all tests green): bb-core additive hooks (`DeviceCtx::service /
@@ -545,4 +582,5 @@ world-model factories, `what_if_ext`, device wakes survive rebuilds, end-of-inte
 integration + 1 µs settle sync after MCU edges on analog nets, 10 µs analog max step);
 bb-radio (pending station events / gateway downlinks wake the space, AT parser byte-safe);
 bb-spice (watch added mid-trail no longer panics); bb-world (`<pot>.evaporation_scale`);
+bb-sim rebuilds keep capacitor charge (`.ic` on capacitor nodes instead of `.nodeset`);
 capsoil v1.2 output resistance 2.2 kΩ (design's −0.4 mV meter load).

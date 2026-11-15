@@ -12,6 +12,7 @@ bb-avr = { workspace = true }
 bb-circuit = { workspace = true }
 bb-spice = { workspace = true }
 bb-sim = { workspace = true }
+bb-firmware = { workspace = true }
 bb-plugin = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

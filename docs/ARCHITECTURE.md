@@ -463,7 +463,8 @@ step(limit):                         // MCUs lead, the analog circuit lags
   pin damaged → high-Z). USB supply has a polyfuse I²t model (hold 0.5 A, trip → 50 Ω, resets
   1 s after the load drops below 60 mA).
 - **Rebuild keeping state** (`Bench::update_project`): re-netlists, re-creates the session with
-  node-voltage nodesets from the old solution, keeps MCUs (matched by part id), devices
+  the old node voltages (`.ic` on nodes touching a capacitor, so stored charge carries over;
+  `.nodeset` hints elsewhere), keeps MCUs (matched by part id), devices
   (`save_state` / `load_state`), world, instruments and services; live property edits use
   `Device::set_param` or `Session::set_param` / `set_ext` without a rebuild.
 - **MCU trait.** `McuCore`: `label`, `engine`, `now`, `pin_names`, `pin_index`, `run_until(t,
@@ -632,6 +633,58 @@ The ABI and every import are specified in `docs/PLUGIN-SDK.md`; the manifest sch
   `breadbox.bench-psu`, `breadbox.function-generator`, `breadbox.soil-weather`,
   `breadbox.lora-gateway`; SDK examples in `plugins/examples/` (template part, sawtooth
   generator, sensitivity analysis, Pro Mini board, Solarized theme).
+
+## 7b. Lessons (`bb-lessons`)
+
+The file format is specified in `docs/LESSON-FORMAT.md` (kept in sync by
+`bb-lessons/tests/lessons.rs`); content lives in `lessons/<track>/`.
+
+- **Format** (`format.rs`): `TrackDef`, `Lesson { id, track, order, title, summary, minutes,
+  bench: BenchSpec { project | example, firmware, world, warmup }, steps }`, `Step { kind,
+  title, body, formula, callouts, choice, predict, measure, table, quiz, code, checks, run,
+  hints, damage_title/text, repair_label, next_label, solution: [Action], vars }`; `Check` (23
+  goal types) and `Action` (21 worked-solution actions) are serde-tagged enums. Expressions
+  are `bb_spice::expr`; templates (`text.rs`) format numbers the design's way.
+- **Catalog** (`lib.rs`): `Catalog::builtin()` (`lessons/` from the repo or
+  `Breadbox.app/Contents/Resources/lessons`, `BREADBOX_LESSONS`), `add_packs(host.lesson_dirs())`,
+  `track(id)`, `lesson(id)`, `all()`, `errors`. `LoadedLesson { lesson, dir, file, pack }` →
+  `start_project()`, `images(&project)` (AVR images), `host_firmware(&project, lib)` (host
+  builds), `resolve(rel)`. `validate(lesson, lib)` lists authoring problems.
+- **Session** (`session.rs`): the Lessons screen's state machine over a
+  `bb_circuit::edit::Editor` holding the lesson circuit: `label()` ("Step 3 of 5"),
+  `lesson_label(n)`, `current()`, `state()` (`StepState { choice, math, guess, verdict, hint,
+  show_working, rows, quiz, firmware, passed }`), `vars(meter)`, `render(template, meter)`,
+  `choose(i) → Edit`, `bypassed()`, `set_math(on)`, `meter_hidden()`, `predict(guess, meter) →
+  Verdict { correct, text, expected }`, `working()`, `toggle_working()`, `record(meter)`,
+  `checkpoint() → (passed, text)`, `answer_quiz(i)`, `set_firmware_loaded`, `mark`,
+  `next_step()` / `prev_step()`, `is_last()`, `next_label()`, `free_play() → Project`. The
+  bench is the caller's: an `Edit::SetProp` goes to `Command::SetPartParam`, `Edit::Project`
+  to `Command::UpdateProject`.
+- **Checks** (`check.rs`): `prepare(checks, &mut bench)` adds frequency/duty probes;
+  `evaluate_step(step, project, lib, Option<&mut Bench>, state) → Vec<CheckResult { label, ok,
+  detail }>` covers connectivity / parts / props / ERC (bb-circuit), readings, voltages,
+  element currents, LED state, damage, serial output, probes, world, MQTT and the phone
+  (bb-sim, incl. plugin instruments' `readings`), and SPICE (`spice_value`: the project's Pro
+  netlist with the check's analysis card), plus the goals a quiz, code step or table imply.
+- **Runner** (`runner.rs`): a lesson on a headless `Bench` built with `PluginHost::
+  bench_options()` (`None` for Pro lessons): `apply(&Action)` (circuit edits through the
+  editor, then `update_project` / `set_part_param`), `meter()`, `evaluate()`, `solve_step()`,
+  `solve()` (the scripted solver; `transcript`), `next_step()`.
+- **Code steps** (`code.rs`): `fqbn_for(project, lib, mcu)`, `compile(source, fqbn) → Build {
+  success, image, diagnostics, log }` (a temp sketch folder through `bb_firmware::Toolchain`);
+  `Runner::upload(mcu, &image)`.
+- **Progress** (`progress.rs`): `Progress::load(Progress::default_path())`, `step_done`,
+  `set_current`, `record`, `complete`, `resume`, `is_done`, `done_count`, `reset`, `save`
+  (atomic).
+- **Editor model** (`editor.rs`): `Draft::new(title, track)` / `open(lesson, track)`,
+  `capture_bench(&project)`, `add_step` / `remove_step` / `move_step` / `step_mut`,
+  `add_check`, `suggest_for_part(lib, part, readings)` / `suggest_for_pins(lib, a, b, volts)` →
+  `Suggestion { label, check }`, `validate`, `to_toml`, `save_pack(dir, PackInfo)` (a
+  lesson-pack plugin folder), `package` (`.bbplugin` bytes).
+- **Content**: 5 tracks, 24 lessons (Electricity you can see 8; Sensors & the real world,
+  Microcontrollers from zero, Radios & IoT, Pro: SPICE analysis 4 each). Start circuits come
+  from `cargo run -p bb-lessons --example write_benches`; AVR sketches are built into
+  `firmware/*.hex` by `lessons/build-firmware.sh`.
 
 ## 8. App (`breadbox`)
 

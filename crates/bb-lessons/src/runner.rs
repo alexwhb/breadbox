@@ -339,6 +339,19 @@ impl Runner {
         }
     }
 
+    /// Uploads a compiled image to the code step's MCU (what the UI does after a successful
+    /// build of the student's sketch) and marks the sketch as loaded.
+    pub fn upload(&mut self, mcu: &str, image: &bb_avr::FirmwareImage) -> Result<(), LessonError> {
+        self.bench()?
+            .mcu(mcu)
+            .ok_or_else(|| LessonError::Bench(format!("no MCU `{mcu}`")))?
+            .flash(image)
+            .map_err(LessonError::Bench)?;
+        self.opts.firmware.insert(mcu.to_string(), image.clone());
+        self.session.set_firmware_loaded(true);
+        Ok(())
+    }
+
     /// Evaluates the current step's goals.
     pub fn evaluate(&mut self) -> Vec<CheckResult> {
         let step = self.session.current().clone();

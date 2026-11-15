@@ -176,12 +176,12 @@ pub struct Quiz {
 pub struct Code {
     /// MCU part id.
     pub mcu: String,
-    /// Starter sketch (lesson-relative folder) shown in the editor.
+    /// The sketch the editor opens with (`.ino` source).
     #[serde(default)]
-    pub starter: Option<String>,
-    /// The worked solution's sketch folder.
+    pub starter: String,
+    /// The reference solution (`.ino` source).
     #[serde(default)]
-    pub solution: Option<String>,
+    pub solution: String,
     /// Prebuilt image of the solution (used when no toolchain is installed).
     #[serde(default)]
     pub image: Option<String>,

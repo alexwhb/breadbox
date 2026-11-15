@@ -18,6 +18,7 @@
 //!   checkers by picking parts/nets/instruments, save a lesson pack plugin.
 
 pub mod check;
+pub mod code;
 pub mod editor;
 pub mod format;
 pub mod progress;

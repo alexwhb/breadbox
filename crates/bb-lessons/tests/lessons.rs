@@ -437,3 +437,47 @@ fn make_your_own_lesson_saves_a_pack_that_installs_and_solves() {
     let mut r = Runner::new(&l, &ph).unwrap();
     r.solve().unwrap();
 }
+
+/// docs/LESSON-FORMAT.md documents every check type and action.
+#[test]
+fn lesson_format_doc_lists_every_check_and_action() {
+    let src = std::fs::read_to_string(root().join("crates/bb-lessons/src/format.rs")).unwrap();
+    let doc = std::fs::read_to_string(root().join("docs/LESSON-FORMAT.md")).unwrap();
+    let variants = |en: &str| -> Vec<String> {
+        let start = src.find(&format!("pub enum {en} {{")).unwrap();
+        let body = &src[start..];
+        let body = &body[..body.find("\n}\n").unwrap()];
+        body.lines()
+            .filter_map(|l| {
+                let t = l.trim_start();
+                // variant lines are indented by exactly 4 spaces and start upper-case
+                (l.starts_with("    ") && !l.starts_with("     "))
+                    .then_some(t)
+                    .filter(|t| t.chars().next().is_some_and(|c| c.is_ascii_uppercase()))
+                    .map(|t| {
+                        let name: String = t.chars().take_while(|c| c.is_alphanumeric()).collect();
+                        let mut snake = String::new();
+                        for (i, c) in name.chars().enumerate() {
+                            if c.is_ascii_uppercase() && i > 0 {
+                                snake.push('_');
+                            }
+                            snake.push(c.to_ascii_lowercase());
+                        }
+                        snake
+                    })
+            })
+            .collect()
+    };
+    let checks = variants("Check");
+    let actions = variants("Action");
+    assert!(
+        checks.len() >= 20 && actions.len() >= 20,
+        "{checks:?} {actions:?}"
+    );
+    for v in checks.iter().chain(actions.iter()) {
+        assert!(
+            doc.contains(&format!("`{v}`")),
+            "LESSON-FORMAT.md lacks `{v}`"
+        );
+    }
+}
