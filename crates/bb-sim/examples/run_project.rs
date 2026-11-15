@@ -15,8 +15,18 @@ fn main() {
         .unwrap_or_else(|| "examples/garden-node".into());
     let secs: f64 = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(5.0);
     let project = Project::load(&dir).expect("project");
+    let lib = Library::builtin();
+    // API-level boards (ESP32 / Pico): build their sketches with the host compiler (cached)
+    let host_firmware = match bb_sim::firmware::compile_host_project(&project, &dir, &lib) {
+        Ok(h) => h,
+        Err(e) => {
+            eprintln!("host build: {e}");
+            Default::default()
+        }
+    };
     let mut opts = BenchOptions {
         firmware: bb_sim::firmware::project_images(&project, &dir),
+        host_firmware,
         ..Default::default()
     };
     if let Some(img) = args.get(3) {
@@ -29,7 +39,7 @@ fn main() {
         opts.firmware
             .insert(mcu, bb_sim::firmware::load_image(img).expect("image"));
     }
-    let mut bench = Bench::new(project, Library::builtin(), opts).expect("bench");
+    let mut bench = Bench::new(project, lib, opts).expect("bench");
     let t0 = Instant::now();
     bench.run_until(SimTime::from_secs_f64(secs)).expect("run");
     let wall = t0.elapsed().as_secs_f64();
