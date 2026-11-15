@@ -31,6 +31,11 @@ pub trait DeviceCtx {
     fn element_charge(&self, element: &str) -> Option<f64>;
     /// Starts integrating an element's current (see [`DeviceCtx::element_charge`]).
     fn track_element(&mut self, element: &str);
+    /// Energy (J) dissipated in a tracked element since the bench started (average power =
+    /// Δenergy / Δt).
+    fn element_energy(&self, _element: &str) -> Option<f64> {
+        None
+    }
     /// Changes how the device drives `pin` from now on.
     fn set_drive(&mut self, pin: usize, drive: PinDrive);
     /// Sets an analog external variable of this part (`ext("<ref>.<name>")` in its SPICE

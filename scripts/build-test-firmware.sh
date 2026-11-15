@@ -80,7 +80,7 @@ fi
 BUILD_ROOT="$ROOT/target/test-firmware-build"
 mkdir -p "$BUILD_ROOT"
 count=0
-for crate in bb-avr bb-firmware bb-radio; do
+for crate in bb-avr bb-firmware bb-radio bb-sim; do
     FW="$ROOT/crates/$crate/tests/firmware"
     OUT="$ROOT/crates/$crate/tests/fixtures"
     [ -d "$FW" ] || continue
