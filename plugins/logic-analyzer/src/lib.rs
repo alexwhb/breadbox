@@ -7,6 +7,11 @@
 //! Decoders are configured with the part's `decoders` property, e.g.
 //! `uart:D0@9600, i2c:D2/D3, spi:D4/D5/D6/D7, onewire:D8`
 //! (UART `ch@baud`; I²C `SDA/SCL`; SPI `SCK/MOSI/MISO/CS`; 1-Wire `DQ`).
+//!
+//! The 1-Wire decoder follows the transaction after each reset: the ROM command and the
+//! function command are named (`0xCC Skip ROM`, `0x44 Convert T`); single read slots polling
+//! a busy device after Convert T / Copy / Recall / Read Power Supply become one
+//! `busy ×N → done` item instead of bytes, and Search ROM's bit triplets one `search` item.
 
 use bb_plugin_sdk::prelude::*;
 
@@ -88,6 +93,43 @@ struct SpiState {
 struct OwState {
     fall: Option<f64>,
     bits: Vec<bool>,
+    /// Bytes since the last reset.
+    bytes: u32,
+    /// The transaction's ROM command (first byte after the reset).
+    rom: Option<u8>,
+    /// ROM bytes still to come (Match ROM / Read ROM).
+    rom_left: u8,
+    /// A function command that the device answers with status slots: (busy slots so far,
+    /// start time).
+    polling: Option<(u32, f64)>,
+    /// Search ROM in progress: slots seen.
+    search: Option<u32>,
+}
+
+/// 1-Wire ROM command names.
+fn ow_rom_name(b: u8) -> Option<&'static str> {
+    Some(match b {
+        0xCC => "Skip ROM",
+        0x55 => "Match ROM",
+        0x33 => "Read ROM",
+        0xF0 => "Search ROM",
+        0xEC => "Alarm Search",
+        0xA5 => "Resume",
+        _ => return None,
+    })
+}
+
+/// DS18B20 function command names.
+fn ow_function_name(b: u8) -> Option<&'static str> {
+    Some(match b {
+        0x44 => "Convert T",
+        0xBE => "Read Scratchpad",
+        0x4E => "Write Scratchpad",
+        0x48 => "Copy Scratchpad",
+        0xB8 => "Recall E2",
+        0xB4 => "Read Power Supply",
+        _ => return None,
+    })
 }
 
 fn parse_ch(s: &str) -> Option<usize> {
@@ -363,46 +405,124 @@ impl La {
                 } else if let Some(f) = self.ow_state[di].fall.take() {
                     let w = t - f;
                     if w > 400e-6 {
-                        self.ow_state[di].bits.clear();
+                        self.ow_end_transaction(di);
                         self.frames[di].push(Frame {
                             t: f,
                             proto: "1-Wire",
                             text: "RESET".into(),
                             byte: None,
                         });
-                    } else if w > 50e-6 && w < 300e-6 {
-                        // presence pulse from a device is reported as part of the reset
-                        if let Some(last) = self.frames[di].last_mut()
-                            && last.text == "RESET"
-                        {
+                    } else if w > 50e-6
+                        && w < 300e-6
+                        && self.frames[di].last().is_some_and(|x| x.text == "RESET")
+                    {
+                        // the presence pulse from a device is part of the reset
+                        if let Some(last) = self.frames[di].last_mut() {
                             last.text = "RESET · presence".into();
-                        } else {
-                            self.ow_state[di].bits.push(false);
                         }
                     } else {
-                        // write-1 / read-1: short low; write-0: long low (≥ 15 µs)
-                        self.ow_state[di].bits.push(w < 15e-6);
-                    }
-                    if self.ow_state[di].bits.len() == 8 {
-                        let mut byte = 0u8;
-                        for (k, b) in self.ow_state[di].bits.iter().enumerate() {
-                            if *b {
-                                byte |= 1 << k;
-                            }
-                        }
-                        self.ow_state[di].bits.clear();
-                        self.frames[di].push(Frame {
-                            t: f,
-                            proto: "1-Wire",
-                            text: format!("0x{byte:02X}"),
-                            byte: Some(byte),
-                        });
+                        // write-1 / read-1: short low; write-0 / read-0: long low (≥ 15 µs)
+                        self.ow_slot(di, f, w < 15e-6);
                     }
                 }
             }
             i += 1;
         }
         self.cursor[di] = i;
+    }
+
+    /// One time slot (bit) of the transaction after a reset.
+    fn ow_slot(&mut self, di: usize, t: f64, bit: bool) {
+        let st = &mut self.ow_state[di];
+        if let Some((busy, t0)) = st.polling {
+            // status slots after Convert T & co: 0 = busy, 1 = done
+            if bit {
+                st.polling = None;
+                self.frames[di].push(Frame {
+                    t: t0,
+                    proto: "1-Wire",
+                    text: format!("busy ×{busy} → done"),
+                    byte: None,
+                });
+            } else {
+                st.polling = Some((busy + 1, t0));
+            }
+            return;
+        }
+        if let Some(n) = st.search.as_mut() {
+            *n += 1;
+            return;
+        }
+        st.bits.push(bit);
+        if st.bits.len() < 8 {
+            return;
+        }
+        let mut byte = 0u8;
+        for (k, b) in st.bits.iter().enumerate() {
+            if *b {
+                byte |= 1 << k;
+            }
+        }
+        st.bits.clear();
+        // the function command follows Skip ROM / Resume, or Match ROM's 8 ROM bytes
+        let function_due = match st.rom {
+            Some(0xCC) | Some(0xA5) => st.bytes == 1,
+            Some(0x55) => st.bytes == 9,
+            _ => false,
+        };
+        let name = if st.bytes == 0 {
+            ow_rom_name(byte)
+        } else if function_due {
+            ow_function_name(byte)
+        } else {
+            None
+        };
+        if st.bytes == 0 {
+            st.rom = Some(byte);
+            match byte {
+                0x55 | 0x33 => st.rom_left = 8,
+                0xF0 | 0xEC => st.search = Some(0),
+                _ => {}
+            }
+        } else if st.rom_left > 0 {
+            st.rom_left -= 1;
+        } else if name.is_some() && matches!(byte, 0x44 | 0x48 | 0xB8 | 0xB4) {
+            st.polling = Some((0, t));
+        }
+        st.bytes += 1;
+        self.frames[di].push(Frame {
+            t,
+            proto: "1-Wire",
+            text: match name {
+                Some(n) => format!("0x{byte:02X} {n}"),
+                None => format!("0x{byte:02X}"),
+            },
+            byte: Some(byte),
+        });
+    }
+
+    /// A reset ends the transaction: report a poll or search still in progress.
+    fn ow_end_transaction(&mut self, di: usize) {
+        let st = std::mem::take(&mut self.ow_state[di]);
+        if let Some((busy, t0)) = st.polling
+            && busy > 0
+        {
+            self.frames[di].push(Frame {
+                t: t0,
+                proto: "1-Wire",
+                text: format!("busy ×{busy}"),
+                byte: None,
+            });
+        }
+        if let Some(n) = st.search {
+            let t = self.frames[di].last().map(|f| f.t).unwrap_or(0.0);
+            self.frames[di].push(Frame {
+                t,
+                proto: "1-Wire",
+                text: format!("search · {n} slots"),
+                byte: None,
+            });
+        }
     }
 
     fn publish(&self, ctx: &Ctx) {

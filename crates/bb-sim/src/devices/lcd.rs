@@ -367,7 +367,10 @@ impl Device for ParallelLcd {
         lcd_look(&self.hd, self.backlight, self.powered)
     }
     fn readings(&self) -> Vec<(String, f64)> {
-        vec![("commands".into(), self.hd.commands as f64)]
+        vec![
+            ("commands".into(), self.hd.commands as f64),
+            ("eight_bit".into(), self.hd.eight_bit as u8 as f64),
+        ]
     }
 }
 

@@ -436,6 +436,62 @@ fn reversed_electrolytic_pops() {
     assert!(bench.health(&c).is_damaged(), "stays damaged");
 }
 
+/// PART-6: the HD44780 on its full 8-bit bus (LiquidCrystal with D0…D7): the controller stays
+/// in 8-bit mode, a custom character lands in CGRAM, a ROM character above 0x7F shows.
+#[test]
+fn lcd_on_the_8_bit_bus() {
+    let lib = lib();
+    let (mut b, u1, bb) = uno_bench(&lib, "lcd8");
+    let lcd = b.offboard("lcd_1602", "LCD1", 40.0, 24.0, &[]);
+    let mut bus = vec![("RS", "D12".to_string()), ("E", "D11".to_string())];
+    for k in 0..8 {
+        bus.push((
+            ["D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7"][k],
+            format!("D{}", k + 2),
+        ));
+    }
+    for (pin, to) in &bus {
+        b.wire((&lcd, pin), (&u1, to), "blue");
+    }
+    b.wire((&lcd, "VSS"), (&bb, "t-20"), "black");
+    b.wire((&lcd, "RW"), (&bb, "t-21"), "black");
+    b.wire((&lcd, "V0"), (&bb, "t-22"), "black");
+    b.wire((&lcd, "VDD"), (&bb, "t+20"), "red");
+    let mut bench = start(b.finish(), &[(&u1, "lcd8")]);
+    bench.run_until(ms(1250)).unwrap();
+    let r = bench.readings(&lcd);
+    let get = |k: &str| r.iter().find(|x| x.0 == k).map(|x| x.1);
+    assert_eq!(get("eight_bit"), Some(1.0), "{r:?}");
+    assert!(get("commands").unwrap() > 10.0, "{r:?}");
+    match bench.visual(&lcd).unwrap().look {
+        Look::TextLcd {
+            text,
+            codes,
+            cgram,
+            display_on,
+            ..
+        } => {
+            assert_eq!(text[0].trim_end(), "8-bit bus OK", "{text:?}");
+            assert_eq!(codes[1][0], 1, "custom character 1 at the start of line 2");
+            assert_eq!(
+                cgram[1],
+                [0b00100, 0b01110, 0b01110, 0b01110, 0b11111, 0, 0b00100, 0]
+            );
+            // n = millis / 100 ≈ 12 after 1.2 s, then the ROM degree sign (0xDF)
+            let line = &codes[1];
+            let s: String = line[2..].iter().map(|c| *c as char).collect();
+            assert!(s.starts_with("n=12") || s.starts_with("n=11"), "{s:?}");
+            let end = 2 + s
+                .find(|c: char| !c.is_ascii_graphic() || c as u32 >= 0x7F)
+                .unwrap();
+            assert_eq!(line[end], 0xDF, "{line:?}");
+            assert!(text[1].contains('°'), "{:?}", text[1]);
+            assert!(display_on);
+        }
+        other => panic!("{other:?}"),
+    }
+}
+
 /// Hardware USART0 looped back on the bench (D1 TX → D0 RX): the sketch's own "ping N"
 /// comes back through the real TX waveform and the pin-level receiver, and is answered with
 /// "pong N" (parity with the API-level boards' loopback tests in `host_bridges.rs`).

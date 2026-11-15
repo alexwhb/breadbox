@@ -430,3 +430,201 @@ fn function_generator_into_an_rc_filter_matches_spice() {
     );
     assert_eq!(reading(&b, "fg1", "shape"), 1.0);
 }
+
+// ------------------------------------------------------------------ test depth (closeout-b)
+
+/// An UNO running bb-sim's test sketch `sketch` (fixture), plus whatever `build` adds.
+fn uno_with(h: &PluginHost, sketch: &str, build: impl FnOnce(&mut BenchBuilder, &str)) -> Bench {
+    let lib = h.library();
+    let mut b = BenchBuilder::new(&lib, sketch, Mode::Playground);
+    b.project.world.noise = false;
+    let u1 = b.offboard("uno", "U1", 0.0, 0.0, &[]);
+    build(&mut b, &u1);
+    let mut opts = h.bench_options();
+    let hex = root().join(format!("crates/bb-sim/tests/fixtures/{sketch}.uno.hex"));
+    opts.firmware
+        .insert(u1, bb_sim::firmware::load_image(&hex).unwrap());
+    Bench::new(b.finish(), lib, opts).unwrap()
+}
+
+/// A decoder's readout row (`I2C D0/D1` → its text).
+fn decoded(b: &mut Bench, la: &str, row: &str) -> String {
+    let pnl = panel(b, la);
+    let rows: Vec<(String, String)> = serde_json::from_value(pnl["readouts"].clone()).unwrap();
+    rows.into_iter()
+        .find(|r| r.0 == row)
+        .map(|r| r.1)
+        .unwrap_or_else(|| panic!("no {row} decoder: {}", pnl["readouts"]))
+}
+
+/// Runs in 10 ms steps (up to `secs`) until the decoder row contains `want`.
+fn wait_decoded(b: &mut Bench, la: &str, row: &str, want: &str, secs: f64) -> String {
+    let end = b.time() + SimTime::from_secs_f64(secs);
+    loop {
+        let text = decoded(b, la, row);
+        if text.contains(want) || b.time() >= end {
+            return text;
+        }
+        b.run_for(SimTime::from_ms(10)).unwrap();
+    }
+}
+
+fn la_part(b: &mut BenchBuilder, decoders: &str) -> String {
+    b.offboard(
+        "logic_analyzer",
+        "LA1",
+        60.0,
+        0.0,
+        &[("decoders", PropValue::Text(decoders.into()))],
+    )
+}
+
+/// PLUG-5 logic analyzer, I²C decoder on the AVR's real TWI waveforms to a BME280: address +
+/// direction + ACK/NACK, register pointer, repeated START, the chip id read back, a write, and
+/// a probe of an address nobody answers.
+#[test]
+fn logic_analyzer_decodes_i2c_to_a_bme280() {
+    let h = host(&["logic-analyzer"]);
+    let mut b = uno_with(&h, "la_i2c", |b, u1| {
+        let s = b.offboard("bme280", "U2", 30.0, 0.0, &[]);
+        b.wire((&s, "VIN"), (u1, "5V"), "red");
+        b.wire((&s, "GND"), (u1, "GND"), "black");
+        b.wire((&s, "SDA"), (u1, "A4"), "blue");
+        b.wire((&s, "SCL"), (u1, "A5"), "yellow");
+        let la = la_part(b, "i2c:D0/D1");
+        b.wire((&la, "D0"), (u1, "A4"), "blue");
+        b.wire((&la, "D1"), (u1, "A5"), "yellow");
+        b.wire((&la, "GND"), (u1, "GND"), "black");
+    });
+    let cycle = "START · addr 0x76 W ACK · 0xD0 ACK · START · addr 0x76 R ACK · 0x60 NACK · STOP · \
+                 START · addr 0x76 W ACK · 0xF4 ACK · 0x27 ACK · STOP · \
+                 START · addr 0x40 W NACK · STOP";
+    b.run_until(SimTime::from_ms(100)).unwrap();
+    let text = wait_decoded(&mut b, "la1", "I2C D0/D1", cycle, 1.0);
+    assert!(text.contains(cycle), "decoded: {text}");
+    // the sketch saw the same bus
+    let fw: Vec<String> = b
+        .serial("u1")
+        .unwrap()
+        .data_lines()
+        .map(|l| l.text.clone())
+        .collect();
+    assert!(fw.contains(&"id=0x60 ghost=2".to_string()), "{fw:?}");
+    assert!(reading(&b, "la1", "decoded") >= 15.0);
+}
+
+/// SPI decoder on the AVR's hardware SPI (mode 0, 1 MHz) into a 74HC595 whose serial out
+/// feeds MISO: MOSI and MISO bytes per transfer, framed by chip select; MISO matches what the
+/// sketch read (the byte leaving the shift register).
+#[test]
+fn logic_analyzer_decodes_spi_mosi_and_miso() {
+    let h = host(&["logic-analyzer"]);
+    let mut b = uno_with(&h, "la_spi", |b, u1| {
+        let s = b.offboard("hc595", "U2", 30.0, 0.0, &[]);
+        b.wire((&s, "VCC"), (u1, "5V"), "red");
+        b.wire((&s, "GND"), (u1, "GND"), "black");
+        b.wire((&s, "MR"), (u1, "5V"), "red");
+        b.wire((&s, "OE"), (u1, "GND"), "black");
+        b.wire((&s, "DS"), (u1, "D11"), "blue");
+        b.wire((&s, "SHCP"), (u1, "D13"), "yellow");
+        b.wire((&s, "STCP"), (u1, "D10"), "green");
+        b.wire((&s, "Q7S"), (u1, "D12"), "white");
+        let la = la_part(b, "spi:D0/D1/D2/D3");
+        b.wire((&la, "D0"), (u1, "D13"), "yellow");
+        b.wire((&la, "D1"), (u1, "D11"), "blue");
+        b.wire((&la, "D2"), (u1, "D12"), "white");
+        b.wire((&la, "D3"), (u1, "D10"), "green");
+        b.wire((&la, "GND"), (u1, "GND"), "black");
+    });
+    let frame = "MOSI 0x5A · MISO 0xC3 · MOSI 0xC3 · MISO 0x5A";
+    b.run_until(SimTime::from_ms(100)).unwrap();
+    let text = wait_decoded(&mut b, "la1", "SPI D0/D1", frame, 1.0);
+    assert!(text.contains(frame), "decoded: {text}");
+    let fw: Vec<String> = b
+        .serial("u1")
+        .unwrap()
+        .data_lines()
+        .map(|l| l.text.clone())
+        .collect();
+    assert_eq!(fw.first().map(String::as_str), Some("rx=0,5A"), "{fw:?}");
+    assert!(fw.iter().skip(1).all(|l| l == "rx=C3,5A"), "{fw:?}");
+}
+
+/// 1-Wire decoder on DallasTemperature talking to a DS18B20 (4.7 k pull-up): reset with the
+/// presence pulse, Skip ROM (0xCC), Convert T (0x44), the status polling while it converts,
+/// Read Scratchpad (0xBE) and the temperature bytes (19.25 °C = 0x0134 → 0x34, 0x01, LSB
+/// first). Found: the polling read slots used to be packed into bytes — hundreds of `0x00`
+/// items that pushed the transaction out of the readout.
+#[test]
+fn logic_analyzer_decodes_one_wire_to_a_ds18b20() {
+    let h = host(&["logic-analyzer"]);
+    let lib = h.library();
+    let mut bb = BenchBuilder::new(&lib, "1wire", Mode::Playground);
+    bb.project.world.noise = false;
+    bb.project.world.air.temp_c = 19.25;
+    let u1 = bb.offboard("uno", "U1", 0.0, 0.0, &[]);
+    let s = bb.offboard("ds18b20", "U2", 30.0, 0.0, &[]);
+    let r = bb.offboard(
+        "resistor",
+        "R1",
+        40.0,
+        0.0,
+        &[("resistance", PropValue::Num(4700.0))],
+    );
+    bb.wire((&s, "GND"), (&u1, "GND"), "black");
+    bb.wire((&s, "VDD"), (&u1, "5V"), "red");
+    bb.wire((&s, "DQ"), (&u1, "D4"), "yellow");
+    bb.wire((&r, "1"), (&u1, "5V"), "red");
+    bb.wire((&r, "2"), (&u1, "D4"), "yellow");
+    let la = la_part(&mut bb, "onewire:D0");
+    bb.wire((&la, "D0"), (&u1, "D4"), "yellow");
+    bb.wire((&la, "GND"), (&u1, "GND"), "black");
+    let mut opts = h.bench_options();
+    let hex = root().join("crates/bb-sim/tests/fixtures/ds18b20.uno.hex");
+    opts.firmware
+        .insert(u1.clone(), bb_sim::firmware::load_image(&hex).unwrap());
+    let mut b = Bench::new(bb.finish(), lib, opts).unwrap();
+    b.run_until(SimTime::from_ms(200)).unwrap();
+    // every distinct readout over 3 s (it shows the last 24 items)
+    let mut seen: Vec<String> = Vec::new();
+    for _ in 0..300 {
+        b.run_for(SimTime::from_ms(10)).unwrap();
+        let t = decoded(&mut b, "la1", "1-Wire D0");
+        if seen.last() != Some(&t) {
+            seen.push(t);
+        }
+    }
+    let any = |want: &str| seen.iter().any(|t| t.contains(want));
+    // requestTemperatures: Skip ROM + Convert T, then status slots until the next reset
+    assert!(
+        any("RESET · presence · 0xCC Skip ROM · 0x44 Convert T · busy ×"),
+        "{seen:#?}"
+    );
+    // getTempCByIndex: Search ROM (64 bits × 3 slots), then Match ROM with the ROM code
+    // (family 0x28, CRC 0x29) and Read Scratchpad: 19.25 °C = 0x0134
+    assert!(any("0xF0 Search ROM · search · 192 slots"), "{seen:#?}");
+    assert!(
+        any(
+            "RESET · presence · 0x55 Match ROM · 0x28 · 0x01 · 0x00 · 0x00 · 0x00 · 0x00 · 0x00 · 0x29 · 0xBE Read Scratchpad · 0x34 · 0x01"
+        ),
+        "{seen:#?}"
+    );
+    let busy: u32 = seen
+        .iter()
+        .find_map(|t| t.split("busy ×").nth(1))
+        .and_then(|x| x.split_whitespace().next())
+        .and_then(|n| n.parse().ok())
+        .unwrap();
+    assert!(busy > 1000, "~750 ms of polling: {busy} slots");
+    assert!(
+        !any("0x00 · 0x00 · 0x00 · 0x00 · 0x00 · 0x00 · 0x00"),
+        "polling slots packed into bytes: {seen:#?}"
+    );
+    let fw: Vec<String> = b
+        .serial(&u1)
+        .unwrap()
+        .data_lines()
+        .map(|l| l.text.clone())
+        .collect();
+    assert!(fw.iter().any(|l| l == "t=19.25"), "{fw:?}");
+}
