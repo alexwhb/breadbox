@@ -77,6 +77,8 @@ pub struct Btn<'a> {
     min_width: f32,
     tooltip: Option<&'a str>,
     full_width: bool,
+    /// AccessKit name when it differs from the visible label (`Add` → `Add Oscilloscope`).
+    accessible_name: Option<&'a str>,
 }
 
 impl<'a> Btn<'a> {
@@ -93,6 +95,7 @@ impl<'a> Btn<'a> {
             min_width: 0.0,
             tooltip: None,
             full_width: false,
+            accessible_name: None,
         }
     }
     pub fn ghost(label: &'a str) -> Self {
@@ -153,6 +156,12 @@ impl<'a> Btn<'a> {
         self.full_width = true;
         self
     }
+    /// A descriptive name for VoiceOver / the GUI tests when the visible label is short
+    /// (`Btn::ghost("Add").accessible_name("Add Oscilloscope")`, `docs/UI-TEXT.md` rule 9).
+    pub fn accessible_name(mut self, name: &'a str) -> Self {
+        self.accessible_name = Some(name);
+        self
+    }
 
     pub fn show(self, ui: &mut Ui) -> Response {
         let p = pal(ui);
@@ -202,7 +211,7 @@ impl<'a> Btn<'a> {
             Sense::hover()
         };
         let (rect, mut resp) = ui.allocate_exact_size(vec2(w, h), sense);
-        let label = self.label.to_string();
+        let label = self.accessible_name.unwrap_or(self.label).to_string();
         let enabled = self.enabled;
         let selected = self.selected;
         resp.widget_info(|| {
@@ -647,16 +656,24 @@ pub fn section_header(ui: &mut Ui, text: &str) -> Response {
     resp
 }
 
-/// Header row: uppercase title left, muted caption right (`RADIOS ... virtual RF space`).
+/// Header row: uppercase title left, muted caption right (`RADIOS ... virtual RF space`). A
+/// caption too long for the row is cut with an ellipsis (full text on hover).
 pub fn section_header_row(ui: &mut Ui, title: &str, caption: &str) {
     ui.horizontal(|ui| {
         section_header(ui, title);
+        if caption.is_empty() {
+            return;
+        }
+        ui.add_space(8.0);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let p = pal(ui);
-            ui.label(
-                egui::RichText::new(caption)
-                    .font(font::ui(12.0))
-                    .color(p.text_muted),
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(caption)
+                        .font(font::ui(12.0))
+                        .color(p.text_muted),
+                )
+                .truncate(),
             );
         });
     });
