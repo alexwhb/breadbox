@@ -1,0 +1,597 @@
+{
+ "size": [
+  216,
+  148
+ ],
+ "color": "#2B2E33",
+ "art": "scope.bench.svg",
+ "elements": [
+  {
+   "type": "screen",
+   "id": "screen",
+   "rect": [
+    6,
+    6,
+    150,
+    96
+   ],
+   "kind": "scope",
+   "grid": [
+    10,
+    8
+   ],
+   "channels": [
+    {
+     "id": "CH1",
+     "label": "CH1",
+     "color": "#F7C77A"
+    },
+    {
+     "id": "CH2",
+     "label": "CH2",
+     "color": "#4CC3F0"
+    },
+    {
+     "id": "CH3",
+     "label": "CH3",
+     "color": "#E57AD1"
+    },
+    {
+     "id": "CH4",
+     "label": "CH4",
+     "color": "#7BD88F"
+    },
+    {
+     "id": "FFT",
+     "label": "FFT",
+     "color": "#E8E8E8"
+    }
+   ]
+  },
+  {
+   "type": "knob",
+   "id": "timebase",
+   "rect": [
+    164,
+    8,
+    22,
+    22
+   ],
+   "label": "s/div",
+   "min": 1e-07,
+   "max": 10,
+   "default": 0.001,
+   "log": true,
+   "unit": "s"
+  },
+  {
+   "type": "knob",
+   "id": "hpos",
+   "rect": [
+    192,
+    8,
+    16,
+    16
+   ],
+   "label": "Position",
+   "min": 0,
+   "max": 10,
+   "default": 5
+  },
+  {
+   "type": "knob",
+   "id": "trig_level",
+   "rect": [
+    164,
+    40,
+    18,
+    18
+   ],
+   "label": "Level",
+   "min": -20,
+   "max": 20,
+   "default": 2.5,
+   "unit": "V"
+  },
+  {
+   "type": "switch",
+   "id": "trig_source",
+   "rect": [
+    188,
+    40,
+    24,
+    8
+   ],
+   "label": "Source",
+   "options": [
+    "CH1",
+    "CH2",
+    "CH3",
+    "CH4"
+   ]
+  },
+  {
+   "type": "switch",
+   "id": "trig_edge",
+   "rect": [
+    188,
+    50,
+    24,
+    8
+   ],
+   "label": "Edge",
+   "options": [
+    "↑",
+    "↓"
+   ]
+  },
+  {
+   "type": "switch",
+   "id": "trig_mode",
+   "rect": [
+    164,
+    62,
+    48,
+    8
+   ],
+   "label": "Mode",
+   "options": [
+    "Auto",
+    "Normal",
+    "Single"
+   ]
+  },
+  {
+   "type": "knob",
+   "id": "trig_pulse",
+   "rect": [
+    164,
+    74,
+    16,
+    16
+   ],
+   "label": "Pulse width",
+   "min": -1,
+   "max": 1,
+   "default": 0,
+   "unit": "s"
+  },
+  {
+   "type": "button",
+   "id": "run",
+   "rect": [
+    186,
+    74,
+    12,
+    8
+   ],
+   "label": "Run/Stop"
+  },
+  {
+   "type": "button",
+   "id": "single",
+   "rect": [
+    200,
+    74,
+    12,
+    8
+   ],
+   "label": "Single"
+  },
+  {
+   "type": "led",
+   "id": "trig",
+   "rect": [
+    204,
+    30,
+    4,
+    4
+   ],
+   "label": "Trig'd",
+   "color": "#7BD88F"
+  },
+  {
+   "type": "switch",
+   "id": "fft",
+   "rect": [
+    164,
+    94,
+    48,
+    8
+   ],
+   "label": "FFT",
+   "options": [
+    "off",
+    "CH1",
+    "CH2",
+    "CH3",
+    "CH4"
+   ]
+  },
+  {
+   "type": "knob",
+   "id": "cursor1",
+   "rect": [
+    6,
+    106,
+    12,
+    12
+   ],
+   "label": "Cursor 1",
+   "min": 0,
+   "max": 10,
+   "default": 2
+  },
+  {
+   "type": "knob",
+   "id": "cursor2",
+   "rect": [
+    20,
+    106,
+    12,
+    12
+   ],
+   "label": "Cursor 2",
+   "min": 0,
+   "max": 10,
+   "default": 8
+  },
+  {
+   "type": "knob",
+   "id": "vdiv1",
+   "rect": [
+    40,
+    106,
+    14,
+    14
+   ],
+   "label": "CH1 V/div",
+   "min": 0.001,
+   "max": 10,
+   "default": 2,
+   "log": true,
+   "unit": "V"
+  },
+  {
+   "type": "button",
+   "id": "on1",
+   "rect": [
+    55,
+    106,
+    12,
+    6
+   ],
+   "label": "CH1"
+  },
+  {
+   "type": "switch",
+   "id": "coupling1",
+   "rect": [
+    40,
+    121,
+    27,
+    5
+   ],
+   "label": "Coupling",
+   "options": [
+    "DC",
+    "AC",
+    "GND"
+   ]
+  },
+  {
+   "type": "switch",
+   "id": "probe1",
+   "rect": [
+    40,
+    127,
+    27,
+    5
+   ],
+   "label": "Probe",
+   "options": [
+    "1×",
+    "10×"
+   ],
+   "default": 1
+  },
+  {
+   "type": "knob",
+   "id": "comp1",
+   "rect": [
+    60,
+    113,
+    7,
+    7
+   ],
+   "label": "Comp",
+   "min": -1,
+   "max": 1,
+   "default": 0
+  },
+  {
+   "type": "jack",
+   "id": "j1",
+   "rect": [
+    46,
+    134,
+    10,
+    10
+   ],
+   "pin": "CH1",
+   "label": "CH1",
+   "color": "#3A3A3A"
+  },
+  {
+   "type": "knob",
+   "id": "vdiv2",
+   "rect": [
+    70,
+    106,
+    14,
+    14
+   ],
+   "label": "CH2 V/div",
+   "min": 0.001,
+   "max": 10,
+   "default": 2,
+   "log": true,
+   "unit": "V"
+  },
+  {
+   "type": "button",
+   "id": "on2",
+   "rect": [
+    85,
+    106,
+    12,
+    6
+   ],
+   "label": "CH2"
+  },
+  {
+   "type": "switch",
+   "id": "coupling2",
+   "rect": [
+    70,
+    121,
+    27,
+    5
+   ],
+   "label": "Coupling",
+   "options": [
+    "DC",
+    "AC",
+    "GND"
+   ]
+  },
+  {
+   "type": "switch",
+   "id": "probe2",
+   "rect": [
+    70,
+    127,
+    27,
+    5
+   ],
+   "label": "Probe",
+   "options": [
+    "1×",
+    "10×"
+   ],
+   "default": 1
+  },
+  {
+   "type": "knob",
+   "id": "comp2",
+   "rect": [
+    90,
+    113,
+    7,
+    7
+   ],
+   "label": "Comp",
+   "min": -1,
+   "max": 1,
+   "default": 0
+  },
+  {
+   "type": "jack",
+   "id": "j2",
+   "rect": [
+    76,
+    134,
+    10,
+    10
+   ],
+   "pin": "CH2",
+   "label": "CH2",
+   "color": "#3A3A3A"
+  },
+  {
+   "type": "knob",
+   "id": "vdiv3",
+   "rect": [
+    100,
+    106,
+    14,
+    14
+   ],
+   "label": "CH3 V/div",
+   "min": 0.001,
+   "max": 10,
+   "default": 2,
+   "log": true,
+   "unit": "V"
+  },
+  {
+   "type": "button",
+   "id": "on3",
+   "rect": [
+    115,
+    106,
+    12,
+    6
+   ],
+   "label": "CH3"
+  },
+  {
+   "type": "switch",
+   "id": "coupling3",
+   "rect": [
+    100,
+    121,
+    27,
+    5
+   ],
+   "label": "Coupling",
+   "options": [
+    "DC",
+    "AC",
+    "GND"
+   ]
+  },
+  {
+   "type": "switch",
+   "id": "probe3",
+   "rect": [
+    100,
+    127,
+    27,
+    5
+   ],
+   "label": "Probe",
+   "options": [
+    "1×",
+    "10×"
+   ],
+   "default": 1
+  },
+  {
+   "type": "knob",
+   "id": "comp3",
+   "rect": [
+    120,
+    113,
+    7,
+    7
+   ],
+   "label": "Comp",
+   "min": -1,
+   "max": 1,
+   "default": 0
+  },
+  {
+   "type": "jack",
+   "id": "j3",
+   "rect": [
+    106,
+    134,
+    10,
+    10
+   ],
+   "pin": "CH3",
+   "label": "CH3",
+   "color": "#3A3A3A"
+  },
+  {
+   "type": "knob",
+   "id": "vdiv4",
+   "rect": [
+    130,
+    106,
+    14,
+    14
+   ],
+   "label": "CH4 V/div",
+   "min": 0.001,
+   "max": 10,
+   "default": 2,
+   "log": true,
+   "unit": "V"
+  },
+  {
+   "type": "button",
+   "id": "on4",
+   "rect": [
+    145,
+    106,
+    12,
+    6
+   ],
+   "label": "CH4"
+  },
+  {
+   "type": "switch",
+   "id": "coupling4",
+   "rect": [
+    130,
+    121,
+    27,
+    5
+   ],
+   "label": "Coupling",
+   "options": [
+    "DC",
+    "AC",
+    "GND"
+   ]
+  },
+  {
+   "type": "switch",
+   "id": "probe4",
+   "rect": [
+    130,
+    127,
+    27,
+    5
+   ],
+   "label": "Probe",
+   "options": [
+    "1×",
+    "10×"
+   ],
+   "default": 1
+  },
+  {
+   "type": "knob",
+   "id": "comp4",
+   "rect": [
+    150,
+    113,
+    7,
+    7
+   ],
+   "label": "Comp",
+   "min": -1,
+   "max": 1,
+   "default": 0
+  },
+  {
+   "type": "jack",
+   "id": "j4",
+   "rect": [
+    136,
+    134,
+    10,
+    10
+   ],
+   "pin": "CH4",
+   "label": "CH4",
+   "color": "#3A3A3A"
+  },
+  {
+   "type": "jack",
+   "id": "jgnd",
+   "rect": [
+    164,
+    134,
+    10,
+    10
+   ],
+   "pin": "GND",
+   "label": "GND",
+   "color": "#1C1C1C"
+  }
+ ]
+}

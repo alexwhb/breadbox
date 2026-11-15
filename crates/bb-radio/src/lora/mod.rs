@@ -715,6 +715,13 @@ pub fn forward_uplinks(
     }
 }
 
+impl LoraSpace {
+    /// The gateway's MQTT client (once it connected).
+    pub fn gateway_key(&self) -> Option<ConnKey> {
+        self.gateway.mqtt
+    }
+}
+
 /// Transmits downlinks published to `lora/<net>/<addr>/down`.
 pub fn forward_downlinks(net: &mut Network, lora: &mut LoraSpace, now: SimTime) {
     let Some(key) = lora.gateway.mqtt else {

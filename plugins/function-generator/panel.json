@@ -1,0 +1,159 @@
+{
+ "size": [
+  130,
+  60
+ ],
+ "color": "#30343A",
+ "art": "fgen.bench.svg",
+ "elements": [
+  {
+   "type": "display",
+   "id": "lcd",
+   "rect": [
+    6,
+    6,
+    70,
+    18
+   ],
+   "digits": 8,
+   "style": "vfd",
+   "annunciators": [
+    "SINE",
+    "SQUARE",
+    "TRIANGLE",
+    "PULSE",
+    "NOISE",
+    "ARB"
+   ]
+  },
+  {
+   "type": "switch",
+   "id": "shape",
+   "rect": [
+    82,
+    6,
+    44,
+    8
+   ],
+   "label": "Waveform",
+   "options": [
+    "∿",
+    "⊓",
+    "⋀",
+    "⎍",
+    "noise",
+    "arb"
+   ]
+  },
+  {
+   "type": "knob",
+   "id": "frequency",
+   "rect": [
+    8,
+    28,
+    18,
+    18
+   ],
+   "label": "Frequency",
+   "min": 0.001,
+   "max": 10000000.0,
+   "default": 1000,
+   "log": true,
+   "unit": "Hz"
+  },
+  {
+   "type": "knob",
+   "id": "amplitude",
+   "rect": [
+    32,
+    28,
+    18,
+    18
+   ],
+   "label": "Amplitude",
+   "min": 0,
+   "max": 20,
+   "default": 2,
+   "unit": "Vpp"
+  },
+  {
+   "type": "knob",
+   "id": "offset",
+   "rect": [
+    56,
+    28,
+    18,
+    18
+   ],
+   "label": "Offset",
+   "min": -10,
+   "max": 10,
+   "default": 0,
+   "unit": "V"
+  },
+  {
+   "type": "knob",
+   "id": "duty",
+   "rect": [
+    80,
+    28,
+    14,
+    14
+   ],
+   "label": "Duty",
+   "min": 0.01,
+   "max": 0.99,
+   "default": 0.5
+  },
+  {
+   "type": "button",
+   "id": "output",
+   "rect": [
+    100,
+    30,
+    24,
+    8
+   ],
+   "label": "Output",
+   "momentary": false
+  },
+  {
+   "type": "led",
+   "id": "on",
+   "rect": [
+    118,
+    42,
+    4,
+    4
+   ],
+   "label": "ON",
+   "color": "#7BD88F"
+  },
+  {
+   "type": "jack",
+   "id": "jout",
+   "rect": [
+    100,
+    48,
+    9,
+    9
+   ],
+   "pin": "OUT",
+   "label": "OUT 50Ω",
+   "color": "#D9453B"
+  },
+  {
+   "type": "jack",
+   "id": "jcom",
+   "rect": [
+    115,
+    48,
+    9,
+    9
+   ],
+   "pin": "COM",
+   "label": "COM",
+   "color": "#1C1C1C"
+  }
+ ]
+}

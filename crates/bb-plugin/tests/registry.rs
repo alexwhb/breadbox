@@ -165,7 +165,6 @@ fn local_plugins_hot_reload_on_file_change() {
 }
 
 #[test]
-#[ignore = "enabled once every first-party plugin is built"]
 fn bundled_catalog_has_the_design_entries() {
     let tmp = Tmp::new("bundled");
     let user = tmp.dir("user");

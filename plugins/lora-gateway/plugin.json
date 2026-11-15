@@ -1,0 +1,62 @@
+{
+  "id": "breadbox.lora-gateway",
+  "version": "1.0.0",
+  "name": "LoRa + virtual gateway",
+  "kind": [
+    "radio",
+    "part"
+  ],
+  "summary": "Path loss by distance and terrain; airtime and duty-cycle limits.",
+  "description": "Adds the REYAX RYLR896 LoRa module and a virtual multi-SF gateway that forwards uplinks to the built-in MQTT broker (lora/<net>/<addr>/up) and sends downlinks published to …/down. A payload decoder turns `k=v` or JSON payloads into lora/<net>/<addr>/decoded. Range follows distance and terrain; airtime comes from SF/BW/CR and the region's duty-cycle limits apply.",
+  "author": "Breadbox",
+  "license": "MIT",
+  "provides": {
+    "model": "./lora.wasm",
+    "parts": "./parts.json",
+    "view3d": "./rylr896.bench.svg",
+    "radio": {
+      "lora": true,
+      "extension": true,
+      "gateway": {
+        "enabled": true,
+        "pos": {
+          "x": 40.0,
+          "y": 0.0
+        },
+        "freq_hz": 915000000,
+        "address": 0,
+        "tx_dbm": 14.0,
+        "gain_db": 3.0
+      }
+    }
+  },
+  "specs": {
+    "module": "REYAX RYLR896 (AT over UART, 115200 baud)",
+    "band": "868/915 MHz",
+    "sf": "7–12",
+    "airtime": "Semtech formula",
+    "duty_cycle": "EU868 1 %",
+    "gateway": "multi-SF → MQTT"
+  },
+  "highlights": [
+    {
+      "label": "Module",
+      "value": "RYLR896 · AT commands"
+    },
+    {
+      "label": "Range",
+      "value": "distance + terrain path loss"
+    },
+    {
+      "label": "Airtime",
+      "value": "SF/BW/CR · duty-cycle limits"
+    },
+    {
+      "label": "Gateway",
+      "value": "uplinks → MQTT, downlinks back"
+    }
+  ],
+  "permissions": [
+    "radio:space"
+  ]
+}

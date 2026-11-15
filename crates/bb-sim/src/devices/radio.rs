@@ -273,7 +273,8 @@ impl RadioModule {
             .service("radio")
             .and_then(|a| a.downcast_mut::<RadioService>())
         {
-            for b in &bytes {
+            // a break / glitch (stop bit low) is dropped, like a real UART flags and discards it
+            for b in bytes.iter().filter(|b| b.ok()) {
                 if self.powered {
                     s.uart_rx(id, b.data as u8, b.time);
                 }

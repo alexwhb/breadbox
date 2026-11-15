@@ -1,0 +1,12 @@
+{
+  "id": "example.sensitivity",
+  "version": "0.1.0",
+  "name": "DC sensitivity",
+  "kind": ["analysis"],
+  "summary": "Analysis example: how much each resistor moves a node (per +1 %).",
+  "provides": {
+    "model": "./sensitivity.wasm",
+    "analysis": { "name": "DC sensitivity", "description": "ΔV of a node per +1 % of each resistor", "options": { "node": "out" } }
+  },
+  "permissions": []
+}

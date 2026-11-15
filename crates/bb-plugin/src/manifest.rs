@@ -676,7 +676,12 @@ impl Manifest {
             ));
         }
         // permissions that what it provides implies
-        if self.spice.load.is_some() && !perms.contains(&Permission::InjectLoad) {
+        // a load on the circuit needs `inject:load`; a source's output impedance comes with
+        // `drive:pins`
+        if self.spice.load.is_some()
+            && !perms.contains(&Permission::InjectLoad)
+            && !perms.contains(&Permission::DrivePins)
+        {
             return Err(PluginError::PermissionDenied {
                 plugin: self.id.clone(),
                 permission: Permission::InjectLoad,

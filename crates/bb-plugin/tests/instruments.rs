@@ -1,0 +1,432 @@
+//! First-party instrument plugins end to end (PLUG-5): the compiled wasm modules on real
+//! benches, read through the public engine API (readings, panel state).
+
+mod common;
+use bb_circuit::builder::BenchBuilder;
+use bb_circuit::project::{Endpoint, Mode, Wire};
+use bb_circuit::{Project, PropValue};
+use bb_core::{SimTime, UserInput};
+use bb_plugin::PluginHost;
+use bb_sim::Bench;
+use common::*;
+
+fn host(dirs: &[&str]) -> PluginHost {
+    let h = PluginHost::from_dirs(
+        &dirs
+            .iter()
+            .map(|d| root().join("plugins").join(d))
+            .collect::<Vec<_>>(),
+        None,
+    );
+    assert!(h.errors.is_empty(), "{:?}", h.errors);
+    h
+}
+
+fn wire(p: &mut Project, id: &str, a: (&str, &str), b: (&str, &str)) {
+    p.wires.retain(|w| w.id != id);
+    p.wires.push(Wire {
+        id: id.into(),
+        a: Endpoint::pin(a.0, a.1),
+        b: Endpoint::pin(b.0, b.1),
+        color: "green".into(),
+        bends: vec![],
+    });
+}
+
+fn reading(b: &Bench, part: &str, key: &str) -> f64 {
+    b.readings(part)
+        .into_iter()
+        .find(|(k, _)| k == key)
+        .map(|x| x.1)
+        .unwrap_or(f64::NAN)
+}
+
+fn panel(b: &mut Bench, part: &str) -> serde_json::Value {
+    b.telemetry()
+        .parts
+        .iter()
+        .find(|p| p.part == part)
+        .and_then(|p| p.panel.clone())
+        .expect("panel")
+}
+
+/// garden-node plus an instrument part `id` of `def`.
+fn garden_with(
+    h: &PluginHost,
+    id: &str,
+    def: &str,
+    props: &[(&str, PropValue)],
+) -> (Bench, Project) {
+    let dir = root().join("examples/garden-node");
+    let mut p = Project::load(&dir).unwrap();
+    let mut inst =
+        bb_circuit::project::PartInstance::new(id, &id.to_ascii_uppercase(), def).at(80.0, 10.0);
+    for (k, v) in props {
+        inst.props.insert(k.to_string(), v.clone());
+    }
+    p.parts.push(inst);
+    let opts = {
+        let mut o = h.bench_options();
+        o.firmware = bb_sim::firmware::project_images(&p, &dir);
+        o
+    };
+    (Bench::new(p.clone(), h.library(), opts).unwrap(), p)
+}
+
+#[test]
+fn scope_triggers_on_the_d9_pwm_and_its_duty_tracks_the_light() {
+    let h = host(&["scope-4ch"]);
+    let (mut b, mut p) = garden_with(&h, "scope2", "scope_4ch", &[]);
+    wire(&mut p, "ws1", ("scope2", "CH1"), ("u1", "D9"));
+    wire(&mut p, "ws2", ("scope2", "GND"), ("bb1", "t-1"));
+    b.update_project(p).unwrap();
+    b.run_until(SimTime::from_secs(3)).unwrap();
+    assert_eq!(reading(&b, "scope2", "triggered"), 1.0);
+    let f = reading(&b, "scope2", "frequency");
+    assert!((f - 490.2).abs() < 2.0, "f {f}");
+    let d0 = reading(&b, "scope2", "duty");
+    assert!((d0 - 0.475).abs() < 0.03, "duty {d0}");
+    let pnl = panel(&mut b, "scope2");
+    let trace = &pnl["screens"]["screen"]["traces"][0];
+    assert_eq!(trace["channel"], "CH1");
+    assert!(trace["points"].as_array().unwrap().len() > 20);
+    assert!(
+        pnl["screens"]["screen"]["header"]
+            .as_str()
+            .unwrap()
+            .contains("Trig'd"),
+        "{}",
+        pnl["screens"]["screen"]["header"]
+    );
+    // brighter room → the sketch dims the night LED: the duty follows
+    b.set_world("light.ambient_lux", 900.0);
+    b.run_until(SimTime::from_secs(6)).unwrap();
+    let d1 = reading(&b, "scope2", "duty");
+    assert!(d1 < d0 - 0.1, "duty {d0} → {d1}");
+    assert!((reading(&b, "scope2", "frequency") - 490.2).abs() < 2.0);
+    // single-shot freezes the picture
+    b.input(
+        "scope2",
+        &UserInput::Value {
+            key: "single".into(),
+            value: 1.0,
+        },
+    )
+    .unwrap();
+    b.run_for(SimTime::from_ms(200)).unwrap();
+    assert_eq!(reading(&b, "scope2", "frozen"), 1.0);
+    // a mis-adjusted 10× probe overshoots on the edges
+    b.input(
+        "scope2",
+        &UserInput::Value {
+            key: "trig_mode".into(),
+            value: 0.0,
+        },
+    )
+    .unwrap();
+    b.run_for(SimTime::from_ms(200)).unwrap();
+    let vmax = reading(&b, "scope2", "vmax");
+    b.input(
+        "scope2",
+        &UserInput::Value {
+            key: "comp1".into(),
+            value: 0.5,
+        },
+    )
+    .unwrap();
+    b.run_for(SimTime::from_ms(200)).unwrap();
+    let vmax_bad = reading(&b, "scope2", "vmax");
+    assert!(vmax_bad > vmax + 1.0, "overshoot {vmax} → {vmax_bad}");
+    // FFT: the peak sits at the PWM fundamental
+    b.input(
+        "scope2",
+        &UserInput::Value {
+            key: "comp1".into(),
+            value: 0.0,
+        },
+    )
+    .unwrap();
+    b.input(
+        "scope2",
+        &UserInput::Value {
+            key: "timebase".into(),
+            value: 5e-3,
+        },
+    )
+    .unwrap();
+    b.input(
+        "scope2",
+        &UserInput::Value {
+            key: "fft".into(),
+            value: 1.0,
+        },
+    )
+    .unwrap();
+    b.run_for(SimTime::from_ms(300)).unwrap();
+    let peak = reading(&b, "scope2", "fft_peak");
+    assert!(
+        (peak - 490.0).abs() < 25.0,
+        "FFT peak {peak}: {}",
+        panel(&mut b, "scope2")["readouts"]
+    );
+}
+
+#[test]
+fn logic_analyzer_decodes_the_softwareserial_bytes_to_the_esp01() {
+    let h = host(&["logic-analyzer"]);
+    let (mut b, mut p) = garden_with(
+        &h,
+        "la1",
+        "logic_analyzer",
+        &[(
+            "decoders",
+            PropValue::Text("uart:D0@9600, uart:D1@9600".into()),
+        )],
+    );
+    // D0 on the sketch's SoftwareSerial TX (D2 → ESP RX), D1 on the ESP's answers (D3)
+    wire(&mut p, "wl1", ("la1", "D0"), ("u1", "D2"));
+    wire(&mut p, "wl2", ("la1", "D1"), ("u1", "D3"));
+    wire(&mut p, "wl3", ("la1", "GND"), ("bb1", "t-1"));
+    b.update_project(p).unwrap();
+    b.run_until(SimTime::from_secs(5)).unwrap();
+    let pnl = panel(&mut b, "la1");
+    let rows: Vec<(String, String)> = serde_json::from_value(pnl["readouts"].clone()).unwrap();
+    let tx = &rows
+        .iter()
+        .find(|r| r.0 == "UART D0 @ 9600")
+        .expect("D0 decoder")
+        .1;
+    let rx = &rows
+        .iter()
+        .find(|r| r.0 == "UART D1 @ 9600")
+        .expect("D1 decoder")
+        .1;
+    assert!(
+        tx.contains("AT+CWJAP=\"SIM-AP\",\"breadbox\"\r\n"),
+        "{tx:?}"
+    );
+    assert!(
+        tx.contains("AT+CIPSTART=\"TCP\",\"10.0.0.1\",1883"),
+        "{tx:?}"
+    );
+    assert!(rx.contains("WIFI GOT IP"), "{rx:?}");
+    // byte for byte what the modem received
+    let sent = b.radio().unwrap().uart_sent_text("u2");
+    let n = sent.len().min(tx.len()).min(200);
+    assert_eq!(&tx[..n], &sent[..n]);
+    assert!(reading(&b, "la1", "edges") > 1000.0);
+    b.input(
+        "la1",
+        &UserInput::Value {
+            key: "window".into(),
+            value: 2.0,
+        },
+    )
+    .unwrap();
+    b.run_for(SimTime::from_ms(100)).unwrap();
+    let pnl = panel(&mut b, "la1");
+    let markers = pnl["screens"]["screen"]["markers"].as_array().unwrap();
+    assert!(!markers.is_empty());
+}
+
+fn psu_bench(h: &PluginHost, load_ohms: f64) -> Bench {
+    let lib = h.library();
+    let mut bb = BenchBuilder::new(&lib, "psu", Mode::Playground);
+    let psu = bb.offboard(
+        "bench_psu",
+        "PSU1",
+        0.0,
+        0.0,
+        &[
+            ("voltage", PropValue::Num(5.0)),
+            ("current_limit", PropValue::Num(1.0)),
+        ],
+    );
+    let r = bb.offboard(
+        "resistor",
+        "R1",
+        30.0,
+        0.0,
+        &[
+            ("resistance", PropValue::Num(load_ohms)),
+            ("power", PropValue::Num(100.0)),
+        ],
+    );
+    bb.wire((&psu, "POS"), (&r, "1"), "red");
+    bb.wire((&psu, "NEG"), (&r, "2"), "black");
+    Bench::new(bb.finish(), lib, h.bench_options()).unwrap()
+}
+
+#[test]
+fn psu_regulates_limits_and_folds_back_on_a_short() {
+    let h = host(&["bench-psu"]);
+    // CV into 10 Ω: 5 V minus the 50 mV/A sag at 0.5 A
+    let mut b = psu_bench(&h, 10.0);
+    b.run_until(SimTime::from_ms(200)).unwrap();
+    let (v, i) = (
+        reading(&b, "psu1", "voltage"),
+        reading(&b, "psu1", "current"),
+    );
+    assert!((v - 4.975).abs() < 0.02, "CV {v} V");
+    assert!((i - v / 10.0).abs() < 0.005, "{i} A");
+    assert_eq!(reading(&b, "psu1", "cc"), 0.0);
+    // 2 Ω would need 2.5 A: constant current at the 1 A limit
+    let mut b = psu_bench(&h, 2.0);
+    b.run_until(SimTime::from_ms(200)).unwrap();
+    assert!((reading(&b, "psu1", "current") - 1.0).abs() < 0.02);
+    assert!((reading(&b, "psu1", "voltage") - 2.0).abs() < 0.05);
+    assert_eq!(reading(&b, "psu1", "cc"), 1.0);
+    assert_eq!(reading(&b, "psu1", "folded"), 0.0);
+    // a dead short folds the limit back to 10 %
+    let mut b = psu_bench(&h, 0.01);
+    b.run_until(SimTime::from_ms(200)).unwrap();
+    assert_eq!(reading(&b, "psu1", "folded"), 1.0);
+    let i = reading(&b, "psu1", "current");
+    assert!((i - 0.1).abs() < 0.01, "foldback current {i}");
+    let pnl = panel(&mut b, "psu1");
+    assert_eq!(pnl["leds"]["cc"], 1.0);
+    assert!(
+        pnl["displays"]["amps"]["annunciators"]
+            .to_string()
+            .contains("FOLD")
+    );
+    // foldback off: the short gets the full limit
+    b.input(
+        "psu1",
+        &UserInput::Value {
+            key: "foldback".into(),
+            value: 0.0,
+        },
+    )
+    .unwrap();
+    b.run_for(SimTime::from_ms(100)).unwrap();
+    assert!((reading(&b, "psu1", "current") - 1.0).abs() < 0.02);
+    // output off
+    b.input(
+        "psu1",
+        &UserInput::Value {
+            key: "output".into(),
+            value: 1.0,
+        },
+    )
+    .unwrap();
+    b.run_for(SimTime::from_ms(50)).unwrap();
+    assert!(reading(&b, "psu1", "current").abs() < 1e-6);
+}
+
+/// Fits A·sin(ωt + φ) + c to samples: (A, φ in degrees).
+fn fit(samples: &[(f64, f64)], f: f64) -> (f64, f64) {
+    let w = 2.0 * std::f64::consts::PI * f;
+    let n = samples.len() as f64;
+    let (mut s, mut c) = (0.0, 0.0);
+    let mean = samples.iter().map(|x| x.1).sum::<f64>() / n;
+    for (t, v) in samples {
+        s += (v - mean) * (w * t).sin();
+        c += (v - mean) * (w * t).cos();
+    }
+    let (a, b) = (2.0 * s / n, 2.0 * c / n);
+    ((a * a + b * b).sqrt(), b.atan2(a).to_degrees())
+}
+
+#[test]
+fn function_generator_into_an_rc_filter_matches_spice() {
+    let h = host(&["function-generator"]);
+    let lib = h.library();
+    let mut bb = BenchBuilder::new(&lib, "rc", Mode::Playground);
+    let fg = bb.offboard(
+        "function_generator",
+        "FG1",
+        0.0,
+        0.0,
+        &[
+            ("frequency", PropValue::Num(1000.0)),
+            ("amplitude", PropValue::Num(2.0)),
+        ],
+    );
+    let r = bb.offboard(
+        "resistor",
+        "R1",
+        30.0,
+        0.0,
+        &[("resistance", PropValue::Num(1000.0))],
+    );
+    let c = bb.offboard(
+        "capacitor",
+        "C1",
+        40.0,
+        0.0,
+        &[("capacitance", PropValue::Num(100e-9))],
+    );
+    bb.wire((&fg, "OUT"), (&r, "1"), "red");
+    let cpins: Vec<String> = lib
+        .get("capacitor")
+        .unwrap()
+        .pins
+        .iter()
+        .map(|p| p.id.clone())
+        .collect();
+    bb.wire((&r, "2"), (&c, &cpins[0]), "yellow");
+    bb.wire((&c, &cpins[1]), (&fg, "COM"), "black");
+    let mut b = Bench::new(bb.finish(), lib, h.bench_options()).unwrap();
+    b.run_until(SimTime::from_ms(10)).unwrap();
+    let mut bench = Vec::new();
+    for k in 0..1000 {
+        b.run_until(SimTime::from_ms(10) + SimTime::from_us(10 * k))
+            .unwrap();
+        bench.push((b.time().as_secs_f64(), b.pin_voltage("r1", "2").unwrap()));
+    }
+    // the same circuit as a plain SPICE transient
+    let nl = bb_spice::Netlist::parse(
+        "fg into rc\nV1 g 0 SIN(0 1 1000)\nRO g a 50\nR1 a out 1k\nC1 out 0 100n\n.tran 1u 20m 0 1u\n.end\n",
+    )
+    .unwrap();
+    let res = nl.run().unwrap();
+    let plot = res.runs[0].plot(bb_spice::results::PlotKind::Tran).unwrap();
+    let t = plot.vectors[0].reals();
+    let v = plot
+        .vectors
+        .iter()
+        .find(|x| x.name == "v(out)")
+        .unwrap()
+        .reals();
+    let spice: Vec<(f64, f64)> = t
+        .iter()
+        .zip(v.iter())
+        .filter(|(t, _)| **t >= 0.01)
+        .map(|(t, v)| (*t, *v))
+        .collect();
+    let (a_b, p_b) = fit(&bench, 1000.0);
+    let (a_s, p_s) = fit(&spice, 1000.0);
+    // analytic: |H| = 1/√(1+(ωRC)²), R = 1050 Ω
+    let wrc = 2.0 * std::f64::consts::PI * 1000.0 * 1050.0 * 100e-9;
+    let a_th = 1.0 / (1.0 + wrc * wrc).sqrt();
+    assert!((a_b - a_s).abs() < 0.01 * a_s, "bench {a_b} vs SPICE {a_s}");
+    assert!((a_s - a_th).abs() < 0.01 * a_th, "SPICE {a_s} vs {a_th}");
+    assert!(
+        (p_b - p_s).abs() < 1.0,
+        "phase bench {p_b}° vs SPICE {p_s}°"
+    );
+    // square wave: the filtered output swings symmetrically
+    b.input(
+        "fg1",
+        &UserInput::Value {
+            key: "shape".into(),
+            value: 1.0,
+        },
+    )
+    .unwrap();
+    b.run_for(SimTime::from_ms(10)).unwrap();
+    let mut vmin = f64::INFINITY;
+    let mut vmax = f64::NEG_INFINITY;
+    for _ in 0..200 {
+        b.run_for(SimTime::from_us(10)).unwrap();
+        let v = b.pin_voltage("r1", "2").unwrap();
+        vmin = vmin.min(v);
+        vmax = vmax.max(v);
+    }
+    assert!(
+        vmax > 0.6 && vmin < -0.6 && (vmax + vmin).abs() < 0.1,
+        "{vmin}..{vmax}"
+    );
+    assert_eq!(reading(&b, "fg1", "shape"), 1.0);
+}

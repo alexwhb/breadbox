@@ -60,6 +60,7 @@ pub mod prelude {
     pub use alloc::string::{String, ToString};
     pub use alloc::vec;
     pub use alloc::vec::Vec;
+    pub use serde_json::{self, Value};
 }
 
 /// The part a device model runs for (`Config::part`).

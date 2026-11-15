@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 70" width="120" height="70">
+  <defs><filter id="sh"><feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.45"/></filter></defs>
+  <rect x="1" y="1" width="118" height="68" rx="5" fill="#33373D" filter="url(#sh)"/>
+  <rect x="6" y="6" width="50" height="20" rx="2" fill="#140A06"/><rect x="62" y="6" width="50" height="20" rx="2" fill="#140A06"/>
+  <text x="31" y="21" font-family="JetBrains Mono, monospace" font-size="12" fill="#F2A33A" text-anchor="middle">05.00</text>
+  <text x="87" y="21" font-family="JetBrains Mono, monospace" font-size="12" fill="#F2A33A" text-anchor="middle">0.120</text>
+  <circle cx="20" cy="40" r="9" fill="#4A4F57"/><circle cx="76" cy="40" r="9" fill="#4A4F57"/>
+  <circle cx="45" cy="61" r="4.5" fill="#111" stroke="#D9453B" stroke-width="1.6"/>
+  <circle cx="65" cy="61" r="4.5" fill="#111" stroke="#777" stroke-width="1.6"/>
+</svg>

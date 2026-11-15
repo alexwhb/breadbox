@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 100" width="50" height="100">
+  <rect x="2" y="2" width="46" height="82" rx="3" fill="#1D4E89"/>
+  <rect x="8" y="10" width="34" height="34" rx="2" fill="#C9CCD1"/>
+  <text x="25" y="31" font-family="Inter, sans-serif" font-size="6" text-anchor="middle" fill="#333">RYLR896</text>
+  <path d="M25 50 v-6 M18 58 h14" stroke="#E0B341" stroke-width="2"/>
+  <g fill="#C9A227"><rect x="5" y="86" width="5" height="12"/><rect x="14" y="86" width="5" height="12"/><rect x="23" y="86" width="5" height="12"/><rect x="32" y="86" width="5" height="12"/><rect x="41" y="86" width="5" height="12"/></g>
+</svg>

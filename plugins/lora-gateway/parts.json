@@ -1,0 +1,56 @@
+[
+ {
+  "id": "rylr896",
+  "name": "LoRa RYLR896",
+  "category": "radios",
+  "icon": "radio",
+  "ref_prefix": "U",
+  "description": "REYAX RYLR896 LoRa transceiver: AT commands over UART (115200 baud), 3.3 V.",
+  "part_number": "RYLR896",
+  "pins": [
+   "VDD:power_in",
+   "NRST:input",
+   "RXD:input",
+   "TXD:output",
+   "GND:ground"
+  ],
+  "model": {
+   "behaviour": "rylr896",
+   "device_pins": [
+    "VDD",
+    "NRST",
+    "RXD",
+    "TXD"
+   ]
+  },
+  "inspector": [
+   {
+    "label": "Supply",
+    "value": "3.3 V · 43 mA TX"
+   },
+   {
+    "label": "UART",
+    "value": "115200 8N1"
+   },
+   {
+    "label": "Radio",
+    "value": "SX1276 · SF7–12 · +15 dBm"
+   }
+  ],
+  "bench": {
+   "art": "rylr896.bench.svg",
+   "layout": "row",
+   "size": [
+    5,
+    10
+   ]
+  },
+  "schematic": {
+   "symbol": "box"
+  },
+  "tags": [
+   "radio",
+   "plugin"
+  ]
+ }
+]

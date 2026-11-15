@@ -1,0 +1,20 @@
+{
+  "id": "example.pro-mini",
+  "version": "0.1.0",
+  "name": "Arduino Pro Mini (5 V)",
+  "kind": ["board"],
+  "summary": "Board example: a declarative ATmega328P variant without USB.",
+  "provides": {
+    "boards": [{
+      "id": "pro_mini",
+      "name": "Arduino Pro Mini 5V",
+      "base": "nano",
+      "label": "ATmega328P @ 16 MHz",
+      "description": "UNO brains on a stamp: power it through RAW (5–12 V) or VCC; no USB.",
+      "pins": ["D1", "D0", "RST", "GND", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9",
+               "D10", "D11", "D12", "D13", "A0", "A1", "A2", "A3", "VCC", "GND.2", "RAW"],
+      "vcc_pin": "VCC"
+    }]
+  },
+  "permissions": []
+}

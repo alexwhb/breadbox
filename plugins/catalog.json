@@ -1,0 +1,22 @@
+{
+  "order": [
+    "community.dmm-handheld",
+    "breadbox.soil-weather",
+    "breadbox.scope-4ch",
+    "breadbox.logic-analyzer",
+    "breadbox.bench-psu",
+    "breadbox.function-generator",
+    "breadbox.pi-hat-host",
+    "breadbox.lora-gateway"
+  ],
+  "preinstalled": ["community.dmm-handheld", "breadbox.soil-weather"],
+  "planned": [
+    {
+      "id": "breadbox.pi-hat-host",
+      "name": "Pi 40-pin HAT host",
+      "kind": "board",
+      "summary": "Emulated Linux SBC with GPIO, I²C and HAT EEPROM detection.",
+      "note": "Not in v1: emulated Linux single-board computers are out of scope."
+    }
+  ]
+}

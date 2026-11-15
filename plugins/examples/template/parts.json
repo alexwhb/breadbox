@@ -1,0 +1,17 @@
+[
+  {
+    "id": "blinker_chip",
+    "name": "Blinker chip",
+    "category": "ics",
+    "icon": "dip",
+    "ref_prefix": "U",
+    "description": "An LED driver with its own oscillator (plugin SDK template).",
+    "props": [{"key": "rate", "label": "Rate", "unit": "Hz", "type": "number", "default": 2, "min": 0.1, "max": 100, "live": true}],
+    "pins": ["VCC:power_in", "GND:ground", "OUT:output"],
+    "model": {"behaviour": "wasm", "device_pins": ["VCC", "OUT"], "spice": ["$(el:R:q) $(VCC) $(GND) 100k"]},
+    "inspector": [{"label": "Rate", "value": "$(rate|Hz)"}],
+    "bench": {"layout": "row", "size": [3, 4]},
+    "schematic": {"symbol": "box"},
+    "tags": ["plugin"]
+  }
+]

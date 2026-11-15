@@ -1,0 +1,355 @@
+{
+ "size": [
+  212,
+  110
+ ],
+ "color": "#1F2125",
+ "art": "la.bench.svg",
+ "elements": [
+  {
+   "type": "screen",
+   "id": "screen",
+   "rect": [
+    4,
+    4,
+    180,
+    90
+   ],
+   "kind": "logic",
+   "grid": [
+    10,
+    16
+   ],
+   "channels": [
+    {
+     "id": "D0",
+     "label": "D0",
+     "color": "#7BD88F"
+    },
+    {
+     "id": "D1",
+     "label": "D1",
+     "color": "#7BD88F"
+    },
+    {
+     "id": "D2",
+     "label": "D2",
+     "color": "#7BD88F"
+    },
+    {
+     "id": "D3",
+     "label": "D3",
+     "color": "#7BD88F"
+    },
+    {
+     "id": "D4",
+     "label": "D4",
+     "color": "#7BD88F"
+    },
+    {
+     "id": "D5",
+     "label": "D5",
+     "color": "#7BD88F"
+    },
+    {
+     "id": "D6",
+     "label": "D6",
+     "color": "#7BD88F"
+    },
+    {
+     "id": "D7",
+     "label": "D7",
+     "color": "#7BD88F"
+    },
+    {
+     "id": "D8",
+     "label": "D8",
+     "color": "#7BD88F"
+    },
+    {
+     "id": "D9",
+     "label": "D9",
+     "color": "#7BD88F"
+    },
+    {
+     "id": "D10",
+     "label": "D10",
+     "color": "#7BD88F"
+    },
+    {
+     "id": "D11",
+     "label": "D11",
+     "color": "#7BD88F"
+    },
+    {
+     "id": "D12",
+     "label": "D12",
+     "color": "#7BD88F"
+    },
+    {
+     "id": "D13",
+     "label": "D13",
+     "color": "#7BD88F"
+    },
+    {
+     "id": "D14",
+     "label": "D14",
+     "color": "#7BD88F"
+    },
+    {
+     "id": "D15",
+     "label": "D15",
+     "color": "#7BD88F"
+    }
+   ]
+  },
+  {
+   "type": "knob",
+   "id": "window",
+   "rect": [
+    188,
+    6,
+    20,
+    20
+   ],
+   "label": "Window",
+   "min": 1e-06,
+   "max": 10,
+   "default": 0.02,
+   "log": true,
+   "unit": "s"
+  },
+  {
+   "type": "button",
+   "id": "clear",
+   "rect": [
+    188,
+    32,
+    20,
+    8
+   ],
+   "label": "Clear"
+  },
+  {
+   "type": "jack",
+   "id": "j0",
+   "rect": [
+    4,
+    98,
+    8,
+    8
+   ],
+   "pin": "D0",
+   "label": "D0",
+   "color": "#2E2E2E"
+  },
+  {
+   "type": "jack",
+   "id": "j1",
+   "rect": [
+    15,
+    98,
+    8,
+    8
+   ],
+   "pin": "D1",
+   "label": "D1",
+   "color": "#2E2E2E"
+  },
+  {
+   "type": "jack",
+   "id": "j2",
+   "rect": [
+    26,
+    98,
+    8,
+    8
+   ],
+   "pin": "D2",
+   "label": "D2",
+   "color": "#2E2E2E"
+  },
+  {
+   "type": "jack",
+   "id": "j3",
+   "rect": [
+    37,
+    98,
+    8,
+    8
+   ],
+   "pin": "D3",
+   "label": "D3",
+   "color": "#2E2E2E"
+  },
+  {
+   "type": "jack",
+   "id": "j4",
+   "rect": [
+    48,
+    98,
+    8,
+    8
+   ],
+   "pin": "D4",
+   "label": "D4",
+   "color": "#2E2E2E"
+  },
+  {
+   "type": "jack",
+   "id": "j5",
+   "rect": [
+    59,
+    98,
+    8,
+    8
+   ],
+   "pin": "D5",
+   "label": "D5",
+   "color": "#2E2E2E"
+  },
+  {
+   "type": "jack",
+   "id": "j6",
+   "rect": [
+    70,
+    98,
+    8,
+    8
+   ],
+   "pin": "D6",
+   "label": "D6",
+   "color": "#2E2E2E"
+  },
+  {
+   "type": "jack",
+   "id": "j7",
+   "rect": [
+    81,
+    98,
+    8,
+    8
+   ],
+   "pin": "D7",
+   "label": "D7",
+   "color": "#2E2E2E"
+  },
+  {
+   "type": "jack",
+   "id": "j8",
+   "rect": [
+    92,
+    98,
+    8,
+    8
+   ],
+   "pin": "D8",
+   "label": "D8",
+   "color": "#2E2E2E"
+  },
+  {
+   "type": "jack",
+   "id": "j9",
+   "rect": [
+    103,
+    98,
+    8,
+    8
+   ],
+   "pin": "D9",
+   "label": "D9",
+   "color": "#2E2E2E"
+  },
+  {
+   "type": "jack",
+   "id": "j10",
+   "rect": [
+    114,
+    98,
+    8,
+    8
+   ],
+   "pin": "D10",
+   "label": "D10",
+   "color": "#2E2E2E"
+  },
+  {
+   "type": "jack",
+   "id": "j11",
+   "rect": [
+    125,
+    98,
+    8,
+    8
+   ],
+   "pin": "D11",
+   "label": "D11",
+   "color": "#2E2E2E"
+  },
+  {
+   "type": "jack",
+   "id": "j12",
+   "rect": [
+    136,
+    98,
+    8,
+    8
+   ],
+   "pin": "D12",
+   "label": "D12",
+   "color": "#2E2E2E"
+  },
+  {
+   "type": "jack",
+   "id": "j13",
+   "rect": [
+    147,
+    98,
+    8,
+    8
+   ],
+   "pin": "D13",
+   "label": "D13",
+   "color": "#2E2E2E"
+  },
+  {
+   "type": "jack",
+   "id": "j14",
+   "rect": [
+    158,
+    98,
+    8,
+    8
+   ],
+   "pin": "D14",
+   "label": "D14",
+   "color": "#2E2E2E"
+  },
+  {
+   "type": "jack",
+   "id": "j15",
+   "rect": [
+    169,
+    98,
+    8,
+    8
+   ],
+   "pin": "D15",
+   "label": "D15",
+   "color": "#2E2E2E"
+  },
+  {
+   "type": "jack",
+   "id": "jgnd",
+   "rect": [
+    180,
+    98,
+    8,
+    8
+   ],
+   "pin": "GND",
+   "label": "GND",
+   "color": "#1C1C1C"
+  }
+ ]
+}

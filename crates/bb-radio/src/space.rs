@@ -375,7 +375,12 @@ impl RadioSpace {
             Module::Host(h) => self.net.has_events(h.station),
             _ => false,
         });
-        if pending {
+        // a downlink published to the gateway's MQTT topic is sent right away
+        let downlink = self
+            .lora
+            .gateway_key()
+            .is_some_and(|k| self.net.broker().virtual_pending(k) > 0);
+        if pending || downlink {
             return Some(self.now);
         }
         let mut t = [

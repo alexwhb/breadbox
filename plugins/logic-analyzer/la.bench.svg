@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 100" width="240" height="100">
+  <defs><filter id="sh"><feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.45"/></filter></defs>
+  <rect x="2" y="2" width="236" height="96" rx="6" fill="#26292E" filter="url(#sh)"/>
+  <rect x="8" y="8" width="160" height="62" rx="3" fill="#0D1117" stroke="#3B4048"/>
+  <g stroke="#7BD88F" stroke-width="1.2" fill="none">
+    <path d="M10 20h20v-8h12v8h30v-8h8v8h86"/><path d="M10 36h40v-8h20v8h16v-8h30v8h60"/>
+    <path d="M10 52h10v-8h10v8h10v-8h10v8h10v-8h10v8h10v-8h10v8h10v-8h10v8h46"/>
+    <path d="M10 66h70v-8h4v8h82"/>
+  </g>
+  <g fill="#3A3F47">
+    <rect x="176" y="10" width="54" height="10" rx="2"/><rect x="176" y="26" width="54" height="10" rx="2"/>
+  </g>
+  <g fill="#111">
+    <circle cx="14" cy="84" r="3"/><circle cx="27" cy="84" r="3"/><circle cx="40" cy="84" r="3"/><circle cx="53" cy="84" r="3"/>
+    <circle cx="66" cy="84" r="3"/><circle cx="79" cy="84" r="3"/><circle cx="92" cy="84" r="3"/><circle cx="105" cy="84" r="3"/>
+    <circle cx="118" cy="84" r="3"/><circle cx="131" cy="84" r="3"/><circle cx="144" cy="84" r="3"/><circle cx="157" cy="84" r="3"/>
+    <circle cx="170" cy="84" r="3"/><circle cx="183" cy="84" r="3"/><circle cx="196" cy="84" r="3"/><circle cx="209" cy="84" r="3"/>
+  </g>
+  <text x="178" y="56" font-family="Space Grotesk, Inter, sans-serif" font-size="9" fill="#C9CDD3">LOGIC 16</text>
+</svg>

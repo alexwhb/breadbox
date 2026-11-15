@@ -1,0 +1,59 @@
+{
+  "id": "breadbox.bench-psu",
+  "version": "1.0.0",
+  "name": "Bench power supply",
+  "kind": [
+    "instrument"
+  ],
+  "summary": "CV/CC with current limit, foldback and a real sag curve.",
+  "description": "A linear bench supply, 0–30 V / 0–3 A. Constant voltage until the load asks for more than the current limit, then constant current; with foldback on, a dead short folds the limit back to 10 % so nothing cooks. The output sags 50 mV per amp like a real transformer supply.",
+  "author": "Breadbox",
+  "license": "MIT",
+  "provides": {
+    "instrument": "Bench power supply",
+    "probes": [
+      "POS",
+      "NEG"
+    ],
+    "model": "./psu.wasm",
+    "view3d": "./psu.bench.svg",
+    "parts": "./parts.json",
+    "panel": "./panel.json"
+  },
+  "spice": {
+    "load": "source behind 20 mΩ (ext vset / rout)"
+  },
+  "specs": {
+    "voltage": "0–30 V",
+    "current": "0–3 A",
+    "modes": [
+      "CV",
+      "CC"
+    ],
+    "foldback": "10 % below 10 % of set voltage",
+    "sag_mv_per_a": 50,
+    "regulation_loop_us": 100
+  },
+  "highlights": [
+    {
+      "label": "Output",
+      "value": "0–30 V · 0–3 A"
+    },
+    {
+      "label": "Modes",
+      "value": "CV / CC"
+    },
+    {
+      "label": "Protection",
+      "value": "current limit + foldback"
+    },
+    {
+      "label": "Sag",
+      "value": "50 mV/A"
+    }
+  ],
+  "permissions": [
+    "read:nets",
+    "drive:pins"
+  ]
+}

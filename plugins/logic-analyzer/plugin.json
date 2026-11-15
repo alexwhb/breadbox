@@ -1,0 +1,31 @@
+{
+  "id": "breadbox.logic-analyzer",
+  "version": "1.0.0",
+  "name": "Logic analyzer",
+  "kind": ["instrument"],
+  "summary": "16 channels with I²C, SPI and UART decoders.",
+  "description": "Sixteen digital channels timestamped to the exact edge, with UART, I²C, SPI and 1-Wire protocol decoders. Decoded bytes annotate the traces and stream into a decode table.",
+  "author": "Breadbox",
+  "license": "MIT",
+  "provides": {
+    "instrument": "Logic analyzer",
+    "probes": 17,
+    "model": "./la.wasm",
+    "view3d": "./la.bench.svg",
+    "parts": "./parts.json",
+    "panel": "./panel.json"
+  },
+  "specs": {
+    "channels": 16,
+    "threshold_v": 1.4,
+    "timing": "exact edge times from the simulation",
+    "decoders": ["UART", "I²C", "SPI", "1-Wire"]
+  },
+  "highlights": [
+    { "label": "Channels", "value": "16 · 1.4 V threshold" },
+    { "label": "Timing", "value": "exact edge timestamps" },
+    { "label": "Decoders", "value": "UART · I²C · SPI · 1-Wire" },
+    { "label": "Capture", "value": "400 k edges" }
+  ],
+  "permissions": ["read:nets", "ui:panel"]
+}

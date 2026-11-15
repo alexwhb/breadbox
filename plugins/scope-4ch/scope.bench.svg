@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 216 148" width="216" height="148">
+  <defs>
+    <filter id="sh" x="-10%" y="-10%" width="120%" height="120%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-opacity="0.45"/></filter>
+    <linearGradient id="b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3A3E45"/><stop offset="1" stop-color="#25282D"/></linearGradient>
+  </defs>
+  <rect x="1" y="1" width="214" height="146" rx="8" fill="url(#b)" filter="url(#sh)"/>
+  <rect x="6" y="6" width="150" height="96" rx="3" fill="#0B1410" stroke="#4B5563"/>
+  <g stroke="#1F3A2C" stroke-width="0.5">
+    <path d="M21 6v96M36 6v96M51 6v96M66 6v96M81 6v96M96 6v96M111 6v96M126 6v96M141 6v96"/>
+    <path d="M6 18h150M6 30h150M6 42h150M6 54h150M6 66h150M6 78h150M6 90h150"/>
+  </g>
+  <path d="M8 70 h14 v-30 h15 v30 h15 v-30 h15 v30 h15 v-30 h15 v30 h15 v-30 h15 v30 h15" fill="none" stroke="#F7C77A" stroke-width="1.4"/>
+  <g fill="#4A4F57">
+    <circle cx="175" cy="19" r="10"/><circle cx="173" cy="49" r="8"/>
+    <circle cx="47" cy="113" r="6"/><circle cx="77" cy="113" r="6"/><circle cx="107" cy="113" r="6"/><circle cx="137" cy="113" r="6"/>
+  </g>
+  <g fill="#111" stroke-width="1.5">
+    <circle cx="51" cy="139" r="4.5" stroke="#F7C77A"/><circle cx="81" cy="139" r="4.5" stroke="#4CC3F0"/>
+    <circle cx="111" cy="139" r="4.5" stroke="#E57AD1"/><circle cx="141" cy="139" r="4.5" stroke="#7BD88F"/>
+    <circle cx="169" cy="139" r="4.5" stroke="#888"/>
+  </g>
+  <text x="186" y="128" font-family="Space Grotesk, Inter, sans-serif" font-size="7" fill="#C9CDD3">SCOPE 4</text>
+</svg>

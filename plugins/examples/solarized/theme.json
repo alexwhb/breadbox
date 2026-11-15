@@ -1,0 +1,13 @@
+{
+  "name": "Solarized light",
+  "base": "light",
+  "tokens": {
+    "bg": "#FDF6E3",
+    "panel": "#EEE8D5",
+    "text": "#586E75",
+    "muted": "#93A1A1",
+    "accent": "#B58900",
+    "cyan": "#2AA198",
+    "danger": "#DC322F"
+  }
+}

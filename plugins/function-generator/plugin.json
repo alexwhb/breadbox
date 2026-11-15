@@ -1,0 +1,63 @@
+{
+  "id": "breadbox.function-generator",
+  "version": "1.0.0",
+  "name": "Function generator",
+  "kind": [
+    "instrument",
+    "generator"
+  ],
+  "summary": "Sine, square, triangle, pulse, noise and arbitrary waveforms into 50 Ω.",
+  "description": "A bench function generator up to 10 MHz: sine, square, triangle, pulse with adjustable duty, band-limited noise and a 16-point arbitrary waveform, behind a 50 Ω output. The waveform is played by the analog solver itself, so filters and amplifiers respond exactly as they would in SPICE.",
+  "author": "Breadbox",
+  "license": "MIT",
+  "provides": {
+    "instrument": "Function generator",
+    "probes": [
+      "OUT",
+      "COM"
+    ],
+    "model": "./fgen.wasm",
+    "view3d": "./fgen.bench.svg",
+    "parts": "./parts.json",
+    "panel": "./panel.json"
+  },
+  "spice": {
+    "load": "source behind 50 Ω"
+  },
+  "specs": {
+    "shapes": [
+      "sine",
+      "square",
+      "triangle",
+      "pulse",
+      "noise",
+      "arbitrary"
+    ],
+    "frequency": "1 mHz – 10 MHz",
+    "amplitude": "0–20 Vpp",
+    "offset": "±10 V",
+    "output_ohms": 50,
+    "arb_points": 16
+  },
+  "highlights": [
+    {
+      "label": "Waveforms",
+      "value": "sine · square · triangle · pulse · noise · arb"
+    },
+    {
+      "label": "Frequency",
+      "value": "1 mHz – 10 MHz"
+    },
+    {
+      "label": "Amplitude",
+      "value": "0–20 Vpp, ±10 V offset"
+    },
+    {
+      "label": "Output",
+      "value": "50 Ω"
+    }
+  ],
+  "permissions": [
+    "drive:pins"
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "id": "breadbox.scope-4ch",
+  "version": "1.0.0",
+  "name": "4-channel oscilloscope",
+  "kind": ["instrument"],
+  "summary": "Triggering, FFT, probe compensation, 10× attenuation.",
+  "description": "A four-channel bench scope. Probes load the circuit like real 1× and 10× probes, a mis-adjusted 10× probe shows the classic square-wave overshoot, and edge or pulse-width triggers lock auto, normal or single-shot. Measurements, two time cursors and an FFT of any channel.",
+  "author": "Breadbox",
+  "license": "MIT",
+  "provides": {
+    "instrument": "4-channel oscilloscope",
+    "probes": ["CH1", "CH2", "CH3", "CH4", "GND"],
+    "model": "./scope.wasm",
+    "view3d": "./scope.bench.svg",
+    "parts": "./parts.json",
+    "panel": "./panel.json"
+  },
+  "spice": { "load": "per channel: R 10Meg ∥ C 12p (10×) or R 1Meg ∥ C 100p (1×)" },
+  "specs": {
+    "channels": 4,
+    "bandwidth": "set by the simulation step",
+    "timebase": "1 µs/div … 10 s/div",
+    "vdiv": "1 mV/div … 10 V/div",
+    "triggers": ["edge", "pulse"],
+    "trigger_modes": ["auto", "normal", "single"],
+    "measurements": ["frequency", "duty", "Vpp", "Vavg", "Vrms"]
+  },
+  "highlights": [
+    { "label": "Channels", "value": "4 · 1×/10× probes" },
+    { "label": "Timebase", "value": "1 µs … 10 s/div" },
+    { "label": "Trigger", "value": "edge / pulse · auto, normal, single" },
+    { "label": "Math", "value": "FFT, cursors, 5 measurements" }
+  ],
+  "permissions": ["read:nets", "inject:load", "ui:panel"]
+}

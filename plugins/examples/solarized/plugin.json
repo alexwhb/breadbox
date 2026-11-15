@@ -1,0 +1,9 @@
+{
+  "id": "example.solarized",
+  "version": "0.1.0",
+  "name": "Solarized light",
+  "kind": ["theme"],
+  "summary": "Theme example: Solarized colours over the light token set.",
+  "provides": { "theme": "./theme.json" },
+  "permissions": []
+}

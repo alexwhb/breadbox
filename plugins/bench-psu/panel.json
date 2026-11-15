@@ -1,0 +1,164 @@
+{
+ "size": [
+  120,
+  70
+ ],
+ "color": "#2B2E33",
+ "art": "psu.bench.svg",
+ "elements": [
+  {
+   "type": "display",
+   "id": "volts",
+   "rect": [
+    6,
+    6,
+    50,
+    20
+   ],
+   "digits": 4,
+   "style": "seven_segment",
+   "units": [
+    "V"
+   ]
+  },
+  {
+   "type": "display",
+   "id": "amps",
+   "rect": [
+    62,
+    6,
+    50,
+    20
+   ],
+   "digits": 4,
+   "style": "seven_segment",
+   "units": [
+    "A"
+   ],
+   "annunciators": [
+    "FOLD"
+   ]
+  },
+  {
+   "type": "knob",
+   "id": "voltage",
+   "rect": [
+    10,
+    30,
+    20,
+    20
+   ],
+   "label": "Voltage",
+   "min": 0,
+   "max": 30,
+   "default": 5,
+   "step": 0.01,
+   "unit": "V"
+  },
+  {
+   "type": "knob",
+   "id": "current",
+   "rect": [
+    66,
+    30,
+    20,
+    20
+   ],
+   "label": "Current",
+   "min": 0.001,
+   "max": 3,
+   "default": 1,
+   "step": 0.001,
+   "unit": "A"
+  },
+  {
+   "type": "led",
+   "id": "cv",
+   "rect": [
+    36,
+    32,
+    4,
+    4
+   ],
+   "label": "CV",
+   "color": "#7BD88F"
+  },
+  {
+   "type": "led",
+   "id": "cc",
+   "rect": [
+    92,
+    32,
+    4,
+    4
+   ],
+   "label": "CC",
+   "color": "#F2A33A"
+  },
+  {
+   "type": "switch",
+   "id": "foldback",
+   "rect": [
+    36,
+    42,
+    22,
+    6
+   ],
+   "label": "Foldback",
+   "options": [
+    "off",
+    "on"
+   ],
+   "default": 1
+  },
+  {
+   "type": "button",
+   "id": "output",
+   "rect": [
+    90,
+    42,
+    22,
+    8
+   ],
+   "label": "Output"
+  },
+  {
+   "type": "led",
+   "id": "out",
+   "rect": [
+    104,
+    52,
+    4,
+    4
+   ],
+   "label": "OUT",
+   "color": "#D9453B"
+  },
+  {
+   "type": "jack",
+   "id": "jpos",
+   "rect": [
+    40,
+    56,
+    10,
+    10
+   ],
+   "pin": "POS",
+   "label": "+",
+   "color": "#D9453B"
+  },
+  {
+   "type": "jack",
+   "id": "jneg",
+   "rect": [
+    60,
+    56,
+    10,
+    10
+   ],
+   "pin": "NEG",
+   "label": "−",
+   "color": "#1C1C1C"
+  }
+ ]
+}

@@ -567,7 +567,7 @@ impl Bench {
                 .map(|(k, v)| (k.clone(), *v))
                 .collect();
             let opts = SessionOptions {
-                max_step: (self.quantum.as_secs_f64() * 50.0).clamp(1e-6, 1e-4),
+                max_step: (self.quantum.as_secs_f64() * 10.0).clamp(1e-6, 1e-4),
                 ..SessionOptions::default()
             };
             session = Some(

@@ -12,7 +12,8 @@ fn role(name: &str) -> &'static str {
     let n = n.split('.').next().unwrap_or("");
     match n {
         "GND" | "AGND" => "ground",
-        "VCC" | "5V" | "3V3" => "power_out",
+        "5V" | "3V3" => "power_out",
+        "VCC" => "power_in",
         "RAW" | "VIN" => "power_in",
         "RST" | "RESET" | "AREF" => "input",
         _ => "io",
@@ -58,11 +59,14 @@ pub fn part_json(
                 b.base
             )));
         }
-        pins.push(if id.contains('.') {
-            format!("{id}:{r}:{name}")
-        } else {
-            format!("{id}:{r}")
-        });
+        let mut pin = serde_json::json!({"id": id, "role": r});
+        if id.contains('.') {
+            pin["name"] = serde_json::Value::String(name.clone());
+        }
+        if r == "io" {
+            pin["mcu"] = serde_json::Value::String(name.clone());
+        }
+        pins.push(pin);
     }
     let has = |n: &str| b.pins.iter().any(|p| p == n);
     if !has(&b.vcc_pin) {
@@ -77,9 +81,11 @@ pub fn part_json(
     let vcc = &b.vcc_pin;
     let mut spice = vec![format!("$(el:R:load) $({vcc}) $(GND) 100k")];
     if has("RAW") {
-        // on-board regulator RAW → VCC (5 V, 0.25 V dropout)
-        spice.push("$(el:B:reg) $(n:r) $(GND) V=min(5.0,max(v($(RAW),$(GND))-0.25,0))".to_string());
-        spice.push(format!("$(el:R:reg) $(n:r) $({vcc}) 0.5"));
+        // on-board regulator RAW → VCC (5 V, 0.25 V dropout, 0.5 Ω): it only sources current,
+        // so a board powered through VCC with RAW open is not shorted by it
+        spice.push(format!(
+            "$(el:B:reg) $(GND) $({vcc}) I={{max(0,(min(5.0,max(v($(RAW),$(GND))-0.25,0))-v($({vcc}),$(GND)))/0.5)}}"
+        ));
         spice.push("$(el:R:raw) $(RAW) $(GND) 1Meg".into());
     }
     for rst in ["RST", "RESET"] {

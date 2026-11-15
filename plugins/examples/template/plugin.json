@@ -1,0 +1,11 @@
+{
+  "id": "example.blinker",
+  "version": "0.1.0",
+  "name": "Blinker chip (template)",
+  "kind": ["part"],
+  "summary": "SDK template: an LED driver with its own oscillator.",
+  "author": "Breadbox",
+  "license": "MIT",
+  "provides": { "model": "./blinker.wasm", "parts": "./parts.json" },
+  "permissions": ["read:nets", "drive:pins"]
+}

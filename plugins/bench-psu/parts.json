@@ -1,0 +1,93 @@
+[
+ {
+  "id": "bench_psu",
+  "name": "Bench power supply",
+  "category": "instruments",
+  "icon": "psu",
+  "ref_prefix": "PSU",
+  "description": "Variable bench supply: + and − terminals, CV/CC with current limit.",
+  "props": [
+   {
+    "key": "voltage",
+    "label": "Voltage",
+    "unit": "V",
+    "type": "number",
+    "default": 5.0,
+    "min": 0,
+    "max": 30,
+    "live": true
+   },
+   {
+    "key": "current_limit",
+    "label": "Current limit",
+    "unit": "A",
+    "type": "number",
+    "default": 1.0,
+    "min": 0.001,
+    "max": 3,
+    "live": true
+   },
+   {
+    "key": "foldback",
+    "label": "Foldback",
+    "type": "bool",
+    "default": true,
+    "live": true
+   },
+   {
+    "key": "output",
+    "label": "Output on",
+    "type": "bool",
+    "default": true
+   }
+  ],
+  "pins": [
+   "POS:power_out:+",
+   "NEG:passive:−"
+  ],
+  "model": {
+   "spice": [
+    "$(el:V:out) $(n:int) $(NEG) {$(ext:vset)}",
+    "$(el:R:out) $(n:int) $(POS) {$(ext:rout)}",
+    "$(el:R:earth) $(NEG) $(gnd) 1e9"
+   ],
+   "ext": [
+    {
+     "name": "vset",
+     "default": "$(voltage)"
+    },
+    {
+     "name": "rout",
+     "default": 0.02
+    }
+   ],
+   "behaviour": "wasm"
+  },
+  "inspector": [
+   {
+    "label": "Set",
+    "value": "$(voltage|V) · $(current_limit|A) limit"
+   },
+   {
+    "label": "Output resistance",
+    "value": "20 mΩ + 50 mV/A sag"
+   }
+  ],
+  "bench": {
+   "art": "psu.bench.svg",
+   "layout": "row",
+   "off_board": true,
+   "size": [
+    20,
+    12
+   ]
+  },
+  "schematic": {
+   "symbol": "none"
+  },
+  "tags": [
+   "instrument",
+   "plugin"
+  ]
+ }
+]

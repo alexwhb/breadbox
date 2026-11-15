@@ -1,0 +1,12 @@
+{
+  "id": "example.sawtooth",
+  "version": "0.1.0",
+  "name": "Sawtooth source",
+  "kind": ["generator"],
+  "summary": "Generator example: a 1 kHz sawtooth source part.",
+  "provides": {
+    "model": "./sawtooth.wasm",
+    "generator": { "part": "sawtooth_source", "name": "Sawtooth source", "period": 0.001, "points": 128, "r_out": 50 }
+  },
+  "permissions": ["drive:pins"]
+}

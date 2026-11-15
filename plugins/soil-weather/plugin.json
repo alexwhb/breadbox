@@ -1,0 +1,57 @@
+{
+  "id": "breadbox.soil-weather",
+  "version": "1.0.0",
+  "name": "Soil & weather pack",
+  "kind": [
+    "world-model"
+  ],
+  "summary": "Evaporation, drainage, rain events and sun position by location.",
+  "description": "Replaces the pots' simple evaporation with one driven by temperature, humidity, light and wind, adds rain storms for outdoor pots (with runoff when the soil is saturated) and tracks the sun's position for the bench location. Pair it with time-warp to watch a week of weather in a minute.",
+  "author": "Breadbox",
+  "license": "MIT",
+  "provides": {
+    "model": "./soil.wasm",
+    "world_model": {
+      "name": "Soil & weather",
+      "replaces": [
+        "evaporation"
+      ],
+      "vars": [
+        "weather.evap_rate_pct_h",
+        "weather.rain_mm_h",
+        "weather.raining",
+        "sun.azimuth_deg",
+        "weather.sun_elevation_deg",
+        "weather.daylight"
+      ]
+    }
+  },
+  "specs": {
+    "evaporation": "≈1.2 %VWC/h indoors at 21 °C / 45 %RH, ×1.6 outdoors",
+    "mean_rain_interval_h": 72,
+    "rain": "1–8 mm/h for 1–4 h",
+    "sun": "NOAA solar position"
+  },
+  "highlights": [
+    {
+      "label": "Evaporation",
+      "value": "T · RH · light · wind"
+    },
+    {
+      "label": "Rain",
+      "value": "storms every ~3 days (outdoor pots)"
+    },
+    {
+      "label": "Sun",
+      "value": "position by location & date"
+    },
+    {
+      "label": "Time-warp",
+      "value": "hours per second"
+    }
+  ],
+  "permissions": [
+    "world:read",
+    "world:write"
+  ]
+}

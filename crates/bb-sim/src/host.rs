@@ -152,11 +152,20 @@ impl HostMcu {
         })
     }
 
-    /// Serial1/2 output → TX waveforms; follows the configured baud.
+    /// Serial1/2 output → TX waveforms; follows the configured baud. Like a real UART the TX
+    /// line idles high from `SerialN.begin()`.
     fn pump_uarts(&mut self) {
         let off = self.offset;
+        let now = self.bench_now();
         for u in 0..self.uarts.len() {
             let port = self.uarts[u].port;
+            if !self.uarts[u].used
+                && self.board.serial_baud(port).is_some()
+                && let Some(tx) = self.uarts[u].tx
+            {
+                self.uarts[u].used = true;
+                self.set_drive(tx, LogicDrive::Output { high: true }, now);
+            }
             if let Some(b) = self.board.serial_baud(port)
                 && b != self.uarts[u].baud
                 && b > 0
@@ -177,12 +186,14 @@ impl HostMcu {
                 let t = t + off;
                 self.serial_out.push((port as usize, t, b));
                 let Some(tx) = self.uarts[u].tx else { continue };
+                let mut ready = t.saturating_sub(frame);
                 if !self.uarts[u].used {
+                    // first byte before we saw begin(): idle high for a frame first
                     self.uarts[u].used = true;
-                    let start = t.saturating_sub(frame);
-                    self.set_drive(tx, LogicDrive::Output { high: true }, start);
+                    self.set_drive(tx, LogicDrive::Output { high: true }, ready);
+                    ready += frame;
                 }
-                for (et, level) in self.uarts[u].enc.encode(&[b], t.saturating_sub(frame)) {
+                for (et, level) in self.uarts[u].enc.encode(&[b], ready) {
                     self.edges.push_back((et, tx, level));
                 }
             }

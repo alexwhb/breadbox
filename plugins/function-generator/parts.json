@@ -1,0 +1,220 @@
+[
+ {
+  "id": "function_generator",
+  "name": "Function generator",
+  "category": "instruments",
+  "icon": "wave",
+  "ref_prefix": "FG",
+  "description": "Bench function generator: OUT (50 Ω) and COM.",
+  "props": [
+   {
+    "key": "shape",
+    "label": "Waveform",
+    "type": "choice",
+    "default": "sine",
+    "options": [
+     {
+      "value": "sine"
+     },
+     {
+      "value": "square"
+     },
+     {
+      "value": "triangle"
+     },
+     {
+      "value": "pulse"
+     },
+     {
+      "value": "noise"
+     },
+     {
+      "value": "arb"
+     }
+    ]
+   },
+   {
+    "key": "frequency",
+    "label": "Frequency",
+    "unit": "Hz",
+    "type": "number",
+    "default": 1000,
+    "min": 0.001,
+    "max": 10000000.0,
+    "live": true
+   },
+   {
+    "key": "amplitude",
+    "label": "Amplitude",
+    "unit": "Vpp",
+    "type": "number",
+    "default": 2.0,
+    "min": 0,
+    "max": 20,
+    "live": true
+   },
+   {
+    "key": "offset",
+    "label": "Offset",
+    "unit": "V",
+    "type": "number",
+    "default": 0.0,
+    "min": -10,
+    "max": 10,
+    "live": true
+   },
+   {
+    "key": "duty",
+    "label": "Duty",
+    "type": "number",
+    "default": 0.5,
+    "min": 0.01,
+    "max": 0.99,
+    "live": true
+   },
+   {
+    "key": "output",
+    "label": "Output on",
+    "type": "bool",
+    "default": true
+   }
+  ],
+  "pins": [
+   "OUT:output",
+   "COM:passive"
+  ],
+  "model": {
+   "spice": [
+    "$(el:B:gen) $(n:g) $(COM) V={$(ext:offset)+$(ext:en)*$(ext:amp)*if($(ext:shape)<0.5,sin(2*pi*$(ext:freq)*time),if($(ext:shape)<1.5,2*u(0.5-fmod(time*$(ext:freq),1))-1,if($(ext:shape)<2.5,1-4*abs(fmod(time*$(ext:freq)+0.25,1)-0.5),if($(ext:shape)<3.5,2*u($(ext:duty)-fmod(time*$(ext:freq),1))-1,if($(ext:shape)<4.5,$(ext:noise),table(fmod(time*$(ext:freq),1),0.0000,$(ext:a0),0.0625,$(ext:a1),0.1250,$(ext:a2),0.1875,$(ext:a3),0.2500,$(ext:a4),0.3125,$(ext:a5),0.3750,$(ext:a6),0.4375,$(ext:a7),0.5000,$(ext:a8),0.5625,$(ext:a9),0.6250,$(ext:a10),0.6875,$(ext:a11),0.7500,$(ext:a12),0.8125,$(ext:a13),0.8750,$(ext:a14),0.9375,$(ext:a15),1,$(ext:a0)))))))}",
+    "$(el:R:out) $(n:g) $(OUT) 50",
+    "$(el:R:earth) $(COM) $(gnd) 0.1"
+   ],
+   "ext": [
+    {
+     "name": "shape",
+     "default": 0
+    },
+    {
+     "name": "freq",
+     "default": "$(frequency)"
+    },
+    {
+     "name": "amp",
+     "default": 1.0
+    },
+    {
+     "name": "offset",
+     "default": "$(offset)"
+    },
+    {
+     "name": "duty",
+     "default": 0.5
+    },
+    {
+     "name": "en",
+     "default": 1
+    },
+    {
+     "name": "noise",
+     "default": 0
+    },
+    {
+     "name": "a0",
+     "default": 0
+    },
+    {
+     "name": "a1",
+     "default": 0
+    },
+    {
+     "name": "a2",
+     "default": 0
+    },
+    {
+     "name": "a3",
+     "default": 0
+    },
+    {
+     "name": "a4",
+     "default": 0
+    },
+    {
+     "name": "a5",
+     "default": 0
+    },
+    {
+     "name": "a6",
+     "default": 0
+    },
+    {
+     "name": "a7",
+     "default": 0
+    },
+    {
+     "name": "a8",
+     "default": 0
+    },
+    {
+     "name": "a9",
+     "default": 0
+    },
+    {
+     "name": "a10",
+     "default": 0
+    },
+    {
+     "name": "a11",
+     "default": 0
+    },
+    {
+     "name": "a12",
+     "default": 0
+    },
+    {
+     "name": "a13",
+     "default": 0
+    },
+    {
+     "name": "a14",
+     "default": 0
+    },
+    {
+     "name": "a15",
+     "default": 0
+    }
+   ],
+   "behaviour": "wasm"
+  },
+  "inspector": [
+   {
+    "label": "Output",
+    "value": "50 Ω"
+   },
+   {
+    "label": "Frequency",
+    "value": "$(frequency|Hz)"
+   },
+   {
+    "label": "Amplitude",
+    "value": "$(amplitude) Vpp"
+   }
+  ],
+  "bench": {
+   "art": "fgen.bench.svg",
+   "layout": "row",
+   "off_board": true,
+   "size": [
+    22,
+    10
+   ]
+  },
+  "schematic": {
+   "symbol": "none"
+  },
+  "tags": [
+   "instrument",
+   "plugin",
+   "spice"
+  ]
+ }
+]

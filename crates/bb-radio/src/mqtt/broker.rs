@@ -369,6 +369,11 @@ impl Broker {
         self.take_out()
     }
 
+    /// Messages waiting in a virtual client's inbox.
+    pub fn virtual_pending(&self, key: ConnKey) -> usize {
+        self.inboxes.get(&key).map_or(0, |v| v.len())
+    }
+
     /// Messages delivered to a virtual client since the last call.
     pub fn virtual_take(&mut self, key: ConnKey) -> Vec<Received> {
         self.inboxes
