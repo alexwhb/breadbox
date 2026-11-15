@@ -54,8 +54,12 @@ impl Bench {
         let t0 = self.time;
         let quiet = self.analog_quiescent() && self.edges.is_empty();
         let single_mcu = self.mcus.len() <= 1;
-        let q = if quiet && single_mcu {
+        let q = if self.mcus.is_empty() || (quiet && single_mcu) {
+            // device watches are exact (the solver stops at every crossing), and nothing else
+            // needs a short quantum
             self.max_quantum
+        } else if single_mcu {
+            self.adaptive_quantum(t0)
         } else {
             self.quantum
         };
@@ -173,6 +177,52 @@ impl Bench {
         }
         self.after_sync(t_sync)?;
         Ok(())
+    }
+
+    /// Longest quantum that keeps MCU inputs on moving analog nets within one sync quantum
+    /// of their threshold crossings: half the predicted time for the fastest-approaching
+    /// watched input to reach its threshold (from its slope since the last sync point).
+    fn adaptive_quantum(&mut self, now: SimTime) -> SimTime {
+        let mut q = self.max_quantum.as_secs_f64();
+        let session = self.analog.session.as_ref();
+        for m in self.mcus.iter_mut() {
+            let (lo, hi) = (m.model.vil * m.vcc, m.model.vih * m.vcc);
+            for p in m.pins.iter_mut() {
+                if !p.watched || !matches!(p.drive, crate::mcu::LogicDrive::Input { .. }) {
+                    continue;
+                }
+                let Some(net) = p.net else { continue };
+                let n = &self.nets[net.0];
+                let (Some(node), Some(s)) = (n.node, session) else {
+                    continue;
+                };
+                let v = s.voltage_at(node);
+                let dt = (now - p.last_t).as_secs_f64();
+                if dt > 0.0 {
+                    let slope = (v - p.last_v) / dt;
+                    let mid = 0.5 * (lo + hi);
+                    // distance to the threshold it is heading for
+                    let dist = if slope > 0.0 && v < hi {
+                        Some(hi - v)
+                    } else if slope < 0.0 && v > lo {
+                        Some(v - lo)
+                    } else if (v - mid).abs() < 0.5 * (hi - lo) {
+                        Some(0.0)
+                    } else {
+                        None
+                    };
+                    if let Some(d) = dist {
+                        let t_cross = d / slope.abs().max(1e-12);
+                        q = q.min(0.5 * t_cross);
+                    }
+                } else {
+                    q = q.min(self.quantum.as_secs_f64());
+                }
+                p.last_v = v;
+                p.last_t = now;
+            }
+        }
+        SimTime::from_secs_f64(q).clamp(self.quantum, self.max_quantum)
     }
 
     /// Advances the analog session to `t`, stopping at every threshold crossing to deliver it.

@@ -324,6 +324,7 @@ struct Ne555 {
     trig_low: bool,
     reset_low: bool,
     cycles: u64,
+    watched_hi: f64,
 }
 
 impl Ne555 {
@@ -341,6 +342,7 @@ impl Ne555 {
             trig_low: false,
             reset_low: false,
             cycles: 0,
+            watched_hi: 0.0,
         }
     }
     fn levels(&self, ctx: &dyn DeviceCtx) -> (f64, f64, f64) {
@@ -351,6 +353,17 @@ impl Ne555 {
             vcc * 2.0 / 3.0
         };
         (vcc, hi, hi / 2.0)
+    }
+    fn rewatch(&mut self, ctx: &mut dyn DeviceCtx) {
+        let (vcc, hi, lo) = self.levels(ctx);
+        let eps = 1e-3 * vcc.max(1.0);
+        if ok(self.thr) {
+            ctx.watch(self.thr, hi - eps, hi);
+        }
+        if ok(self.trig) {
+            ctx.watch(self.trig, lo, lo + eps);
+        }
+        self.watched_hi = hi;
     }
     fn update(&mut self, ctx: &mut dyn DeviceCtx) {
         let before = self.q;
@@ -392,21 +405,26 @@ impl Device for Ne555 {
         "ne555"
     }
     fn on_start(&mut self, ctx: &mut dyn DeviceCtx) {
-        let (vcc, hi, lo) = self.levels(ctx);
-        let eps = 1e-3 * vcc.max(1.0);
+        self.rewatch(ctx);
         if ok(self.thr) {
-            ctx.watch(self.thr, hi - eps, hi);
-            self.thr_high = ctx.pin_voltage(self.thr) > hi;
+            self.thr_high = ctx.pin_voltage(self.thr) > self.watched_hi;
         }
         if ok(self.trig) {
-            ctx.watch(self.trig, lo, lo + eps);
-            self.trig_low = ctx.pin_voltage(self.trig) < lo;
+            self.trig_low = ctx.pin_voltage(self.trig) < self.watched_hi / 2.0;
         }
+        ctx.tick_every(SimTime::from_ms(20));
         if ok(self.reset) {
             ctx.watch(self.reset, 0.4, 1.0);
             self.reset_low = ctx.pin_voltage(self.reset) < 0.7;
         }
         self.update(ctx);
+    }
+    fn on_tick(&mut self, ctx: &mut dyn DeviceCtx) {
+        // follow the supply (battery sag, CTRL modulation)
+        let (_, hi, _) = self.levels(ctx);
+        if (hi - self.watched_hi).abs() > 0.005 * self.watched_hi.abs().max(0.1) {
+            self.rewatch(ctx);
+        }
     }
     fn on_edge(&mut self, ctx: &mut dyn DeviceCtx, pin: usize, high: bool) {
         if pin == self.thr {

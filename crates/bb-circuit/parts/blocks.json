@@ -40,9 +40,9 @@
     ],
     "pins": ["1", "2"],
     "model": {
-      "spice": ["$(el:R) $(1) $(2) {$(resistance)*(1+$(tempco)*1e-6*($(ext:temp)-25))}"],
+      "spice": ["$(el:R) $(1) $(2) {$(ext:r)*(1+$(tempco)*1e-6*($(ext:temp)-25))}"],
       "pro": ["$(el:R) $(1) $(2) $(resistance)"],
-      "ext": [{"name": "temp", "default": 25}],
+      "ext": [{"name": "temp", "default": 25}, {"name": "r", "default": "$(resistance)"}],
       "behaviour": "thermal",
       "device_pins": []
     },
@@ -236,7 +236,7 @@
     "pins": ["plus:power_out:+", "minus:ground:−"],
     "model": {
       "spice": ["$(el:V) $(n:emf) $(minus) {$(ext:emf)}", "$(el:R:int) $(n:emf) $(plus) {$(ext:rint)}"],
-      "ext": [{"name": "emf", "default": 6.4}, {"name": "rint", "default": 0.6}],
+      "ext": [{"name": "emf", "default": "$(emf)"}, {"name": "rint", "default": "$(rint)"}],
       "behaviour": "battery",
       "device_pins": []
     },

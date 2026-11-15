@@ -182,3 +182,13 @@ fn t_junction_in_schematic() {
     let conn = Connectivity::compute(&b.project, &lib);
     assert!(conn.connected((&r1, "2"), (&r2, "2")));
 }
+
+#[test]
+fn bench_examples_have_no_schematic_only_connections() {
+    let lib = lib();
+    for name in ["garden-node", "blink", "night-light", "thermometer", "ble-button", "servo-sweep", "esp32-weather", "555-astable"] {
+        let p = Project::load(format!("{}/../../examples/{name}", env!("CARGO_MANIFEST_DIR"))).unwrap();
+        let c = Connectivity::compute(&p, &lib);
+        assert!(c.ratsnest_bench.is_empty(), "{name}: {:?}", c.ratsnest_bench);
+    }
+}

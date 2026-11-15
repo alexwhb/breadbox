@@ -544,6 +544,18 @@ pub fn validate(def: &PartDef) -> Result<(), String> {
             }
         }
     }
+    for e in &def.model.ext {
+        if let ValueRef::Expr(x) = &e.default {
+            let k = x.trim().trim_start_matches("$(").trim_end_matches(')');
+            let implied = def.props.iter().any(|p| match &p.kind {
+                PropKind::Choice { options, .. } => options.iter().any(|o| o.sets.contains_key(k)),
+                _ => false,
+            });
+            if def.prop(k).is_none() && !implied {
+                return Err(format!("ext `{}` default `{x}` is not a property", e.name));
+            }
+        }
+    }
     if let Some(m) = &def.model.mcu
         && def.pin(&m.vcc_pin).is_none()
     {

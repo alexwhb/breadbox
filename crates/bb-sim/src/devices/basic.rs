@@ -267,7 +267,7 @@ impl Device for Thermal {
     }
     fn on_start(&mut self, ctx: &mut dyn DeviceCtx) {
         ctx.track_element("R");
-        self.temp = ctx.world().temperature_at(self.pos);
+        self.temp = ctx.world().var("air.temp_c").unwrap_or(21.0);
         self.last_t = ctx.now();
         self.last_e = ctx.element_energy("R").unwrap_or(0.0);
         ctx.set_ext("temp", self.temp);
@@ -284,7 +284,8 @@ impl Device for Thermal {
         self.power = ((e - self.last_e) / dt).max(0.0);
         self.last_e = e;
         self.last_t = ctx.now();
-        let amb = ctx.world().temperature_at(self.pos);
+        // ambient = the air (its own heat must not feed back through the world)
+        let amb = ctx.world().var("air.temp_c").unwrap_or(21.0);
         let target = amb + self.power * self.theta;
         lag(&mut self.temp, target, dt, self.tau);
         if (self.temp - self.sent).abs() > 0.1 {

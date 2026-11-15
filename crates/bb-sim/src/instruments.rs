@@ -520,6 +520,17 @@ impl Instruments {
         id
     }
 
+    /// Restarts min / max / average of every probe (the "reset" button of Probes & power).
+    pub fn reset_probe_stats(&mut self) {
+        for p in self.probes.iter_mut() {
+            let v = p.last_v;
+            p.min = v;
+            p.max = v;
+            p.integral = 0.0;
+            p.started = Some(p.last_t);
+        }
+    }
+
     pub fn remove_probe(&mut self, id: &str) {
         self.probes.retain(|p| p.def.id != id);
     }

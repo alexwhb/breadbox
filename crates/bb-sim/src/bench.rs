@@ -106,6 +106,9 @@ pub(crate) struct McuPinRt {
     pub drive: LogicDrive,
     pub damaged: bool,
     pub watched: bool,
+    /// Last sampled voltage (adaptive quantum: slope towards the thresholds).
+    pub last_v: f64,
+    pub last_t: SimTime,
 }
 
 pub(crate) struct McuRt {
@@ -366,9 +369,11 @@ impl Bench {
         for mi in 0..bench.mcus.len() {
             bench.update_vcc(mi);
         }
-        // devices start (initial drives / watches / ticks) at t = 0
+        // devices start (initial drives / watches / ticks) at t = 0, each seeing the circuit
+        // as the previous ones left it
         for i in 0..bench.devices.len() {
             bench.with_device(i, SimTime::ZERO, |d, ctx| d.on_start(ctx));
+            bench.commit_analog(SimTime::ZERO)?;
         }
         bench.settle(SimTime::ZERO)?;
         bench.push_wake(bench.world_dt, WakeKind::World);
@@ -480,6 +485,8 @@ impl Bench {
                         drive: m.core.pin_drive(i),
                         damaged: old.get(i).is_some_and(|o| o.damaged),
                         watched: false,
+                        last_v: 0.0,
+                        last_t: SimTime::ZERO,
                     }
                 })
                 .collect();
@@ -1043,11 +1050,10 @@ impl Bench {
             }
             None => false,
         };
-        // plain SPICE parameters (resistance, capacitance) go straight into the session
+        // plain SPICE values (capacitance, inductance) go straight into the session
         let mut patched = live;
         if !live {
             let spec_el = match key {
-                "resistance" => Some(("R", "r")),
                 "capacitance" => Some(("C", "c")),
                 "inductance" => Some(("L", "l")),
                 _ => None,
@@ -1057,11 +1063,7 @@ impl Bench {
                 && let Some(s) = self.analog.session.as_mut()
                 && s.set_param(&name, param, value).is_ok()
             {
-                patched = !matches!(
-                    self.lib.get(&self.project.part(part).map(|p| p.part.clone()).unwrap_or_default()).map(|d| d.id.clone()).as_deref(),
-                    Some("resistor")
-                );
-                // resistors carry a tempco expression: rebuild keeps it exact
+                patched = true;
             }
         }
         if !patched {

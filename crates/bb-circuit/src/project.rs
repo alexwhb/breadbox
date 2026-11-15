@@ -545,18 +545,35 @@ impl Project {
             .map(|b| bb_core::Pos::new(b.at.x * 0.00254, b.at.y * 0.00254))
     }
 
-    /// Places every part that has no schematic placement on a grid to the right of the
-    /// placed ones (WB-7 auto-placement); returns how many were placed.
+    /// Places every part that has no schematic placement (WB-7 auto-placement): symbols are
+    /// packed in rows to the right of / below the placed ones, each with clearance around its
+    /// pin stubs so no two pins ever touch. Returns how many were placed.
     pub fn auto_place_schematic(&mut self, lib: &Library) -> usize {
+        // extent of a symbol (min/max over body and pin anchors) in local coordinates
+        let extent = |def: &PartDef| -> (f64, f64, f64, f64) {
+            let (w, h) = def.schematic.size;
+            let mut b = (-w / 2.0, -h / 2.0, w / 2.0, h / 2.0);
+            for p in &def.schematic.pins {
+                b.0 = b.0.min(p.x);
+                b.1 = b.1.min(p.y);
+                b.2 = b.2.max(p.x);
+                b.3 = b.3.max(p.y);
+            }
+            b
+        };
         let mut max_x: f64 = 0.0;
+        let mut max_y: f64 = 0.0;
         for p in &self.parts {
-            if let Some(s) = &p.schematic {
-                max_x = max_x.max(s.x);
+            if let (Some(s), Some(def)) = (&p.schematic, lib.get(&p.part)) {
+                let e = extent(def);
+                max_x = max_x.max(s.x + e.2);
+                max_y = max_y.max(s.y + e.3);
             }
         }
-        let start = if max_x > 0.0 { max_x + 20.0 } else { 10.0 };
+        let origin_x = if max_x > 0.0 { max_x + 10.0 } else { 10.0 };
+        let row_width = 140.0;
+        let (mut cx, mut cy, mut row_h) = (origin_x, 10.0, 0.0f64);
         let mut n = 0;
-        let (mut col, mut row) = (0, 0);
         for p in self.parts.iter_mut() {
             if p.schematic.is_some() {
                 continue;
@@ -567,23 +584,22 @@ impl Project {
             if def.schematic.symbol == "none" {
                 continue;
             }
-            let big = def.schematic.size.1 > 10.0;
-            let step_y = if big {
-                def.schematic.size.1 + 8.0
-            } else {
-                12.0
-            };
-            p.schematic = Some(Placement::at(
-                start + col as f64 * 16.0,
-                10.0 + row as f64 * step_y,
-            ));
-            row += 1;
-            if row >= 6 || big {
-                row = 0;
-                col += 1;
+            let (x0, y0, x1, y1) = extent(def);
+            let (w, h) = (x1 - x0 + 6.0, y1 - y0 + 6.0);
+            if cx + w > origin_x + row_width && cx > origin_x {
+                cx = origin_x;
+                cy += row_h;
+                row_h = 0.0;
             }
+            // snap so that anchors stay on the 0.5 grid
+            let px = ((cx - x0 + 3.0) * 2.0).round() / 2.0;
+            let py = ((cy - y0 + 3.0) * 2.0).round() / 2.0;
+            p.schematic = Some(Placement::at(px, py));
+            cx += w;
+            row_h = row_h.max(h);
             n += 1;
         }
+        let _ = max_y;
         n
     }
 

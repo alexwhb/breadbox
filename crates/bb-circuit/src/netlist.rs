@@ -368,6 +368,7 @@ pub fn build(
     for net in &conn.nets {
         let mut spice = net.name == "0";
         let mut cosim = 0;
+        let mut device_pins = 0;
         for t in &net.pins {
             let Some(info) = infos.get(&t.part) else {
                 continue;
@@ -380,11 +381,12 @@ pub fn build(
             }
             if info.dev_pins.contains(&t.pin) {
                 cosim += 1;
+                device_pins += 1;
             }
         }
         net_kind[net.id.0] = if spice {
             NetKind::Analog(net.name.clone())
-        } else if cosim >= 2 && bench {
+        } else if bench && (cosim >= 2 || device_pins >= 1) {
             NetKind::Digital
         } else if !bench && cosim >= 1 {
             // Pro: MCU pins appear on X lines, so the net needs a node
@@ -467,8 +469,15 @@ pub fn build(
                 }
             }
         }
+        let ext_default = |e: &crate::part::ExtDef| match &e.default {
+            ValueRef::Num(v) => *v,
+            ValueRef::Expr(x) => {
+                let k = x.trim().trim_start_matches("$(").trim_end_matches(')');
+                Project::prop_f64(def, p, k).unwrap_or(0.0)
+            }
+        };
         for e in &def.model.ext {
-            ext.push((format!("{}.{}", p.reference, e.name), e.default));
+            ext.push((format!("{}.{}", p.reference, e.name), ext_default(e)));
         }
         // MCU (Pro: an X line with a stub subcircuit)
         if let Some(m) = &def.model.mcu
@@ -668,7 +677,7 @@ pub fn build(
                     .map(|e| {
                         (
                             e.name.clone(),
-                            (format!("{}.{}", p.reference, e.name), e.default),
+                            (format!("{}.{}", p.reference, e.name), ext_default(e)),
                         )
                     })
                     .collect(),

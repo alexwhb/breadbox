@@ -314,7 +314,8 @@ impl PropDef {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ExtDef {
     pub name: String,
-    pub default: f64,
+    /// Initial value: a number or a property reference (`"$(resistance)"`).
+    pub default: ValueRef,
 }
 
 /// MCU model of a board part.
