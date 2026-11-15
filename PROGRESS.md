@@ -7,10 +7,10 @@ reviews and integrates between phases. Agents update **only their own section** 
 
 | phase | agent A | agent B |
 |---|---|---|
-| 1 | `spice` — bb-spice (SPICE-*) | `mcu` — bb-avr + bb-firmware AVR path (MCU-1..5, 7) ✅ |
-| 2 | `sim` — bb-core device contract, bb-circuit, bb-world, bb-sim, parts library (PART-*, SIM-*, WORLD-*) | `radio` — bb-radio (RF-1..6, 8), example firmware sketches, ESP32/Pico host-emulated boards (MCU-6), native-toolchain installer |
-| 3 | `ui-bench` — app shell, theme, Home, Workbench (APP-*, WB-*) | `plugins` — bb-plugin, bb-plugin-sdk, first-party plugins (PLUG-*), bb-lessons engine + content (LES-1,3,4), radio/host-board ↔ sim glue |
-| 4 | `ui-pro` — Firmware screen + debugger UI, Pro mode, PCB (PRO-*, MCU-5 UI) | `ui-plug-les` — Plugins screen, Lessons screen + lesson editor (LES-2,5,6), radio panel (RF-7), instruments on bench |
+| 1 | `spice` — bb-spice (SPICE-*) ✅ | `mcu` — bb-avr + bb-firmware AVR path (MCU-1..5, 7) ✅ |
+| 2 | `sim` — bb-core device contract, bb-circuit, bb-world, bb-sim, parts library (PART-*, SIM-*, WORLD-*) | `radio` — bb-radio (RF-1..6, 8), example sketches, ESP32/Pico host boards (MCU-6), native-toolchain installer ✅ |
+| 3 | `plugins` (after `sim`) — bb-plugin, bb-plugin-sdk, first-party plugins (PLUG-*), bb-lessons engine + content (LES-1,3,4), radio/host-board ↔ sim glue | `ui-core` — app shell, theme, widget kit, Home, Firmware screen (editor/compile/libraries/toolchain), Pro Analysis tab, kittest harness |
+| 4 | `ui-bench` — Workbench (breadboard + schematic canvases, parts palette, world/inspector/probes, serial dock), sim wiring for firmware upload + debugger + radio panel | `ui-plug-les` — Plugins screen, Lessons screen + lesson editor (LES-2,5,6), instruments on bench, PCB (PRO-7) |
 | 5 | `e2e` — headless + GUI e2e suites, perf, fixes (TEST-*) | `qa` — independent spec audit + fixes, bundle-macos, docs |
 
 ## Ownership (current phase)
