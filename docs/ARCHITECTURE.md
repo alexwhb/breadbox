@@ -317,6 +317,12 @@ is a snapshot). Time is counted in oscillator cycles (`cycle()`); `time()` conve
   `sp()`, `sreg()`, `reg(n)`, `rampz()`, `eind()`, `peek/poke(addr)`, `sram()`, `flash_bytes()`,
   `eeprom()`, `io_registers() -> Vec<(name, addr, value)>`, `instruction_at(pc)` (disassembly
   via `Display`), `instructions()`, `last_reset_cause()`, `sleep_mode()`, `in_reset()`.
+  `flash_generation()` changes (process-unique) whenever program memory changes (flash, load,
+  SPM page write) so UIs cache a flash copy. The static table
+  `bb_avr::io_registers(Mcu) -> &'static [IoRegister { name, addr, peripheral }]` (address
+  order; `peripheral` = `"Port B"`, `"Timer/Counter1"`, `"USART0"`, `"ADC"`, `"SPI"`,
+  `"TWI (I2C)"`, `"EEPROM"`, `"External interrupts"`, `"Watchdog"`, `"CPU"`, …) names every
+  I/O register of the 328P and the 2560 (`PORTB` = `0x25`, `PORTH` = `0x102`).
 
 **Toolchain + debugging (`bb-firmware`).**
 
@@ -585,7 +591,8 @@ Example sketches live in `examples/<project>/firmware/<MCU ref>/<sketch>/` with 
 - UI: `Telemetry.radio: Option<RadioTelemetry>` (cards, last 200 packet-log rows with
   `time_label/dir/text/dropped/proto`, conditions, APs, `has_ble`/`has_lora`, phone
   `{scan, connected, services, log, terminal}`, MQTT explorer rows, LAN bridge config/status,
-  bench_pos); `Command::Radio(RadioCommand)` (conditions, APs, LAN bridge, bench position,
+  bench_pos, floor-plan `walls`, `bench_links` = each AP's `Link { distance_m, walls, rssi_dbm,
+  … }` to the bench); `Command::Radio(RadioCommand)` (conditions, APs, LAN bridge, bench position,
   settings, explorer subscribe/unsubscribe/publish, clear log, `Phone(PhoneCommand)`);
   `Command::ExportPacketLog { format, reply }`; `RadioService::uart_transcript(part)` (UART spy).
 
@@ -811,8 +818,9 @@ pub trait BenchLink: Send {
     fn set_breakpoints(&mut self, target: &str, bps: &[BreakpointSpec]); // file (tab), line, enabled, hit_count
     fn debug(&mut self, target: &str, cmd: DebugCommand); // Continue/Pause/StepOver/StepInto/StepOut/StepInstruction
     fn send_serial(&mut self, target: &str, data: &[u8]);
-    fn radio(&mut self, cmd: RadioCommand);           // SetConditions / SetLanBridge / AddBleHat / Mqtt*
+    fn radio(&mut self, cmd: RadioCommand);           // SetConditions / SetLanBridge / SetBenchPos / Mqtt* / Phone
     fn poll(&mut self) -> BenchUpdate;                // never blocks
+    fn watch_memory(&mut self, target: &str) {}       // Memory / I/O view visible: keep its snapshot fresh
 }
 pub struct BenchUpdate { running, sim_time, serial: Vec<SerialLine>, debug: Vec<DebugViewModel>,
                          radio: Option<RadioPanelModel>, pins: Vec<(String, Vec<PinView>)>,
@@ -825,10 +833,18 @@ idle); `poll` drains serial lines / events and returns the latest view models. V
 `DebugViewModel { state: NoFirmware|Running|Paused{reason}|Halted, location: SourcePos { file
 (tab name), line }, function, call_stack: [FrameView], locals/globals: [VarView], registers:
 RegistersView (r0–31, SREG, SP, PC, cycle), breakpoints: [BreakpointView { line, resolved_line,
-hits, enabled }], debug_build }`; `RadioPanelModel { cards: [RadioCardView { label, title,
-status, tone, kind, rows }], log: [PacketRow { time, dir, text, dropped }], conditions:
-NetConditionsView, ble: Option<BleView>, mqtt }` with `RadioPanelModel::from_space(&RadioSpace,
-limit)`; `SerialLine { target, time, text, kind: Normal|System|Net|Warn|Error }`; `BenchEvent::
+hits, enabled }], debug_build, memory: Option<MemoryView> }` — `MemoryView { mcu, sram_start,
+sram, eeprom, flash (Arc buffers; flash cached per `flash_gen`), flash_used, io: [IoRegView {
+name, addr, peripheral, value, prev }], prev_sram, prev_eeprom (the previous pause), sp, x, y,
+z, cycle }` is taken on the engine thread by `bench::memory_snapshot(&Avr, known_flash_gen)` at
+every pause and ~4×/s while running when the UI calls `watch_memory`; `bench::MemoryHistory`
+(per link) fills the flash cache and the previous-pause comparison base. API-level boards have
+none. `RadioPanelModel { cards: [RadioCardView { label, title, status, tone, kind, rows }], log:
+[PacketRow { time, dir, text, dropped }], conditions: NetConditionsView, ble: Option<BleView>,
+mqtt, placement: Option<PlacementView { bench: (x, y) m, aps: [ApPlacement { ssid, channel, x,
+y, distance_m, walls, rssi_dbm }], walls: [WallView] }> }` with
+`RadioPanelModel::from_space(&RadioSpace, limit)` / `bench::placement_from_space`;
+`RadioCommand::SetBenchPos { x, y }` moves the bench (every radio on it); `SerialLine { target, time, text, kind: Normal|System|Net|Warn|Error }`; `BenchEvent::
 {Flashed(UploadReport), BreakpointArmed, Paused, Note, Error}`; `probes` keys match the Pro
 `.op` table (`V(A0)`, `I(D1) avg`, `P(R2)`) for its "bench probe" column. Factories:
 `BenchFactory = Arc<dyn Fn(&BenchSpec) -> Box<dyn BenchLink>>` with `BenchSpec { project_dir,
@@ -887,7 +903,25 @@ image / `examples/fixtures/<sketch>.<board>.elf`.
 `host::compile_host` (ESP32/Pico) on a job; `BuildOutput::output_lines()` fill the Output tab;
 `Diagnostic`s become editor squiggles. "Step · breakpoints" builds `-Og` and arms the gutter's
 breakpoints via `BenchLink::set_breakpoints`; pauses follow the executing line across tabs.
-Bottom tabs: Output · Serial monitor · Debug (call stack, variables, registers + SREG).
+Bottom tabs: Output · Serial monitor · Debug (300 px tall; `debug_panel::debug_tab`, view
+selector "Debug view" = Variables · Memory · I/O registers): Variables = call stack, locals +
+globals, registers + SREG; Memory = "Memory region" SRAM · Flash · EEPROM hex dump (16 B/row
++ ASCII, virtualised `show_rows`, rows labelled `SRAM 0x0100: 00 …`), SP / X / Y / Z outlined in
+SRAM ("Pointers" buttons jump there), bytes changed since the previous pause amber, "Go to
+address" (`0x08f0`, `SP`, `Z`) + "Go"; I/O registers = groups per peripheral in balanced
+columns, rows `PORTB 0x25 0x20 0010 0000` (changed bits amber), "Filter registers". The
+selected target is watched (`watch_memory`) while either view is open; ESP32 / Pico get a
+"needs the cycle-accurate AVR core" empty state. The right column is the Radios panel
+(`radio_panel::radio_panel → RadioPanelOutput { commands, export, bench_pos }`): cards, a
+"Placement" section ("Floor plan" canvas: APs, walls, draggable "Bench position x m, y m" marker, arrows nudge 0.5 m;
+readout `SIM-AP · 3.2 m · 1 wall · -54 dBm`; the drop position is stored in
+`project.radios.bench_pos` via `radio_panel::store_bench_pos`, not an undo step), Packet log with "Export
+pcap-ng…" / "Export CSV…" (`SimBench::export_packet_log`, save dialog or
+`BREADBOX_EXPORT_DIR`, toast with the path), Network conditions (Latency, Jitter 0–200 ms,
+Packet loss, "Drop the AP at t =" + "Drop the AP at (s)" field, LAN bridge) and the Bluetooth
+LE card, whose "Add BLE hat" runs `radio_panel::add_ble_hat` (HM-10 right of the first board,
+VCC→5V / 3V3 on host boards, GND, TXD→D10 / RXD→D11 — ESP32 RX2/TX2, Pico GP1/GP0 — one
+undoable "Add BLE hat" transaction) and starts the bench so the phone scans `HMSoft`.
 
 **Pro → Analysis** (design screen 3): for a project with a circuit the netlist is **synced
 from the schematic** (`screens/pro/sync.rs`: bb-circuit's Pro netlist with world values as
@@ -980,7 +1014,11 @@ prompt → install, Handheld DMM on garden-node A0 ≈ 1.88 V, probe tips dragge
 dial → Ω; local plugin + hot reload, theme, SDK docs, analysis plugin), `tests/lessons.rs`
 (lesson 3 step 3 math mode + hints + working + measurements, break it + Repair, free play;
 the lesson editor → pack → Lessons), `tests/radio_tools.rs` (phone ↔ ble-button notify, MQTT
-explorer `garden/pot1`), `tests/pcb.rs` (blink: auto-place, route, DRC, Gerbers parse back). `BREADBOX_EXPORT_DIR` / `BREADBOX_PROJECTS_DIR` redirect Share and
+explorer `garden/pot1`), `tests/debug_memory.rs` (blink: SRAM / I/O / EEPROM / flash views
+across two pauses, PORTB bit 5, Go to address; API-level empty state;
+`docs/screenshots/firmware-memory.png`), `tests/radio_panel.rs` (garden-node bench drag →
+lower RSSI + stored position, jitter / drop-AP, pcap-ng + CSV export; Add BLE hat → HMSoft;
+`docs/screenshots/radios-placement.png`), `tests/pcb.rs` (blink: auto-place, route, DRC, Gerbers parse back). `BREADBOX_EXPORT_DIR` / `BREADBOX_PROJECTS_DIR` redirect Share and
 bundle imports in tests. GUI tests use `AppOptions::test()` (no persistence,
 no native menu, bench at max speed); compile tests skip gracefully without a toolchain.
 
