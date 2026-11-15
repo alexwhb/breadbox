@@ -464,12 +464,12 @@ fn memory_view(ui: &mut Ui, p: &Palette, st: &mut DebugPanelState, m: &MemoryVie
             let painter = ui.painter();
             painter.line_segment(
                 [hr.left_bottom(), hr.right_bottom()],
-                Stroke::new(1.0, p.border_faint),
+                Stroke::new(1.0, p.border),
             );
             painter.text(
                 pos2(hr.left() + 4.0, hr.center().y - 1.0),
                 egui::Align2::LEFT_CENTER,
-                "address",
+                "addr",
                 mono.clone(),
                 p.text_faint,
             );
@@ -491,14 +491,17 @@ fn memory_view(ui: &mut Ui, p: &Palette, st: &mut DebugPanelState, m: &MemoryVie
                 mono.clone(),
                 p.text_faint,
             );
+            // a whole number of rows, scrolled by whole rows: no half-cut row under the header
+            let visible = ((avail_h - 20.0) / ROW_H).floor().max(3.0);
             let mut area = egui::ScrollArea::vertical()
                 .id_salt(("hex-view", region as u8))
                 .auto_shrink([false, false])
-                .max_height((avail_h - 20.0).max(ROW_H * 3.0));
+                .max_height(visible * ROW_H);
             if let Some((r, row)) = st.scroll_to_row
                 && r == region
             {
-                area = area.vertical_scroll_offset(row as f32 * ROW_H);
+                let top = row.min(rows.saturating_sub(visible as usize));
+                area = area.vertical_scroll_offset(top as f32 * ROW_H);
                 st.scroll_to_row = None;
             }
             area.show_rows(ui, ROW_H, rows, |ui, range| {

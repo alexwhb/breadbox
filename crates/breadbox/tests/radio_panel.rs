@@ -127,6 +127,23 @@ fn placement_conditions_and_packet_log_export_on_garden_node() {
         "{:?} after → (was {moved:?})",
         pos(&h)
     );
+    // the engine's readout catches up with the marker
+    let want = pos(&h).x;
+    assert!(
+        wait_for(&mut h, 30.0, |h| h
+            .state()
+            .ctx
+            .bench
+            .radio
+            .as_ref()
+            .and_then(|r| r.placement.as_ref())
+            .is_some_and(|p| (p.bench.0 - want).abs() < 1e-6)),
+        "placement readout"
+    );
+    assert!(has_label_containing(
+        &h,
+        &format!("SIM-AP · {want:.1} m · 1 wall · ")
+    ));
     h.run_steps(4);
     h.state_mut().ctx.toasts.clear();
     screenshot(&mut h, "radios-placement");
