@@ -265,3 +265,35 @@ fn scripts_are_checked_without_a_world() {
     assert!(World::check_script("moisture = 45 *").is_err());
     assert!(World::check_script(" = 3").is_err());
 }
+
+#[test]
+fn scheduled_watering_waters_every_interval_even_at_high_time_warp() {
+    let mut w = World::new(WorldConfig {
+        time_warp: 3600.0,
+        pots: vec![PotConfig {
+            vwc: 20.0,
+            evaporation: false,
+            schedule: Some(WaterSchedule {
+                every_h: 6.0,
+                ml: 50.0,
+                at_h: 0.0,
+            }),
+            ..PotConfig::default()
+        }],
+        ..WorldConfig::default()
+    })
+    .unwrap();
+    // 24 world hours in one big step: waterings at 6, 12, 18, 24 h
+    w.step(SimTime::from_secs(24));
+    let ev = w.take_events();
+    assert_eq!(ev.len(), 4, "{ev:?}");
+    let vwc = w.snapshot().pots[0].vwc;
+    assert!((vwc - 40.0).abs() < 1e-9, "4 × 50 ml into 1 l: {vwc}");
+    // the schedule is a live setting too
+    w.set("pot1.water_every_h", 0.0);
+    w.step(SimTime::from_secs(48));
+    assert!(w.take_events().is_empty());
+    w.set("pot1.water_every_h", 12.0);
+    w.step(SimTime::from_secs(72));
+    assert_eq!(w.take_events().len(), 2);
+}

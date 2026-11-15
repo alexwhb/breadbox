@@ -218,6 +218,45 @@ impl Panels {
                     sends.push((format!("{}.evaporation", pt.id), evap as u8 as f64));
                     commit = true;
                 }
+                // scheduled watering (WORLD-1): 100 ml every N world hours
+                let cur = pt.schedule.map(|s| s.every_h);
+                let shown = match pt.schedule {
+                    Some(s) => format!("every {} h · {:.0} ml", s.every_h, s.ml),
+                    None => "off".into(),
+                };
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new("Water automatically")
+                            .font(crate::theme::font::ui(13.0))
+                            .color(pal(ui).text_dim),
+                    );
+                    let (_, picked) =
+                        widgets::select(ui, "Water automatically", &shown, 150.0, |ui| {
+                            let mut pick = None;
+                            for (l, v) in [
+                                ("Off", 0.0),
+                                ("Every 6 h", 6.0),
+                                ("Every 12 h", 12.0),
+                                ("Every 24 h", 24.0),
+                                ("Every 48 h", 48.0),
+                            ] {
+                                let on = cur.map_or(v == 0.0, |c| (c - v).abs() < 1e-9);
+                                if widgets::menu_item(ui, l, on, true) {
+                                    pick = Some(v);
+                                }
+                            }
+                            pick
+                        });
+                    if let Some(Some(v)) = picked {
+                        pt.schedule = (v > 0.0).then_some(bb_world::WaterSchedule {
+                            every_h: v,
+                            ml: 100.0,
+                            at_h: 0.0,
+                        });
+                        sends.push((format!("{}.water_every_h", pt.id), v));
+                        commit = true;
+                    }
+                });
             }
             let mut solar = new_cfg.light.mode == bb_world::LightMode::Solar;
             let loc = new_cfg.light.location.name.clone();

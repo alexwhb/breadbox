@@ -144,6 +144,18 @@ pub struct PotConfig {
     pub drainage_per_h: f64,
     /// Bench position of the pot (metres).
     pub pos: Pos,
+    /// Scheduled watering (WORLD-1): `ml` every `every_h` world hours.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schedule: Option<WaterSchedule>,
+}
+
+/// A watering schedule: `ml` millilitres every `every_h` world hours, the first at `at_h`.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct WaterSchedule {
+    pub every_h: f64,
+    pub ml: f64,
+    #[serde(default)]
+    pub at_h: f64,
 }
 
 impl Default for PotConfig {
@@ -160,6 +172,7 @@ impl Default for PotConfig {
             evaporation_scale: 1.0,
             drainage_per_h: 0.8,
             pos: Pos::new(0.20, 0.16),
+            schedule: None,
         }
     }
 }

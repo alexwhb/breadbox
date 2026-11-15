@@ -21,7 +21,7 @@ pub mod sun;
 
 pub use config::{
     AirConfig, Interp, Keyframe, LightConfig, LightMode, ObjectConfig, ObjectKind, PotConfig,
-    Script, Timeline, WorldConfig,
+    Script, Timeline, WaterSchedule, WorldConfig,
 };
 pub use sun::{DateTime, Location, daylight_lux, solar_elevation};
 
@@ -309,7 +309,9 @@ impl World {
         let dt_sim = (now - self.time).as_secs_f64();
         let dt_w = dt_sim * self.cfg.time_warp.max(0.0);
         self.time = now;
+        let before = self.world_secs;
         self.world_secs += dt_w;
+        self.scheduled_watering(before, self.world_secs);
         self.apply_programs();
         self.update_derived();
         self.step_pots(dt_w);
@@ -415,6 +417,31 @@ impl World {
         (0.6 + 0.04 * self.temp_c.max(0.0)) * dryness * light * wet * wind * p.evaporation_scale
     }
 
+    /// Waters every pot whose schedule has a watering time in `(from, to]` world seconds
+    /// (each one, so a big time-warp step still counts every watering; at most 1000 a step).
+    fn scheduled_watering(&mut self, from: f64, to: f64) {
+        let mut due = Vec::new();
+        for p in &self.cfg.pots {
+            let Some(s) = p.schedule else { continue };
+            if s.every_h <= 0.0 || s.ml <= 0.0 {
+                continue;
+            }
+            let (period, first) = (s.every_h * 3600.0, s.at_h * 3600.0);
+            // index of the first watering after `from`
+            let k0 = ((from - first) / period).floor() + 1.0;
+            let mut k = k0.max(0.0);
+            let mut n = 0;
+            while first + k * period <= to && n < 1000 {
+                due.push((p.id.clone(), s.ml));
+                k += 1.0;
+                n += 1;
+            }
+        }
+        for (id, ml) in due {
+            self.water(&id, ml);
+        }
+    }
+
     fn step_pots(&mut self, dt_w: f64) {
         let dt_h = dt_w / 3600.0;
         if dt_h <= 0.0 {
@@ -477,6 +504,24 @@ impl World {
                             // a world-model plugin taking over evaporation sets this to 0
                             "evaporation_scale" => p.evaporation_scale = value.clamp(0.0, 100.0),
                             "field_capacity" => p.field_capacity = value.clamp(0.0, 100.0),
+                            // scheduled watering: interval (h, 0 = off) and amount (ml)
+                            "water_every_h" => {
+                                if value > 0.0 {
+                                    let ml = p.schedule.map(|s| s.ml).unwrap_or(100.0);
+                                    p.schedule = Some(WaterSchedule {
+                                        every_h: value,
+                                        ml,
+                                        at_h: 0.0,
+                                    });
+                                } else {
+                                    p.schedule = None;
+                                }
+                            }
+                            "water_ml" => {
+                                if let Some(s) = p.schedule.as_mut() {
+                                    s.ml = value.max(0.0);
+                                }
+                            }
                             _ => {
                                 self.cfg.vars.insert(key.to_string(), value);
                             }

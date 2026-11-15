@@ -705,3 +705,36 @@ fn hand_object_scripts_and_timelines_drive_the_world() {
         .clone();
     assert_ne!(w.timelines[0].keys[1].value, 900.0);
 }
+
+/// WORLD-1: "Water automatically" in the World panel schedules waterings in the world model
+/// (stored with the project and applied to the running bench).
+#[test]
+fn world_panel_schedules_watering() {
+    scratch();
+    let mut h = harness();
+    open_example(&mut h, "garden-node");
+    assert!(wait_for(&mut h, 30.0, |h| h
+        .state_mut()
+        .ctx
+        .sim()
+        .is_some()));
+    h.get_by_label("Water automatically: off").click();
+    h.run_steps(2);
+    h.get_by_label("Every 6 h").click();
+    h.run_steps(3);
+    let pot = h.state().ctx.circuit.as_ref().unwrap().project().world.pots[0].clone();
+    assert_eq!(pot.schedule.map(|s| s.every_h), Some(6.0), "{pot:?}");
+    assert!(has_label(&h, "Water automatically: every 6 h · 100 ml"));
+    let live = h
+        .state_mut()
+        .ctx
+        .sim()
+        .unwrap()
+        .with_bench(|b| b.world().config().pots[0].schedule)
+        .flatten();
+    assert_eq!(
+        live.map(|s| s.every_h),
+        Some(6.0),
+        "the running world waters too"
+    );
+}
