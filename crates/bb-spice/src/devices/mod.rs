@@ -91,6 +91,9 @@ pub struct Ckt {
     pub srcfact: f64,
     pub noncon: usize,
     pub noncon_devs: Vec<u32>,
+    /// A switch changed state at the start of this transient step (a discontinuity the
+    /// Newton iteration may need more than ITL4 iterations to follow).
+    pub switched: bool,
     pub cur_dev: u32,
     pub opts: SimOptions,
     /// Circuit temperature in kelvin.
@@ -128,6 +131,7 @@ impl Ckt {
             srcfact: 1.0,
             noncon: 0,
             noncon_devs: Vec::new(),
+            switched: false,
             cur_dev: 0,
             opts,
             temp,
