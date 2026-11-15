@@ -113,7 +113,11 @@ mod mac {
                 "File",
                 true,
                 &[
-                    &item("new-playground", "New Playground Project…", Some((cmd, Code::KeyN))),
+                    &item(
+                        "new-playground",
+                        "New Playground Project…",
+                        Some((cmd, Code::KeyN)),
+                    ),
                     &item("new-pro", "New Pro Project…", None),
                     &item("open", "Open Project…", Some((cmd, Code::KeyO))),
                     &PredefinedMenuItem::separator(),
@@ -188,7 +192,12 @@ mod mac {
                 ],
             )
             .ok()?;
-            let help = Submenu::with_items("Help", true, &[&item("docs", "Breadbox Documentation", None)]).ok()?;
+            let help = Submenu::with_items(
+                "Help",
+                true,
+                &[&item("docs", "Breadbox Documentation", None)],
+            )
+            .ok()?;
             for m in [&app, &file, &edit, &view, &sim, &window, &help] {
                 menu.append(m).ok()?;
             }
@@ -221,7 +230,8 @@ mod mac {
 
         pub fn sync(&self, app: &AppCtx) {
             self.theme_dark.set_checked(app.theme == ThemeChoice::Dark);
-            self.theme_light.set_checked(app.theme == ThemeChoice::Light);
+            self.theme_light
+                .set_checked(app.theme == ThemeChoice::Light);
         }
     }
 }
@@ -251,8 +261,14 @@ mod tests {
     #[test]
     fn menu_ids_map_to_commands() {
         assert_eq!(command_for("save"), Some(Command::Save));
-        assert_eq!(command_for("theme-light"), Some(Command::SetTheme(ThemeChoice::Light)));
-        assert_eq!(command_for("pro"), Some(Command::Navigate(Route::Pro(ProTab::Analysis))));
+        assert_eq!(
+            command_for("theme-light"),
+            Some(Command::SetTheme(ThemeChoice::Light))
+        );
+        assert_eq!(
+            command_for("pro"),
+            Some(Command::Navigate(Route::Pro(ProTab::Analysis)))
+        );
         assert_eq!(command_for("nope"), None);
     }
 }

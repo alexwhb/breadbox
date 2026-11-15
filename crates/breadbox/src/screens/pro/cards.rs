@@ -67,12 +67,34 @@ impl AnalysisKind {
     /// Editable fields of the config popover: `(label, hint)`.
     pub fn fields(self) -> &'static [(&'static str, &'static str)] {
         match self {
-            AnalysisKind::Tran => &[("Stop time", "10m"), ("Max step", "1u"), ("Start time", "0")],
-            AnalysisKind::Dc => &[("Sweep", "V1 / lux / temp"), ("Start", "1"), ("Stop", "10k"), ("Mode", "dec / lin / oct"), ("Points or step", "40")],
-            AnalysisKind::Ac => &[("Mode", "dec / lin / oct"), ("Points", "20"), ("Start", "1"), ("Stop", "1meg")],
+            AnalysisKind::Tran => &[
+                ("Stop time", "10m"),
+                ("Max step", "1u"),
+                ("Start time", "0"),
+            ],
+            AnalysisKind::Dc => &[
+                ("Sweep", "V1 / lux / temp"),
+                ("Start", "1"),
+                ("Stop", "10k"),
+                ("Mode", "dec / lin / oct"),
+                ("Points or step", "40"),
+            ],
+            AnalysisKind::Ac => &[
+                ("Mode", "dec / lin / oct"),
+                ("Points", "20"),
+                ("Start", "1"),
+                ("Stop", "1meg"),
+            ],
             AnalysisKind::Mc => &[("Runs", "100"), ("Tolerance", "5%"), ("Seed", "7")],
             AnalysisKind::Temp => &[("Temperatures °C", "-20 0 25 50 85")],
-            AnalysisKind::Noise => &[("Output", "v(out)"), ("Input source", "V1"), ("Mode", "dec"), ("Points", "10"), ("Start", "10"), ("Stop", "100k")],
+            AnalysisKind::Noise => &[
+                ("Output", "v(out)"),
+                ("Input source", "V1"),
+                ("Mode", "dec"),
+                ("Points", "10"),
+                ("Start", "10"),
+                ("Stop", "100k"),
+            ],
             AnalysisKind::Op => &[],
         }
     }
@@ -82,7 +104,11 @@ impl AnalysisKind {
         let g = |i: usize| args.get(i).cloned().unwrap_or_default();
         let kv = |k: &str| {
             args.iter()
-                .find_map(|a| a.to_ascii_lowercase().strip_prefix(&format!("{k}=")).map(str::to_string))
+                .find_map(|a| {
+                    a.to_ascii_lowercase()
+                        .strip_prefix(&format!("{k}="))
+                        .map(str::to_string)
+                })
                 .unwrap_or_default()
         };
         match self {
@@ -92,7 +118,9 @@ impl AnalysisKind {
                 vec![g(1), max, if args.len() >= 3 { g(2) } else { "0".into() }]
             }
             AnalysisKind::Dc => {
-                if args.get(3).is_some_and(|m| ["dec", "lin", "oct"].contains(&m.to_ascii_lowercase().as_str())) {
+                if args.get(3).is_some_and(|m| {
+                    ["dec", "lin", "oct"].contains(&m.to_ascii_lowercase().as_str())
+                }) {
                     vec![g(0), g(1), g(2), g(3), g(4)]
                 } else {
                     vec![g(0), g(1), g(2), "lin".into(), g(3)]
@@ -110,7 +138,12 @@ impl AnalysisKind {
     pub fn from_fields(self, f: &[String]) -> String {
         let g = |i: usize| f.get(i).map(|s| s.trim().to_string()).unwrap_or_default();
         match self {
-            AnalysisKind::Tran => format!("0 {} {} {}", or(&g(0), "10m"), or(&g(2), "0"), or(&g(1), "1u")),
+            AnalysisKind::Tran => format!(
+                "0 {} {} {}",
+                or(&g(0), "10m"),
+                or(&g(2), "0"),
+                or(&g(1), "1u")
+            ),
             AnalysisKind::Dc => {
                 if g(3).eq_ignore_ascii_case("lin") || g(3).is_empty() {
                     format!("{} {} {} {}", g(0), g(1), g(2), g(4))
@@ -118,7 +151,13 @@ impl AnalysisKind {
                     format!("{} {} {} {} {}", g(0), g(1), g(2), g(3), g(4))
                 }
             }
-            AnalysisKind::Ac => format!("{} {} {} {}", or(&g(0), "dec"), or(&g(1), "20"), or(&g(2), "1"), or(&g(3), "1meg")),
+            AnalysisKind::Ac => format!(
+                "{} {} {} {}",
+                or(&g(0), "dec"),
+                or(&g(1), "20"),
+                or(&g(2), "1"),
+                or(&g(3), "1meg")
+            ),
             AnalysisKind::Mc => {
                 let mut s = or(&g(0), "100");
                 if !g(1).is_empty() {
@@ -137,7 +176,11 @@ impl AnalysisKind {
 }
 
 fn or(s: &str, d: &str) -> String {
-    if s.is_empty() { d.to_string() } else { s.to_string() }
+    if s.is_empty() {
+        d.to_string()
+    } else {
+        s.to_string()
+    }
 }
 
 /// A dot-card found in the netlist.
@@ -214,8 +257,13 @@ pub fn summary(card: Option<&CardLine>) -> String {
                 .and_then(|s| v(s))
                 .or_else(|| a.first().and_then(|s| v(s)))
                 .unwrap_or(0.0);
-            format!("{} → {} · step {}", fmt_si(start, "s").trim_end_matches(" s"), fmt_si(stop, "s"), fmt_si(step, "s"))
-                .replace("0 s →", "0 →")
+            format!(
+                "{} → {} · step {}",
+                fmt_si(start, "s").trim_end_matches(" s"),
+                fmt_si(stop, "s"),
+                fmt_si(step, "s")
+            )
+            .replace("0 s →", "0 →")
         }
         AnalysisKind::Dc => {
             let var = a.first().cloned().unwrap_or_default();
@@ -223,23 +271,38 @@ pub fn summary(card: Option<&CardLine>) -> String {
             let hi = a.get(2).and_then(|s| v(s)).unwrap_or(0.0);
             match a.get(3).map(|s| s.to_ascii_lowercase()) {
                 Some(m) if m == "dec" || m == "oct" => {
-                    format!("{var} {} → {} · {}/{m}", fmt_si(lo, ""), fmt_si(hi, ""), a.get(4).cloned().unwrap_or_default())
+                    format!(
+                        "{var} {} → {} · {}/{m}",
+                        fmt_si(lo, ""),
+                        fmt_si(hi, ""),
+                        a.get(4).cloned().unwrap_or_default()
+                    )
                 }
-                _ => format!("{var} {} → {} · step {}", fmt_si(lo, ""), fmt_si(hi, ""), a.get(3).cloned().unwrap_or_default()),
+                _ => format!(
+                    "{var} {} → {} · step {}",
+                    fmt_si(lo, ""),
+                    fmt_si(hi, ""),
+                    a.get(3).cloned().unwrap_or_default()
+                ),
             }
         }
         AnalysisKind::Ac => {
             let n = a.get(1).cloned().unwrap_or_default();
             let lo = a.get(2).and_then(|s| v(s)).unwrap_or(0.0);
             let hi = a.get(3).and_then(|s| v(s)).unwrap_or(0.0);
-            let m = a.first().map(|s| s.to_ascii_lowercase()).unwrap_or_default();
+            let m = a
+                .first()
+                .map(|s| s.to_ascii_lowercase())
+                .unwrap_or_default();
             format!("{} → {} · {n}/{m}", fmt_si(lo, "Hz"), fmt_si(hi, "Hz"))
         }
         AnalysisKind::Mc => {
             let runs = a.first().cloned().unwrap_or_default();
-            let seed = a
-                .iter()
-                .find_map(|x| x.to_ascii_lowercase().strip_prefix("seed=").map(str::to_string));
+            let seed = a.iter().find_map(|x| {
+                x.to_ascii_lowercase()
+                    .strip_prefix("seed=")
+                    .map(str::to_string)
+            });
             match seed {
                 Some(s) => format!("{runs} runs · seed {s}"),
                 None => format!("{runs} runs"),
@@ -257,7 +320,11 @@ pub fn summary(card: Option<&CardLine>) -> String {
             let src = a.get(1).cloned().unwrap_or_default();
             let lo = a.get(4).and_then(|s| v(s)).unwrap_or(0.0);
             let hi = a.get(5).and_then(|s| v(s)).unwrap_or(0.0);
-            format!("{out} ← {src} · {} → {}", fmt_si(lo, "Hz"), fmt_si(hi, "Hz"))
+            format!(
+                "{out} ← {src} · {} → {}",
+                fmt_si(lo, "Hz"),
+                fmt_si(hi, "Hz")
+            )
         }
         AnalysisKind::Op => "bias point".into(),
     }
@@ -286,7 +353,9 @@ pub fn set_enabled(text: &str, kind: AnalysisKind, on: bool) -> String {
 
 /// Replaces (or inserts) the card for `kind` with `args`, enabled.
 pub fn set_card(text: &str, kind: AnalysisKind, args: &str) -> String {
-    let card = format!("{} {}", kind.keyword(), args).trim_end().to_string();
+    let card = format!("{} {}", kind.keyword(), args)
+        .trim_end()
+        .to_string();
     match find(text, kind) {
         Some(c) => {
             let mut lines: Vec<String> = text.lines().map(str::to_string).collect();
@@ -342,7 +411,10 @@ mod tests {
         // enabling a missing analysis inserts its default card before .end
         let ac = set_enabled(NL, AnalysisKind::Ac, true);
         assert!(ac.contains(".ac dec 20 1 1meg\n.end"));
-        assert_eq!(summary(find(&ac, AnalysisKind::Ac).as_ref()), "1 Hz → 1 MHz · 20/dec");
+        assert_eq!(
+            summary(find(&ac, AnalysisKind::Ac).as_ref()),
+            "1 Hz → 1 MHz · 20/dec"
+        );
     }
 
     #[test]
@@ -367,7 +439,10 @@ mod tests {
     fn temperature_sweep_is_a_multi_value_temp() {
         let t = set_enabled(NL, AnalysisKind::Temp, true);
         assert!(t.contains(".temp -20 0 25 50 85"));
-        assert_eq!(summary(find(&t, AnalysisKind::Temp).as_ref()), "-20 … 85 °C · 5 points");
+        assert_eq!(
+            summary(find(&t, AnalysisKind::Temp).as_ref()),
+            "-20 … 85 °C · 5 points"
+        );
         assert!(find("x\n.temp 27\n", AnalysisKind::Temp).is_none());
     }
 }

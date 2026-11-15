@@ -201,10 +201,9 @@ impl BreadboxApp {
         // restore the last project + screen
         if let Some(dir) = &persisted.last_project
             && dir.join("project.json").exists()
+            && let Err(e) = app_ctx.open_project(dir)
         {
-            if let Err(e) = app_ctx.open_project(dir) {
-                log::warn!("could not reopen {}: {e:#}", dir.display());
-            }
+            log::warn!("could not reopen {}: {e:#}", dir.display());
         }
         let route = persisted.route;
         app_ctx.route = if route.needs_project() && app_ctx.project.is_none() {
@@ -275,11 +274,18 @@ impl BreadboxApp {
             .exact_size(theme::size::HEADER)
             .resizable(false)
             .show_separator_line(false)
-            .frame(egui::Frame::new().fill(p.bg_header).inner_margin(egui::Margin::symmetric(16, 0)))
+            .frame(
+                egui::Frame::new()
+                    .fill(p.bg_header)
+                    .inner_margin(egui::Margin::symmetric(16, 0)),
+            )
             .show(ui, |ui| {
                 let r = ui.max_rect();
                 ui.painter().line_segment(
-                    [pos2(r.left() - 16.0, r.bottom() - 0.5), pos2(r.right() + 16.0, r.bottom() - 0.5)],
+                    [
+                        pos2(r.left() - 16.0, r.bottom() - 0.5),
+                        pos2(r.right() + 16.0, r.bottom() - 0.5),
+                    ],
                     Stroke::new(1.0, p.border),
                 );
                 ui.horizontal_centered(|ui| self.top_bar(ui));
@@ -320,7 +326,11 @@ impl BreadboxApp {
             ui.add_space(4.0);
             if let Some(proj) = &self.ctx.project {
                 slash(ui, p);
-                ui.label(egui::RichText::new(&proj.name).font(font::ui(13.0)).color(p.text_dim));
+                ui.label(
+                    egui::RichText::new(&proj.name)
+                        .font(font::ui(13.0))
+                        .color(p.text_dim),
+                );
             }
             // section crumb with a screen switcher
             let section = crumb.unwrap_or_else(|| self.ctx.route.title().to_string());
@@ -340,7 +350,11 @@ impl BreadboxApp {
                 self.ctx.project.as_ref().map(|p| p.mode)
             };
             if let Some(m) = mode {
-                let tone = if m == ProjectMode::Pro { Tone::Info } else { Tone::Neutral };
+                let tone = if m == ProjectMode::Pro {
+                    Tone::Info
+                } else {
+                    Tone::Neutral
+                };
                 widgets::tag(ui, m.label(), tone);
             }
             if is_pro {
@@ -375,9 +389,14 @@ impl BreadboxApp {
         let g = widgets::galley(ui, section, font::ui(13.0), p.text_dim);
         let (r, resp) = ui.allocate_exact_size(vec2(g.size().x + 18.0, 26.0), Sense::click());
         if resp.hovered() {
-            ui.painter().rect_filled(r.expand2(vec2(6.0, 0.0)), CornerRadius::same(6), p.bg_hover);
+            ui.painter()
+                .rect_filled(r.expand2(vec2(6.0, 0.0)), CornerRadius::same(6), p.bg_hover);
         }
-        ui.painter().galley(pos2(r.left(), r.center().y - g.size().y / 2.0), g, p.text_dim);
+        ui.painter().galley(
+            pos2(r.left(), r.center().y - g.size().y / 2.0),
+            g,
+            p.text_dim,
+        );
         Icon::ChevronDown.paint(
             ui.painter(),
             Rect::from_center_size(pos2(r.right() - 6.0, r.center().y), vec2(11.0, 11.0)),
@@ -388,7 +407,10 @@ impl BreadboxApp {
     }
 
     fn section_menu_button(&mut self, ui: &mut Ui) {
-        let resp = Btn::plain("Switch screen").icon_only(Icon::ChevronDown).height(28.0).show(ui);
+        let resp = Btn::plain("Switch screen")
+            .icon_only(Icon::ChevronDown)
+            .height(28.0)
+            .show(ui);
         self.screen_menu(&resp);
     }
 
@@ -406,12 +428,23 @@ impl BreadboxApp {
                     Route::Plugins => Icon::Plug,
                     _ => Icon::Book,
                 };
-                if Btn::plain(r.title()).icon(icon).selected(on).full_width().show(ui).clicked() {
+                if Btn::plain(r.title())
+                    .icon(icon)
+                    .selected(on)
+                    .full_width()
+                    .show(ui)
+                    .clicked()
+                {
                     go = Some(r);
                 }
             }
             ui.separator();
-            if Btn::plain("Home").icon(Icon::Home).full_width().show(ui).clicked() {
+            if Btn::plain("Home")
+                .icon(Icon::Home)
+                .full_width()
+                .show(ui)
+                .clicked()
+            {
                 go = Some(Route::Home);
             }
         });
@@ -425,7 +458,9 @@ impl BreadboxApp {
         let mut push = |c| self.ctx.pending.push(c);
         let cmd = Modifiers::COMMAND;
         let cmd_shift = Modifiers::COMMAND | Modifiers::SHIFT;
-        let consume = |m: Modifiers, k: Key| ctx.input_mut(|i| i.consume_shortcut(&KeyboardShortcut::new(m, k)));
+        let consume = |m: Modifiers, k: Key| {
+            ctx.input_mut(|i| i.consume_shortcut(&KeyboardShortcut::new(m, k)))
+        };
         // ⌘⇧ variants first (consume_shortcut ignores extra shift otherwise)
         if consume(cmd_shift, Key::S) {
             push(Command::SaveAs);
@@ -510,7 +545,9 @@ impl BreadboxApp {
                     self.ctx.set_project(None);
                     self.ctx.navigate(Route::Home);
                 } else {
-                    self.ctx.egui.send_viewport_cmd(egui::ViewportCommand::Close);
+                    self.ctx
+                        .egui
+                        .send_viewport_cmd(egui::ViewportCommand::Close);
                 }
             }
             Command::Navigate(r) => {
@@ -536,7 +573,9 @@ impl BreadboxApp {
                 if let Some(root) = &self.ctx.resources.root {
                     let doc = root.join("docs");
                     if doc.is_dir() {
-                        self.ctx.egui.open_url(egui::OpenUrl::new_tab(format!("file://{}", doc.display())));
+                        self.ctx
+                            .egui
+                            .open_url(egui::OpenUrl::new_tab(format!("file://{}", doc.display())));
                     }
                 }
             }
@@ -548,7 +587,9 @@ impl BreadboxApp {
                     if let Some(dest) = platform::save_folder("Save project as", &suggested) {
                         match p.save_as(&dest) {
                             Ok(np) => {
-                                self.ctx.toasts.success(format!("Saved a copy to {}", np.dir.display()));
+                                self.ctx
+                                    .toasts
+                                    .success(format!("Saved a copy to {}", np.dir.display()));
                                 let route = self.ctx.route;
                                 self.ctx.set_project(Some(np));
                                 self.ctx.navigate(route);
@@ -629,7 +670,11 @@ impl BreadboxApp {
 }
 
 fn slash(ui: &mut Ui, p: &theme::Palette) {
-    ui.label(egui::RichText::new("/").font(font::ui(13.0)).color(p.text_ghost));
+    ui.label(
+        egui::RichText::new("/")
+            .font(font::ui(13.0))
+            .color(p.text_ghost),
+    );
 }
 
 impl eframe::App for BreadboxApp {

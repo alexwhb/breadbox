@@ -71,12 +71,59 @@ pub fn highlight(lang: Lang, text: &str) -> Vec<(Range<usize>, Tok)> {
 }
 
 const CPP_KEYWORDS: &[&str] = &[
-    "alignas", "alignof", "asm", "auto", "break", "case", "catch", "class", "const", "constexpr",
-    "continue", "default", "delete", "do", "else", "enum", "explicit", "extern", "false", "for",
-    "friend", "goto", "if", "inline", "namespace", "new", "noexcept", "nullptr", "operator",
-    "override", "private", "protected", "public", "register", "return", "sizeof", "static",
-    "static_assert", "struct", "switch", "template", "this", "throw", "true", "try", "typedef",
-    "typename", "union", "using", "virtual", "volatile", "while", "PROGMEM",
+    "alignas",
+    "alignof",
+    "asm",
+    "auto",
+    "break",
+    "case",
+    "catch",
+    "class",
+    "const",
+    "constexpr",
+    "continue",
+    "default",
+    "delete",
+    "do",
+    "else",
+    "enum",
+    "explicit",
+    "extern",
+    "false",
+    "for",
+    "friend",
+    "goto",
+    "if",
+    "inline",
+    "namespace",
+    "new",
+    "noexcept",
+    "nullptr",
+    "operator",
+    "override",
+    "private",
+    "protected",
+    "public",
+    "register",
+    "return",
+    "sizeof",
+    "static",
+    "static_assert",
+    "struct",
+    "switch",
+    "template",
+    "this",
+    "throw",
+    "true",
+    "try",
+    "typedef",
+    "typename",
+    "union",
+    "using",
+    "virtual",
+    "volatile",
+    "while",
+    "PROGMEM",
 ];
 
 const CPP_TYPES: &[&str] = &[
@@ -173,7 +220,10 @@ fn cpp(text: &str) -> Vec<(Range<usize>, Tok)> {
         // numbers
         if c.is_ascii_digit() || (c == b'.' && i + 1 < n && b[i + 1].is_ascii_digit()) {
             let mut e = i;
-            if c == b'0' && i + 1 < n && (b[i + 1] == b'x' || b[i + 1] == b'X' || b[i + 1] == b'b' || b[i + 1] == b'B') {
+            if c == b'0'
+                && i + 1 < n
+                && (b[i + 1] == b'x' || b[i + 1] == b'X' || b[i + 1] == b'b' || b[i + 1] == b'B')
+            {
                 e += 2;
                 while e < n && b[e].is_ascii_hexdigit() {
                     e += 1;
@@ -351,11 +401,10 @@ fn spice(text: &str) -> Vec<(Range<usize>, Tok)> {
                         let is_last = pi + 1 == positional.len();
                         if model_last && is_last && !is_spice_number(s) && pi >= 2 {
                             spans.push((t.clone(), Tok::Model));
-                        } else if matches!(kind, b'R' | b'C' | b'L') && pi == 2 && is_spice_number(s) {
-                            spans.push((t.clone(), Tok::Number));
-                        } else if matches!(kind, b'V' | b'I' | b'E' | b'F' | b'G' | b'H' | b'B')
-                            && pi >= 2
-                            && is_spice_number(s)
+                        } else if is_spice_number(s)
+                            && ((matches!(kind, b'R' | b'C' | b'L') && pi == 2)
+                                || (matches!(kind, b'V' | b'I' | b'E' | b'F' | b'G' | b'H' | b'B')
+                                    && pi >= 2))
                         {
                             spans.push((t.clone(), Tok::Number));
                         }
@@ -449,7 +498,10 @@ mod tests {
         assert!(t.contains(&("int", Tok::Type)));
         assert!(t.contains(&("// capacitive probe J1", Tok::Comment)));
         assert!(t.contains(&("SoftwareSerial", Tok::Type)));
-        assert!(!t.iter().any(|(s, _)| *s == "esp"), "a declaration, not a call");
+        assert!(
+            !t.iter().any(|(s, _)| *s == "esp"),
+            "a declaration, not a call"
+        );
         assert!(t.contains(&("3", Tok::Number)));
         assert!(t.contains(&("void", Tok::Type)));
         assert!(t.contains(&("setup", Tok::Function)));
@@ -458,7 +510,10 @@ mod tests {
         assert!(t.contains(&("if", Tok::Keyword)));
         assert!(t.contains(&("\"garden/pot1\"", Tok::String)));
         // identifiers that are neither keywords nor calls stay plain
-        assert!(!t.iter().any(|(s, _)| *s == "SOIL_PIN" || *s == "A0" || *s == "Serial"));
+        assert!(
+            !t.iter()
+                .any(|(s, _)| *s == "SOIL_PIN" || *s == "A0" || *s == "Serial")
+        );
     }
 
     #[test]
@@ -476,7 +531,10 @@ mod tests {
         let t = tokens(Lang::Spice, src);
         assert_eq!(t[0], ("* garden-node — generated, editable", Tok::Comment));
         assert!(t.contains(&("5", Tok::Number)));
-        assert!(!t.contains(&("0", Tok::Number)), "node 0 stays plain: {t:?}");
+        assert!(
+            !t.contains(&("0", Tok::Number)),
+            "node 0 stays plain: {t:?}"
+        );
         assert!(t.contains(&("RL", Tok::Model)));
         assert!(t.contains(&("CAPSOIL", Tok::Model)));
         assert!(t.contains(&("42", Tok::Number)));
@@ -488,13 +546,18 @@ mod tests {
         assert!(t.contains(&("180", Tok::Number)));
         assert!(t.contains(&("10k", Tok::Number)));
         assert!(t.contains(&(".tran", Tok::Directive)));
-        assert!(!t.contains(&("10m", Tok::Number)), "analysis cards stay plain");
+        assert!(
+            !t.contains(&("10m", Tok::Number)),
+            "analysis cards stay plain"
+        );
         assert!(t.contains(&(".end", Tok::Directive)));
     }
 
     #[test]
     fn spice_numbers() {
-        for s in ["5", "220", "10k", "4.7k", "1u", "1e-19", "2meg", "-0.7", "5%", "100nF"] {
+        for s in [
+            "5", "220", "10k", "4.7k", "1u", "1e-19", "2meg", "-0.7", "5%", "100nF",
+        ] {
             assert!(is_spice_number(s), "{s}");
         }
         for s in ["A0", "VCC", "N1", "", "-", "lux"] {

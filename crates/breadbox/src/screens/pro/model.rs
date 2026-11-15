@@ -114,7 +114,10 @@ pub fn prepare(text: &str) -> (String, Option<Arc<bb_spice::Library>>) {
     let lower = text.to_ascii_lowercase();
     let needs: Vec<&str> = demo::STUB_PARTS
         .iter()
-        .filter(|(name, _)| lower.contains(&name.to_ascii_lowercase()) && !lower.contains(&format!(".subckt {}", name.to_ascii_lowercase())))
+        .filter(|(name, _)| {
+            lower.contains(&name.to_ascii_lowercase())
+                && !lower.contains(&format!(".subckt {}", name.to_ascii_lowercase()))
+        })
         .map(|(name, _)| *name)
         .collect();
     if needs.is_empty() {
@@ -148,7 +151,8 @@ pub fn strip_text_params(text: &str) -> String {
                 .split_whitespace()
                 .filter(|tok| match tok.split_once('=') {
                     Some((_, v)) => {
-                        let fileish = v.contains('.') && v.chars().next().is_some_and(|c| c.is_ascii_alphabetic());
+                        let fileish = v.contains('.')
+                            && v.chars().next().is_some_and(|c| c.is_ascii_alphabetic());
                         !fileish
                     }
                     None => true,
@@ -205,7 +209,9 @@ fn is_top_node(name: &str) -> bool {
 fn variation(v: &[f64]) -> f64 {
     let (lo, hi) = v
         .iter()
-        .fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), x| (a.min(*x), b.max(*x)));
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), x| {
+            (a.min(*x), b.max(*x))
+        });
     if lo.is_finite() { hi - lo } else { 0.0 }
 }
 
@@ -259,7 +265,11 @@ fn series(plot: &Plot, name: &str) -> Option<Vec<[f64; 2]>> {
 }
 
 fn mean(v: &[f64]) -> f64 {
-    if v.is_empty() { 0.0 } else { v.iter().sum::<f64>() / v.len() as f64 }
+    if v.is_empty() {
+        0.0
+    } else {
+        v.iter().sum::<f64>() / v.len() as f64
+    }
 }
 
 /// Time-weighted average over a transient plot.
@@ -274,66 +284,95 @@ fn time_avg(t: &[f64], v: &[f64]) -> f64 {
     acc / (t[t.len() - 1] - t[0]).max(1e-30)
 }
 
-pub fn build_view(results: &Results, nl: &Netlist, text: &str, profile: &Profile, p: &Palette) -> ViewData {
+pub fn build_view(
+    results: &Results,
+    nl: &Netlist,
+    text: &str,
+    profile: &Profile,
+    p: &Palette,
+) -> ViewData {
     let nom = nominal_run(results, text);
     let palette = [p.accent, p.info, p.text, p.trace_blue, p.ok, p.trace_yellow];
     let mut warnings: Vec<String> = results.warnings.iter().map(|w| w.to_string()).collect();
     warnings.truncate(20);
 
     // ---- transient
-    let tran = results.runs.get(nom).and_then(|r| r.plot(PlotKind::Tran)).map(|plot| {
-        let names: Vec<String> = plot.names().map(str::to_string).collect();
-        let mut chosen: Vec<String> = profile
-            .tran_traces
-            .iter()
-            .filter(|n| names.contains(n))
-            .cloned()
-            .collect();
-        if chosen.is_empty() {
-            let best_v = names
+    let tran = results
+        .runs
+        .get(nom)
+        .and_then(|r| r.plot(PlotKind::Tran))
+        .map(|plot| {
+            let names: Vec<String> = plot.names().map(str::to_string).collect();
+            let mut chosen: Vec<String> = profile
+                .tran_traces
                 .iter()
-                .filter(|n| is_top_node(n))
-                .max_by(|a, b| {
-                    variation(&plot.real(a).unwrap_or_default()).total_cmp(&variation(&plot.real(b).unwrap_or_default()))
-                })
-                .cloned();
-            let best_i = names
-                .iter()
-                .filter(|n| n.starts_with("i(d") || n.starts_with("i(q") || n.starts_with("i(r"))
-                .filter(|n| !n.contains('.'))
-                .max_by(|a, b| {
-                    variation(&plot.real(a).unwrap_or_default()).total_cmp(&variation(&plot.real(b).unwrap_or_default()))
-                })
-                .cloned();
-            chosen.extend(best_v);
-            chosen.extend(best_i.filter(|n| variation(&plot.real(n).unwrap_or_default()) > 1e-9));
-        }
-        let mut traces = Vec::new();
-        let mut has_current = false;
-        for (k, n) in chosen.iter().enumerate() {
-            let Some(pts) = series(plot, n) else { continue };
-            let current = n.starts_with("i(");
-            let mut t = Trace::new(upper(n), palette[k % palette.len()], pts).width(if current { 1.6 } else { 2.0 });
-            if current && k > 0 {
-                t = t.right();
-                has_current = true;
+                .filter(|n| names.contains(n))
+                .cloned()
+                .collect();
+            if chosen.is_empty() {
+                let best_v = names
+                    .iter()
+                    .filter(|n| is_top_node(n))
+                    .max_by(|a, b| {
+                        variation(&plot.real(a).unwrap_or_default())
+                            .total_cmp(&variation(&plot.real(b).unwrap_or_default()))
+                    })
+                    .cloned();
+                let best_i = names
+                    .iter()
+                    .filter(|n| {
+                        n.starts_with("i(d") || n.starts_with("i(q") || n.starts_with("i(r")
+                    })
+                    .filter(|n| !n.contains('.'))
+                    .max_by(|a, b| {
+                        variation(&plot.real(a).unwrap_or_default())
+                            .total_cmp(&variation(&plot.real(b).unwrap_or_default()))
+                    })
+                    .cloned();
+                chosen.extend(best_v);
+                chosen
+                    .extend(best_i.filter(|n| variation(&plot.real(n).unwrap_or_default()) > 1e-9));
             }
-            traces.push(t);
-        }
-        let cursors = traces.first().and_then(|t| crate::widgets::plot::auto_cursors(&t.points));
-        let title = match &profile.tran_title {
-            Some(t) => format!(".tran — {t}"),
-            None => format!(".tran — {}", traces.iter().map(|t| t.name.clone()).collect::<Vec<_>>().join(", ")),
-        };
-        TranView {
-            title,
-            y_unit: if traces.first().is_some_and(|t| t.name.starts_with('I')) { "A".into() } else { "V".into() },
-            y2_unit: has_current.then(|| "mA".into()),
-            traces,
-            cursors,
-            plot: plot.clone(),
-        }
-    });
+            let mut traces = Vec::new();
+            let mut has_current = false;
+            for (k, n) in chosen.iter().enumerate() {
+                let Some(pts) = series(plot, n) else { continue };
+                let current = n.starts_with("i(");
+                let mut t = Trace::new(upper(n), palette[k % palette.len()], pts)
+                    .width(if current { 1.6 } else { 2.0 });
+                if current && k > 0 {
+                    t = t.right();
+                    has_current = true;
+                }
+                traces.push(t);
+            }
+            let cursors = traces
+                .first()
+                .and_then(|t| crate::widgets::plot::auto_cursors(&t.points));
+            let title = match &profile.tran_title {
+                Some(t) => format!(".tran — {t}"),
+                None => format!(
+                    ".tran — {}",
+                    traces
+                        .iter()
+                        .map(|t| t.name.clone())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+            };
+            TranView {
+                title,
+                y_unit: if traces.first().is_some_and(|t| t.name.starts_with('I')) {
+                    "A".into()
+                } else {
+                    "V".into()
+                },
+                y2_unit: has_current.then(|| "mA".into()),
+                traces,
+                cursors,
+                plot: plot.clone(),
+            }
+        });
 
     // ---- DC sweep (+ .step family)
     let family = results.family(PlotKind::Dc);
@@ -348,12 +387,16 @@ pub fn build_view(results: &Results, nl: &Netlist, text: &str, profile: &Profile
                     .iter()
                     .filter(|n| is_top_node(n))
                     .max_by(|a, b| {
-                        variation(&first.real(a).unwrap_or_default()).total_cmp(&variation(&first.real(b).unwrap_or_default()))
+                        variation(&first.real(a).unwrap_or_default())
+                            .total_cmp(&variation(&first.real(b).unwrap_or_default()))
                     })
                     .cloned()
             })
             .unwrap_or_default();
-        let x_name = first.scale().map(|s| s.name.clone()).unwrap_or_else(|| "sweep".into());
+        let x_name = first
+            .scale()
+            .map(|s| s.name.clone())
+            .unwrap_or_else(|| "sweep".into());
         let x_log = text.lines().any(|l| {
             let t = l.trim().to_ascii_lowercase();
             t.starts_with(".dc") && (t.contains(" dec ") || t.contains(" oct "))
@@ -361,7 +404,9 @@ pub fn build_view(results: &Results, nl: &Netlist, text: &str, profile: &Profile
         let colors = [p.trace_blue, p.accent, p.text, p.ok, p.info, p.trace_yellow];
         let mut traces = Vec::new();
         for (k, (run, plot)) in family.iter().enumerate() {
-            let Some(pts) = series(plot, &vector) else { continue };
+            let Some(pts) = series(plot, &vector) else {
+                continue;
+            };
             let label = if run.params.is_empty() {
                 upper(&vector)
             } else {
@@ -385,10 +430,22 @@ pub fn build_view(results: &Results, nl: &Netlist, text: &str, profile: &Profile
         let marker = params.get(&x_name.to_ascii_lowercase()).and_then(|x0| {
             let pts = &traces.get(nom.min(traces.len().saturating_sub(1)))?.points;
             let y = interp(pts, *x0)?;
-            let unit = if x_name.eq_ignore_ascii_case("lux") { " lx" } else { "" };
-            Some((*x0, y, format!("op: {}{unit} → {:.2} V", fmt_si(*x0, ""), y)))
+            let unit = if x_name.eq_ignore_ascii_case("lux") {
+                " lx"
+            } else {
+                ""
+            };
+            Some((
+                *x0,
+                y,
+                format!("op: {}{unit} → {:.2} V", fmt_si(*x0, ""), y),
+            ))
         });
-        let stepped = !results.runs.first().map(|r| r.params.is_empty()).unwrap_or(true);
+        let stepped = !results
+            .runs
+            .first()
+            .map(|r| r.params.is_empty())
+            .unwrap_or(true);
         let title = format!(
             ".dc{} — {}",
             if stepped { " + .step" } else { "" },
@@ -400,7 +457,13 @@ pub fn build_view(results: &Results, nl: &Netlist, text: &str, profile: &Profile
         DcView {
             title,
             traces,
-            x_unit: if x_name.eq_ignore_ascii_case("lux") { "lx".into() } else if x_name.eq_ignore_ascii_case("temp") { "°C".into() } else { String::new() },
+            x_unit: if x_name.eq_ignore_ascii_case("lux") {
+                "lx".into()
+            } else if x_name.eq_ignore_ascii_case("temp") {
+                "°C".into()
+            } else {
+                String::new()
+            },
             x_log,
             marker,
             x_name,
@@ -425,7 +488,11 @@ pub fn build_view(results: &Results, nl: &Netlist, text: &str, profile: &Profile
             })?;
         let d = mc.distribution(&vector)?;
         let bins = d.histogram(12);
-        let tol = nl.mc.as_ref().and_then(|m| m.tol).map(|t| format!("{}% R tol", (t * 100.0).round()));
+        let tol = nl
+            .mc
+            .as_ref()
+            .and_then(|m| m.tol)
+            .map(|t| format!("{}% R tol", (t * 100.0).round()));
         let mut stats = format!("μ {:.2} V · σ {:.2} V", d.mean, d.sigma);
         if let Some(t) = tol {
             stats.push_str(&format!(" · {t}"));
@@ -446,58 +513,66 @@ pub fn build_view(results: &Results, nl: &Netlist, text: &str, profile: &Profile
     });
 
     // ---- AC / Bode
-    let ac = results.runs.get(nom).and_then(|r| r.plot(PlotKind::Ac)).map(|plot| {
-        let names: Vec<String> = plot.names().map(str::to_string).collect();
-        let out = names
-            .iter()
-            .filter(|n| is_top_node(n))
-            .filter_map(|n| plot.vector(n).map(|v| (n.clone(), v)))
-            .max_by(|a, b| {
-                let spread = |v: &bb_spice::Vector| {
-                    let m: Vec<f64> = (0..v.len()).map(|i| v.complex_at(i).abs()).collect();
-                    variation(&m)
-                };
-                spread(a.1).total_cmp(&spread(b.1))
-            })
-            .map(|x| x.0)
-            .unwrap_or_default();
-        let f = plot.scale_values();
-        let (mut mag, mut ph) = (Vec::new(), Vec::new());
-        if let Some(v) = plot.vector(&out) {
-            for (i, fi) in f.iter().enumerate() {
-                let c = v.complex_at(i);
-                mag.push([*fi, 20.0 * c.abs().max(1e-30).log10()]);
-                ph.push([*fi, c.arg().to_degrees()]);
+    let ac = results
+        .runs
+        .get(nom)
+        .and_then(|r| r.plot(PlotKind::Ac))
+        .map(|plot| {
+            let names: Vec<String> = plot.names().map(str::to_string).collect();
+            let out = names
+                .iter()
+                .filter(|n| is_top_node(n))
+                .filter_map(|n| plot.vector(n).map(|v| (n.clone(), v)))
+                .max_by(|a, b| {
+                    let spread = |v: &bb_spice::Vector| {
+                        let m: Vec<f64> = (0..v.len()).map(|i| v.complex_at(i).abs()).collect();
+                        variation(&m)
+                    };
+                    spread(a.1).total_cmp(&spread(b.1))
+                })
+                .map(|x| x.0)
+                .unwrap_or_default();
+            let f = plot.scale_values();
+            let (mut mag, mut ph) = (Vec::new(), Vec::new());
+            if let Some(v) = plot.vector(&out) {
+                for (i, fi) in f.iter().enumerate() {
+                    let c = v.complex_at(i);
+                    mag.push([*fi, 20.0 * c.abs().max(1e-30).log10()]);
+                    ph.push([*fi, c.arg().to_degrees()]);
+                }
             }
-        }
-        AcView {
-            title: format!(".ac — Bode of {}", upper(&out)),
-            mag: vec![Trace::new(format!("|{}| dB", upper(&out)), p.accent, mag)],
-            phase: vec![Trace::new(format!("∠{} °", upper(&out)), p.info, ph).width(1.6)],
-            plot: plot.clone(),
-        }
-    });
+            AcView {
+                title: format!(".ac — Bode of {}", upper(&out)),
+                mag: vec![Trace::new(format!("|{}| dB", upper(&out)), p.accent, mag)],
+                phase: vec![Trace::new(format!("∠{} °", upper(&out)), p.info, ph).width(1.6)],
+                plot: plot.clone(),
+            }
+        });
 
     // ---- noise
-    let noise = results.runs.get(nom).and_then(|r| r.plot(PlotKind::Noise)).map(|plot| {
-        let traces: Vec<Trace> = plot
-            .names()
-            .filter(|n| n.contains("onoise") && !n.contains('_'))
-            .take(2)
-            .filter_map(|n| series(plot, n).map(|pts| Trace::new(n.to_string(), p.accent, pts)))
-            .collect();
-        let total = results
-            .runs
-            .get(nom)
-            .and_then(|r| r.plot(PlotKind::NoiseTotal))
-            .and_then(|t| t.value("onoise_total"))
-            .map(|v| format!("integrated output noise {}", fmt_readout(v, "V", 2)));
-        NoiseView {
-            title: ".noise — output noise density".into(),
-            traces,
-            total,
-        }
-    });
+    let noise = results
+        .runs
+        .get(nom)
+        .and_then(|r| r.plot(PlotKind::Noise))
+        .map(|plot| {
+            let traces: Vec<Trace> = plot
+                .names()
+                .filter(|n| n.contains("onoise") && !n.contains('_'))
+                .take(2)
+                .filter_map(|n| series(plot, n).map(|pts| Trace::new(n.to_string(), p.accent, pts)))
+                .collect();
+            let total = results
+                .runs
+                .get(nom)
+                .and_then(|r| r.plot(PlotKind::NoiseTotal))
+                .and_then(|t| t.value("onoise_total"))
+                .map(|v| format!("integrated output noise {}", fmt_readout(v, "V", 2)));
+            NoiseView {
+                title: ".noise — output noise density".into(),
+                traces,
+                total,
+            }
+        });
 
     // ---- operating point
     let mut op = Vec::new();
@@ -515,7 +590,10 @@ pub fn build_view(results: &Results, nl: &Netlist, text: &str, profile: &Profile
     if let Some(tp) = results.runs.get(nom).and_then(|r| r.plot(PlotKind::Tran)) {
         let t = tp.scale_values();
         let names: Vec<String> = tp.names().map(str::to_string).collect();
-        for n in names.iter().filter(|n| n.starts_with("i(d") && !n.contains('.')) {
+        for n in names
+            .iter()
+            .filter(|n| n.starts_with("i(d") && !n.contains('.'))
+        {
             let avg = time_avg(&t, &tp.real(n).unwrap_or_default());
             if avg.abs() > 1e-6 {
                 op.push(OpRow {
@@ -532,7 +610,9 @@ pub fn build_view(results: &Results, nl: &Netlist, text: &str, profile: &Profile
                 continue;
             };
             let vb = node_series(tp, &b).unwrap_or_else(|| vec![0.0; va.len()]);
-            let pw: Vec<f64> = (0..i.len().min(va.len()).min(vb.len())).map(|k| (va[k] - vb[k]) * i[k]).collect();
+            let pw: Vec<f64> = (0..i.len().min(va.len()).min(vb.len()))
+                .map(|k| (va[k] - vb[k]) * i[k])
+                .collect();
             let avg = time_avg(&t, &pw);
             if avg.abs() > 1e-3 {
                 op.push(OpRow {
@@ -544,7 +624,13 @@ pub fn build_view(results: &Results, nl: &Netlist, text: &str, profile: &Profile
         }
     }
     if !profile.op_rows.is_empty() {
-        let rank = |q: &str| profile.op_rows.iter().position(|r| r == q).unwrap_or(usize::MAX);
+        let rank = |q: &str| {
+            profile
+                .op_rows
+                .iter()
+                .position(|r| r == q)
+                .unwrap_or(usize::MAX)
+        };
         op.sort_by_key(|r| rank(&r.quantity));
     }
 
@@ -557,7 +643,10 @@ pub fn build_view(results: &Results, nl: &Netlist, text: &str, profile: &Profile
         noise,
         op,
         warnings,
-        dc_family: family.iter().map(|(r, p)| (r.label.clone(), (*p).clone())).collect(),
+        dc_family: family
+            .iter()
+            .map(|(r, p)| (r.label.clone(), (*p).clone()))
+            .collect(),
     }
 }
 
@@ -577,7 +666,11 @@ fn resistor_nodes(text: &str) -> Vec<(String, String, String)> {
             if !name.to_ascii_uppercase().starts_with('R') {
                 return None;
             }
-            Some((name.to_string(), it.next()?.to_string(), it.next()?.to_string()))
+            Some((
+                name.to_string(),
+                it.next()?.to_string(),
+                it.next()?.to_string(),
+            ))
         })
         .collect()
 }
@@ -607,7 +700,13 @@ pub fn mixed_info(text: &str) -> MixedInfo {
     let method = lower
         .split_whitespace()
         .find_map(|t| t.strip_prefix("method="))
-        .map(|m| if m.starts_with("gear") { "Gear-2".to_string() } else { m.to_string() })
+        .map(|m| {
+            if m.starts_with("gear") {
+                "Gear-2".to_string()
+            } else {
+                m.to_string()
+            }
+        })
         .unwrap_or_else(|| "trap".into());
     let reltol = lower
         .split_whitespace()
@@ -627,7 +726,8 @@ mod tests {
 
     #[test]
     fn text_params_are_stripped_from_instances_only() {
-        let t = "XU1 VCC 0 A0 ATMEGA328P\n+     fw=garden-node.hex  sync=1u\nR1 a b 1k\n.param f=1.5\n";
+        let t =
+            "XU1 VCC 0 A0 ATMEGA328P\n+     fw=garden-node.hex  sync=1u\nR1 a b 1k\n.param f=1.5\n";
         let s = strip_text_params(t);
         assert!(s.contains("sync=1u") && !s.contains("fw="), "{s}");
         assert!(s.contains("R1 a b 1k\n.param f=1.5\n"));
@@ -651,7 +751,11 @@ mod tests {
         assert_eq!(tran.traces[0].name, "V(D9)");
         assert_eq!(tran.traces[1].name, "I(D1)");
         let (a, b, duty) = tran.cursors.unwrap();
-        assert!(((1.0 / (b - a)) - 490.0).abs() < 2.0, "f = {}", 1.0 / (b - a));
+        assert!(
+            ((1.0 / (b - a)) - 490.0).abs() < 2.0,
+            "f = {}",
+            1.0 / (b - a)
+        );
         assert!((duty - 0.478).abs() < 0.01, "duty {duty}");
         let dc = v.dc.as_ref().unwrap();
         assert_eq!(dc.traces.len(), 3);
@@ -663,17 +767,33 @@ mod tests {
         assert_eq!(label, "op: 180 lx → 2.60 V");
         let mc = v.mc.as_ref().unwrap();
         assert_eq!(mc.title, ".mc — V(A1) spread, 100 runs");
-        assert!(mc.stats.starts_with("μ 2.59") || mc.stats.starts_with("μ 2.60"), "{}", mc.stats);
+        assert!(
+            mc.stats.starts_with("μ 2.59") || mc.stats.starts_with("μ 2.60"),
+            "{}",
+            mc.stats
+        );
         let q: Vec<&str> = v.op.iter().map(|r| r.quantity.as_str()).collect();
         assert_eq!(&q[..3], &["V(VCC)", "V(A0)", "V(A1)"]);
         assert!(q.contains(&"I(D1) avg") && q.contains(&"P(R2)"), "{q:?}");
         let a1 = v.op.iter().find(|r| r.quantity == "V(A1)").unwrap();
-        assert!(a1.value.starts_with("2.59") || a1.value.starts_with("2.60"), "{}", a1.value);
+        assert!(
+            a1.value.starts_with("2.59") || a1.value.starts_with("2.60"),
+            "{}",
+            a1.value
+        );
     }
 
     #[test]
     fn parse_errors_carry_the_line() {
-        let e = run("t\nR1 a\n.op\n", "x.cir", None, &Profile::default(), CancelToken::new(), Arc::new(|_| {})).unwrap_err();
+        let e = run(
+            "t\nR1 a\n.op\n",
+            "x.cir",
+            None,
+            &Profile::default(),
+            CancelToken::new(),
+            Arc::new(|_| {}),
+        )
+        .unwrap_err();
         assert_eq!(e.line, Some(2));
     }
 

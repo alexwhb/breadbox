@@ -14,8 +14,14 @@ use placeholder::Placeholder;
 pub fn default_registry() -> ScreenRegistry {
     let mut r = ScreenRegistry::default();
     r.register(ScreenSlot::Home, Box::new(home::HomeScreen::default()));
-    r.register(ScreenSlot::Firmware, Box::new(firmware::FirmwareScreen::default()));
-    r.register(ScreenSlot::ProAnalysis, Box::new(pro::AnalysisScreen::default()));
+    r.register(
+        ScreenSlot::Firmware,
+        Box::new(firmware::FirmwareScreen::default()),
+    );
+    r.register(
+        ScreenSlot::ProAnalysis,
+        Box::new(pro::AnalysisScreen::default()),
+    );
     // ---- slots filled by later phases (replace the placeholder with the real screen) ----
     r.register(
         ScreenSlot::Workbench,

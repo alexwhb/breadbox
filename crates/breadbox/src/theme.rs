@@ -287,7 +287,10 @@ pub fn font_definitions() -> FontDefinitions {
     add("Inter-Medium", FontData::from_static(INTER_MEDIUM_TTF));
     add("Inter-SemiBold", FontData::from_static(INTER_SEMIBOLD_TTF));
     add("JetBrainsMono-Regular", FontData::from_static(MONO_REGULAR));
-    add("JetBrainsMono-Medium", FontData::from_static(MONO_MEDIUM_TTF));
+    add(
+        "JetBrainsMono-Medium",
+        FontData::from_static(MONO_MEDIUM_TTF),
+    );
     let grotesk = |wght: f32| {
         let mut d = FontData::from_static(GROTESK_VARIABLE);
         d.tweak.coords = VariationCoords::new([(b"wght", wght)]);
@@ -322,7 +325,11 @@ pub fn font_definitions() -> FontDefinitions {
     defs.families.insert(
         FontFamily::Name(font::MONO_MEDIUM.into()),
         chain(
-            &["JetBrainsMono-Medium", "JetBrainsMono-Regular", "Inter-Regular"],
+            &[
+                "JetBrainsMono-Medium",
+                "JetBrainsMono-Regular",
+                "Inter-Regular",
+            ],
             &fallback_mono,
         ),
     );
@@ -463,7 +470,15 @@ pub fn mix(a: Color32, b: Color32, t: f32) -> Color32 {
 
 /// Paints the `.paper` grid (60 px major / 12 px minor) over `rect`.
 pub fn paint_paper(painter: &egui::Painter, rect: egui::Rect, p: &Palette) {
-    paint_grid(painter, rect, p.bg_app, 60.0, 12.0, p.paper_major, p.paper_minor);
+    paint_grid(
+        painter,
+        rect,
+        p.bg_app,
+        60.0,
+        12.0,
+        p.paper_major,
+        p.paper_minor,
+    );
 }
 
 /// Paints the `.dots` canvas grid (80 / 16 px).
@@ -496,7 +511,10 @@ fn paint_grid(
         let is_major = (x / major).round() * major == x;
         let c = if is_major { cmaj } else { cmin };
         shapes.push(egui::Shape::line_segment(
-            [egui::pos2(x + 0.5, rect.top()), egui::pos2(x + 0.5, rect.bottom())],
+            [
+                egui::pos2(x + 0.5, rect.top()),
+                egui::pos2(x + 0.5, rect.bottom()),
+            ],
             Stroke::new(1.0, c),
         ));
         x += minor;
@@ -507,7 +525,10 @@ fn paint_grid(
         let is_major = (y / major).round() * major == y;
         let c = if is_major { cmaj } else { cmin };
         shapes.push(egui::Shape::line_segment(
-            [egui::pos2(rect.left(), y + 0.5), egui::pos2(rect.right(), y + 0.5)],
+            [
+                egui::pos2(rect.left(), y + 0.5),
+                egui::pos2(rect.right(), y + 0.5),
+            ],
             Stroke::new(1.0, c),
         ));
         y += minor;

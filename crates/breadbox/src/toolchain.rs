@@ -137,35 +137,39 @@ impl ToolchainService {
         }
         let found = self.any();
         self.state = ToolchainState::Installing;
-        self.install = Some(Job::spawn("toolchain-install", self.repaint.clone(), move |p| {
-            let mut cb = |ev: InstallProgress| match ev {
-                InstallProgress::Download { bytes, total } => {
-                    p.set_fraction(total.map(|t| bytes as f32 / t.max(1) as f32));
-                }
-                InstallProgress::Step(s) => {
-                    p.set_fraction(None);
-                    p.step(s);
-                }
-                InstallProgress::Log(l) => p.log(l),
-                InstallProgress::Done => p.set_fraction(Some(1.0)),
-            };
-            match found {
-                Some(tc) => {
-                    let mut tc = (*tc).clone();
-                    tc.install_core(&mut cb)?;
-                    if tc.needs_native_tools() {
-                        let opts = bb_firmware::NativeInstallOptions {
-                            app_dir: Toolchain::app_dir(),
-                            ..Default::default()
-                        };
-                        tc.install_native_tools_with(&opts, &mut cb)?;
+        self.install = Some(Job::spawn(
+            "toolchain-install",
+            self.repaint.clone(),
+            move |p| {
+                let mut cb = |ev: InstallProgress| match ev {
+                    InstallProgress::Download { bytes, total } => {
+                        p.set_fraction(total.map(|t| bytes as f32 / t.max(1) as f32));
                     }
-                    cb(InstallProgress::Done);
-                    Ok(tc)
+                    InstallProgress::Step(s) => {
+                        p.set_fraction(None);
+                        p.step(s);
+                    }
+                    InstallProgress::Log(l) => p.log(l),
+                    InstallProgress::Done => p.set_fraction(Some(1.0)),
+                };
+                match found {
+                    Some(tc) => {
+                        let mut tc = (*tc).clone();
+                        tc.install_core(&mut cb)?;
+                        if tc.needs_native_tools() {
+                            let opts = bb_firmware::NativeInstallOptions {
+                                app_dir: Toolchain::app_dir(),
+                                ..Default::default()
+                            };
+                            tc.install_native_tools_with(&opts, &mut cb)?;
+                        }
+                        cb(InstallProgress::Done);
+                        Ok(tc)
+                    }
+                    None => Toolchain::install(&Toolchain::app_dir(), &mut cb),
                 }
-                None => Toolchain::install(&Toolchain::app_dir(), &mut cb),
-            }
-        }));
+            },
+        ));
     }
 
     pub fn refresh_libraries(&mut self) {

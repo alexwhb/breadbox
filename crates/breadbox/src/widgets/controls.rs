@@ -8,8 +8,8 @@
 use super::icons::Icon;
 use crate::theme::{self, Palette, font, pal};
 use eframe::egui::{
-    self, Align2, Color32, CornerRadius, CursorIcon, FontId, Galley, Pos2, Rect, Response, Sense,
-    Stroke, StrokeKind, Ui, Vec2, WidgetInfo, Role, pos2, text::LayoutJob, vec2,
+    self, Align2, Color32, CornerRadius, CursorIcon, FontId, Galley, Pos2, Rect, Response, Role,
+    Sense, Stroke, StrokeKind, Ui, Vec2, WidgetInfo, pos2, text::LayoutJob, vec2,
 };
 use std::sync::Arc;
 
@@ -42,11 +42,8 @@ pub fn galley_spaced(
 
 /// Paints a galley centred vertically at `pos` (left aligned).
 pub fn paint_galley_left(ui: &Ui, g: &Arc<Galley>, left: f32, center_y: f32, color: Color32) {
-    ui.painter().galley(
-        pos2(left, center_y - g.size().y / 2.0),
-        g.clone(),
-        color,
-    );
+    ui.painter()
+        .galley(pos2(left, center_y - g.size().y / 2.0), g.clone(), color);
 }
 
 // ------------------------------------------------------------------------------------------
@@ -177,7 +174,11 @@ impl<'a> Btn<'a> {
             ),
         };
         let g = (!self.icon_only).then(|| galley(ui, self.label, font::medium(fs), p.text));
-        let icon_size = if self.kind == BtnKind::Mini { 12.0 } else { 14.0 };
+        let icon_size = if self.kind == BtnKind::Mini {
+            12.0
+        } else {
+            14.0
+        };
         let mut w = pad * 2.0;
         if let Some(g) = &g {
             w += g.size().x;
@@ -326,7 +327,11 @@ fn button_colors(
             } else {
                 p.bg_raised
             };
-            (fill, Stroke::new(1.0, p.danger.gamma_multiply(0.6)), p.danger_soft)
+            (
+                fill,
+                Stroke::new(1.0, p.danger.gamma_multiply(0.6)),
+                p.danger_soft,
+            )
         }
     }
 }
@@ -441,7 +446,8 @@ fn seg_impl<T: PartialEq + Copy>(
             p.text_muted
         };
         if on {
-            ui.painter().rect_filled(r, CornerRadius::same(item_r), p.bg_selected);
+            ui.painter()
+                .rect_filled(r, CornerRadius::same(item_r), p.bg_selected);
         }
         let mut cx = r.left() + item_pad;
         if let Some(icon) = o.icon {
@@ -593,8 +599,10 @@ pub fn filter_chip(ui: &mut Ui, text: &str, on: bool) -> Response {
 /// A coloured status dot (7 px) + label, as in `● running`.
 pub fn status_dot(ui: &mut Ui, color: Color32, label: &str, label_color: Color32) -> Response {
     let g = galley(ui, label, font::mono(12.0), label_color);
-    let (rect, resp) =
-        ui.allocate_exact_size(vec2(7.0 + 6.0 + g.size().x, g.size().y.max(14.0)), Sense::hover());
+    let (rect, resp) = ui.allocate_exact_size(
+        vec2(7.0 + 6.0 + g.size().x, g.size().y.max(14.0)),
+        Sense::hover(),
+    );
     ui.painter()
         .circle_filled(pos2(rect.left() + 3.5, rect.center().y), 3.5, color);
     ui.painter().galley(
@@ -645,7 +653,11 @@ pub fn section_header_row(ui: &mut Ui, title: &str, caption: &str) {
         section_header(ui, title);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let p = pal(ui);
-            ui.label(egui::RichText::new(caption).font(font::ui(12.0)).color(p.text_muted));
+            ui.label(
+                egui::RichText::new(caption)
+                    .font(font::ui(12.0))
+                    .color(p.text_muted),
+            );
         });
     });
 }
@@ -664,7 +676,11 @@ pub fn kv_grid(ui: &mut Ui, id: &str, rows: &[(String, String)], key_width: f32)
         .min_col_width(key_width)
         .show(ui, |ui| {
             for (k, v) in rows {
-                ui.label(egui::RichText::new(k).font(font::ui(12.0)).color(p.text_muted));
+                ui.label(
+                    egui::RichText::new(k)
+                        .font(font::ui(12.0))
+                        .color(p.text_muted),
+                );
                 ui.add(
                     egui::Label::new(egui::RichText::new(v).font(font::mono(12.0)).color(p.text))
                         .wrap(),
@@ -705,7 +721,14 @@ pub fn checkbox(ui: &mut Ui, value: &mut bool, label: &str) -> Response {
         ];
         ui.painter().add(egui::Shape::line(
             pts,
-            Stroke::new(2.0, if p.dark { Color32::from_rgb(0x1A, 0x12, 0x05) } else { Color32::WHITE }),
+            Stroke::new(
+                2.0,
+                if p.dark {
+                    Color32::from_rgb(0x1A, 0x12, 0x05)
+                } else {
+                    Color32::WHITE
+                },
+            ),
         ));
     } else {
         let stroke = if resp.hovered() {
@@ -716,7 +739,11 @@ pub fn checkbox(ui: &mut Ui, value: &mut bool, label: &str) -> Response {
         ui.painter().rect(
             b,
             CornerRadius::same(3),
-            if p.dark { Color32::from_rgb(0x0E, 0x0E, 0x0E) } else { Color32::WHITE },
+            if p.dark {
+                Color32::from_rgb(0x0E, 0x0E, 0x0E)
+            } else {
+                Color32::WHITE
+            },
             Stroke::new(1.0, stroke),
             StrokeKind::Inside,
         );
@@ -817,15 +844,24 @@ impl<'a> StopSlider<'a> {
             let readout = (self.format)(*value);
             let lg = galley(ui, self.label, font::ui(13.0), p.text);
             let vg = galley(ui, &readout, font::mono(13.0), p.accent_soft);
-            let (row, _) = ui.allocate_exact_size(vec2(w, lg.size().y.max(vg.size().y)), Sense::hover());
-            ui.painter().galley(pos2(row.left(), row.center().y - lg.size().y / 2.0), lg, p.text);
+            let (row, _) =
+                ui.allocate_exact_size(vec2(w, lg.size().y.max(vg.size().y)), Sense::hover());
             ui.painter().galley(
-                pos2(row.right() - vg.size().x, row.center().y - vg.size().y / 2.0),
+                pos2(row.left(), row.center().y - lg.size().y / 2.0),
+                lg,
+                p.text,
+            );
+            ui.painter().galley(
+                pos2(
+                    row.right() - vg.size().x,
+                    row.center().y - vg.size().y / 2.0,
+                ),
                 vg,
                 p.accent_soft,
             );
             // track
-            let (track_rect, mut resp) = ui.allocate_exact_size(vec2(w, 16.0), Sense::click_and_drag());
+            let (track_rect, mut resp) =
+                ui.allocate_exact_size(vec2(w, 16.0), Sense::click_and_drag());
             let (lo, hi) = (*self.range.start(), *self.range.end());
             let knob_r = 7.0;
             let x0 = track_rect.left() + knob_r;
@@ -857,7 +893,11 @@ impl<'a> StopSlider<'a> {
             }
             // keyboard
             if resp.has_focus() {
-                let step = if self.step > 0.0 { self.step } else { (hi - lo) / 100.0 };
+                let step = if self.step > 0.0 {
+                    self.step
+                } else {
+                    (hi - lo) / 100.0
+                };
                 let (l, r) = ui.input(|i| {
                     (
                         i.key_pressed(egui::Key::ArrowLeft),
@@ -871,7 +911,15 @@ impl<'a> StopSlider<'a> {
             }
             let cy = track_rect.center().y;
             let track = Rect::from_min_max(pos2(x0, cy - 2.0), pos2(x1, cy + 2.0));
-            ui.painter().rect_filled(track, CornerRadius::same(2), if p.dark { Color32::from_rgb(0x2E, 0x2E, 0x2E) } else { p.border_strong });
+            ui.painter().rect_filled(
+                track,
+                CornerRadius::same(2),
+                if p.dark {
+                    Color32::from_rgb(0x2E, 0x2E, 0x2E)
+                } else {
+                    p.border_strong
+                },
+            );
             let kx = to_x(*value);
             ui.painter().rect_filled(
                 Rect::from_min_max(track.min, pos2(kx, track.max.y)),
@@ -880,14 +928,29 @@ impl<'a> StopSlider<'a> {
             );
             for s in self.stops {
                 let sx = to_x(s.value);
-                ui.painter().circle_filled(pos2(sx, cy), 1.5, if s.value <= *value { p.accent_bg } else { p.text_ghost });
+                ui.painter().circle_filled(
+                    pos2(sx, cy),
+                    1.5,
+                    if s.value <= *value {
+                        p.accent_bg
+                    } else {
+                        p.text_ghost
+                    },
+                );
             }
             let hot = resp.hovered() || resp.dragged();
             ui.painter().circle(
                 pos2(kx, cy),
                 if hot { knob_r + 1.0 } else { knob_r },
                 p.accent,
-                Stroke::new(2.0, if p.dark { Color32::from_rgb(0x2A, 0x1F, 0x0E) } else { Color32::WHITE }),
+                Stroke::new(
+                    2.0,
+                    if p.dark {
+                        Color32::from_rgb(0x2A, 0x1F, 0x0E)
+                    } else {
+                        Color32::WHITE
+                    },
+                ),
             );
             let label = self.label.to_string();
             let v = *value;
@@ -1000,7 +1063,11 @@ pub fn rail_button_sized(
     let l = label.to_string();
     resp.widget_info(|| WidgetInfo::selected(Role::Button, true, on, &l));
     let (fill, stroke, fg) = if on {
-        (p.accent_bg2, Stroke::new(1.0, p.accent_border), p.accent_soft)
+        (
+            p.accent_bg2,
+            Stroke::new(1.0, p.accent_border),
+            p.accent_soft,
+        )
     } else if resp.hovered() {
         (p.bg_hover, Stroke::NONE, p.text)
     } else {
@@ -1014,14 +1081,20 @@ pub fn rail_button_sized(
             },
         )
     };
-    ui.painter()
-        .rect(rect, CornerRadius::same(8), fill, stroke, StrokeKind::Inside);
+    ui.painter().rect(
+        rect,
+        CornerRadius::same(8),
+        fill,
+        stroke,
+        StrokeKind::Inside,
+    );
     icon.paint(
         ui.painter(),
         Rect::from_center_size(rect.center(), vec2(icon_size, icon_size)),
         fg,
     );
-    resp.on_hover_text(label).on_hover_cursor(CursorIcon::PointingHand)
+    resp.on_hover_text(label)
+        .on_hover_cursor(CursorIcon::PointingHand)
 }
 
 // ------------------------------------------------------------------------------------------
@@ -1032,7 +1105,11 @@ pub fn progress(ui: &mut Ui, fraction: Option<f32>, label: &str) -> Response {
     let p = pal(ui);
     let w = ui.available_width();
     if !label.is_empty() {
-        ui.label(egui::RichText::new(label).font(font::ui(12.0)).color(p.text_muted));
+        ui.label(
+            egui::RichText::new(label)
+                .font(font::ui(12.0))
+                .color(p.text_muted),
+        );
     }
     let (rect, resp) = ui.allocate_exact_size(vec2(w, 4.0), Sense::hover());
     ui.painter()
@@ -1041,7 +1118,10 @@ pub fn progress(ui: &mut Ui, fraction: Option<f32>, label: &str) -> Response {
         Some(f) => {
             let f = f.clamp(0.0, 1.0);
             ui.painter().rect_filled(
-                Rect::from_min_max(rect.min, pos2(rect.left() + rect.width() * f, rect.bottom())),
+                Rect::from_min_max(
+                    rect.min,
+                    pos2(rect.left() + rect.width() * f, rect.bottom()),
+                ),
                 CornerRadius::same(2),
                 p.accent,
             );
@@ -1155,31 +1235,6 @@ pub fn paint_centered(ui: &Ui, rect: Rect, text: &str, font: FontId, color: Colo
         .text(rect.center(), Align2::CENTER_CENTER, text, font, color);
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn stop_slider_snaps_to_named_stops_and_steps() {
-        let fmt = |v: f64| format!("{v:.0} % VWC");
-        let stops = [
-            Stop { value: 0.0, label: "Bone dry" },
-            Stop { value: 30.0, label: "Field capacity" },
-            Stop { value: 60.0, label: "Saturated" },
-        ];
-        let s = StopSlider::new("Soil moisture", 0.0..=60.0, &fmt)
-            .stops(&stops)
-            .step(1.0)
-            .snap(0.03);
-        assert_eq!(s.quantize(29.0), 30.0); // within 3 % of the range → snaps
-        assert_eq!(s.quantize(25.4), 25.0); // otherwise steps
-        assert_eq!(s.quantize(-5.0), 0.0);
-        assert_eq!(s.quantize(61.0), 60.0);
-        assert_eq!(s.nearest_stop(42.0), Some("Field capacity"));
-        assert_eq!(s.nearest_stop(55.0), Some("Saturated"));
-    }
-}
-
 /// A top-down child `Ui` filling `rect` (independent of the parent's layout direction).
 pub fn child_ui(ui: &mut Ui, rect: Rect) -> Ui {
     ui.new_child(
@@ -1190,7 +1245,13 @@ pub fn child_ui(ui: &mut Ui, rect: Rect) -> Ui {
 }
 
 /// Wrapped text limited to `max_rows` rows (ellipsis), as a label.
-pub fn wrapped_text(ui: &mut Ui, text: &str, font: FontId, color: Color32, max_rows: usize) -> Response {
+pub fn wrapped_text(
+    ui: &mut Ui,
+    text: &str,
+    font: FontId,
+    color: Color32,
+    max_rows: usize,
+) -> Response {
     let mut job = LayoutJob::single_section(
         text.to_string(),
         egui::TextFormat {
@@ -1241,9 +1302,11 @@ pub fn select<R>(
         p.text,
         rect.width() - 34.0,
     );
-    ui.painter()
-        .with_clip_rect(rect.shrink(1.0))
-        .galley(pos2(rect.left() + 10.0, rect.center().y - g.size().y / 2.0), g, p.text);
+    ui.painter().with_clip_rect(rect.shrink(1.0)).galley(
+        pos2(rect.left() + 10.0, rect.center().y - g.size().y / 2.0),
+        g,
+        p.text,
+    );
     Icon::ChevronDown.paint(
         ui.painter(),
         Rect::from_center_size(pos2(rect.right() - 14.0, rect.center().y), vec2(12.0, 12.0)),
@@ -1260,11 +1323,19 @@ pub fn select<R>(
 pub fn menu_item(ui: &mut Ui, text: &str, selected: bool, enabled: bool) -> bool {
     let p = pal(ui);
     let w = ui.available_width().max(160.0);
-    let (rect, resp) = ui.allocate_exact_size(vec2(w, 28.0), if enabled { Sense::click() } else { Sense::hover() });
+    let (rect, resp) = ui.allocate_exact_size(
+        vec2(w, 28.0),
+        if enabled {
+            Sense::click()
+        } else {
+            Sense::hover()
+        },
+    );
     let t = text.to_string();
     resp.widget_info(|| WidgetInfo::selected(Role::MenuItem, enabled, selected, &t));
     if resp.hovered() && enabled {
-        ui.painter().rect_filled(rect, CornerRadius::same(5), p.bg_hover);
+        ui.painter()
+            .rect_filled(rect, CornerRadius::same(5), p.bg_hover);
     }
     let color = if !enabled {
         p.text_faint
@@ -1292,4 +1363,38 @@ pub fn menu_item(ui: &mut Ui, text: &str, selected: bool, enabled: bool) -> bool
         ui.close();
     }
     clicked
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stop_slider_snaps_to_named_stops_and_steps() {
+        let fmt = |v: f64| format!("{v:.0} % VWC");
+        let stops = [
+            Stop {
+                value: 0.0,
+                label: "Bone dry",
+            },
+            Stop {
+                value: 30.0,
+                label: "Field capacity",
+            },
+            Stop {
+                value: 60.0,
+                label: "Saturated",
+            },
+        ];
+        let s = StopSlider::new("Soil moisture", 0.0..=60.0, &fmt)
+            .stops(&stops)
+            .step(1.0)
+            .snap(0.03);
+        assert_eq!(s.quantize(29.0), 30.0); // within 3 % of the range → snaps
+        assert_eq!(s.quantize(25.4), 25.0); // otherwise steps
+        assert_eq!(s.quantize(-5.0), 0.0);
+        assert_eq!(s.quantize(61.0), 60.0);
+        assert_eq!(s.nearest_stop(42.0), Some("Field capacity"));
+        assert_eq!(s.nearest_stop(55.0), Some("Saturated"));
+    }
 }

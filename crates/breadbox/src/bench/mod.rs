@@ -132,7 +132,10 @@ pub enum RadioCommand {
     SetLanBridge(Option<(String, u16)>),
     /// "Add BLE hat" on the empty BLE card.
     AddBleHat,
-    MqttPublish { topic: String, payload: String },
+    MqttPublish {
+        topic: String,
+        payload: String,
+    },
     MqttSubscribe(String),
 }
 
@@ -171,7 +174,12 @@ impl SerialLine {
 /// `mm:ss.mmm`.
 pub fn clock_label(t: SimTime) -> String {
     let ms = t.as_millis();
-    format!("{:02}:{:02}.{:03}", ms / 60_000, (ms / 1000) % 60, ms % 1000)
+    format!(
+        "{:02}:{:02}.{:03}",
+        ms / 60_000,
+        (ms / 1000) % 60,
+        ms % 1000
+    )
 }
 
 /// Out-of-band bench events for the output panel / toasts.
@@ -180,9 +188,17 @@ pub enum BenchEvent {
     /// `"Flashed virtual U1 in 0.21 s · core reset · bench state kept"`.
     Flashed(UploadReport),
     /// A breakpoint was armed / re-armed: `note: line 30 — breakpoint armed on U1 (hits: 24)`.
-    BreakpointArmed { target: String, file: String, line: u32, hits: u64 },
+    BreakpointArmed {
+        target: String,
+        file: String,
+        line: u32,
+        hits: u64,
+    },
     /// Execution paused (breakpoint, step, user).
-    Paused { target: String, reason: String },
+    Paused {
+        target: String,
+        reason: String,
+    },
     Note(String),
     Error(String),
 }
@@ -391,15 +407,19 @@ impl RadioPanelModel {
             .into_iter()
             .map(|c| {
                 let lower = c.title.to_ascii_lowercase();
-                let kind = if lower.contains("wi-fi") || lower.contains("wifi") || lower.contains("esp") {
-                    RadioKind::Wifi
-                } else if lower.contains("ble") || lower.contains("bluetooth") || lower.contains("hc-05") {
-                    RadioKind::Ble
-                } else if lower.contains("lora") {
-                    RadioKind::Lora
-                } else {
-                    RadioKind::Other
-                };
+                let kind =
+                    if lower.contains("wi-fi") || lower.contains("wifi") || lower.contains("esp") {
+                        RadioKind::Wifi
+                    } else if lower.contains("ble")
+                        || lower.contains("bluetooth")
+                        || lower.contains("hc-05")
+                    {
+                        RadioKind::Ble
+                    } else if lower.contains("lora") {
+                        RadioKind::Lora
+                    } else {
+                        RadioKind::Other
+                    };
                 RadioCardView {
                     tone: status_tone(&c.status),
                     label: c.label,
@@ -423,7 +443,10 @@ impl RadioPanelModel {
             })
             .collect();
         let c = space.net.conditions();
-        let bridge = space.settings().lan_bridge.map(|b| format!("{}:{}", b.host, b.port));
+        let bridge = space
+            .settings()
+            .lan_bridge
+            .map(|b| format!("{}:{}", b.host, b.port));
         let bridge_status = space.lan_bridge_status().map(|s| format!("{s:?}"));
         let ble = cards
             .iter()
@@ -460,7 +483,11 @@ fn status_tone(s: &str) -> StatusTone {
     let s = s.to_ascii_lowercase();
     if s.contains("connected") && !s.contains("dis") || s == "advertising" || s == "online" {
         StatusTone::Ok
-    } else if s.contains("join") || s.contains("connecting") || s.contains("boot") || s.contains("scan") {
+    } else if s.contains("join")
+        || s.contains("connecting")
+        || s.contains("boot")
+        || s.contains("scan")
+    {
         StatusTone::Busy
     } else if s.contains("fail") || s.contains("error") || s.contains("lost") {
         StatusTone::Error

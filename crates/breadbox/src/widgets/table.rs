@@ -164,7 +164,8 @@ pub fn data_table(
             .join(" ");
         resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, &label));
         if resp.hovered() {
-            ui.painter().rect_filled(r, 0.0, p.bg_hover.gamma_multiply(0.6));
+            ui.painter()
+                .rect_filled(r, 0.0, p.bg_hover.gamma_multiply(0.6));
         }
         ui.painter().line_segment(
             [r.left_top(), r.right_top()],

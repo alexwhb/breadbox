@@ -70,8 +70,20 @@ pub fn board_kind(part: &str) -> Option<BoardKind> {
         })
     };
     match part {
-        "uno" => k("UNO R3", "ATmega328P", Some("arduino:avr:uno"), "cycle-accurate AVR core", "uno"),
-        "nano" => k("Nano", "ATmega328P", Some("arduino:avr:nano"), "cycle-accurate AVR core", "nano"),
+        "uno" => k(
+            "UNO R3",
+            "ATmega328P",
+            Some("arduino:avr:uno"),
+            "cycle-accurate AVR core",
+            "uno",
+        ),
+        "nano" => k(
+            "Nano",
+            "ATmega328P",
+            Some("arduino:avr:nano"),
+            "cycle-accurate AVR core",
+            "nano",
+        ),
         "mega" | "mega2560" => k(
             "Mega 2560",
             "ATmega2560",
@@ -107,10 +119,14 @@ impl Project {
     /// Loads `<dir>/project.json`.
     pub fn load(dir: &Path) -> Result<Project> {
         let file = dir.join("project.json");
-        let text = std::fs::read_to_string(&file)
-            .with_context(|| format!("{} is not a Breadbox project (no project.json)", dir.display()))?;
-        let json: serde_json::Value =
-            serde_json::from_str(&text).with_context(|| format!("{}: invalid JSON", file.display()))?;
+        let text = std::fs::read_to_string(&file).with_context(|| {
+            format!(
+                "{} is not a Breadbox project (no project.json)",
+                dir.display()
+            )
+        })?;
+        let json: serde_json::Value = serde_json::from_str(&text)
+            .with_context(|| format!("{}: invalid JSON", file.display()))?;
         let name = json["name"]
             .as_str()
             .map(str::to_string)
@@ -158,7 +174,13 @@ impl Project {
     pub fn create(parent: &Path, name: &str, mode: ProjectMode) -> Result<Project> {
         let clean: String = name
             .chars()
-            .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
+            .map(|c| {
+                if c.is_alphanumeric() || c == '-' || c == '_' {
+                    c
+                } else {
+                    '-'
+                }
+            })
             .collect();
         if clean.is_empty() {
             bail!("project name is empty");
@@ -175,7 +197,10 @@ impl Project {
                 sketch.join(format!("{clean}.ino")),
                 "void setup() {\n  Serial.begin(115200);\n  pinMode(LED_BUILTIN, OUTPUT);\n}\n\nvoid loop() {\n  digitalWrite(LED_BUILTIN, HIGH);\n  delay(500);\n  digitalWrite(LED_BUILTIN, LOW);\n  delay(500);\n}\n",
             )?;
-            std::fs::write(sketch.join("sketch.yaml"), "default_fqbn: arduino:avr:uno\n")?;
+            std::fs::write(
+                sketch.join("sketch.yaml"),
+                "default_fqbn: arduino:avr:uno\n",
+            )?;
             serde_json::json!([{
                 "id": "u1", "ref": "U1", "part": "uno",
                 "bench": {"x": 0.0, "y": 4.0},
@@ -193,7 +218,10 @@ impl Project {
             "parts": parts,
             "wires": [],
         });
-        std::fs::write(dir.join("project.json"), serde_json::to_string_pretty(&json)?)?;
+        std::fs::write(
+            dir.join("project.json"),
+            serde_json::to_string_pretty(&json)?,
+        )?;
         Project::load(&dir)
     }
 
@@ -257,7 +285,11 @@ impl Project {
 
 fn folder_name(p: &Path) -> String {
     p.file_name()
-        .map(|s| s.to_string_lossy().trim_end_matches(".breadbox").to_string())
+        .map(|s| {
+            s.to_string_lossy()
+                .trim_end_matches(".breadbox")
+                .to_string()
+        })
         .unwrap_or_else(|| "project".into())
 }
 
@@ -281,13 +313,19 @@ pub fn sketch_files(dir: &Path) -> Vec<String> {
                 .map(|e| e.file_name().to_string_lossy().into_owned())
                 .filter(|n| {
                     let l = n.to_ascii_lowercase();
-                    [".ino", ".h", ".cpp", ".c", ".hpp"].iter().any(|x| l.ends_with(x))
+                    [".ino", ".h", ".cpp", ".c", ".hpp"]
+                        .iter()
+                        .any(|x| l.ends_with(x))
                 })
                 .collect()
         })
         .unwrap_or_default();
     files.sort_by(|a, b| {
-        (a != &main, !a.ends_with(".ino"), a.to_lowercase()).cmp(&(b != &main, !b.ends_with(".ino"), b.to_lowercase()))
+        (a != &main, !a.ends_with(".ino"), a.to_lowercase()).cmp(&(
+            b != &main,
+            !b.ends_with(".ino"),
+            b.to_lowercase(),
+        ))
     });
     files
 }
@@ -346,7 +384,13 @@ pub fn scan_examples(dir: &Path) -> Vec<ExampleInfo> {
         })
         .unwrap_or_default();
     // the design's hero example first, then alphabetical
-    v.sort_by_key(|e| (e.name != "garden-node", e.mode == ProjectMode::Pro, e.name.clone()));
+    v.sort_by_key(|e| {
+        (
+            e.name != "garden-node",
+            e.mode == ProjectMode::Pro,
+            e.name.clone(),
+        )
+    });
     v
 }
 
@@ -365,7 +409,10 @@ impl Resources {
             };
         }
         if let Ok(exe) = std::env::current_exe()
-            && let Some(res) = exe.parent().and_then(|p| p.parent()).map(|c| c.join("Resources"))
+            && let Some(res) = exe
+                .parent()
+                .and_then(|p| p.parent())
+                .map(|c| c.join("Resources"))
             && res.join("examples").is_dir()
         {
             return Resources { root: Some(res) };
@@ -380,11 +427,16 @@ impl Resources {
     }
 
     pub fn examples(&self) -> Option<PathBuf> {
-        self.root.as_ref().map(|r| r.join("examples")).filter(|p| p.is_dir())
+        self.root
+            .as_ref()
+            .map(|r| r.join("examples"))
+            .filter(|p| p.is_dir())
     }
 
     pub fn fixtures(&self) -> Option<PathBuf> {
-        self.examples().map(|e| e.join("fixtures")).filter(|p| p.is_dir())
+        self.examples()
+            .map(|e| e.join("fixtures"))
+            .filter(|p| p.is_dir())
     }
 
     /// True if `dir` is inside the bundled examples (opened read-only).
@@ -456,7 +508,9 @@ mod tests {
         assert_eq!(p.radios, vec![("U2".to_string(), "esp01".to_string())]);
         let t = p.bench_targets();
         assert_eq!(t[0].label, "U1 · UNO R3 (ATmega328P)");
-        let fw = p.prebuilt_firmware(&p.mcus[0], r.fixtures().as_deref()).unwrap();
+        let fw = p
+            .prebuilt_firmware(&p.mcus[0], r.fixtures().as_deref())
+            .unwrap();
         assert!(fw.ends_with("garden-node.uno.elf"));
         let files = sketch_files(p.mcus[0].sketch_dir.as_ref().unwrap());
         assert_eq!(files[0], "garden-node.ino");
@@ -471,7 +525,14 @@ mod tests {
         let p = Project::create(&tmp, "my bench", ProjectMode::Playground).unwrap();
         assert_eq!(p.name, "my bench");
         assert_eq!(p.mcus.len(), 1);
-        assert!(p.mcus[0].sketch_dir.as_ref().unwrap().join("my-bench.ino").exists());
+        assert!(
+            p.mcus[0]
+                .sketch_dir
+                .as_ref()
+                .unwrap()
+                .join("my-bench.ino")
+                .exists()
+        );
         let q = p.save_as(&tmp.join("copy.breadbox")).unwrap();
         assert_eq!(q.mcus.len(), 1);
         let pro = Project::create(&tmp, "filter", ProjectMode::Pro).unwrap();

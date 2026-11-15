@@ -4,9 +4,9 @@
 mod common;
 
 use common::*;
-use egui_kittest::kittest::Queryable;
 #[allow(unused_imports)]
 use egui_kittest::kittest::NodeT;
+use egui_kittest::kittest::Queryable;
 
 #[test]
 fn home_screen_renders() {
@@ -30,7 +30,10 @@ fn go(h: &mut egui_kittest::Harness<'static, breadbox::BreadboxApp>, section: &s
 }
 
 fn toolchain_settled(h: &egui_kittest::Harness<'static, breadbox::BreadboxApp>) -> bool {
-    !matches!(h.state().ctx.toolchain.state, breadbox::toolchain::ToolchainState::Detecting)
+    !matches!(
+        h.state().ctx.toolchain.state,
+        breadbox::toolchain::ToolchainState::Detecting
+    )
 }
 
 #[test]
@@ -47,7 +50,8 @@ fn firmware_upload_garden_node_shows_serial_and_radio() {
     assert!(
         wait_for(&mut h, 240.0, |h| {
             let s = &h.state().ctx.bench.serial;
-            s.iter().any(|l| l.text.starts_with("soil_raw=")) && s.iter().any(|l| l.text.starts_with("mqtt: PUB"))
+            s.iter().any(|l| l.text.starts_with("soil_raw="))
+                && s.iter().any(|l| l.text.starts_with("mqtt: PUB"))
         }),
         "serial output never arrived"
     );
@@ -63,7 +67,11 @@ fn firmware_upload_garden_node_shows_serial_and_radio() {
 
 fn paused_at(h: &egui_kittest::Harness<'static, breadbox::BreadboxApp>) -> Option<u32> {
     let d = h.state().ctx.bench.debug.get("U1")?;
-    if d.is_paused() { d.location.as_ref().map(|l| l.line) } else { None }
+    if d.is_paused() {
+        d.location.as_ref().map(|l| l.line)
+    } else {
+        None
+    }
 }
 
 #[test]
@@ -79,14 +87,23 @@ fn firmware_breakpoint_hit_and_step_over() {
     assert!(h.state().ctx.bench.debug.is_empty() || true);
     assert!(wait_for(&mut h, 30.0, |h| toolchain_settled(h)));
     h.get_by_label("Upload to sim").click();
-    assert!(wait_for(&mut h, 240.0, |h| paused_at(h) == Some(8)), "breakpoint on line 8 never hit");
+    assert!(
+        wait_for(&mut h, 240.0, |h| paused_at(h) == Some(8)),
+        "breakpoint on line 8 never hit"
+    );
     h.run_steps(3);
     assert!(has_label_containing(&h, "paused at blink.ino:8"));
     screenshot(&mut h, "firmware-debug");
     h.get_by_label("Step over").click();
-    assert!(wait_for(&mut h, 30.0, |h| paused_at(h) == Some(9)), "step over did not land on line 9");
+    assert!(
+        wait_for(&mut h, 30.0, |h| paused_at(h) == Some(9)),
+        "step over did not land on line 9"
+    );
     h.get_by_label("Continue").click();
-    assert!(wait_for(&mut h, 30.0, |h| paused_at(h) == Some(8)), "continue did not come back to the breakpoint");
+    assert!(
+        wait_for(&mut h, 30.0, |h| paused_at(h) == Some(8)),
+        "continue did not come back to the breakpoint"
+    );
 }
 
 #[test]
@@ -94,18 +111,33 @@ fn pro_analysis_runs_demo_and_populates_plots() {
     let mut h = harness();
     open_example(&mut h, "garden-node");
     go(&mut h, "Pro");
-    assert!(matches!(h.state().ctx.route, breadbox::router::Route::Pro(_)));
+    assert!(matches!(
+        h.state().ctx.route,
+        breadbox::router::Route::Pro(_)
+    ));
     // auto-runs on first open
-    assert!(wait_for(&mut h, 120.0, |h| has_label(h, "tran plot") && has_label(h, "dc plot") && has_label(h, "mc histogram")), "plots never appeared");
+    assert!(
+        wait_for(&mut h, 120.0, |h| has_label(h, "tran plot")
+            && has_label(h, "dc plot")
+            && has_label(h, "mc histogram")),
+        "plots never appeared"
+    );
     h.run_steps(3);
     screenshot(&mut h, "pro-analysis");
     assert!(has_label_containing(&h, "3 steps · "));
-    assert!(has_label_containing(&h, "V(A1) 2.59") || has_label_containing(&h, "V(A1) 2.60"), "op table row");
-    assert!(has_label_containing(&h, "Transient (.tran) — 0 → 10 ms · step 1 µs"));
+    assert!(
+        has_label_containing(&h, "V(A1) 2.59") || has_label_containing(&h, "V(A1) 2.60"),
+        "op table row"
+    );
+    assert!(has_label_containing(
+        &h,
+        "Transient (.tran) — 0 → 10 ms · step 1 µs"
+    ));
     screenshot(&mut h, "pro-analysis");
     // re-run explicitly
     h.get_by_label("Run analyses").click();
-    assert!(wait_for(&mut h, 120.0, |h| !has_label(h, "Cancel") && has_label(h, "tran plot")));
+    assert!(wait_for(&mut h, 120.0, |h| !has_label(h, "Cancel")
+        && has_label(h, "tran plot")));
 }
 
 #[test]
@@ -116,9 +148,112 @@ fn navigate_home_firmware_pro_home() {
     go(&mut h, "Firmware");
     assert_eq!(h.state().ctx.route, breadbox::router::Route::Firmware);
     go(&mut h, "Pro");
-    assert!(matches!(h.state().ctx.route, breadbox::router::Route::Pro(_)));
+    assert!(matches!(
+        h.state().ctx.route,
+        breadbox::router::Route::Pro(_)
+    ));
     h.get_by_label("Breadbox").click();
     h.run_steps(3);
     assert_eq!(h.state().ctx.route, breadbox::router::Route::Home);
     assert!(has_label_containing(&h, "Open recent blink"));
+}
+
+#[test]
+fn every_screen_renders_and_is_saved() {
+    let mut h = harness();
+    open_example(&mut h, "garden-node");
+    assert!(has_label_containing(&h, "SCREEN SLOT · Workbench"));
+    screenshot(&mut h, "workbench");
+    go(&mut h, "Plugins");
+    assert!(has_label_containing(&h, "SCREEN SLOT · Plugins"));
+    screenshot(&mut h, "plugins");
+    go(&mut h, "Lessons");
+    assert!(has_label_containing(&h, "SCREEN SLOT · Lessons"));
+    screenshot(&mut h, "lessons");
+    go(&mut h, "Pro");
+    h.get_by_label("Schematic").click();
+    h.run_steps(3);
+    assert_eq!(
+        h.state().ctx.route,
+        breadbox::router::Route::Pro(breadbox::router::ProTab::Schematic)
+    );
+    screenshot(&mut h, "pro-schematic");
+    h.get_by_label("PCB").click();
+    h.run_steps(3);
+    screenshot(&mut h, "pro-pcb");
+}
+
+#[test]
+fn idle_app_does_not_repaint_continuously() {
+    let mut h = harness();
+    assert!(wait_for(&mut h, 30.0, |h| toolchain_settled(h)));
+    assert!(h.try_run().is_ok(), "Home keeps requesting repaints");
+    open_example(&mut h, "blink");
+    go(&mut h, "Firmware");
+    h.run_steps(3);
+    assert!(h.try_run().is_ok(), "Firmware keeps requesting repaints");
+}
+
+#[test]
+fn keyboard_shortcuts_navigate_and_close() {
+    use eframe::egui::{Key, Modifiers};
+    let mut h = harness();
+    open_example(&mut h, "blink");
+    h.key_press_modifiers(Modifiers::COMMAND, Key::Num2);
+    h.run_steps(3);
+    assert_eq!(h.state().ctx.route, breadbox::router::Route::Firmware);
+    h.key_press_modifiers(Modifiers::COMMAND, Key::Num3);
+    h.run_steps(3);
+    assert!(matches!(
+        h.state().ctx.route,
+        breadbox::router::Route::Pro(_)
+    ));
+    h.key_press_modifiers(Modifiers::COMMAND, Key::W);
+    h.run_steps(3);
+    assert_eq!(h.state().ctx.route, breadbox::router::Route::Home);
+    assert!(h.state().ctx.project.is_none());
+}
+
+#[test]
+fn verify_blink_then_a_compile_error_lands_in_the_editor() {
+    let mut h = harness();
+    open_example(&mut h, "blink");
+    go(&mut h, "Firmware");
+    assert!(wait_for(&mut h, 30.0, |h| toolchain_settled(h)));
+    if h.state().ctx.toolchain.ready().is_none() {
+        eprintln!("skipping: no arduino-cli/avr-gcc toolchain on this machine");
+        return;
+    }
+    h.get_by_label("Verify").click();
+    assert!(
+        wait_for(&mut h, 240.0, |h| has_label_containing(h, "Sketch uses ")),
+        "no size report"
+    );
+    // break the sketch: type at the start of the file
+    let editor = h.get_by_role(eframe::egui::Role::MultilineTextInput);
+    editor.focus();
+    h.run_steps(1);
+    h.get_by_role(eframe::egui::Role::MultilineTextInput)
+        .type_text("oops ");
+    h.run_steps(2);
+    h.get_by_label("Verify").click();
+    let ok = wait_for(&mut h, 240.0, |h| {
+        has_label_containing(h, "error: 'oops' does not name a type")
+    });
+    h.run_steps(2);
+    screenshot(&mut h, "firmware-error");
+    assert!(ok, "diagnostic not shown in the output");
+}
+
+#[test]
+fn light_theme_renders() {
+    let mut h = harness();
+    h.state_mut()
+        .ctx
+        .command(breadbox::router::Command::SetTheme(
+            breadbox::theme::ThemeChoice::Light,
+        ));
+    h.run_steps(4);
+    assert_eq!(h.state().ctx.theme, breadbox::theme::ThemeChoice::Light);
+    screenshot(&mut h, "home-light");
 }

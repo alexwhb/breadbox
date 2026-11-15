@@ -233,8 +233,7 @@ pub fn collapsible_side<R>(
                         Side::Left => [rect.right_top(), rect.right_bottom()],
                         Side::Right => [rect.left_top(), rect.left_bottom()],
                     };
-                    ui.painter()
-                        .line_segment(edge, Stroke::new(1.0, p.border));
+                    ui.painter().line_segment(edge, Stroke::new(1.0, p.border));
                     content(ui)
                 });
             Some(r.inner)
@@ -252,13 +251,18 @@ pub fn collapsible_side<R>(
                 .show(ui, |ui| {
                     let rect = ui.max_rect();
                     let h = 26.0 + 8.0 * title.len() as f32;
-                    let tab = Rect::from_center_size(rect.center(), vec2(30.0, h.min(rect.height())));
+                    let tab =
+                        Rect::from_center_size(rect.center(), vec2(30.0, h.min(rect.height())));
                     let resp = ui.interact(tab, Id::unique(id).with("tab-out"), Sense::click());
                     let label = format!("Show {title}");
                     resp.widget_info(|| {
                         egui::WidgetInfo::labeled(egui::Role::Button, true, &label)
                     });
-                    let fill = if resp.hovered() { p.bg_hover } else { p.bg_panel };
+                    let fill = if resp.hovered() {
+                        p.bg_hover
+                    } else {
+                        p.bg_panel
+                    };
                     let cr = match side {
                         Side::Right => CornerRadius {
                             nw: 8,
@@ -286,15 +290,21 @@ pub fn collapsible_side<R>(
                     };
                     icon.paint(
                         ui.painter(),
-                        Rect::from_center_size(pos2(tab.center().x, tab.top() + 18.0), vec2(14.0, 14.0)),
+                        Rect::from_center_size(
+                            pos2(tab.center().x, tab.top() + 18.0),
+                            vec2(14.0, 14.0),
+                        ),
                         p.text_dim,
                     );
                     // vertical label
                     let mut y = tab.top() + 34.0;
                     for ch in title.chars() {
                         let g = galley(ui, ch.to_string(), font::medium(12.0), p.text_dim);
-                        ui.painter()
-                            .galley(pos2(tab.center().x - g.size().x / 2.0, y), g, p.text_dim);
+                        ui.painter().galley(
+                            pos2(tab.center().x - g.size().x / 2.0, y),
+                            g,
+                            p.text_dim,
+                        );
                         y += 13.0;
                     }
                     if resp.clicked() {
@@ -338,7 +348,11 @@ pub fn panel_title_with_collapse(
                 *mode = PanelMode::Collapsed;
             }
             if !caption.is_empty() {
-                ui.label(egui::RichText::new(caption).font(font::ui(12.0)).color(p.text_muted));
+                ui.label(
+                    egui::RichText::new(caption)
+                        .font(font::ui(12.0))
+                        .color(p.text_muted),
+                );
             }
         });
     });

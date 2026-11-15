@@ -188,7 +188,10 @@ impl<'a> CodeEditor<'a> {
             let mut child = super::controls::child_ui(ui, bar.shrink2(vec2(12.0, 4.0)));
             find_bar(&mut child, p, &mut view.find);
             ui.painter().line_segment(
-                [pos2(bar.left(), bar.bottom()), pos2(bar.right(), bar.bottom())],
+                [
+                    pos2(bar.left(), bar.bottom()),
+                    pos2(bar.right(), bar.bottom()),
+                ],
                 Stroke::new(1.0, p.border),
             );
         }
@@ -205,12 +208,17 @@ impl<'a> CodeEditor<'a> {
         let max_cols = doc
             .text
             .split('\n')
-            .map(|l| l.chars().map(|c| if c == '\t' { 4 } else { 1 }).sum::<usize>())
+            .map(|l| {
+                l.chars()
+                    .map(|c| if c == '\t' { 4 } else { 1 })
+                    .sum::<usize>()
+            })
             .max()
             .unwrap_or(0) as f32;
 
         // find matches (byte ranges)
-        let matches: Vec<std::ops::Range<usize>> = if view.find.open && !view.find.query.is_empty() {
+        let matches: Vec<std::ops::Range<usize>> = if view.find.open && !view.find.query.is_empty()
+        {
             find_all(&doc.text, &view.find.query)
         } else {
             Vec::new()
@@ -228,11 +236,12 @@ impl<'a> CodeEditor<'a> {
         let text_color = p.code_text;
         let colors = TokColors::from(p);
         let font_c = font.clone();
-        let mut layouter = move |ui: &Ui, buf: &dyn egui::TextBuffer, _wrap: f32| -> Arc<egui::Galley> {
-            let text = buf.as_str();
-            let job = layout_job(text, lang, &font_c, lh, text_color, &colors);
-            ui.painter().layout_job(job)
-        };
+        let mut layouter =
+            move |ui: &Ui, buf: &dyn egui::TextBuffer, _wrap: f32| -> Arc<egui::Galley> {
+                let text = buf.as_str();
+                let job = layout_job(text, lang, &font_c, lh, text_color, &colors);
+                ui.painter().layout_job(job)
+            };
 
         let exec_line = self.exec_line;
         let bp_gutter = self.breakpoint_gutter;
@@ -255,14 +264,20 @@ impl<'a> CodeEditor<'a> {
             let origin = ui.cursor().min;
             let content_w = (gutter_w + 32.0 + max_cols * char_w).max(viewport.width());
             let content_h = top_pad * 2.0 + n_lines as f32 * lh;
-            let (all, _) = ui.allocate_exact_size(vec2(content_w, content_h.max(viewport.height())), Sense::hover());
+            let (all, _) = ui.allocate_exact_size(
+                vec2(content_w, content_h.max(viewport.height())),
+                Sense::hover(),
+            );
             let code_left = origin.x + gutter_w;
             let painter = ui.painter().clone();
             // backgrounds go into this slot, under the text painted by the TextEdit below
             let bg_slot = painter.add(egui::Shape::Noop);
 
             // ---- text
-            let text_rect = Rect::from_min_max(pos2(code_left, origin.y), pos2(all.right(), origin.y + content_h.max(viewport.height())));
+            let text_rect = Rect::from_min_max(
+                pos2(code_left, origin.y),
+                pos2(all.right(), origin.y + content_h.max(viewport.height())),
+            );
             let te = egui::TextEdit::multiline(&mut doc.text)
                 .id(id)
                 .font(font.clone())
@@ -283,12 +298,19 @@ impl<'a> CodeEditor<'a> {
             let output = ui
                 .scope_builder(UiBuilder::new().max_rect(text_rect), |ui| te.show(ui))
                 .inner;
+            let a11y = format!("{} editor", doc.name);
+            output.response.widget_info(|| {
+                egui::WidgetInfo::labeled(egui::Role::MultilineTextInput, !read_only, &a11y)
+            });
             // geometry from the laid-out galley (exact, whatever margins egui applied)
             let text_x = output.galley_pos.x;
             let text_y = output.galley_pos.y;
             let row_top = |line0: usize| text_y + line0 as f32 * lh;
-            let first = ((viewport.top() - (text_y - origin.y)) / lh).floor().max(0.0) as usize;
-            let last = (((viewport.bottom() - (text_y - origin.y)) / lh).ceil() as usize + 1).min(n_lines);
+            let first = ((viewport.top() - (text_y - origin.y)) / lh)
+                .floor()
+                .max(0.0) as usize;
+            let last =
+                (((viewport.bottom() - (text_y - origin.y)) / lh).ceil() as usize + 1).min(n_lines);
 
             // ---- backgrounds
             let mut bg: Vec<egui::Shape> = Vec::new();
@@ -322,13 +344,20 @@ impl<'a> CodeEditor<'a> {
                 let cols = visual_cols(&doc.text[m.clone()]);
                 let y = row_top(l0);
                 let x = text_x + c0 as f32 * char_w;
-                let r = Rect::from_min_size(pos2(x - 1.0, y + 1.0), vec2(cols as f32 * char_w + 2.0, lh - 2.0));
+                let r = Rect::from_min_size(
+                    pos2(x - 1.0, y + 1.0),
+                    vec2(cols as f32 * char_w + 2.0, lh - 2.0),
+                );
                 let on = k == current_match;
                 bg.push(egui::Shape::Rect(egui::epaint::RectShape::new(
                     r,
                     CornerRadius::same(3),
                     if on { p.accent_bg } else { p.bg_selected },
-                    if on { Stroke::new(1.0, p.accent) } else { Stroke::NONE },
+                    if on {
+                        Stroke::new(1.0, p.accent)
+                    } else {
+                        Stroke::NONE
+                    },
                     egui::StrokeKind::Inside,
                 )));
             }
@@ -340,11 +369,21 @@ impl<'a> CodeEditor<'a> {
                 let y = row_top(l0);
                 let line = l0 as u32 + 1;
                 let lr = Rect::from_min_max(pos2(origin.x, y), pos2(code_left - 2.0, y + lh));
-                let lresp = ui.interact(lr, id.with(("gutter", l0)), if bp_gutter { Sense::click() } else { Sense::hover() });
+                let lresp = ui.interact(
+                    lr,
+                    id.with(("gutter", l0)),
+                    if bp_gutter {
+                        Sense::click()
+                    } else {
+                        Sense::hover()
+                    },
+                );
                 if bp_gutter {
                     let label = format!("Breakpoint line {line}");
                     let on = doc.breakpoints.contains(&line);
-                    lresp.widget_info(|| egui::WidgetInfo::selected(egui::Role::CheckBox, true, on, &label));
+                    lresp.widget_info(|| {
+                        egui::WidgetInfo::selected(egui::Role::CheckBox, true, on, &label)
+                    });
                 }
                 if lresp.hovered() {
                     hover_line = Some(line);
@@ -410,7 +449,10 @@ impl<'a> CodeEditor<'a> {
                 st.store(ui.ctx(), id);
                 let (l0, _) = line_col(&doc.text, &line_starts, m.start);
                 let y = row_top(l0);
-                ui.scroll_to_rect(Rect::from_min_size(pos2(code_left, y - lh), vec2(10.0, lh * 3.0)), None);
+                ui.scroll_to_rect(
+                    Rect::from_min_size(pos2(code_left, y - lh), vec2(10.0, lh * 3.0)),
+                    None,
+                );
             }
             if let Some(l) = scroll_to {
                 let y = row_top(l.saturating_sub(1) as usize);
@@ -427,7 +469,10 @@ impl<'a> CodeEditor<'a> {
                     continue;
                 }
                 let ls = line_starts[l0];
-                let le = line_starts.get(l0 + 1).map(|e| e - 1).unwrap_or(doc.text.len());
+                let le = line_starts
+                    .get(l0 + 1)
+                    .map(|e| e - 1)
+                    .unwrap_or(doc.text.len());
                 let line_text = &doc.text[ls..le.max(ls)];
                 let (c_from, c_to) = squiggle_cols(line_text, d.col);
                 let y = row_top(l0) + lh - 3.0;
@@ -457,7 +502,11 @@ impl<'a> CodeEditor<'a> {
             }
         });
         if !out.changed {
-            out.cursor = if out.cursor == (0, 0) { view.cursor } else { out.cursor };
+            out.cursor = if out.cursor == (0, 0) {
+                view.cursor
+            } else {
+                out.cursor
+            };
         } else {
             doc.dirty = true;
             doc.version += 1;
@@ -497,7 +546,14 @@ impl From<&Palette> for TokColors {
     }
 }
 
-fn layout_job(text: &str, lang: Lang, font: &FontId, lh: f32, plain: Color32, c: &TokColors) -> LayoutJob {
+fn layout_job(
+    text: &str,
+    lang: Lang,
+    font: &FontId,
+    lh: f32,
+    plain: Color32,
+    c: &TokColors,
+) -> LayoutJob {
     let mut job = LayoutJob::default();
     let fmt = |color: Color32, italics: bool| TextFormat {
         font_id: font.clone(),
@@ -574,7 +630,10 @@ fn visual_cols(s: &str) -> usize {
 }
 
 fn char_to_byte(text: &str, ci: usize) -> usize {
-    text.char_indices().nth(ci).map(|(b, _)| b).unwrap_or(text.len())
+    text.char_indices()
+        .nth(ci)
+        .map(|(b, _)| b)
+        .unwrap_or(text.len())
 }
 
 /// Columns to underline: from the reported column to the end of the token there, or the whole
@@ -645,14 +704,33 @@ fn find_bar(ui: &mut Ui, p: &Palette, f: &mut FindState) {
         } else {
             format!("{} of {}", f.current + 1, f.match_count)
         };
-        ui.label(egui::RichText::new(label).font(font::mono(12.0)).color(p.text_muted));
-        if Btn::plain("Previous match").icon_only(Icon::ChevronLeft).height(24.0).show(ui).clicked() {
+        ui.label(
+            egui::RichText::new(label)
+                .font(font::mono(12.0))
+                .color(p.text_muted),
+        );
+        if Btn::plain("Previous match")
+            .icon_only(Icon::ChevronLeft)
+            .height(24.0)
+            .show(ui)
+            .clicked()
+        {
             f.pending_jump = Some(-1);
         }
-        if Btn::plain("Next match").icon_only(Icon::ChevronRight).height(24.0).show(ui).clicked() {
+        if Btn::plain("Next match")
+            .icon_only(Icon::ChevronRight)
+            .height(24.0)
+            .show(ui)
+            .clicked()
+        {
             f.pending_jump = Some(1);
         }
-        if Btn::plain("Close find").icon_only(Icon::Close).height(24.0).show(ui).clicked() {
+        if Btn::plain("Close find")
+            .icon_only(Icon::Close)
+            .height(24.0)
+            .show(ui)
+            .clicked()
+        {
             f.open = false;
         }
     });
@@ -660,13 +738,21 @@ fn find_bar(ui: &mut Ui, p: &Palette, f: &mut FindState) {
 
 /// The 38 px editor header: file tabs on the left, status (`Ln 30, Col 9 · C++`) on the
 /// right. Returns the clicked tab index.
-pub fn editor_tabs(ui: &mut Ui, names: &[(String, bool)], active: usize, status: &str) -> Option<usize> {
+pub fn editor_tabs(
+    ui: &mut Ui,
+    names: &[(String, bool)],
+    active: usize,
+    status: &str,
+) -> Option<usize> {
     let p = pal(ui);
     let rect = ui.available_rect_before_wrap();
     let bar = Rect::from_min_size(rect.min, vec2(rect.width(), 38.0));
     ui.painter().rect_filled(bar, 0.0, p.bg_header);
     ui.painter().line_segment(
-        [pos2(bar.left(), bar.bottom() - 0.5), pos2(bar.right(), bar.bottom() - 0.5)],
+        [
+            pos2(bar.left(), bar.bottom() - 0.5),
+            pos2(bar.right(), bar.bottom() - 0.5),
+        ],
         Stroke::new(1.0, p.border),
     );
     let mut clicked = None;
@@ -674,13 +760,21 @@ pub fn editor_tabs(ui: &mut Ui, names: &[(String, bool)], active: usize, status:
     child.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 18.0;
         for (i, (name, dirty)) in names.iter().enumerate() {
-            let label = if *dirty { format!("{name} •") } else { name.clone() };
+            let label = if *dirty {
+                format!("{name} •")
+            } else {
+                name.clone()
+            };
             if tab_sized(ui, &label, i == active, 37.0, 12.0).clicked() {
                 clicked = Some(i);
             }
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.label(egui::RichText::new(status).font(font::mono(12.0)).color(p.text_muted));
+            ui.label(
+                egui::RichText::new(status)
+                    .font(font::mono(12.0))
+                    .color(p.text_muted),
+            );
         });
     });
     ui.allocate_rect(bar, Sense::hover());

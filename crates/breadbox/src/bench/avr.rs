@@ -377,8 +377,11 @@ impl Worker {
             if self.active() {
                 self.slice();
             }
-            let due = self.last_publish.elapsed() > Duration::from_millis(33);
-            if due || self.debug_dirty || !self.out_events.is_empty() {
+            // publish at ≤ 30 Hz while running, otherwise only when something changed (an idle
+            // bench must not wake the UI)
+            let due = self.active() && self.last_publish.elapsed() > Duration::from_millis(33);
+            if due || self.debug_dirty || !self.out_events.is_empty() || !self.out_serial.is_empty()
+            {
                 self.publish(false);
             }
         }
@@ -440,9 +443,11 @@ impl Worker {
     fn flash(&mut self, fw: &Firmware) -> Result<UploadReport, BenchError> {
         let t0 = Instant::now();
         let image = if let Some(elf) = &fw.elf {
-            bb_avr::FirmwareImage::from_elf(elf).map_err(|e| BenchError::BadFirmware(e.to_string()))?
+            bb_avr::FirmwareImage::from_elf(elf)
+                .map_err(|e| BenchError::BadFirmware(e.to_string()))?
         } else if let Some(hex) = &fw.hex {
-            bb_avr::FirmwareImage::from_hex(hex).map_err(|e| BenchError::BadFirmware(e.to_string()))?
+            bb_avr::FirmwareImage::from_hex(hex)
+                .map_err(|e| BenchError::BadFirmware(e.to_string()))?
         } else {
             return Err(BenchError::BadFirmware("no ELF or HEX".into()));
         };
@@ -495,7 +500,12 @@ impl Worker {
             message,
         };
         self.out_events.push(BenchEvent::Flashed(report.clone()));
-        for b in self.dbg.as_ref().map(|d| d.breakpoints().to_vec()).unwrap_or_default() {
+        for b in self
+            .dbg
+            .as_ref()
+            .map(|d| d.breakpoints().to_vec())
+            .unwrap_or_default()
+        {
             self.out_events.push(BenchEvent::BreakpointArmed {
                 target: self.target.id.clone(),
                 file: file_name(&b.file),
@@ -700,7 +710,8 @@ impl Worker {
                     PinState::Output { high: true } => {
                         tr.prev_rise = tr.last_rise;
                         tr.last_rise = Some(e.cycle);
-                        if let (Some(a), Some(f), Some(b)) = (tr.prev_rise, tr.last_fall, tr.last_rise)
+                        if let (Some(a), Some(f), Some(b)) =
+                            (tr.prev_rise, tr.last_fall, tr.last_rise)
                             && a < f
                             && f < b
                         {
@@ -797,10 +808,9 @@ impl Worker {
                 .bp_specs
                 .iter()
                 .map(|s| {
-                    let b = dbg
-                        .breakpoints()
-                        .iter()
-                        .find(|b| same_file(&s.file, &file_name(&b.file)) && b.requested_line == s.line);
+                    let b = dbg.breakpoints().iter().find(|b| {
+                        same_file(&s.file, &file_name(&b.file)) && b.requested_line == s.line
+                    });
                     BreakpointView {
                         file: s.file.clone(),
                         line: s.line,
@@ -828,11 +838,7 @@ impl Worker {
                         pc: f.pc,
                     })
                     .collect();
-                vm.locals = dbg
-                    .locals(&self.avr, 0)
-                    .into_iter()
-                    .map(var_view)
-                    .collect();
+                vm.locals = dbg.locals(&self.avr, 0).into_iter().map(var_view).collect();
                 let mut g: Vec<VarView> = dbg
                     .globals(&self.avr)
                     .into_iter()
@@ -906,11 +912,9 @@ impl Worker {
                 // keep hit counts fresh while running
                 if let Some(dbg) = &self.dbg {
                     for b in &mut s.debug.breakpoints {
-                        if let Some(x) = dbg
-                            .breakpoints()
-                            .iter()
-                            .find(|x| same_file(&b.file, &file_name(&x.file)) && x.requested_line == b.line)
-                        {
+                        if let Some(x) = dbg.breakpoints().iter().find(|x| {
+                            same_file(&b.file, &file_name(&x.file)) && x.requested_line == b.line
+                        }) {
                             b.hits = x.hits;
                         }
                     }
@@ -1023,7 +1027,11 @@ mod tests {
                 },
             )
             .unwrap();
-        assert!(r.message.starts_with("Flashed virtual U1 in "), "{}", r.message);
+        assert!(
+            r.message.starts_with("Flashed virtual U1 in "),
+            "{}",
+            r.message
+        );
         let mut loc = None;
         assert!(wait(&mut b, 10.0, |u| {
             let d = &u.debug[0];
@@ -1048,7 +1056,11 @@ mod tests {
                 false
             }
         }));
-        assert_eq!(after.unwrap().line, 9, "step over digitalWrite lands on delay()");
+        assert_eq!(
+            after.unwrap().line,
+            9,
+            "step over digitalWrite lands on delay()"
+        );
     }
 
     #[test]
@@ -1067,12 +1079,17 @@ mod tests {
         .unwrap();
         let mut lines: Vec<SerialLine> = Vec::new();
         let mut radio = None;
-        assert!(wait(&mut b, 60.0, |u| {
-            lines.extend(u.serial.iter().cloned());
-            radio = u.radio.clone();
-            lines.iter().any(|l| l.text.starts_with("soil_raw="))
-                && lines.iter().any(|l| l.kind == LineKind::Net && l.text.starts_with("mqtt: PUB"))
-        }), "serial: {lines:#?}");
+        assert!(
+            wait(&mut b, 60.0, |u| {
+                lines.extend(u.serial.iter().cloned());
+                radio = u.radio.clone();
+                lines.iter().any(|l| l.text.starts_with("soil_raw="))
+                    && lines
+                        .iter()
+                        .any(|l| l.kind == LineKind::Net && l.text.starts_with("mqtt: PUB"))
+            }),
+            "serial: {lines:#?}"
+        );
         let radio = radio.unwrap();
         assert_eq!(radio.cards[0].label, "U2");
         assert!(radio.log.iter().any(|r| r.text.contains("DHCP")));

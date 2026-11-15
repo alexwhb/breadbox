@@ -8,9 +8,14 @@ pub mod overlay;
 pub mod plot;
 pub mod table;
 
+pub use code_editor::{
+    CodeDoc, CodeEditor, DiagSeverity, EditorDiagnostic, EditorOutput, EditorView, editor_tabs,
+};
 pub use controls::*;
-pub use icons::{Icon, paint_logo};
-pub use overlay::{ModalResult, PanelMode, Side, Toast, ToastKind, Toasts, collapsible_side, modal, panel_title_with_collapse};
-pub use table::{Cell, Col, Row, TableStyle, data_table};
-pub use code_editor::{CodeDoc, CodeEditor, DiagSeverity, EditorDiagnostic, EditorOutput, EditorView, editor_tabs};
 pub use highlight::{Lang, Tok};
+pub use icons::{Icon, paint_logo};
+pub use overlay::{
+    ModalResult, PanelMode, Side, Toast, ToastKind, Toasts, collapsible_side, modal,
+    panel_title_with_collapse,
+};
+pub use table::{Cell, Col, Row, TableStyle, data_table};

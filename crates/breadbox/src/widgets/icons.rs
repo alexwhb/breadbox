@@ -225,8 +225,10 @@ icons! {
 /// Parsed, flattened subpath: points + closed flag.
 type Sub = (Vec<Pos2>, bool);
 
-fn cache() -> &'static Mutex<HashMap<&'static str, std::sync::Arc<Vec<Sub>>>> {
-    static C: OnceLock<Mutex<HashMap<&'static str, std::sync::Arc<Vec<Sub>>>>> = OnceLock::new();
+type PathCache = Mutex<HashMap<&'static str, std::sync::Arc<Vec<Sub>>>>;
+
+fn cache() -> &'static PathCache {
+    static C: OnceLock<PathCache> = OnceLock::new();
     C.get_or_init(Default::default)
 }
 
@@ -309,7 +311,8 @@ struct Lexer<'a> {
 
 impl Lexer<'_> {
     fn skip(&mut self) {
-        while self.i < self.s.len() && (self.s[self.i].is_ascii_whitespace() || self.s[self.i] == b',')
+        while self.i < self.s.len()
+            && (self.s[self.i].is_ascii_whitespace() || self.s[self.i] == b',')
         {
             self.i += 1;
         }
@@ -347,7 +350,10 @@ impl Lexer<'_> {
                 break;
             }
         }
-        std::str::from_utf8(&self.s[start..self.i]).ok()?.parse().ok()
+        std::str::from_utf8(&self.s[start..self.i])
+            .ok()?
+            .parse()
+            .ok()
     }
     /// Arc flags may be written without separators (`a6 6 0 1 0 12 0` or `a1 1 0 10 2 0`).
     fn flag(&mut self) -> Option<bool> {
@@ -448,7 +454,7 @@ pub fn parse_path(d: &str) -> Vec<(Vec<Pos2>, bool)> {
             }
             b'C' | b'S' => {
                 let b = base(cur);
-                let c1 = if cmd.to_ascii_uppercase() == b'C' {
+                let c1 = if cmd.eq_ignore_ascii_case(&b'C') {
                     let (Some(x), Some(y)) = (lx.number(), lx.number()) else {
                         break;
                     };
@@ -483,7 +489,7 @@ pub fn parse_path(d: &str) -> Vec<(Vec<Pos2>, bool)> {
             }
             b'Q' | b'T' => {
                 let b = base(cur);
-                let c1 = if cmd.to_ascii_uppercase() == b'Q' {
+                let c1 = if cmd.eq_ignore_ascii_case(&b'Q') {
                     let (Some(x), Some(y)) = (lx.number(), lx.number()) else {
                         break;
                     };

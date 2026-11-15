@@ -30,15 +30,27 @@ impl Screen for HomeScreen {
     fn header(&mut self, ui: &mut Ui, app: &mut AppCtx) {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             ui.spacing_mut().item_spacing.x = 8.0;
-            if Btn::amber("New project").icon(Icon::Plus).show(ui).clicked() {
+            if Btn::amber("New project")
+                .icon(Icon::Plus)
+                .show(ui)
+                .clicked()
+            {
                 self.open_new(ProjectMode::Playground);
             }
-            if Btn::ghost("Open project…").icon(Icon::Folder).show(ui).clicked() {
+            if Btn::ghost("Open project…")
+                .icon(Icon::Folder)
+                .show(ui)
+                .clicked()
+            {
                 app.command(Command::OpenProject);
             }
             if let Some(p) = &app.project {
                 let label = format!("Back to {}", p.name);
-                if Btn::plain(&label).icon(Icon::ChevronLeft).show(ui).clicked() {
+                if Btn::plain(&label)
+                    .icon(Icon::ChevronLeft)
+                    .show(ui)
+                    .clicked()
+                {
                     let r = match p.mode {
                         ProjectMode::Pro => Route::Pro(crate::router::ProTab::Analysis),
                         ProjectMode::Playground => Route::Workbench,
@@ -66,7 +78,10 @@ impl Screen for HomeScreen {
             .show(ui, |ui| {
                 let w = (area.width() - 96.0).clamp(760.0, 1180.0);
                 let left = area.left() + (area.width() - w) / 2.0;
-                let mut child = widgets::child_ui(ui, Rect::from_min_size(pos2(left, area.top() + 40.0), vec2(w, 10_000.0)));
+                let mut child = widgets::child_ui(
+                    ui,
+                    Rect::from_min_size(pos2(left, area.top() + 40.0), vec2(w, 10_000.0)),
+                );
                 let ui = &mut child;
                 ui.spacing_mut().item_spacing.y = 14.0;
                 self.hero(ui, app, p, w);
@@ -110,7 +125,11 @@ impl HomeScreen {
     }
 
     fn hero(&mut self, ui: &mut Ui, app: &mut AppCtx, p: &Palette, w: f32) {
-        ui.label(egui::RichText::new("Start something").font(font::brand(28.0)).color(p.text_strong));
+        ui.label(
+            egui::RichText::new("Start something")
+                .font(font::brand(28.0))
+                .color(p.text_strong),
+        );
         ui.label(
             egui::RichText::new("A breadboard bench where Arduinos run real firmware — and a SPICE workbench over the same circuit.")
                 .font(font::ui(14.0))
@@ -182,11 +201,36 @@ impl HomeScreen {
             let (r, resp) = ui.allocate_exact_size(vec2(w, 44.0), Sense::click());
             let label = format!("Open recent {}", rp.name);
             resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &label));
-            let fill = if resp.hovered() { p.bg_hover } else { p.bg_header };
-            ui.painter().rect(r, CornerRadius::same(8), fill, Stroke::new(1.0, p.border), egui::StrokeKind::Inside);
-            let icon = if rp.mode == ProjectMode::Pro { Icon::Analysis } else { Icon::Breadboard };
-            icon.paint_with(ui.painter(), Rect::from_center_size(pos2(r.left() + 22.0, r.center().y), vec2(20.0, 20.0)), p.text_dim, p.accent);
-            ui.painter().text(pos2(r.left() + 44.0, r.center().y - 8.0), egui::Align2::LEFT_CENTER, &rp.name, font::medium(13.0), p.text);
+            let fill = if resp.hovered() {
+                p.bg_hover
+            } else {
+                p.bg_header
+            };
+            ui.painter().rect(
+                r,
+                CornerRadius::same(8),
+                fill,
+                Stroke::new(1.0, p.border),
+                egui::StrokeKind::Inside,
+            );
+            let icon = if rp.mode == ProjectMode::Pro {
+                Icon::Analysis
+            } else {
+                Icon::Breadboard
+            };
+            icon.paint_with(
+                ui.painter(),
+                Rect::from_center_size(pos2(r.left() + 22.0, r.center().y), vec2(20.0, 20.0)),
+                p.text_dim,
+                p.accent,
+            );
+            ui.painter().text(
+                pos2(r.left() + 44.0, r.center().y - 8.0),
+                egui::Align2::LEFT_CENTER,
+                &rp.name,
+                font::medium(13.0),
+                p.text,
+            );
             ui.painter().text(
                 pos2(r.left() + 44.0, r.center().y + 9.0),
                 egui::Align2::LEFT_CENTER,
@@ -205,7 +249,8 @@ impl HomeScreen {
                 if rp.path.join("project.json").exists() {
                     app.command(Command::OpenPath(rp.path.clone()));
                 } else {
-                    app.toasts.warn(format!("{} was moved or deleted.", rp.path.display()));
+                    app.toasts
+                        .warn(format!("{} was moved or deleted.", rp.path.display()));
                     app.recent.retain(|x| x.path != rp.path);
                 }
             }
@@ -215,7 +260,14 @@ impl HomeScreen {
     fn examples(&mut self, ui: &mut Ui, app: &mut AppCtx, p: &Palette, w: f32) {
         ui.horizontal(|ui| {
             section_header(ui, "Examples");
-            ui.label(egui::RichText::new(format!("{} projects · open read-only, Save As to keep changes", app.examples.len())).font(font::ui(12.0)).color(p.text_muted));
+            ui.label(
+                egui::RichText::new(format!(
+                    "{} projects · open read-only, Save As to keep changes",
+                    app.examples.len()
+                ))
+                .font(font::ui(12.0))
+                .color(p.text_muted),
+            );
         });
         let cols = 3usize;
         let gap = 12.0;
@@ -227,7 +279,9 @@ impl HomeScreen {
                 for ex in row {
                     let (r, resp) = ui.allocate_exact_size(vec2(cw, 128.0), Sense::click());
                     let label = format!("Open example {}", ex.name);
-                    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &label));
+                    resp.widget_info(|| {
+                        egui::WidgetInfo::labeled(egui::Role::Button, true, &label)
+                    });
                     let hot = resp.hovered();
                     ui.painter().rect(
                         r,
@@ -250,10 +304,20 @@ impl HomeScreen {
                         };
                         let (ir, _) = ui.allocate_exact_size(vec2(22.0, 22.0), Sense::hover());
                         icon.paint_with(ui.painter(), ir, p.text_dim, p.accent);
-                        ui.label(egui::RichText::new(&ex.name).font(font::heading(15.0)).color(p.text_strong));
+                        ui.label(
+                            egui::RichText::new(&ex.name)
+                                .font(font::heading(15.0))
+                                .color(p.text_strong),
+                        );
                     });
                     widgets::wrapped_text(&mut c, &ex.description, font::ui(12.0), p.text_muted, 3);
-                    let mut tags = widgets::child_ui(ui, Rect::from_min_max(pos2(r.left() + 14.0, r.bottom() - 30.0), pos2(r.right() - 14.0, r.bottom() - 8.0)));
+                    let mut tags = widgets::child_ui(
+                        ui,
+                        Rect::from_min_max(
+                            pos2(r.left() + 14.0, r.bottom() - 30.0),
+                            pos2(r.right() - 14.0, r.bottom() - 8.0),
+                        ),
+                    );
                     tags.horizontal(|ui| {
                         ui.spacing_mut().item_spacing.x = 6.0;
                         widgets::kind_tag(ui, &ex.mode.label().to_uppercase());
@@ -268,7 +332,10 @@ impl HomeScreen {
             });
         }
         if app.examples.is_empty() {
-            ui.label(egui::RichText::new("No examples folder found (set BREADBOX_RESOURCES).").color(p.text_muted));
+            ui.label(
+                egui::RichText::new("No examples folder found (set BREADBOX_RESOURCES).")
+                    .color(p.text_muted),
+            );
         }
     }
 
@@ -295,9 +362,17 @@ impl HomeScreen {
                 ui.spacing_mut().item_spacing.y = 8.0;
                 ui.horizontal(|ui| {
                     icon.show(ui, 18.0, p.text_dim);
-                    ui.label(egui::RichText::new(title).font(font::heading(15.0)).color(p.text_strong));
+                    ui.label(
+                        egui::RichText::new(title)
+                            .font(font::heading(15.0))
+                            .color(p.text_strong),
+                    );
                 });
-                ui.label(egui::RichText::new(blurb).font(font::ui(12.5)).color(p.text_muted));
+                ui.label(
+                    egui::RichText::new(blurb)
+                        .font(font::ui(12.5))
+                        .color(p.text_muted),
+                );
                 if Btn::ghost(button).show(ui).clicked() {
                     app.navigate(route);
                 }
@@ -308,7 +383,11 @@ impl HomeScreen {
             ui.spacing_mut().item_spacing.y = 8.0;
             ui.horizontal(|ui| {
                 Icon::Wrench.show(ui, 16.0, p.text_dim);
-                ui.label(egui::RichText::new("Firmware toolchain").font(font::heading(15.0)).color(p.text_strong));
+                ui.label(
+                    egui::RichText::new("Firmware toolchain")
+                        .font(font::heading(15.0))
+                        .color(p.text_strong),
+                );
             });
             let (text, tone) = match &app.toolchain.state {
                 ToolchainState::Ready(_) => (app.toolchain.compiler_label(), Tone::Ok),
@@ -318,17 +397,31 @@ impl HomeScreen {
                 ToolchainState::Failed(e) => (e.clone(), Tone::Danger),
                 ToolchainState::Disabled => ("off".to_string(), Tone::Neutral),
             };
-            ui.add(egui::Label::new(egui::RichText::new(text).font(font::mono(12.0)).color(match tone {
-                Tone::Ok => p.ok,
-                Tone::Warn => p.accent,
-                Tone::Danger => p.danger_soft,
-                _ => p.text_muted,
-            })).wrap());
+            ui.add(
+                egui::Label::new(egui::RichText::new(text).font(font::mono(12.0)).color(
+                    match tone {
+                        Tone::Ok => p.ok,
+                        Tone::Warn => p.accent,
+                        Tone::Danger => p.danger_soft,
+                        _ => p.text_muted,
+                    },
+                ))
+                .wrap(),
+            );
             if let Some(cli) = app.toolchain.cli_label() {
-                ui.label(egui::RichText::new(cli).font(font::mono(12.0)).color(p.text_muted));
+                ui.label(
+                    egui::RichText::new(cli)
+                        .font(font::mono(12.0))
+                        .color(p.text_muted),
+                );
             }
-            if matches!(app.toolchain.state, ToolchainState::Missing { .. } | ToolchainState::Failed(_))
-                && Btn::amber("Install toolchain").icon(Icon::Download).show(ui).clicked()
+            if matches!(
+                app.toolchain.state,
+                ToolchainState::Missing { .. } | ToolchainState::Failed(_)
+            ) && Btn::amber("Install toolchain")
+                .icon(Icon::Download)
+                .show(ui)
+                .clicked()
             {
                 app.toolchain.start_install();
             }
@@ -356,22 +449,43 @@ impl HomeScreen {
                     Seg::new(ProjectMode::Pro, "Pro").icon(Icon::SegSchematic),
                 ],
             );
-            ui.label(egui::RichText::new("Name").font(font::ui(12.0)).color(p.text_muted));
-            let resp = ui.add(egui::TextEdit::singleline(&mut d.name).font(font::ui(13.0)).desired_width(f32::INFINITY));
+            ui.label(
+                egui::RichText::new("Name")
+                    .font(font::ui(12.0))
+                    .color(p.text_muted),
+            );
+            let resp = ui.add(
+                egui::TextEdit::singleline(&mut d.name)
+                    .font(font::ui(13.0))
+                    .desired_width(f32::INFINITY),
+            );
             if resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                 create = true;
             }
-            ui.label(egui::RichText::new("Location").font(font::ui(12.0)).color(p.text_muted));
+            ui.label(
+                egui::RichText::new("Location")
+                    .font(font::ui(12.0))
+                    .color(p.text_muted),
+            );
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new(d.parent.display().to_string()).font(font::mono(12.0)).color(p.text_dim));
+                ui.label(
+                    egui::RichText::new(d.parent.display().to_string())
+                        .font(font::mono(12.0))
+                        .color(p.text_dim),
+                );
                 if Btn::ghost("Choose…").small().show(ui).clicked()
-                    && let Some(dir) = crate::platform::pick_folder("Where should the project live?")
+                    && let Some(dir) =
+                        crate::platform::pick_folder("Where should the project live?")
                 {
                     d.parent = dir;
                 }
             });
             if let Some(e) = &d.error {
-                ui.label(egui::RichText::new(e).font(font::ui(12.0)).color(p.danger_soft));
+                ui.label(
+                    egui::RichText::new(e)
+                        .font(font::ui(12.0))
+                        .color(p.danger_soft),
+                );
             }
             ui.add_space(4.0);
             ui.horizontal(|ui| {

@@ -27,7 +27,11 @@ pub fn harness() -> Harness<'static, BreadboxApp> {
 }
 
 /// Steps until `cond` holds (background jobs and the bench run on their own threads).
-pub fn wait_for(h: &mut Harness<'static, BreadboxApp>, secs: f64, mut cond: impl FnMut(&mut Harness<'static, BreadboxApp>) -> bool) -> bool {
+pub fn wait_for(
+    h: &mut Harness<'static, BreadboxApp>,
+    secs: f64,
+    mut cond: impl FnMut(&mut Harness<'static, BreadboxApp>) -> bool,
+) -> bool {
     let t0 = Instant::now();
     while t0.elapsed().as_secs_f64() < secs {
         h.run_steps(1);

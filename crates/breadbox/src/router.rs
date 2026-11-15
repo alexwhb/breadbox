@@ -189,7 +189,9 @@ impl ScreenRegistry {
     }
 
     pub fn slots(&self) -> impl Iterator<Item = ScreenSlot> + '_ {
-        ScreenSlot::ALL.into_iter().filter(|s| self.screens.contains_key(s))
+        ScreenSlot::ALL
+            .into_iter()
+            .filter(|s| self.screens.contains_key(s))
     }
 }
 
@@ -204,6 +206,9 @@ mod tests {
         assert!(Route::Firmware.needs_project());
         assert!(!Route::Lessons.needs_project());
         let j = serde_json::to_string(&Route::Pro(ProTab::Analysis)).unwrap();
-        assert_eq!(serde_json::from_str::<Route>(&j).unwrap(), Route::Pro(ProTab::Analysis));
+        assert_eq!(
+            serde_json::from_str::<Route>(&j).unwrap(),
+            Route::Pro(ProTab::Analysis)
+        );
     }
 }

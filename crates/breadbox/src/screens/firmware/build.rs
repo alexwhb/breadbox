@@ -49,7 +49,10 @@ pub struct BuildRequest {
 
 #[derive(Clone)]
 pub enum BuildTarget {
-    Avr { toolchain: Arc<Toolchain>, fqbn: String },
+    Avr {
+        toolchain: Arc<Toolchain>,
+        fqbn: String,
+    },
     Host(HostKind),
 }
 
@@ -99,7 +102,10 @@ pub fn run_build(key: &str, req: &BuildRequest) -> BuildResult {
     let t0 = std::time::Instant::now();
     let dir = staging_dir(key, &req.sketch_name);
     if let Err(e) = stage(&dir, req) {
-        return failed(format!("could not stage the sketch in {}: {e}", dir.display()), req.debug);
+        return failed(
+            format!("could not stage the sketch in {}: {e}", dir.display()),
+            req.debug,
+        );
     }
     match &req.target {
         BuildTarget::Avr { toolchain, fqbn } => {
@@ -254,13 +260,28 @@ pub fn included_libraries(docs: &[CodeDoc]) -> Vec<String> {
                 }
                 let lib = name.trim_end_matches(".h").to_string();
                 const SYSTEM: &[&str] = &[
-                    "Arduino", "avr/pgmspace", "avr/io", "avr/interrupt", "avr/eeprom", "avr/sleep", "avr/wdt",
-                    "util/delay", "stdio", "stdlib", "string", "stdarg", "stdint", "stddef", "stdbool", "math",
-                    "ctype", "limits", "inttypes", "assert",
+                    "Arduino",
+                    "avr/pgmspace",
+                    "avr/io",
+                    "avr/interrupt",
+                    "avr/eeprom",
+                    "avr/sleep",
+                    "avr/wdt",
+                    "util/delay",
+                    "stdio",
+                    "stdlib",
+                    "string",
+                    "stdarg",
+                    "stdint",
+                    "stddef",
+                    "stdbool",
+                    "math",
+                    "ctype",
+                    "limits",
+                    "inttypes",
+                    "assert",
                 ];
-                if !SYSTEM.contains(&lib.as_str())
-                    && !libs.contains(&lib)
-                {
+                if !SYSTEM.contains(&lib.as_str()) && !libs.contains(&lib) {
                     libs.push(lib);
                 }
             }
@@ -276,15 +297,26 @@ mod tests {
     #[test]
     fn libraries_come_from_includes_not_tabs() {
         let docs = vec![
-            CodeDoc::new("garden-node.ino", "#include <SoftwareSerial.h>\n#include \"wifi_at.h\"\n#include <ArduinoJson.h>\n"),
-            CodeDoc::new("wifi_at.h", "#include <Arduino.h>\n#include <SoftwareSerial.h>\n"),
+            CodeDoc::new(
+                "garden-node.ino",
+                "#include <SoftwareSerial.h>\n#include \"wifi_at.h\"\n#include <ArduinoJson.h>\n",
+            ),
+            CodeDoc::new(
+                "wifi_at.h",
+                "#include <Arduino.h>\n#include <SoftwareSerial.h>\n",
+            ),
         ];
-        assert_eq!(included_libraries(&docs), vec!["SoftwareSerial", "ArduinoJson"]);
+        assert_eq!(
+            included_libraries(&docs),
+            vec!["SoftwareSerial", "ArduinoJson"]
+        );
     }
 
     #[test]
     fn staging_replaces_stale_tabs() {
-        let dir = std::env::temp_dir().join(format!("bb-stage-{}", std::process::id())).join("s");
+        let dir = std::env::temp_dir()
+            .join(format!("bb-stage-{}", std::process::id()))
+            .join("s");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("old.h"), "x").unwrap();
         let req = BuildRequest {

@@ -110,9 +110,18 @@ impl Trace {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Marker {
     /// Dashed vertical line with a label near the top (thresholds).
-    VLine { x: f64, label: String, color: Color32 },
+    VLine {
+        x: f64,
+        label: String,
+        color: Color32,
+    },
     /// Highlighted point with a label (`op: 180 lx → 2.60 V`).
-    Point { x: f64, y: f64, label: String, color: Color32 },
+    Point {
+        x: f64,
+        y: f64,
+        label: String,
+        color: Color32,
+    },
 }
 
 /// Two cursors on a time plot (data x).
@@ -246,7 +255,7 @@ fn nice_step(raw: f64) -> f64 {
 /// Compact SI formatting for tick labels: `2 ms`, `10k`, `2.5`, `490 Hz`.
 pub fn fmt_si(v: f64, unit: &str) -> String {
     if v == 0.0 {
-        return if unit.is_empty() { "0".into() } else { "0".into() };
+        return "0".into();
     }
     let a = v.abs();
     let (k, p) = [
@@ -270,7 +279,10 @@ pub fn fmt_si(v: f64, unit: &str) -> String {
     } else if (x * 10.0 - (x * 10.0).round()).abs() < 1e-6 {
         format!("{x:.1}")
     } else {
-        format!("{x:.2}").trim_end_matches('0').trim_end_matches('.').to_string()
+        format!("{x:.2}")
+            .trim_end_matches('0')
+            .trim_end_matches('.')
+            .to_string()
     };
     if unit.is_empty() {
         format!("{s}{p}")
@@ -426,7 +438,8 @@ impl<'a> LinePlot<'a> {
                     hi = hi.max(pt[0]);
                 }
             }
-            x.range.unwrap_or(if lo.is_finite() { (lo, hi) } else { (0.0, 1.0) })
+            x.range
+                .unwrap_or(if lo.is_finite() { (lo, hi) } else { (0.0, 1.0) })
         };
         let (x_lo, x_hi) = (x.fwd(x_bounds.0), x.fwd(x_bounds.1));
 
@@ -439,7 +452,11 @@ impl<'a> LinePlot<'a> {
             }
             let v = xs.inv(m.value) * xs.display_scale;
             let last = m.value + m.step_size > *r.end() - 1e-9;
-            if last { tick_text(v, &xs.unit) } else { fmt_si(v, "") }
+            if last {
+                tick_text(v, &xs.unit)
+            } else {
+                fmt_si(v, "")
+            }
         };
         let y_fmt = move |m: GridMark, r: &std::ops::RangeInclusive<f64>| -> String {
             if ys.scale == Scale::Log10 && m.step_size < 0.5 {
@@ -447,7 +464,11 @@ impl<'a> LinePlot<'a> {
             }
             let v = ys.inv(m.value) * ys.display_scale;
             let last = m.value + m.step_size > *r.end() - 1e-9;
-            if last { tick_text(v, &ys.unit) } else { fmt_si(v, "") }
+            if last {
+                tick_text(v, &ys.unit)
+            } else {
+                fmt_si(v, "")
+            }
         };
         let y2_fmt = move |m: GridMark, r: &std::ops::RangeInclusive<f64>| -> String {
             let (Some(ax), Some((a, b))) = (&y2s, y2_range) else {
@@ -584,7 +605,11 @@ impl<'a> LinePlot<'a> {
             plot.y_grid_spacer(move |g| {
                 let span = (g.bounds.1 - g.bounds.0).abs();
                 let n = span / y_step;
-                if (1.5..=8.0).contains(&n) { fixed_marks(g.bounds.0, g.bounds.1, y_step) } else { nice_marks(g, 4.0) }
+                if (1.5..=8.0).contains(&n) {
+                    fixed_marks(g.bounds.0, g.bounds.1, y_step)
+                } else {
+                    nice_marks(g, 4.0)
+                }
             })
         };
         let resp = plot.show(ui, |pui| {
@@ -603,10 +628,19 @@ impl<'a> LinePlot<'a> {
         // markers
         for m in &markers {
             match m {
-                Marker::VLine { x: mx, label, color } => {
+                Marker::VLine {
+                    x: mx,
+                    label,
+                    color,
+                } => {
                     let px = t.position_from_point_x(x.fwd(*mx));
                     let pts = [pos2(px, frame.top() + 6.0), pos2(px, frame.bottom())];
-                    painter.extend(egui::Shape::dashed_line(&pts, Stroke::new(1.0, *color), 3.0, 3.0));
+                    painter.extend(egui::Shape::dashed_line(
+                        &pts,
+                        Stroke::new(1.0, *color),
+                        3.0,
+                        3.0,
+                    ));
                     painter.text(
                         pos2(px - 4.0, frame.top() + 12.0),
                         egui::Align2::RIGHT_CENTER,
@@ -615,10 +649,21 @@ impl<'a> LinePlot<'a> {
                         *color,
                     );
                 }
-                Marker::Point { x: mx, y: my, label, color } => {
-                    let pos = t.position_from_point(&egui_plot::PlotPoint::new(x.fwd(*mx), y.fwd(*my)));
+                Marker::Point {
+                    x: mx,
+                    y: my,
+                    label,
+                    color,
+                } => {
+                    let pos =
+                        t.position_from_point(&egui_plot::PlotPoint::new(x.fwd(*mx), y.fwd(*my)));
                     let pts = [pos2(pos.x, frame.top()), pos2(pos.x, frame.bottom())];
-                    painter.extend(egui::Shape::dashed_line(&pts, Stroke::new(1.0, color.gamma_multiply(0.6)), 3.0, 3.0));
+                    painter.extend(egui::Shape::dashed_line(
+                        &pts,
+                        Stroke::new(1.0, color.gamma_multiply(0.6)),
+                        3.0,
+                        3.0,
+                    ));
                     painter.circle(pos, 4.5, p.bg_app, Stroke::new(2.0, *color));
                     painter.text(
                         pos + vec2(8.0, 14.0),
@@ -638,17 +683,29 @@ impl<'a> LinePlot<'a> {
             let xb = t.position_from_point_x(x.fwd(c.b));
             for px in [xa, xb] {
                 let pts = [pos2(px, frame.top() - 6.0), pos2(px, frame.bottom() + 6.0)];
-                painter.extend(egui::Shape::dashed_line(&pts, Stroke::new(1.0, p.text), 3.0, 3.0));
+                painter.extend(egui::Shape::dashed_line(
+                    &pts,
+                    Stroke::new(1.0, p.text),
+                    3.0,
+                    3.0,
+                ));
             }
             let label = format!("Δ {}", fmt_readout(c.delta() * x.display_scale, &x.unit, 3));
             let g = painter.layout_no_wrap(label, tick_font(), p.text);
             let cx = (xa + xb) / 2.0;
             let r = Rect::from_center_size(pos2(cx, frame.top() + 9.0), g.size() + vec2(14.0, 6.0));
-            painter.rect(r, 3.0, p.bg_raised, Stroke::new(1.0, p.border_strong), egui::StrokeKind::Inside);
+            painter.rect(
+                r,
+                3.0,
+                p.bg_raised,
+                Stroke::new(1.0, p.border_strong),
+                egui::StrokeKind::Inside,
+            );
             painter.galley(r.center() - g.size() / 2.0, g, p.text);
         }
         let label = format!("{id} plot");
-        resp.response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Figure, true, &label));
+        resp.response
+            .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Figure, true, &label));
         PlotOutput {
             rect: frame,
             response: resp.response,
@@ -730,11 +787,23 @@ pub fn histogram_plot(ui: &mut Ui, id: &str, h: &Histogram, height: f32) -> Plot
     if let Some((x, label)) = &h.threshold {
         let px = t.position_from_point_x(*x);
         let pts = [pos2(px, frame.top() + 8.0), pos2(px, frame.bottom())];
-        painter.extend(egui::Shape::dashed_line(&pts, Stroke::new(1.0, p.info), 3.0, 3.0));
-        painter.text(pos2(px - 4.0, frame.top() + 14.0), egui::Align2::RIGHT_CENTER, label, tick_font(), p.info);
+        painter.extend(egui::Shape::dashed_line(
+            &pts,
+            Stroke::new(1.0, p.info),
+            3.0,
+            3.0,
+        ));
+        painter.text(
+            pos2(px - 4.0, frame.top() + 14.0),
+            egui::Align2::RIGHT_CENTER,
+            label,
+            tick_font(),
+            p.info,
+        );
     }
     let l = format!("{id} histogram");
-    resp.response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Figure, true, &l));
+    resp.response
+        .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Figure, true, &l));
     PlotOutput {
         rect: frame,
         response: resp.response,
@@ -779,7 +848,11 @@ pub fn traces_to_csv(x_name: &str, traces: &[Trace]) -> String {
     let mut out = String::new();
     let same_x = traces.windows(2).all(|w| {
         w[0].points.len() == w[1].points.len()
-            && w[0].points.iter().zip(&w[1].points).all(|(a, b)| a[0] == b[0])
+            && w[0]
+                .points
+                .iter()
+                .zip(&w[1].points)
+                .all(|(a, b)| a[0] == b[0])
     });
     if same_x && !traces.is_empty() {
         out.push_str(x_name);
@@ -815,7 +888,14 @@ fn csv_field(s: &str) -> String {
 }
 
 /// Standalone SVG of a line plot (vector export, `PRO-6`).
-pub fn traces_to_svg(title: &str, traces: &[Trace], x: &AxisSpec, y: &AxisSpec, w: f32, h: f32) -> String {
+pub fn traces_to_svg(
+    title: &str,
+    traces: &[Trace],
+    x: &AxisSpec,
+    y: &AxisSpec,
+    w: f32,
+    h: f32,
+) -> String {
     let (ml, mr, mt, mb) = (56.0f32, 20.0f32, 30.0f32, 30.0f32);
     let pw = w - ml - mr;
     let ph = h - mt - mb;
@@ -845,7 +925,9 @@ pub fn traces_to_svg(title: &str, traces: &[Trace], x: &AxisSpec, y: &AxisSpec, 
         let xx = ml + pw * k as f32 / 4.0;
         s.push_str(&format!("<path d=\"M{xx} {mt}V{}\"/>", mt + ph));
     }
-    s.push_str("</g>\n<g font-family=\"JetBrains Mono, monospace\" font-size=\"10\" fill=\"#A3A3A3\">");
+    s.push_str(
+        "</g>\n<g font-family=\"JetBrains Mono, monospace\" font-size=\"10\" fill=\"#A3A3A3\">",
+    );
     for k in 0..=4 {
         let v = yr.0 + (yr.1 - yr.0) * k as f64 / 4.0;
         let yy = sy(v);
@@ -853,21 +935,32 @@ pub fn traces_to_svg(title: &str, traces: &[Trace], x: &AxisSpec, y: &AxisSpec, 
             "<text x=\"{}\" y=\"{:.1}\" text-anchor=\"end\">{}</text>",
             ml - 6.0,
             yy + 3.0,
-            xml(&fmt_si(v * y.display_scale, if k == 4 { &y.unit } else { "" }))
+            xml(&fmt_si(
+                v * y.display_scale,
+                if k == 4 { &y.unit } else { "" }
+            ))
         ));
         let xv = x.inv(xr.0 + (xr.1 - xr.0) * k as f64 / 4.0);
         s.push_str(&format!(
             "<text x=\"{:.1}\" y=\"{}\" text-anchor=\"middle\">{}</text>",
             sx(xv),
             h - 10.0,
-            xml(&fmt_si(xv * x.display_scale, if k == 4 { &x.unit } else { "" }))
+            xml(&fmt_si(
+                xv * x.display_scale,
+                if k == 4 { &x.unit } else { "" }
+            ))
         ));
     }
     s.push_str("</g>\n");
     for t in traces {
         let mut d = String::new();
         for (i, p) in t.points.iter().enumerate() {
-            d.push_str(&format!("{}{:.2} {:.2}", if i == 0 { "M" } else { "L" }, sx(p[0]), sy(p[1])));
+            d.push_str(&format!(
+                "{}{:.2} {:.2}",
+                if i == 0 { "M" } else { "L" },
+                sx(p[0]),
+                sy(p[1])
+            ));
         }
         s.push_str(&format!(
             "<path d=\"{d}\" fill=\"none\" stroke=\"{}\" stroke-width=\"{}\"><title>{}</title></path>\n",
@@ -881,11 +974,17 @@ pub fn traces_to_svg(title: &str, traces: &[Trace], x: &AxisSpec, y: &AxisSpec, 
 }
 
 fn xml(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
 }
 
 /// Crops a screenshot to `rect` (points) and encodes PNG.
-pub fn crop_png(image: &egui::ColorImage, rect: Rect, pixels_per_point: f32) -> Result<Vec<u8>, String> {
+pub fn crop_png(
+    image: &egui::ColorImage,
+    rect: Rect,
+    pixels_per_point: f32,
+) -> Result<Vec<u8>, String> {
     let [iw, ih] = image.size;
     let x0 = ((rect.left() * pixels_per_point).floor().max(0.0) as usize).min(iw);
     let y0 = ((rect.top() * pixels_per_point).floor().max(0.0) as usize).min(ih);
@@ -898,7 +997,11 @@ pub fn crop_png(image: &egui::ColorImage, rect: Rect, pixels_per_point: f32) -> 
     for y in y0..y1 {
         for x in x0..x1 {
             let c = image.pixels[y * iw + x];
-            buf.put_pixel((x - x0) as u32, (y - y0) as u32, image::Rgba(c.to_srgba_unmultiplied()));
+            buf.put_pixel(
+                (x - x0) as u32,
+                (y - y0) as u32,
+                image::Rgba(c.to_srgba_unmultiplied()),
+            );
         }
     }
     let mut out = std::io::Cursor::new(Vec::new());
@@ -938,14 +1041,20 @@ pub fn auto_cursors(points: &[[f64; 2]]) -> Option<(f64, f64, f64)> {
     }
     let (lo, hi) = points
         .iter()
-        .fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), p| (a.min(p[1]), b.max(p[1])));
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), p| {
+            (a.min(p[1]), b.max(p[1]))
+        });
     if hi - lo < 1e-9 {
         return None;
     }
     let mid = (lo + hi) / 2.0;
     let cross = |i: usize, rising: bool| -> Option<f64> {
         let (a, b) = (points[i], points[i + 1]);
-        let ok = if rising { a[1] < mid && b[1] >= mid } else { a[1] >= mid && b[1] < mid };
+        let ok = if rising {
+            a[1] < mid && b[1] >= mid
+        } else {
+            a[1] >= mid && b[1] < mid
+        };
         ok.then(|| a[0] + (mid - a[1]) / (b[1] - a[1]) * (b[0] - a[0]))
     };
     let mut rises = Vec::new();
@@ -959,8 +1068,15 @@ pub fn auto_cursors(points: &[[f64; 2]]) -> Option<(f64, f64, f64)> {
         }
     }
     // skip a rise at t = 0 (start-up), use the next full period
-    let r: Vec<f64> = rises.into_iter().filter(|t| *t > points[0][0] + 1e-12).collect();
-    let (t1, t2) = if r.len() >= 3 { (r[1], r[2]) } else { (*r.first()?, *r.get(1)?) };
+    let r: Vec<f64> = rises
+        .into_iter()
+        .filter(|t| *t > points[0][0] + 1e-12)
+        .collect();
+    let (t1, t2) = if r.len() >= 3 {
+        (r[1], r[2])
+    } else {
+        (*r.first()?, *r.get(1)?)
+    };
     let fall = falls.iter().copied().find(|f| *f > t1 && *f < t2)?;
     Some((t1, t2, (fall - t1) / (t2 - t1)))
 }
@@ -1011,15 +1127,31 @@ mod tests {
         let t2 = Trace::new("v(b)", Color32::BLUE, vec![[1.0, 0.2], [10.0, 0.6]]);
         let csv = traces_to_csv("lux", &[t1.clone(), t2]);
         assert!(csv.starts_with("lux,v(a1),v(b)\n1e0,1e-1,2e-1\n"), "{csv}");
-        let svg = traces_to_svg(".dc — V(A1) vs light", &[t1], &AxisSpec::log("lx"), &AxisSpec::linear("V"), 440.0, 210.0);
-        assert!(svg.starts_with("<svg") && svg.contains("<path d=\"M") && svg.contains("V(A1) vs light"));
+        let svg = traces_to_svg(
+            ".dc — V(A1) vs light",
+            &[t1],
+            &AxisSpec::log("lx"),
+            &AxisSpec::linear("V"),
+            440.0,
+            210.0,
+        );
+        assert!(
+            svg.starts_with("<svg")
+                && svg.contains("<path d=\"M")
+                && svg.contains("V(A1) vs light")
+        );
     }
 
     #[test]
     fn png_crop() {
         let mut img = egui::ColorImage::new([20, 10], vec![Color32::BLACK; 200]);
         img.pixels[5 * 20 + 5] = Color32::WHITE;
-        let png = crop_png(&img, Rect::from_min_max(pos2(2.0, 2.0), pos2(8.0, 8.0)), 1.0).unwrap();
+        let png = crop_png(
+            &img,
+            Rect::from_min_max(pos2(2.0, 2.0), pos2(8.0, 8.0)),
+            1.0,
+        )
+        .unwrap();
         let back = image::load_from_memory(&png).unwrap().to_rgba8();
         assert_eq!(back.dimensions(), (6, 6));
         assert_eq!(back.get_pixel(3, 3).0, [255, 255, 255, 255]);
