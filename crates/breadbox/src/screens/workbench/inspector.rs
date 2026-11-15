@@ -219,13 +219,6 @@ impl Inspector {
                 .font(font::heading(14.0))
                 .color(p.text),
         );
-        if !def.part_number.is_empty() || !def.description.is_empty() {
-            ui.label(
-                egui::RichText::new(&def.description)
-                    .font(font::ui(11.5))
-                    .color(p.text_muted),
-            );
-        }
         // datasheet fields
         let mut rows: Vec<(String, String)> = def
             .inspector

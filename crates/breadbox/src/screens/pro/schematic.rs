@@ -88,7 +88,8 @@ impl Screen for ProSchematicScreen {
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
                         for n in &conn.nets {
-                            if n.pins.is_empty() {
+                            // nets that connect something (lone unconnected pins are noise)
+                            if n.pins.len() + n.holes.len().min(1) < 2 && n.labels.is_empty() {
                                 continue;
                             }
                             let name = net_display(&n.name);

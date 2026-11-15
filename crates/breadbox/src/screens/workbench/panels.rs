@@ -25,6 +25,8 @@ struct WorldUi {
     temp: f64,
     rh: f64,
     active: Option<&'static str>,
+    /// Humidity, time-warp and location shown.
+    more: bool,
 }
 
 /// Well-known places for the day/night cycle.
@@ -187,14 +189,17 @@ impl Panels {
         if w.temp != before {
             sends.push(("air.temp_c".into(), w.temp));
         }
-        let before = w.rh;
-        let r = StopSlider::new("Humidity", 0.0..=100.0, &|v| format!("{v:.0} %RH"))
-            .step(1.0)
-            .show(ui, &mut w.rh);
-        track(&r, "rh", &mut w.active);
-        if w.rh != before {
-            sends.push(("air.rh".into(), w.rh));
+        if w.more {
+            let before = w.rh;
+            let r = StopSlider::new("Humidity", 0.0..=100.0, &|v| format!("{v:.0} %RH"))
+                .step(1.0)
+                .show(ui, &mut w.rh);
+            track(&r, "rh", &mut w.active);
+            if w.rh != before {
+                sends.push(("air.rh".into(), w.rh));
+            }
         }
+        let more = w.more;
         // checkboxes
         let mut new_cfg = cfg.clone();
         ui.vertical(|ui| {
@@ -255,6 +260,7 @@ impl Panels {
                 commit = true;
             }
         });
+        let mut toggle_more = false;
         ui.horizontal(|ui| {
             if let Some(pt) = &pot
                 && Btn::ghost("Water the pot")
@@ -268,6 +274,17 @@ impl Panels {
                     pot: pt.id.clone(),
                     ml: 100.0,
                 });
+            }
+            let more_label = if more {
+                "Fewer settings"
+            } else {
+                "More settings"
+            };
+            if Btn::mini(more_label).show(ui).clicked() {
+                toggle_more = true;
+            }
+            if !more {
+                return;
             }
             let warp = tel
                 .as_ref()
@@ -294,6 +311,9 @@ impl Panels {
                 commit = true;
             }
         });
+        if toggle_more {
+            self.world.more = !self.world.more;
+        }
         let _ = p;
         // apply
         if !sends.is_empty()

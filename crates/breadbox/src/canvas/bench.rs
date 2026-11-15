@@ -1510,7 +1510,12 @@ impl BenchCanvas {
             let g1 = painter.layout_no_wrap(format!("{} ", pr.label), f.clone(), rgb(0xEAEAEA));
             let g2 = painter.layout_no_wrap(value, f, rgb(0xF7C77A));
             let w = g1.size().x + g2.size().x + 24.0;
-            let r = pill_rect(a, w);
+            let mut r = pill_rect(a, w);
+            // a pill that would sit on its own target moves to the other side of the pin
+            let st = pen.view.to_screen(target.0, target.1);
+            if r.expand(4.0).contains(st) {
+                r = r.translate(vec2(-w, 0.0));
+            }
             // the leader goes to the nearest point of the probed net (a hole next to the LED
             // rather than the far-away MCU pin)
             let near = net

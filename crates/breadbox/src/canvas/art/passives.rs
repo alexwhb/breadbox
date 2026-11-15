@@ -339,7 +339,13 @@ pub fn led(pen: &Pen, cx: &ArtCtx) {
         with_alpha(Color32::WHITE, 0.45),
     );
     if lum > 0.02 {
-        pen.glow(mx, base - 1.8, 2.8 + 6.5 * lum as f64, color, 0.95 * lum);
+        pen.glow(
+            mx,
+            base - 1.8,
+            3.6 + 8.0 * lum as f64,
+            color,
+            (1.1 * lum).min(1.0),
+        );
     }
     above_label(pen, cx, mx, base - 3.4, &cx.part.reference);
 }

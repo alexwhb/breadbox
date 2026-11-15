@@ -66,8 +66,42 @@ fn garden_node_runs_on_the_bench_with_serial_and_world_slider() {
             && serial_has(h, "mqtt: PUB")),
         "serial output never arrived"
     );
+    // a few lines more, like the design's monitor
+    assert!(wait_for(&mut h, 120.0, |h| h
+        .state()
+        .ctx
+        .bench
+        .serial
+        .iter()
+        .filter(|l| l.text.starts_with("mqtt: PUB"))
+        .count()
+        >= 2));
     h.run_steps(4);
     assert!(has_label_containing(&h, "soil_raw="));
+    // select the soil sensor: the inspector shows its datasheet values (design)
+    let j1 = {
+        let d = doc(&h);
+        let p = d.project().part("j1").unwrap();
+        let leads = bb_circuit::Project::bench_leads(d.lib.get("capsoil").unwrap(), p).unwrap();
+        view(&h).to_screen(leads[1].1, leads[1].2 + 1.6)
+    };
+    h.hover_at(j1);
+    h.run_steps(1);
+    h.event(egui::Event::PointerButton {
+        pos: j1,
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.run_steps(1);
+    h.event(egui::Event::PointerButton {
+        pos: j1,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.run_steps(3);
+    assert!(has_label_containing(&h, "INSPECTOR · J1"));
     // the bench shows live probes and the scope trace
     let tel = h
         .state_mut()

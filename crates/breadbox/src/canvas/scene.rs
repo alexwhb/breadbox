@@ -193,13 +193,17 @@ impl Scene {
         best.map(|(_, k)| &self.pins[k])
     }
 
-    /// The topmost part whose body contains the point.
+    /// The part under a point: the smallest body containing it (a sensor stuck in a pot, a
+    /// resistor on a breadboard), later-drawn parts winning ties.
     pub fn part_at(&self, x: f64, y: f64) -> Option<usize> {
         self.parts
             .iter()
             .enumerate()
-            .rev()
-            .find(|(_, p)| p.bounds.contains(x, y))
+            .filter(|(_, p)| p.bounds.contains(x, y))
+            .min_by(|(i, a), (j, b)| {
+                let (aa, ab) = (a.bounds.w() * a.bounds.h(), b.bounds.w() * b.bounds.h());
+                aa.total_cmp(&ab).then(j.cmp(i))
+            })
             .map(|(i, _)| i)
     }
 
