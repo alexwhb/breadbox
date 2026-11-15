@@ -11,6 +11,7 @@ pub mod platform;
 pub mod project;
 pub mod router;
 pub mod screens;
+pub mod smoke;
 pub mod theme;
 pub mod toolchain;
 pub mod widgets;
