@@ -221,6 +221,7 @@ pub struct Bench {
     pub(crate) damage: Damage,
     pub(crate) instruments: Instruments,
     pub(crate) events: Vec<SimEvent>,
+    pub(crate) routed: usize,
     pub(crate) services: Vec<Box<dyn Service>>,
     pub(crate) registry: Arc<DeviceRegistry>,
     pub(crate) ext_values: BTreeMap<String, f64>,
@@ -272,6 +273,7 @@ impl Bench {
             damage: Damage::default(),
             instruments: Instruments::default(),
             events: Vec::new(),
+            routed: 0,
             services: Vec::new(),
             registry: opts.registry.clone(),
             ext_values: BTreeMap::new(),
@@ -316,6 +318,7 @@ impl Bench {
             };
             let label = core.label();
             let mut serial = SerialMonitor::new(&spec.reference);
+            serial.seen_resets = core.reset_count();
             serial.system(
                 SimTime::ZERO,
                 &format!("Breadbox sim · {label} · reset cause: power-on"),
@@ -726,6 +729,7 @@ impl Bench {
 
     /// Events since the last call.
     pub fn take_events(&mut self) -> Vec<SimEvent> {
+        self.routed = 0;
         std::mem::take(&mut self.events)
     }
 

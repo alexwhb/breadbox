@@ -319,9 +319,10 @@ impl Bench {
                             },
                         });
                     }
+                    // die temperature follows the air around the board
                     let tc = bb_core::WorldView::var(&self.world, "air.temp_c").unwrap_or(21.0);
                     for m in self.mcus.iter_mut() {
-                        m.core.set_temperature(tc + 8.0);
+                        m.core.set_temperature(tc);
                     }
                     self.push_wake(wake.time + self.world_dt, WakeKind::World);
                 }
@@ -375,17 +376,21 @@ impl Bench {
     }
 
     fn route_events(&mut self) {
-        let mut keep = Vec::new();
-        for ev in std::mem::take(&mut self.events) {
+        let start = self.routed.min(self.events.len());
+        for ev in &self.events[start..] {
             if let bb_core::DeviceEvent::Annotation { channel, text } = &ev.event {
-                // annotations go to the serial monitor of every MCU wired to the device
+                // annotations go to the serial monitors (RF-8)
                 for m in self.mcus.iter_mut() {
                     m.serial.annotation(ev.time, channel, text);
                 }
             }
-            keep.push(ev);
         }
-        self.events = keep;
+        self.routed = self.events.len();
+        // keep the event log bounded when nobody drains it
+        if self.events.len() > 50_000 {
+            self.events.drain(..25_000);
+            self.routed = self.events.len();
+        }
     }
 
     /// Integrates tracked element currents/powers up to `t` and samples new values.

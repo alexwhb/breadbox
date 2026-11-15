@@ -86,11 +86,9 @@ impl ProbeRt {
         };
         if now_high && !self.high {
             self.rises.push_back((t, self.high_total));
-            // keep about one second (and at most 2000 edges)
+            // keep the last ~250 ms of whole periods (at least two edges for slow signals)
             while self.rises.len() > 2000
-                || (self.rises.len() > 2
-                    && (t - self.rises[0].0).as_secs_f64() > 1.0
-                    && (t - self.rises[1].0).as_secs_f64() > 1.0)
+                || (self.rises.len() > 2 && (t - self.rises[1].0).as_secs_f64() > 0.25)
             {
                 self.rises.pop_front();
             }
