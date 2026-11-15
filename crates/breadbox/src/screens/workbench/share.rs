@@ -27,16 +27,19 @@ pub enum Export {
     SchematicSvg,
     SchematicPng,
     BenchPng,
+    /// PCB fabrication files (`PRJ-5`, `PRO-7`).
+    Gerbers,
 }
 
 impl Export {
-    pub const ALL: [Export; 6] = [
+    pub const ALL: [Export; 7] = [
         Export::Bundle,
         Export::Cir,
         Export::Bom,
         Export::SchematicSvg,
         Export::SchematicPng,
         Export::BenchPng,
+        Export::Gerbers,
     ];
     pub fn label(self) -> &'static str {
         match self {
@@ -46,6 +49,7 @@ impl Export {
             Export::SchematicSvg => "Schematic (.svg)",
             Export::SchematicPng => "Schematic (.png)",
             Export::BenchPng => "Bench picture (.png)",
+            Export::Gerbers => "PCB Gerbers + drill (.zip)",
         }
     }
     fn icon(self) -> Icon {
@@ -54,6 +58,7 @@ impl Export {
             Export::Cir => Icon::File,
             Export::Bom => Icon::Table,
             Export::SchematicSvg | Export::SchematicPng | Export::BenchPng => Icon::Image,
+            Export::Gerbers => Icon::Chip,
         }
     }
     fn file(self, name: &str) -> (String, &'static str, &'static str) {
@@ -64,6 +69,7 @@ impl Export {
             Export::SchematicSvg => (format!("{name}.svg"), "SVG", "svg"),
             Export::SchematicPng => (format!("{name}-schematic.png"), "PNG", "png"),
             Export::BenchPng => (format!("{name}-bench.png"), "PNG", "png"),
+            Export::Gerbers => (format!("{name}-gerbers.zip"), "Gerber zip", "zip"),
         }
     }
 }
@@ -111,6 +117,8 @@ impl ShareState {
         let erc = checks.erc.first().map(|i| i.message.clone());
         let r: anyhow::Result<()> = match e {
             Export::Bundle => export::bundle_zip(doc, &path),
+            Export::Gerbers => crate::screens::pro::pcb::gerber_zip(doc.project(), &doc.lib, &name)
+                .and_then(|z| std::fs::write(&path, z).map_err(Into::into)),
             Export::Cir => export::cir(doc.project(), &doc.lib)
                 .and_then(|t| std::fs::write(&path, t).map_err(Into::into)),
             Export::Bom => {

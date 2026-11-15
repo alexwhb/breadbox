@@ -556,7 +556,8 @@ GUI tests with `BREADBOX_UPDATE_SCREENSHOTS=1`): `docs/screenshots/{plugins,less
   copper, F/B mask, F silk, Edge.Cuts + Excellon, with readers) and Pro → PCB (drag / rotate,
   Auto-place, Fit outline, Route tool pad → corners → pad on Top / Bottom with 0.25–1.0 mm widths,
   V = via + layer switch, Via tool, delete, live DRC list + header summary, Export Gerbers…,
-  own undo). Persisted in `project.json` (`PartInstance::pcb`, `Project::pcb`).
+  own undo). Persisted in `project.json` (`PartInstance::pcb`, `Project::pcb`). Share →
+  "PCB Gerbers + drill (.zip)" on the Workbench (`PRJ-5`).
 - `TEST-5` (my screens) — `cargo test -p breadbox`: `tests/plugins.rs` 2 (install the scope
   through the permission prompt; DMM detail; Place on bench → DMM1 on garden-node A0 reads
   ≈ 1.88 V AUTO DC; the live callout; probe tips dragged onto a 4k7 → dial Ω → `4.7… kΩ`; local
@@ -578,6 +579,7 @@ folders, `apply_plugins` each frame, radio tool windows), `theme.rs` (plugin pal
 draw_leads`, `InstrumentView::panel`, plugin art bounds), `screens/mod.rs` (registry),
 `screens/pro/mod.rs` (plugin analyses section; Bode legend `φ` — Inter has no `∠`),
 `screens/firmware/radio_panel.rs` + `screens/workbench/mod.rs` (radio tool buttons),
+`screens/workbench/share.rs` (Gerbers item),
 `tests/gui.rs` (asserts the real Plugins / Lessons / PCB screens), `plugins/*/parts.json`
 (instrument leads on their panel jacks), `plugins/dmm-handheld/panel.json` (design grey),
 `lessons/1-electricity/0{3,5}-*.toml` + `bb-lessons` test (`{meter}`).

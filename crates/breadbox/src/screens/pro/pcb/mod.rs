@@ -16,6 +16,38 @@ use eframe::egui::{
     self, Align2, Color32, CornerRadius, Id, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2,
 };
 
+/// The project's fabrication files as a zip (Share → "PCB Gerbers + drill"); footprints that
+/// were never placed get the auto-placement first (in the copy).
+pub fn gerber_zip(
+    project: &bb_circuit::Project,
+    lib: &bb_circuit::Library,
+    name: &str,
+) -> anyhow::Result<Vec<u8>> {
+    use std::io::Write as _;
+    let mut p = project.clone();
+    pcb::auto_place(&mut p, lib, false);
+    let board = Board::load(&p);
+    let parts = pcb::placed_parts(&p, lib, false);
+    let stem: String = name
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    let opts = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
+    for (file, text) in pcb::gerber::export(&stem, &board, &parts) {
+        zip.start_file(file, opts)?;
+        zip.write_all(text.as_bytes())?;
+    }
+    Ok(zip.finish()?.into_inner())
+}
+
 /// What a click on the board does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PcbTool {
@@ -50,6 +82,27 @@ impl PcbView {
 /// The egui temp-data key of the PCB view (tests map pads to screen points).
 pub fn view_id() -> Id {
     Id::unique("pcb-view")
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn share_zip_holds_the_seven_files() {
+        let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/blink");
+        let p = bb_circuit::Project::load(&dir).unwrap();
+        let lib = bb_circuit::Library::builtin();
+        let z = super::gerber_zip(&p, &lib, "blink").unwrap();
+        let mut a = zip::ZipArchive::new(std::io::Cursor::new(z)).unwrap();
+        assert_eq!(a.len(), 7);
+        let mut names: Vec<String> = (0..a.len())
+            .map(|i| a.by_index(i).unwrap().name().unwrap().to_string())
+            .collect();
+        names.sort();
+        assert!(
+            names.contains(&"blink-F_Cu.gbr".to_string())
+                && names.contains(&"blink.drl".to_string())
+        );
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

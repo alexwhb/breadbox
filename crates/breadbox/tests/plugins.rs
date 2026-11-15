@@ -116,6 +116,16 @@ fn install_scope_place_dmm_read_a0_then_ohms() {
         let dmm = doc.project().part("dmm1").expect("dmm1");
         assert_eq!(dmm.part, "dmm_handheld");
     }
+    // the installed scope is in the parts palette (Advanced library, search)
+    h.get_by_label("Advanced").click();
+    h.run_steps(2);
+    h.get_by_label("Search parts").click();
+    h.get_by_label("Search parts").type_text("4-channel");
+    h.run_steps(3);
+    assert!(
+        has_label(&h, "4-channel oscilloscope"),
+        "plugin part not in the palette"
+    );
     h.get_by_label("Run").click();
     let ok = wait_for(&mut h, 120.0, |h| {
         label_text(h, "DMM1 display:").is_some_and(|t| t.contains("1.8") && t.contains(" V"))

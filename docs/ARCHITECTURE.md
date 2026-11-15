@@ -964,7 +964,8 @@ edge 0.3, unrouted) → `summary()` (`DRC clean`); `pcb::gerber::export` writes 
 mask, F silk, Edge.Cuts (RS-274X, 4.6 mm, Y up from the board's bottom-left) + Excellon
 drill, and `gerber::parse` / `parse_excellon` read them back. The screen edits through the
 shared `CircuitDoc` (own undo stack), auto-places unplaced footprints, routes (pad → corners →
-pad, V = via + layer switch), and exports into a folder (`BREADBOX_EXPORT_DIR/gerbers` in tests).
+pad, V = via + layer switch), and exports into a folder (`BREADBOX_EXPORT_DIR/gerbers` in tests);
+Share → "PCB Gerbers + drill (.zip)" zips the same files (`pro::pcb::gerber_zip`).
 
 **Tests** (`TEST-5`): `cargo test -p breadbox` — unit tests in modules, `tests/gui.rs` (the app
 driven by AccessKit labels through `egui_kittest` + wgpu; renders 1440×900 screenshots into
