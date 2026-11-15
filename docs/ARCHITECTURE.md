@@ -922,5 +922,34 @@ garden-node.breadbox/
 - Toolchain: rustup stable (`~/.cargo/bin` must be first on PATH — Homebrew's older rustc is
   also installed). `rust-toolchain.toml` adds `wasm32-unknown-unknown`.
 - External tools used by tests/dev (install with Homebrew when missing): `arduino-cli` (+
-  `arduino-cli core install arduino:avr`), `ngspice` (golden-data regeneration only).
-- `scripts/test-all.sh` is the single green-light command.
+  `arduino-cli core install arduino:avr`), `ngspice` (golden-data regeneration and the e2e
+  check that every example's `.cir` export runs in ngspice), a C++ compiler (ESP32 / Pico host
+  boards). Every test degrades gracefully without them (prebuilt fixtures, bb-spice-only checks,
+  skipped host boards).
+- `scripts/test-all.sh` is the single green-light command (TEST-7): fmt (workspace + plugins),
+  clippy `-D warnings`, `cargo test --workspace` (a test over 60 s fails the step), the plugin
+  wasm workspace (clippy for wasm32, `scripts/build-plugins.sh --check`: the committed `.wasm`
+  files rebuild byte-identically — builds remap `$HOME`/the plugins folder so modules carry no
+  machine paths), and the release perf gates (TEST-6: `cargo test --release --workspace --test
+  perf -- --ignored` for MCU-3 / SIM-4 / SPICE-5, the Workbench frame-time test, and
+  `breadbox --smoke`). `--quick` skips the perf gates; `SKIP=perf,plugins` skips steps; logs land
+  in `$CARGO_TARGET_DIR/test-all-logs/`.
+- **Smoke mode** (`breadbox --smoke <project | example> [--seconds N] [--speed max|<x>]
+  [--headless] [--warmup S]`, `crates/breadbox/src/smoke.rs`): the real app opens the project on
+  the Workbench and runs its bench with the GUI drawing at 60 Hz (window, or egui frames without
+  one when there is no display / `BREADBOX_HEADLESS=1`), waits for API-level boards to finish
+  compiling (`SimBench::host_build_pending`), then prints `SMOKE project=… first_frame_ms=…
+  realtime=… frame_ms_avg=… status=ok` and exits non-zero on a bench error, damage, ERC errors or
+  a timeout. It never writes the user's saved state. PLAT-4 = `first_frame_ms` (process start →
+  first frame), SIM-4 with the GUI = `realtime`.
+- **Headless e2e** (`tests/e2e`, crate `breadbox-e2e`, TEST-4): scenarios drive the stack through
+  the app's entry points — examples from `examples/`, `bb_sim::SimHandle` (commands + telemetry +
+  streams), `bb_plugin::{Registry, PluginHost}`, `bb_lessons` sessions + checkers,
+  `bb_firmware::Toolchain` (fixtures without it), the app crate's project / export / Pro sync
+  code. `breadbox_e2e::Sim` makes the threaded engine deterministic: every run is a
+  `Command::Step` at maximum speed and the driver waits (fence + a snapshot published after it)
+  until the engine paused at exactly the requested time, so commands land at exact simulated
+  times and nothing asserts on the wall clock; `Sim::with` runs a closure on the engine thread.
+  Scenario files: `garden_node`, `boards`, `damage`, `sim_control`, `lessons`, `projects`,
+  `examples`, `plugins`, `firmware`. GUI flows for the Plugins / Lessons screens belong in
+  `crates/breadbox/tests/` next to `gui.rs` / `workbench.rs` (same harness helpers).
