@@ -7,6 +7,9 @@ use std::path::Path;
 
 /// Prefix of Breadbox-only cards in exported netlists (a comment for other simulators).
 pub const BB_DIRECTIVE: &str = "*!bb ";
+/// Breadbox-only instance parameters ride at the end of an element line as an inline comment
+/// ngspice ignores (`r1 a b 10k ;!bb tol=5%`); bb-spice reads them back as parameters.
+pub const BB_INLINE: &str = ";!bb ";
 
 /// Reads `.include`/`.lib` files (path → text); lets the app serve files from memory.
 pub type IncludeLoader = Arc<dyn Fn(&Path) -> std::io::Result<String> + Send + Sync>;
@@ -119,7 +122,12 @@ fn logical_lines(text: &str, file: Option<Arc<str>>, first_is_title: bool) -> (S
         if t.is_empty() || t.starts_with('*') {
             continue;
         }
-        let body = strip_inline_comment(t);
+        let stripped = strip_inline_comment(t);
+        let body: std::borrow::Cow<str> = match t[stripped.len()..].strip_prefix(BB_INLINE) {
+            Some(extra) => format!("{} {}", stripped.trim_end(), extra.trim()).into(),
+            None => stripped.into(),
+        };
+        let body: &str = &body;
         if body.trim().is_empty() {
             continue;
         }

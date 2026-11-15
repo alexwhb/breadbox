@@ -104,6 +104,27 @@ fn supply_shorts_and_conflicts() {
 }
 
 #[test]
+fn a_negative_rail_is_not_a_short() {
+    // op-amp-amplifier: VN's + on ground, − on VEE makes −12 V — not a supply short
+    let p = Project::load(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../examples/op-amp-amplifier"
+    ))
+    .unwrap();
+    let (e, _) = run(&p);
+    assert!(e.iter().all(|i| i.severity != ErcSeverity::Error), "{e:#?}");
+    // a battery with both terminals on the ground rail is one
+    let lib = lib();
+    let mut b = BenchBuilder::new(&lib, "t", Mode::Playground);
+    let bt = b.offboard("battery_pack", "BT1", 0.0, 0.0, &[]);
+    let bb = b.breadboard("breadboard_400", 10.0, 0.0);
+    b.wire((&bt, "minus"), (&bb, "t-1"), "black");
+    b.wire((&bt, "plus"), (&bb, "t-5"), "red");
+    let (e, _) = run(&b.project);
+    assert!(codes(&e).contains(&"supply_short"), "{e:#?}");
+}
+
+#[test]
 fn missing_ground_floating_input_and_output_conflict() {
     let lib = lib();
     // battery + resistor, battery − not connected anywhere: still has a ground (its own −).

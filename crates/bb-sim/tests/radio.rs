@@ -325,4 +325,17 @@ fn ble_button_notifies_the_virtual_phone() {
         readings.iter().any(|(k, v)| k == "link" && *v == 1.0),
         "{readings:?}"
     );
+    // the phone hangs up between scheduler steps: the module's `OK+LOST` must reach the sketch
+    // intact even though the bench then runs in one long `run_until` (its first UART edge is
+    // 0.8 ms away, inside the quantum the MCU would otherwise run through)
+    b.radio_command(RadioCommand::Phone(PhoneCommand::Disconnect))
+        .unwrap();
+    b.run_until(SimTime::from_ms(5100)).unwrap();
+    let said: Vec<String> = b
+        .serial("u1")
+        .unwrap()
+        .data_lines()
+        .map(|l| l.text.clone())
+        .collect();
+    assert!(said.iter().any(|l| l == "phone disconnected"), "{said:#?}");
 }

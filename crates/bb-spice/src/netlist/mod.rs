@@ -617,6 +617,21 @@ impl Netlist {
         write::netlist_to_text(self)
     }
 
+    /// Like [`Netlist::to_spice_text`], freezing every `ext()` variable at the given value
+    /// (`.param ext_<name>=<value>`; variables not listed are written as 0).
+    pub fn to_spice_text_with_ext(&self, ext: &[(String, f64)]) -> String {
+        let map: std::collections::HashMap<String, f64> = ext.iter().cloned().collect();
+        write::netlist_to_text_with(self, &map)
+    }
+
+    /// Text for ngspice itself (Share → `.cir`): like [`Netlist::to_spice_text_with_ext`],
+    /// with Breadbox / LTspice conveniences ngspice rejects rewritten (`.tran 0 10m 0 1u` gets
+    /// a positive TSTEP). bb-spice reads it back to the same circuit.
+    pub fn to_ngspice_text(&self, ext: &[(String, f64)]) -> String {
+        let map: std::collections::HashMap<String, f64> = ext.iter().cloned().collect();
+        write::netlist_to_text_opts(self, &map, true)
+    }
+
     pub(crate) fn subckt_names(&self) -> Vec<String> {
         let mut v: Vec<String> = self.top.subckts.iter().map(|s| s.name.clone()).collect();
         for l in &self.libraries {

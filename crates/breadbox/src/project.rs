@@ -248,12 +248,18 @@ impl Project {
         Project::load(&dir)
     }
 
-    /// Copies the project folder to `dest` (Save As for read-only examples).
+    /// Copies the project folder to `dest` (Save As for read-only examples). Prebuilt images
+    /// the circuit references from outside the folder come along (`firmware/prebuilt/`).
     pub fn save_as(&self, dest: &Path) -> Result<Project> {
         if dest.exists() {
             bail!("{} already exists", dest.display());
         }
         copy_dir(&self.dir, dest)?;
+        if let Ok(mut circuit) = bb_circuit::Project::load(dest)
+            && localize_firmware(&mut circuit, &self.dir, dest)?
+        {
+            circuit.save(dest)?;
+        }
         let mut p = Project::load(dest)?;
         // project-relative prebuilt images that pointed outside the folder stay valid
         for (m, orig) in p.mcus.iter_mut().zip(&self.mcus) {
@@ -351,6 +357,57 @@ pub fn sketch_files(dir: &Path) -> Vec<String> {
         ))
     });
     files
+}
+
+/// Makes a circuit saved into `dest` self-contained: prebuilt firmware images it references
+/// from outside `dest` (examples point at `../fixtures/…`, relative to `src`) are copied into
+/// `dest/firmware/prebuilt/` (with their `.elf` / `.hex` sibling) and re-pointed. Returns
+/// whether anything changed.
+pub fn localize_firmware(
+    circuit: &mut bb_circuit::Project,
+    src: &Path,
+    dest: &Path,
+) -> Result<bool> {
+    let mut changed = false;
+    for part in circuit.parts.iter_mut() {
+        let Some(fw) = part.firmware.as_mut() else {
+            continue;
+        };
+        let Some(img) = fw.image.clone() else {
+            continue;
+        };
+        let rel = Path::new(&img);
+        let inside = rel.is_relative()
+            && !rel
+                .components()
+                .any(|c| matches!(c, std::path::Component::ParentDir));
+        if inside && dest.join(rel).exists() {
+            continue;
+        }
+        let from = if rel.is_absolute() {
+            rel.to_path_buf()
+        } else {
+            src.join(rel)
+        };
+        let Some(fname) = from.file_name().map(|f| f.to_owned()) else {
+            continue;
+        };
+        if !from.exists() {
+            continue;
+        }
+        let dir = dest.join("firmware/prebuilt");
+        std::fs::create_dir_all(&dir)?;
+        for ext in ["hex", "elf"] {
+            let sib = from.with_extension(ext);
+            if sib.exists() {
+                std::fs::copy(&sib, dir.join(sib.file_name().unwrap_or_default()))?;
+            }
+        }
+        std::fs::copy(&from, dir.join(&fname))?;
+        fw.image = Some(format!("firmware/prebuilt/{}", fname.to_string_lossy()));
+        changed = true;
+    }
+    Ok(changed)
 }
 
 fn copy_dir(from: &Path, to: &Path) -> Result<()> {

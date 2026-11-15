@@ -65,7 +65,59 @@ pub fn synced_netlist(doc: &CircuitDoc, tel: Option<&Telemetry>) -> Result<Strin
     }
     // Breadbox-only cards (`*!bb .step …`) are plain cards in the editor; bb-spice runs them
     let text = text.replace("*!bb ", "");
+    // disabled cards (`*off .mc …`) are comments the netlister drops: keep them so the sidebar
+    // can turn them back on; a circuit without any analysis gets an operating point
+    let mut extra: Vec<String> = project
+        .spice
+        .directives
+        .lines()
+        .map(str::trim)
+        .filter(|l| l.starts_with('*') && is_card_line(l))
+        .map(str::to_string)
+        .collect();
+    if project.spice.directives.trim().is_empty() && !text.lines().any(is_card_line) {
+        extra.push(".op".into());
+    }
+    let text = if extra.is_empty() {
+        text
+    } else {
+        let cards = extra.join("\n") + "\n";
+        match text.rfind("\n.end") {
+            Some(i) => format!("{}\n{cards}{}", &text[..i], &text[i + 1..]),
+            None => format!("{text}{cards}"),
+        }
+    };
     Ok(replay_mcu(&text, project, tel))
+}
+
+/// Analysis / control cards the Analyses sidebar edits (also when disabled: `*off .mc …`).
+/// They round-trip into `project.spice.directives`; everything else in the synced text comes
+/// from the circuit.
+pub fn is_card_line(line: &str) -> bool {
+    let t = line.trim();
+    let t = t.strip_prefix("*off").map(str::trim_start).unwrap_or(t);
+    let word = t
+        .split_whitespace()
+        .next()
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    matches!(
+        word.as_str(),
+        ".tran"
+            | ".ac"
+            | ".dc"
+            | ".op"
+            | ".noise"
+            | ".tf"
+            | ".step"
+            | ".mc"
+            | ".temp"
+            | ".meas"
+            | ".measure"
+            | ".options"
+            | ".option"
+            | ".four"
+    )
 }
 
 /// Plot choices for a synced circuit: the PWM-driven node and its LED current, the probed
@@ -246,6 +298,12 @@ fn replay_mcu(text: &str, project: &Project, tel: Option<&Telemetry>) -> String 
 pub enum EditMapping {
     /// Value changes that map onto part properties: (part id, prop key, value).
     Props(Vec<(String, String, f64)>),
+    /// The analysis cards changed (configured, enabled, disabled): they become the project's
+    /// Pro directives; value changes may come along.
+    Cards {
+        props: Vec<(String, String, f64)>,
+        cards: String,
+    },
     /// Nothing changed.
     None,
     /// Something the circuit cannot represent: detach.
@@ -260,16 +318,40 @@ pub fn map_edit(project: &Project, synced: &str, edited: &str) -> EditMapping {
             .filter(|l| !l.is_empty())
             .collect()
     };
-    let a = norm(synced);
-    let b = norm(edited);
-    if a == b {
-        return EditMapping::None;
+    let (cards_a, a): (Vec<String>, Vec<String>) =
+        norm(synced).into_iter().partition(|l| is_card_line(l));
+    let (cards_b, b): (Vec<String>, Vec<String>) =
+        norm(edited).into_iter().partition(|l| is_card_line(l));
+    let props = match map_values(project, &a, &b) {
+        Some(p) => p,
+        None => return EditMapping::Detach,
+    };
+    if cards_a != cards_b {
+        // the cards must parse to be stored (a half-typed `.tran` stays in the editor)
+        let text = cards_b.join("\n") + "\n";
+        let opts = bb_spice::ParseOptions {
+            first_line_is_title: false,
+            ..Default::default()
+        };
+        if bb_spice::Netlist::parse_with(&text.replace("*off ", "*"), &opts).is_err() {
+            return EditMapping::Detach;
+        }
+        return EditMapping::Cards { props, cards: text };
     }
+    if props.is_empty() {
+        EditMapping::None
+    } else {
+        EditMapping::Props(props)
+    }
+}
+
+/// Element value edits between two non-card line lists (`None` = not representable).
+fn map_values(project: &Project, a: &[String], b: &[String]) -> Option<Vec<(String, String, f64)>> {
     if a.len() != b.len() {
-        return EditMapping::Detach;
+        return None;
     }
     let mut props = Vec::new();
-    for (x, y) in a.iter().zip(&b) {
+    for (x, y) in a.iter().zip(b) {
         if x == y {
             continue;
         }
@@ -277,29 +359,24 @@ pub fn map_edit(project: &Project, synced: &str, edited: &str) -> EditMapping {
         let ty: Vec<&str> = y.split_whitespace().collect();
         // same element, same nodes, a different plain value
         if tx.len() < 4 || tx.len() != ty.len() || tx[..3] != ty[..3] || tx[4..] != ty[4..] {
-            return EditMapping::Detach;
+            return None;
         }
         let el = tx[0].to_ascii_lowercase();
         let (kind, key) = match el.chars().next() {
             Some('r') => ('r', "resistance"),
             Some('c') => ('c', "capacitance"),
             Some('l') => ('l', "inductance"),
-            _ => return EditMapping::Detach,
+            _ => return None,
         };
-        let Ok(v) = bb_core::si::parse(ty[3]) else {
-            return EditMapping::Detach;
-        };
+        let v = bb_core::si::parse(ty[3]).ok()?;
         // the part whose element this is: designator `R1` → element `r1`
         let part = project.parts.iter().find(|p| {
             let r = p.reference.to_ascii_lowercase();
             el == r || el == format!("{kind}{r}")
-        });
-        match part {
-            Some(p) => props.push((p.id.clone(), key.to_string(), v)),
-            None => return EditMapping::Detach,
-        }
+        })?;
+        props.push((part.id.clone(), key.to_string(), v));
     }
-    EditMapping::Props(props)
+    Some(props)
 }
 
 /// Applies mapped value edits to the document.
@@ -312,6 +389,12 @@ pub fn apply(doc: &mut CircuitDoc, props: &[(String, String, f64)]) -> Result<()
     }
     doc.touched();
     Ok(())
+}
+
+/// Stores edited analysis cards as the project's Pro directives (undoable).
+pub fn apply_cards(doc: &mut CircuitDoc, cards: &str) {
+    doc.editor.set_directives(cards);
+    doc.touched();
 }
 
 #[cfg(test)]
@@ -353,5 +436,51 @@ mod tests {
         let detached = t.replace("r1 a1 0 10000", "r1 a1 a0 10000");
         assert_eq!(map_edit(d.project(), &t, &detached), EditMapping::Detach);
         assert_eq!(map_edit(d.project(), &t, &t), EditMapping::None);
+    }
+
+    #[test]
+    fn card_edits_round_trip_into_the_directives() {
+        let mut d = doc();
+        let t = synced_netlist(&d, None).unwrap();
+        assert!(t.contains(".mc 100"), "{t}");
+        // the sidebar disables Monte Carlo and lengthens the transient
+        let edited = t
+            .replace(".mc 100", "*off .mc 100")
+            .replace(".tran 0 0.01 0 1e-6", ".tran 0 0.02 0 1e-6");
+        let EditMapping::Cards { props, cards } = map_edit(d.project(), &t, &edited) else {
+            panic!("card edits must not detach");
+        };
+        assert!(props.is_empty());
+        assert!(
+            cards.contains("*off .mc 100") && cards.contains(".tran 0 0.02"),
+            "{cards}"
+        );
+        apply_cards(&mut d, &cards);
+        let again = synced_netlist(&d, None).unwrap();
+        assert!(
+            again.contains("*off .mc 100"),
+            "the disabled card stays: {again}"
+        );
+        assert!(!again.lines().any(|l| l.starts_with(".mc")), "{again}");
+        assert!(again.contains(".tran 0 0.02"), "{again}");
+        assert!(d.undo());
+        assert!(synced_netlist(&d, None).unwrap().contains("\n.mc 100"));
+        // a half-typed card does not get stored
+        let typing = t.replace(".tran 0 0.01 0 1e-6", ".tran 0 0.0");
+        assert!(matches!(
+            map_edit(d.project(), &t, &typing),
+            EditMapping::Cards { .. } | EditMapping::Detach
+        ));
+    }
+
+    #[test]
+    fn circuits_without_analyses_get_an_operating_point() {
+        let dir =
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/night-light");
+        let d = CircuitDoc::load(&dir, true).unwrap();
+        assert!(d.project().spice.directives.is_empty());
+        let t = synced_netlist(&d, None).unwrap();
+        assert!(t.lines().any(|l| l.trim() == ".op"), "{t}");
+        assert!(t.trim_end().ends_with(".end"), "{t}");
     }
 }

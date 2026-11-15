@@ -337,12 +337,15 @@ impl Engine {
     fn handle(&mut self, c: Command) {
         let r: Result<(), SimError> = match c {
             Command::Play => {
+                // run freely: a Step interrupted by Pause (or a breakpoint) is abandoned
+                self.step_until = None;
                 self.running = self.error.is_none();
                 self.bench.resume();
                 Ok(())
             }
             Command::Pause => {
                 self.running = false;
+                self.step_until = None;
                 Ok(())
             }
             Command::Step(dt) => {
@@ -512,6 +515,7 @@ impl Engine {
             }
         };
         if let DebugCommand::Continue = d {
+            self.step_until = None;
             self.bench.resume();
             self.running = true;
             return Ok(());

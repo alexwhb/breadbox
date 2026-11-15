@@ -292,10 +292,18 @@ impl Sim {
         let start = self.time();
         let target = start + dt;
         self.handle.send(Command::Step(dt));
+        // fence: the Step is applied; any snapshot published from now on reflects it (an older
+        // one may still show a time ≥ target, e.g. right after a Reset rewound the clock)
+        self.with(|_| ());
+        let stale = self.handle.telemetry();
         let t0 = Instant::now();
         loop {
             self.drain();
             let tel = self.handle.telemetry();
+            if Arc::ptr_eq(&tel, &stale) {
+                std::thread::sleep(Duration::from_millis(1));
+                continue;
+            }
             if let RunStatus::Error(e) = &tel.status {
                 panic!(
                     "engine error at t={:.3}s: {e}\nlast serial: {:#?}",
@@ -308,8 +316,7 @@ impl Sim {
                 .iter()
                 .find_map(|m| m.paused.clone().map(|r| (m.part.clone(), r)));
             let done = tel.time >= target && tel.status != RunStatus::Running;
-            let paused =
-                tel.status == RunStatus::Paused && tel.time > start && paused_mcu.is_some();
+            let paused = tel.status == RunStatus::Paused && paused_mcu.is_some();
             if done || paused {
                 // fence: the publish that stored this snapshot has also pushed its stream items
                 self.with(|_| ());

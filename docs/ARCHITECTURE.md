@@ -225,7 +225,9 @@ this is the contract other crates code against.
   `Distribution { mean, sigma, min, max, values }` + `histogram(bins)`. Export: `export::
   {plot_to_csv, results_to_raw, read_raw}` and `Netlist::to_spice_text()` (ngspice-compatible;
   Breadbox-only cards — `.step`, `.mc`, multi-`.temp`, `.dc` over a `.param` — are written as
-  `*!bb <card>`, a comment for ngspice that bb-spice parses back).
+  `*!bb <card>`, a comment for ngspice that bb-spice parses back);
+  `to_spice_text_with_ext(&[(name, value)])` freezes `ext()` variables at given values (bb-circuit's
+  `.cir` export uses the parts' values — a battery's EMF — instead of 0).
 - **Breadbox parts as subcircuits** (`XJ1 VCC 0 A0 CAPSOIL vwc=42`, `XU1 … ATMEGA328P
   fw=garden-node.hex`): an unknown subcircuit is a clean `SimError::Elaboration` naming the
   instance and line. Register parts with `Netlist::add_library(Arc<Library>)`
@@ -879,9 +881,11 @@ Bottom tabs: Output · Serial monitor · Debug (call stack, variables, registers
 
 **Pro → Analysis** (design screen 3): for a project with a circuit the netlist is **synced
 from the schematic** (`screens/pro/sync.rs`: bb-circuit's Pro netlist with world values as
-`.param`s and the MCU's outputs replayed from the live bench); edits that only change an R / C
-/ L value round-trip into the circuit, anything else detaches it (`project.spice.detached`,
-Re-sync button); the `.op` table's bench-probe column reads `SimBench`'s probe keys. The
+`.param`s and the MCU's outputs replayed from the live bench; a circuit without analysis cards
+gets a `.op`); edits that change an R / C / L value round-trip into the circuit, analysis-card
+edits from the sidebar or the editor (`.tran …`, `*off .mc …`) round-trip into
+`project.spice.directives` (`Editor::set_directives`, undoable), anything else detaches it
+(`project.spice.detached`, Re-sync button); the `.op` table's bench-probe column reads `SimBench`'s probe keys. The
 netlist editor (SPICE highlighting, parse errors as
 diagnostics, autosave for `analyses/*.cir`) feeds `model::run` on a job (`run_with` + cancel +
 progress). Breadbox-only parts the analog solver can't elaborate (`CAPSOIL`, `ATMEGA328P`) get

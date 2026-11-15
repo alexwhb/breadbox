@@ -265,6 +265,28 @@ pub fn erc(project: &Project, lib: &Library, conn: &Connectivity) -> Vec<ErcItem
             .collect();
         if net.name == "0" || net.is_ground {
             for (t, _) in &supplies {
+                // a grounded output is a short only if the supply's own return is grounded too
+                // (an op-amp's −12 V rail is a source with + on ground and − on VEE)
+                let ret: Vec<&str> = cx
+                    .def(&t.part)
+                    .map(|d| {
+                        d.pins
+                            .iter()
+                            .filter(|p| {
+                                p.id != t.pin
+                                    && matches!(p.role, PinRole::Ground | PinRole::Passive)
+                            })
+                            .map(|p| p.id.as_str())
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let shorted = ret.is_empty()
+                    || ret
+                        .iter()
+                        .any(|p| conn.net_of(&t.part, p).is_some_and(|n| n == net.id));
+                if !shorted {
+                    continue;
+                }
                 out.push(item(
                     Error,
                     "supply_short",

@@ -192,6 +192,13 @@ impl AnalysisScreen {
                             }
                             self.synced_gen = None;
                         }
+                        sync::EditMapping::Cards { props, cards } => {
+                            if let Err(e) = sync::apply(doc, &props) {
+                                app.toasts.error(format!("{e}"));
+                            }
+                            sync::apply_cards(doc, &cards);
+                            self.synced_gen = None;
+                        }
                         sync::EditMapping::Detach => {
                             doc.detached_netlist = Some(self.doc.text.clone());
                             doc.touched();
@@ -504,7 +511,7 @@ pub fn export_text(text: &str) -> String {
         }
     }
     match bb_spice::Netlist::parse(&with_stubs) {
-        Ok(nl) => nl.to_spice_text(),
+        Ok(nl) => nl.to_ngspice_text(&[]),
         Err(_) => text.to_string(),
     }
 }
