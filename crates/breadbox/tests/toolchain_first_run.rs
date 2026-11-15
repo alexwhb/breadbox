@@ -177,4 +177,7 @@ fn first_run_installs_the_toolchain_and_verifies_a_sketch() {
         wait_for(&mut h, 600.0, |h| has_label_containing(h, "Sketch uses ")),
         "blink did not compile"
     );
+    // the scratch toolchain is ~400 MB
+    drop(h);
+    let _ = std::fs::remove_dir_all(&scratch);
 }
