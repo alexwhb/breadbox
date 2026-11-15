@@ -171,3 +171,233 @@ fn code_editor_toggles_breakpoints_and_highlights() {
     h.run();
     assert!(h.state().0.breakpoints.is_empty());
 }
+
+/// Renders the whole widget kit (reference for later screens) and compares it against the
+/// checked-in snapshot (`tests/snapshots/widget-gallery.png`; `UPDATE_SNAPSHOTS=1` to refresh).
+#[test]
+fn widget_gallery_snapshot() {
+    use breadbox::theme::{font, pal};
+    use breadbox::widgets::{Cell, Col, Icon, Row, TableStyle, Tone};
+    #[derive(Default)]
+    struct G {
+        view: u8,
+        lib: u8,
+        moist: f64,
+        lux: f64,
+        temp: f64,
+        evap: bool,
+        noise: bool,
+        tab: usize,
+        chip: bool,
+    }
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(1440.0, 900.0))
+        .with_pixels_per_point(1.0)
+        .wgpu()
+        .build_ui_state(
+            |ui, g: &mut G| {
+                styled(ui);
+                let p = pal(ui);
+                let r = ui.max_rect();
+                breadbox::theme::paint_paper(ui.painter(), r, p);
+                egui::Frame::new().inner_margin(24).show(ui, |ui| {
+                    ui.spacing_mut().item_spacing = egui::vec2(12.0, 14.0);
+                    ui.horizontal(|ui| {
+                        let (lr, _) =
+                            ui.allocate_exact_size(egui::vec2(26.0, 26.0), egui::Sense::hover());
+                        widgets::paint_logo(ui.painter(), lr);
+                        ui.label(
+                            egui::RichText::new("Breadbox widget kit")
+                                .font(font::brand(16.0))
+                                .color(p.text),
+                        );
+                        widgets::tag(ui, "Playground", Tone::Neutral);
+                        widgets::tag(ui, "Pro", Tone::Info);
+                        widgets::tag(ui, "connected", Tone::Ok);
+                        widgets::kind_tag(ui, "INSTRUMENT · installed");
+                    });
+                    ui.horizontal(|ui| {
+                        widgets::segmented(
+                            ui,
+                            "View",
+                            &mut g.view,
+                            &[
+                                Seg::new(0, "Breadboard").icon(Icon::SegBreadboard),
+                                Seg::new(1, "Schematic").icon(Icon::SegSchematic),
+                            ],
+                        );
+                        widgets::mini_segmented(
+                            ui,
+                            "Library mode",
+                            &mut g.lib,
+                            &[Seg::new(0, "Simple"), Seg::new(1, "Advanced")],
+                        );
+                        widgets::Btn::amber("Pause").icon(Icon::Pause).show(ui);
+                        widgets::Btn::ghost("Verify").show(ui);
+                        widgets::Btn::amber("Upload to sim").show(ui);
+                        widgets::Btn::ghost("Share").show(ui);
+                        widgets::Btn::ghost("Disabled").enabled(false).show(ui);
+                        widgets::Btn::danger("Repair all").show(ui);
+                        widgets::Btn::plain("Plain").icon(Icon::Folder).show(ui);
+                        widgets::filter_chip(ui, "All", true);
+                        if widgets::filter_chip(ui, "Has SPICE model", g.chip).clicked() {
+                            g.chip = !g.chip;
+                        }
+                    });
+                    ui.horizontal_top(|ui| {
+                        ui.vertical(|ui| {
+                            ui.set_width(300.0);
+                            widgets::section_header_row(ui, "World", "Pot 1 · indoor");
+                            let f1 = |v: f64| format!("{v:.0} % VWC");
+                            let f2 = |v: f64| format!("{v:.0} lx");
+                            let f3 = |v: f64| format!("{v:.0} °C");
+                            let s1 = [
+                                Stop {
+                                    value: 0.0,
+                                    label: "Bone dry",
+                                },
+                                Stop {
+                                    value: 30.0,
+                                    label: "Field capacity",
+                                },
+                                Stop {
+                                    value: 60.0,
+                                    label: "Saturated",
+                                },
+                            ];
+                            let s2 = [
+                                Stop {
+                                    value: 0.0,
+                                    label: "Night",
+                                },
+                                Stop {
+                                    value: 300.0,
+                                    label: "Living room",
+                                },
+                                Stop {
+                                    value: 1000.0,
+                                    label: "Bright office",
+                                },
+                            ];
+                            StopSlider::new("Soil moisture", 0.0..=60.0, &f1)
+                                .stops(&s1)
+                                .show(ui, &mut g.moist);
+                            StopSlider::new("Ambient light", 0.0..=1000.0, &f2)
+                                .stops(&s2)
+                                .show(ui, &mut g.lux);
+                            StopSlider::new("Air temperature", -10.0..=45.0, &f3)
+                                .show(ui, &mut g.temp);
+                            widgets::checkbox(ui, &mut g.evap, "Evaporation · ≈ 1.4 %/h");
+                            widgets::checkbox(ui, &mut g.noise, "Sensor noise & ADC quantization");
+                            widgets::tab_strip(
+                                ui,
+                                &mut g.tab,
+                                &["Serial monitor", "Probes & power"],
+                            );
+                            widgets::progress(ui, Some(0.62), "Installing arduino:avr");
+                        });
+                        ui.vertical(|ui| {
+                            ui.set_width(300.0);
+                            widgets::section_header(ui, "Parts");
+                            for row in [
+                                [
+                                    (Icon::Uno, "UNO R3"),
+                                    (Icon::Esp32, "ESP32"),
+                                    (Icon::Pico, "Pico"),
+                                ],
+                                [
+                                    (Icon::Breadboard, "Breadboard"),
+                                    (Icon::Wire, "Jumper wire"),
+                                    (Icon::Resistor, "Resistor"),
+                                ],
+                                [
+                                    (Icon::Led, "LED"),
+                                    (Icon::RgbLed, "RGB LED"),
+                                    (Icon::Buzzer, "Buzzer"),
+                                ],
+                            ] {
+                                ui.horizontal(|ui| {
+                                    ui.spacing_mut().item_spacing.x = 6.0;
+                                    for (i, l) in row {
+                                        widgets::part_tile(ui, i, l, egui::vec2(88.0, 76.0), false);
+                                    }
+                                });
+                            }
+                        });
+                        ui.vertical(|ui| {
+                            ui.set_width(60.0);
+                            widgets::rail_button(ui, Icon::ExpandLeft, "Expand tools", false);
+                            widgets::rail_button(ui, Icon::Multimeter, "Multimeter", true);
+                            widgets::rail_button(ui, Icon::Oscilloscope, "Oscilloscope", true);
+                            widgets::rail_button(ui, Icon::LogicAnalyzer, "Logic analyzer", false);
+                            widgets::rail_button(ui, Icon::PowerSupply, "Power supply", false);
+                            widgets::rail_button(
+                                ui,
+                                Icon::FunctionGenerator,
+                                "Function generator",
+                                false,
+                            );
+                            widgets::rail_button(ui, Icon::World, "World", false);
+                            widgets::rail_button(ui, Icon::Inspector, "Inspector", false);
+                        });
+                        ui.vertical(|ui| {
+                            ui.set_width(560.0);
+                            widgets::card_frame(p).show(ui, |ui| {
+                                ui.set_width(526.0);
+                                ui.label(
+                                    egui::RichText::new(".op — operating point")
+                                        .font(font::heading(15.0))
+                                        .color(p.text),
+                                );
+                                widgets::data_table(
+                                    ui,
+                                    "t",
+                                    &[
+                                        Col::Fr("quantity", 1.4),
+                                        Col::Fr("value", 1.0),
+                                        Col::Fr("bench probe", 1.0),
+                                    ],
+                                    &[
+                                        Row::new(vec![
+                                            Cell::new("V(VCC)"),
+                                            Cell::new("4.952 V"),
+                                            Cell::new("4.95 V").color(p.text_muted),
+                                        ]),
+                                        Row::new(vec![
+                                            Cell::new("V(A0)"),
+                                            Cell::new("1.882 V"),
+                                            Cell::new("1.88 V").color(p.text_muted),
+                                        ]),
+                                    ],
+                                    &TableStyle::default(),
+                                );
+                            });
+                            widgets::section_header(ui, "Icons");
+                            for chunk in Icon::ALL.chunks(16) {
+                                ui.horizontal(|ui| {
+                                    for i in chunk {
+                                        i.show(ui, 22.0, p.text_dim);
+                                    }
+                                });
+                            }
+                        });
+                    });
+                });
+            },
+            G {
+                moist: 42.0,
+                lux: 180.0,
+                temp: 21.0,
+                evap: true,
+                noise: true,
+                ..Default::default()
+            },
+        );
+    h.run();
+    let img = h.render().expect("render");
+    img.save(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/screenshots/widgets.png"),
+    )
+    .unwrap();
+    h.snapshot("widget-gallery");
+}

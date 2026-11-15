@@ -28,8 +28,12 @@ pub fn native_options() -> eframe::NativeOptions {
     }
 }
 
+/// Process start (for the start-up time log, `PLAT-4`).
+pub static STARTED: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+
 /// Runs the app.
 pub fn run() -> eframe::Result<()> {
+    STARTED.get_or_init(std::time::Instant::now);
     eframe::run_native(
         "Breadbox",
         native_options(),

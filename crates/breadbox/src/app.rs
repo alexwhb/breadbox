@@ -144,6 +144,7 @@ pub struct BreadboxApp {
     entered: Option<Route>,
     /// Key events to inject next frame (menu Undo/Redo → text editors).
     inject: Vec<egui::Event>,
+    first_frame: bool,
 }
 
 impl BreadboxApp {
@@ -218,6 +219,7 @@ impl BreadboxApp {
             seen: HashMap::new(),
             entered: None,
             inject: Vec::new(),
+            first_frame: true,
         }
     }
 
@@ -243,6 +245,11 @@ impl BreadboxApp {
     /// The whole frame (also used directly by tests).
     pub fn frame(&mut self, ui: &mut Ui) {
         let ctx = ui.ctx().clone();
+        if std::mem::take(&mut self.first_frame)
+            && let Some(t0) = crate::STARTED.get()
+        {
+            log::info!("first frame {} ms after start", t0.elapsed().as_millis());
+        }
         self.ctx.toolchain.poll();
         self.ctx.bench.poll();
         if let Some(m) = &self.menu {
@@ -693,5 +700,79 @@ impl eframe::App for BreadboxApp {
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
         let c = theme::pal_ctx(&self.ctx.egui).bg_app;
         Color32::to_normalized_gamma_f32(c)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn opts() -> AppOptions {
+        AppOptions {
+            detect_toolchain: false,
+            native_menu: false,
+            load_persisted: false,
+            ..AppOptions::test()
+        }
+    }
+
+    fn frame(app: &mut BreadboxApp, ctx: &egui::Context) {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| app.frame(ui));
+        out.textures_delta.clear();
+    }
+
+    #[test]
+    fn persisted_state_restores_project_route_theme_and_recents() {
+        let ctx = egui::Context::default();
+        let mut app = BreadboxApp::with_context(&ctx, opts(), PersistedState::default());
+        let dir = app
+            .ctx
+            .resources
+            .examples()
+            .expect("examples")
+            .join("blink");
+        app.open_path(&dir);
+        frame(&mut app, &ctx);
+        app.ctx.command(Command::Navigate(Route::Firmware));
+        app.ctx.command(Command::SetTheme(ThemeChoice::Light));
+        frame(&mut app, &ctx);
+        frame(&mut app, &ctx);
+        assert_eq!(app.ctx.route, Route::Firmware);
+        let saved = serde_json::to_string(&app.persisted()).unwrap();
+        let back: PersistedState = serde_json::from_str(&saved).unwrap();
+        let ctx2 = egui::Context::default();
+        let app2 = BreadboxApp::with_context(&ctx2, opts(), back);
+        assert_eq!(
+            app2.ctx.project.as_ref().map(|p| p.name.as_str()),
+            Some("blink")
+        );
+        assert!(
+            app2.ctx.project.as_ref().unwrap().read_only,
+            "examples open read-only"
+        );
+        assert_eq!(app2.ctx.route, Route::Firmware);
+        assert_eq!(app2.ctx.theme, ThemeChoice::Light);
+        assert_eq!(app2.ctx.recent[0].name, "blink");
+        assert!(
+            saved.contains("\"firmware\""),
+            "screen state saved: {saved}"
+        );
+    }
+
+    #[test]
+    fn routes_needing_a_project_fall_back_to_home() {
+        let ctx = egui::Context::default();
+        let state = PersistedState {
+            route: Route::Firmware,
+            last_project: Some("/nonexistent/x.breadbox".into()),
+            ..Default::default()
+        };
+        let mut app = BreadboxApp::with_context(&ctx, opts(), state);
+        assert_eq!(app.ctx.route, Route::Home);
+        app.ctx
+            .command(Command::Navigate(Route::Pro(ProTab::Analysis)));
+        frame(&mut app, &ctx);
+        frame(&mut app, &ctx);
+        assert_eq!(app.ctx.route, Route::Home);
     }
 }
