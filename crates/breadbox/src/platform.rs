@@ -241,6 +241,7 @@ pub const MENUS: &[(&str, &[MenuSpec])] = &[
                 "Import Project Bundle (.breadbox.zip)…",
                 None,
             ),
+            m("import-cir", "Import .cir Netlist…", None),
             m("save", "Save", cmd('S')),
             m("save-as", "Save As…", cmd_shift('S')),
             m("export-cir", "Export .cir…", None),
@@ -276,7 +277,10 @@ pub const MENUS: &[(&str, &[MenuSpec])] = &[
         "Simulate",
         &[
             m("run", "Run / Pause", cmd('R')),
+            m("step-quantum", "Step One Quantum", None),
+            m("step-ms", "Step 1 ms", None),
             m("reset", "Reset Bench", None),
+            m("reset-mcu", "Reset MCU Only", None),
             m("verify", "Verify Sketch", cmd('B')),
             m("upload", "Upload to Sim", cmd('U')),
             m("analyses", "Run Analyses", None),
@@ -328,6 +332,10 @@ pub fn command_for(id: &str) -> Option<Command> {
         "theme-light" => Command::SetTheme(ThemeChoice::Light),
         "run" => Command::RunPause,
         "reset" => Command::ResetSim,
+        "reset-mcu" => Command::ResetMcu,
+        "step-quantum" => Command::StepSim(crate::router::StepSize::Quantum),
+        "step-ms" => Command::StepSim(crate::router::StepSize::Millisecond),
+        "import-cir" => Command::ImportCir,
         "verify" => Command::Verify,
         "upload" => Command::Upload,
         "analyses" => Command::RunAnalyses,
@@ -439,6 +447,7 @@ mod mac {
                     &item("new-pro"),
                     &item("open"),
                     &item("import-bundle"),
+                    &item("import-cir"),
                     &sep(),
                     &item("save"),
                     &item("save-as"),
@@ -491,7 +500,10 @@ mod mac {
                 true,
                 &[
                     &item("run") as &dyn IsMenuItem,
+                    &item("step-quantum"),
+                    &item("step-ms"),
                     &item("reset"),
+                    &item("reset-mcu"),
                     &sep(),
                     &item("verify"),
                     &item("upload"),
@@ -626,6 +638,12 @@ mod tests {
             command_for("pro"),
             Some(Command::Navigate(Route::Pro(ProTab::Analysis)))
         );
+        assert_eq!(
+            command_for("step-ms"),
+            Some(Command::StepSim(crate::router::StepSize::Millisecond))
+        );
+        assert_eq!(command_for("reset-mcu"), Some(Command::ResetMcu));
+        assert_eq!(command_for("import-cir"), Some(Command::ImportCir));
         assert_eq!(command_for("nope"), None);
     }
 }

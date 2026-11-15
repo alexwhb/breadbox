@@ -377,3 +377,75 @@ fn garden_node_pro_matches_the_bench() {
     let r1 = doc.project().part("r1").unwrap().props["resistance"].as_f64();
     assert_eq!(r1, Some(22_000.0));
 }
+
+/// Rising crossings of `level` in a transient vector after `from` seconds.
+fn rising(plot: &bb_spice::Plot, vector: &str, level: f64, from: f64) -> Vec<f64> {
+    let t = plot.vectors[0].reals();
+    let v = plot
+        .vector(vector)
+        .unwrap_or_else(|| {
+            panic!(
+                "no {vector} in {:?}",
+                plot.vectors.iter().map(|v| &v.name).collect::<Vec<_>>()
+            )
+        })
+        .reals();
+    (1..t.len())
+        .filter(|&i| t[i] >= from && v[i - 1] < level && v[i] >= level)
+        .map(|i| t[i])
+        .collect()
+}
+
+fn mean_period(edges: &[f64]) -> f64 {
+    (edges[edges.len() - 1] - edges[0]) / (edges.len() - 1) as f64
+}
+
+/// The 555 in Pro mode: with a `.tran` the astable oscillates at 1.44 / ((R1 + 2·R2)·C) in
+/// bb-spice, and its `.cir` export oscillates the same in ngspice.
+#[test]
+fn pro_555_astable_oscillates_in_bb_spice_and_ngspice() {
+    let (mut p, _) = example("555-astable");
+    p.spice.directives = ".tran 0 4 0 1m\n".into();
+    let lib = lib();
+    let built = bb_circuit::netlist::build(
+        &p,
+        &lib,
+        &bb_circuit::netlist::NetlistOptions::pro(Some(&p.world)),
+    )
+    .unwrap();
+    let out = format!("v({})", built.node_of("u1", "OUT").expect("OUT node"));
+    let text = breadbox::export::cir(&p, &lib).unwrap();
+    let ours = Netlist::parse(&text).unwrap().run().unwrap();
+    let tran = ours.plot(PlotKind::Tran).expect("tran");
+    let edges = rising(tran, &out, 4.0, 0.5);
+    assert!(edges.len() >= 4, "{out} oscillates: {edges:?}");
+    let f = 1.0 / mean_period(&edges);
+    let expect = 1.44 / ((1e3 + 2.0 * 10e3) * 47e-6);
+    assert!(
+        (f - expect).abs() < expect * 0.1,
+        "bb-spice 555 at {f:.3} Hz vs {expect:.3} Hz"
+    );
+    let Some(ng) = ngspice() else { return };
+    let scratch = TempDir::new("555");
+    let cir = scratch.path().join("555.cir");
+    let raw = scratch.path().join("555.raw");
+    std::fs::write(&cir, &text).unwrap();
+    let o = Proc::new(ng)
+        .args(["-b", "-r"])
+        .arg(&raw)
+        .arg(&cir)
+        .env("SPICE_ASCIIRAWFILE", "1")
+        .stdin(std::process::Stdio::null())
+        .output()
+        .unwrap();
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stdout));
+    let plots = bb_spice::export::read_raw(&std::fs::read_to_string(&raw).unwrap()).unwrap();
+    let theirs = plots.iter().find(|p| p.kind == PlotKind::Tran).unwrap();
+    let edges_ng = rising(theirs, &out, 4.0, 0.5);
+    assert!(edges_ng.len() >= 4, "ngspice: {edges_ng:?}");
+    let f_ng = 1.0 / mean_period(&edges_ng);
+    assert!(
+        (f - f_ng).abs() < f * 0.02,
+        "bb-spice {f:.4} Hz vs ngspice {f_ng:.4} Hz"
+    );
+}

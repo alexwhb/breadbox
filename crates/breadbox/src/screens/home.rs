@@ -176,6 +176,9 @@ impl HomeScreen {
                     if mode == ProjectMode::Playground && Btn::ghost("Open project…").icon(Icon::Folder).show(ui).clicked() {
                         app.command(Command::OpenProject);
                     }
+                    if mode == ProjectMode::Pro && Btn::ghost("Import .cir…").icon(Icon::Folder).show(ui).clicked() {
+                        app.command(Command::ImportCir);
+                    }
                 });
             }
         });

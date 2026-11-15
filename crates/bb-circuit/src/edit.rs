@@ -74,6 +74,11 @@ pub enum Op {
     },
     /// Pro analysis cards (`project.spice.directives`).
     Directives { before: String, after: String },
+    /// Simulation settings (seed, sync quantum, speed — `SIM-1`, `SIM-3`).
+    Settings {
+        before: crate::project::Settings,
+        after: crate::project::Settings,
+    },
 }
 
 impl Op {
@@ -141,6 +146,10 @@ impl Op {
                 before: after,
                 after: before,
             },
+            Op::Settings { before, after } => Op::Settings {
+                before: after,
+                after: before,
+            },
             Op::Directives { before, after } => Op::Directives {
                 before: after,
                 after: before,
@@ -171,6 +180,7 @@ impl Op {
             | Op::Instrument { .. }
             | Op::World { .. }
             | Op::Meta { .. }
+            | Op::Settings { .. }
             | Op::Directives { .. } => false,
         }
     }
@@ -241,6 +251,7 @@ fn apply_op(p: &mut Project, op: &mut Op) {
             p.description = after.1.clone();
         }
         Op::Directives { after, .. } => p.spice.directives = after.clone(),
+        Op::Settings { after, .. } => p.settings = after.clone(),
     }
 }
 
@@ -654,6 +665,19 @@ impl Editor {
         tx.ops.push(Op::Directives {
             before: self.project.spice.directives.clone(),
             after: text.to_string(),
+        });
+        self.commit(tx);
+    }
+
+    /// Replaces the simulation settings (seed, sync quantum, speed) as an undoable change.
+    pub fn set_settings(&mut self, settings: crate::project::Settings) {
+        if settings == self.project.settings {
+            return;
+        }
+        let mut tx = Transaction::new("Simulation settings");
+        tx.ops.push(Op::Settings {
+            before: self.project.settings.clone(),
+            after: settings,
         });
         self.commit(tx);
     }

@@ -7,7 +7,7 @@
 
 use crate::devices::{Dev, Device, Init, Mode};
 use crate::elab::Method;
-use crate::engine::Engine;
+use crate::engine::{Engine, NrFail};
 use crate::error::SimError;
 
 /// Integration state of a transient run.
@@ -155,6 +155,9 @@ impl Stepper {
     pub fn step(&mut self, e: &mut Engine, limit: f64) -> Result<f64, SimError> {
         let itl4 = e.ck.opts.itl4.max(3);
         let mut hit_limit = false;
+        let mut failed_tries = 0u32;
+        let mut resume = false;
+        e.ck.switched = false;
         loop {
             let next_bp = self.next_bp(e);
             self.delta = self.delta.min(self.tmax);
@@ -192,7 +195,15 @@ impl Stepper {
                 ck.delta_old[0] = self.delta;
                 ck.order = self.order;
                 ck.compute_coeffs();
-                ck.init = if self.first { Init::Tran } else { Init::Pred };
+                // a retry after Newton ran out of iterations resumes from its last iterate
+                // (voltages and device states), with this shorter step's coefficients
+                ck.init = if self.first {
+                    Init::Tran
+                } else if resume {
+                    Init::Float
+                } else {
+                    Init::Pred
+                };
                 ck.mode = Mode::Tran;
             }
             match e.newton(itl4) {
@@ -204,7 +215,18 @@ impl Stepper {
                         self.time,
                         self.delta
                     );
-                    e.ck.x.copy_from_slice(&self.x_acc);
+                    // Like ngspice, a retry that only ran out of iterations starts from the
+                    // last iterate: a step across a discontinuity (a switch closing onto an
+                    // LED) may need more than ITL4 iterations in total, and restarting from
+                    // the accepted point would repeat the same failing ones at every cut.
+                    failed_tries += 1;
+                    // a switch closing onto a nonlinear load (a 555 output into an LED) can
+                    // need more than ITL4 iterations: retries resume from the last iterate.
+                    // Everything else retries from the accepted point as before.
+                    resume = matches!(f, NrFail::Iterations) && e.ck.switched && failed_tries <= 6;
+                    if !resume {
+                        e.ck.x.copy_from_slice(&self.x_acc);
+                    }
                     let old = self.delta;
                     self.delta /= 8.0;
                     self.order = 1;
@@ -289,6 +311,7 @@ impl Stepper {
                     }
                     // reject
                     self.rejected += 1;
+                    resume = false;
                     e.ck.x.copy_from_slice(&self.x_acc);
                     self.delta = newdelta;
                     hit_limit = false;

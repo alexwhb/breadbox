@@ -132,6 +132,10 @@ impl Dev for Switch {
                 on
             }
         };
+        if ck.mode == Mode::Tran && on != (ck.st[1][self.st] > 0.5) {
+            // the switch changes state in this step (see `Ckt::switched`)
+            ck.switched = true;
+        }
         ck.st[0][self.st] = if on { 1.0 } else { 0.0 };
         ck.st[0][self.st + 1] = c;
         self.g_now = if on { 1.0 / self.ron } else { 1.0 / self.roff };

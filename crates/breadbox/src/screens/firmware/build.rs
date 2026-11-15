@@ -96,10 +96,40 @@ pub fn stage(dir: &Path, req: &BuildRequest) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Runs the build (blocking; call from a job thread).
+/// Exclusive lock on a staging folder for the whole stage + compile, so two builds of the same
+/// sketch (another Breadbox window or process, or a debug build racing a release one) never
+/// rewrite each other's sources while arduino-cli reads them. Released on drop.
+pub struct StagingLock(#[allow(dead_code)] std::fs::File);
+
+impl StagingLock {
+    pub fn acquire(dir: &Path) -> std::io::Result<StagingLock> {
+        let parent = dir.parent().unwrap_or(dir);
+        std::fs::create_dir_all(parent)?;
+        let f = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(parent.join(".lock"))?;
+        f.lock()?;
+        Ok(StagingLock(f))
+    }
+}
+
+/// Runs the build (blocking; call from a job thread). Release and debug builds stage into
+/// separate folders (they also have separate arduino-cli build caches).
 pub fn run_build(key: &str, req: &BuildRequest) -> BuildResult {
     let t0 = std::time::Instant::now();
-    let dir = staging_dir(key, &req.sketch_name);
+    let kind = if req.debug { "debug" } else { "release" };
+    let dir = staging_dir(&format!("{key}-{kind}"), &req.sketch_name);
+    let _lock = match StagingLock::acquire(&dir) {
+        Ok(l) => l,
+        Err(e) => {
+            return failed(
+                format!("could not lock the staging folder {}: {e}", dir.display()),
+                req.debug,
+            );
+        }
+    };
     if let Err(e) = stage(&dir, req) {
         return failed(
             format!("could not stage the sketch in {}: {e}", dir.display()),
@@ -295,6 +325,63 @@ pub fn included_libraries(docs: &[CodeDoc]) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn staging_lock_is_exclusive_until_dropped() {
+        let dir = std::env::temp_dir()
+            .join(format!("bb-staging-lock-{}", std::process::id()))
+            .join("key")
+            .join("blink");
+        let held = StagingLock::acquire(&dir).unwrap();
+        let other = std::fs::OpenOptions::new()
+            .write(true)
+            .open(dir.parent().unwrap().join(".lock"))
+            .unwrap();
+        assert!(other.try_lock().is_err(), "a second build must wait");
+        drop(held);
+        assert!(other.try_lock().is_ok());
+    }
+
+    /// Two builds of the same sketch at once (a debug build racing Verify, another window):
+    /// each compiles its own sources. Used to share one staging folder, so the broken sketch
+    /// was sometimes compiled with the other build's clean files (flaky GUI test).
+    #[test]
+    fn concurrent_builds_of_one_sketch_compile_their_own_sources() {
+        let Ok(tc) = Toolchain::detect() else {
+            eprintln!("skipping: no toolchain");
+            return;
+        };
+        let tc = Arc::new(tc);
+        let key = format!("concurrent-test-{}", std::process::id());
+        let req = |text: &str, debug: bool| BuildRequest {
+            sketch_name: "blinkrace".into(),
+            files: vec![("blinkrace.ino".into(), text.into())],
+            extra: vec![],
+            target: BuildTarget::Avr {
+                toolchain: tc.clone(),
+                fqbn: "arduino:avr:uno".into(),
+            },
+            debug,
+        };
+        let good = "void setup() { pinMode(13, OUTPUT); }\nvoid loop() { digitalWrite(13, millis() / 500 % 2); }\n";
+        let bad = format!("{good}oops\n");
+        for debug_other in [false, true] {
+            let (k1, k2) = (key.clone(), key.clone());
+            let (r1, r2) = (req(&bad, false), req(good, debug_other));
+            let a = std::thread::spawn(move || run_build(&k1, &r1));
+            let b = std::thread::spawn(move || run_build(&k2, &r2));
+            let (a, b) = (a.join().unwrap(), b.join().unwrap());
+            assert!(!a.success, "the broken sketch compiled: {:?}", a.lines);
+            assert!(
+                a.diagnostics
+                    .iter()
+                    .any(|(_, d)| d.message.contains("oops")),
+                "{:?}",
+                a.diagnostics
+            );
+            assert!(b.success, "{:?}", b.lines);
+        }
+    }
 
     #[test]
     fn libraries_come_from_includes_not_tabs() {

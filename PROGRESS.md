@@ -685,6 +685,98 @@ bb-spice (watch added mid-trail no longer panics); bb-world (`<pot>.evaporation_
 bb-sim rebuilds keep capacitor charge (`.ic` on capacitor nodes instead of `.nodeset`);
 capsoil v1.2 output resistance 2.2 kΩ (design's −0.4 mV meter load).
 
+### e2e
+Phase 5 — `tests/e2e` (crate `breadbox-e2e`, TEST-4), `scripts/test-all.sh` (TEST-7), perf gates
++ `breadbox --smoke` (TEST-6, PLAT-4), GUI flows (TEST-5), and the bugs they found. How it works:
+ARCHITECTURE §10.
+
+Scenarios (all green; `cargo test -p breadbox-e2e`, ~10 s wall with the toolchain present):
+
+| file | scenario | |
+|---|---|---|
+| `garden_node` | full run: boot line, `soil_raw=… moisture=…% light_raw=… led_pwm=…` in the design's ranges, `wifi: AT+CWJAP … rssi=-54 dBm ip=10.0.0.42` / `mqtt: PUB` annotations, MQTT explorer (virtual subscriber) gets `garden/pot1` JSON at 0.85–1.15 Hz, radio card + packet log (DHCP DORA, CONNECT/CONNACK, PUBLISH; CSV + pcap-ng export), probes / bench meter (A0 ≈ sensor model) / mini scope (490 Hz, 47.8 %), LED currents, rails, ERC line | ✅ |
+| | D9 duty vs ambient light (5 → 2000 lx; LDR model incl. the night LED's own light) | ✅ |
+| | soil slider: `moisture=` covers > 50 % of the step within 2 s (τ 1.8 s), settles, D8 water LED, publish follows, "Water the pot" | ✅ |
+| | Handheld DMM plugin (from the registry) on A0: reads the sensor model, its 10 MΩ load really shifts the node by the callout's −0.4 mV vs. the same bench without it, follows the slider | ✅ |
+| | fault injector: 25 % loss → amber `!` rows, TCP keeps publishing; AP dropped for 4 s → card not connected, no publishes, rejoin + broker reconnect + publishes resume | ✅ |
+| `boards` | blink timing (firmware compiled by the toolchain; probe-tool frequency 0.5 Hz ±0.1 %, duty 50 %, mid-phase levels, LED) | ✅ |
+| | esp32-weather (API-level): joins SIM-AP, DHT22 every 2 s → `weather/esp32`, retained LWT `online`, explorer command `led on/off` drives GPIO2, readings follow the room | ✅ |
+| | ble-button: phone scan (RSSI) → connect (`phone connected`) → FFE1 notify `pressed #1/#2` → read → terminal `on` lights D13, `?` → `presses=2` → disconnect (`phone disconnected`) | ✅ |
+| | pico-blink knob (12-bit), thermometer LCD + serial follow the room temperature | ✅ |
+| `damage` | LED without its resistor: ERC warning, burns out (smoke, open), stays damaged after the circuit is fixed, Repair all → original current; UNO 5 V short trips the USB polyfuse (stress event, current limited, brown-out, power LED off) and recovers + reboots + blinks after the short is removed; USB power block fuse | ✅ |
+| `sim_control` | deterministic replay of a scripted session through `SimHandle` (serial, probes, MQTT, visuals bit-identical; another seed differs); re-flash keeps analog / world / ESP-01 state; MCU-only reset; full reset; exact 1 ms / 1 µs steps; Play after an interrupted Step | ✅ |
+| `lessons` | lesson 3 "Ohm's law with an LED" through `Session` + `SimHandle` + checkers: meter in series, math mode with the design's hints / working, 3-row checkpoint, break it ("None") + repair, quiz, progress saved + reloaded, free play | ✅ |
+| `projects` | Save As of an edited example → reopen identical → runs; `.breadbox.zip` export → import (×2) → runs; every example's `.cir` runs in ngspice (`-b -r`, no errors) and its `.op` agrees with bb-spice (0.1 % / 1 nA; gmin-dominated nodes detected and skipped); `.cir` import → Pro project; Pro → Analysis on every example's synced netlist (no errors/warnings); garden-node Pro `.op` = bench probes, R1 edit round-trips | ✅ |
+| `projects` (cont.) | Pro 555-astable `.tran` oscillates at the formula's frequency in bb-spice and, exported, in ngspice (within 2 %) | ✅ |
+| `examples` | every example runs 5 s: no engine error, damage, error log, ERC error, DRC problem, warnings, MCU resets; day/night at 3600× time-warp drives the LDR + night LED; world script `moisture = 45 - 0.8*t_hours`; 555-astable LED at 1.44/((R1+2R2)C); night-light on in the dark | ✅ |
+| `plugins` | fresh registry catalog (preinstalled / available / planned), install the 4-ch scope (refused without its permissions), place on garden-node → 490 Hz / 47.8 % like the mini scope, disable / uninstall; `.bbplugin` package install; local plugin hot reload | ✅ |
+| `firmware` | toolchain debug build → Flash + Attach on the live bench → breakpoint `blink.ino:8` hit → step over to 9 (LED on) → continue → next hit 2.000 s later → remove breakpoint runs freely; a compile error maps to the tab / line | ✅ |
+
+GUI (TEST-5, `crates/breadbox/tests/`): the existing flows (open example, Run, Breadboard ⇄
+Schematic, palette drag, wire, resistor value + bands, serial, Firmware Verify / Upload /
+breakpoint / step, Pro analyses on the synced netlist, Share export / import) plus **Pause**
+(status + clock stop, Run resumes), a Monte Carlo card toggle that keeps the netlist *synced*
+(and stores `*off .mc` with the project), and Pro → Analysis on a circuit without cards
+(night-light → `.op` table).
+
+Bugs found and fixed (all with regression tests):
+- bb-radio: a phone hang-up never woke the radio space → HM-10 / HC-05 / ESP32 BLE sketches never
+  saw `OK+LOST` (`02b90f7`).
+- bb-sim scheduler: after processing something due *now* (a radio command) the MCUs ran a full
+  quantum past wakes that processing had just scheduled; the HM-10's first UART start bit
+  arrived late and SoftwareSerial read garbage. Services due now step before the MCUs; the
+  quantum is re-bounded by new wakes (`b470b8e`).
+- bb-sim `SimHandle`: Play after a Step interrupted by Pause stopped at the stale step end
+  (`7852655`).
+- Pro / Share: `.cir` export and the synced netlist froze every `ext()` at 0 (the 555's 9 V
+  battery exported as 0 V); MCU stand-ins lacked `sync` (warnings on thermometer / ESP32 /
+  Pico); card edits from the Analyses sidebar **detached** the synced netlist (now round-trip
+  into `project.spice.directives` via an undoable `Editor::set_directives`); circuits without
+  cards showed an empty Analysis tab (now `.op`) (`8de3232`).
+- Share → `.cir` did not run in ngspice at all: per-element `tol=` ("unknown parameter"),
+  `.tran 0 10m` ("TSTEP is invalid"), no analysis for Playground circuits (`deb4579`).
+- Save As of an example kept `firmware.image = ../fixtures/…`, unresolvable from the copy
+  (`3291343`).
+- ERC: a source with + on ground and − on VEE (op-amp-amplifier's −12 V rail) was an error
+  "shorted to ground" (`ffb9b89`).
+- Plugins: 4 committed `.wasm` were stale and every module embedded the build machine's absolute
+  paths; builds are now path-remapped and reproducible, `build-plugins.sh --check` (`f416926`).
+- GUI tests rewrote 13 committed `docs/screenshots/*.png` on every run (`d8c6daf`).
+- Pro → Analysis: after a mapped edit the comparison baseline was never refreshed, so
+  re-enabling a card looked like "no change" (the `*off` stayed stored) (`bf34a35`).
+- Pro / `.cir`: the NE555 was only its divider — 555-astable never oscillated in Pro or ngspice.
+  New behavioural subcircuit (comparators, hysteretic-switch latch, output stage, discharge;
+  convergent power-on operating point): 1.44/((R1+2R2)C) in bb-spice and ngspice (`1fc3ac8`).
+- bb-spice: a switch closing onto a nonlinear load (555 output → LED) died with "timestep too
+  small" where ngspice runs; after a switch changes state, Newton retries resume from the last
+  iterate (reference suite unchanged) (`9af2893`).
+
+Perf (release, M3 Max, `scripts/test-all.sh` — ALL GREEN in 3 min warm, 7.5 min cold):
+
+| gate | measured | limit |
+|---|---|---|
+| MCU-3 busy ATmega328P sketch (slower of logging / stop-on-every-pin-change) | 23.4× real time (run 1: 17.3×) | ≥ 3× |
+| SIM-4 garden-node engine (+ 60 Hz telemetry) | 15.9× | ≥ 1× |
+| SIM-4 garden-node in the app, GUI drawing at 60 Hz (`--smoke --speed max`) | 15.95× | ≥ 1× |
+| SIM-4 garden-node paced at 1× with the GUI | 1.00× | ≥ 0.97× |
+| SPICE-5 1 024-node `.op` | 15.4 ms | < 50 ms |
+| Workbench frame, garden-node running (UI + tessellation) | 0.73 ms | < 16.7 ms |
+| PLAT-4 process start → first frame (window) | 247 ms (cold 409–478 ms) | < 2 s |
+
+`cargo test --workspace`: 617 passed, 0 failed, 9 ignored (perf), 105 s; e2e 35 scenarios.
+
+Left for the `ui-plug-les` follow-up (after their branch merges): GUI flows "install a plugin
+from the catalog and place it" and "complete a lesson step with the math check" (TEST-5) in
+`crates/breadbox/tests/`, using the same `common` harness; the headless halves of both are
+covered here (`plugins.rs`, `lessons.rs`). PCB (PRO-7) / Gerber export e2e once PCB lands.
+
+Open notes:
+- ngspice and bb-spice place junction gmin slightly differently: nodes held only by picoamps
+  (an off transistor's collector behind a 1 GΩ MCU stand-in) differ by tens of mV — ~3 pA,
+  inside SPEC-6's 1 nA; the `.cir` comparison skips nodes that move with gmin.
+- The `sim` section's note "the Pro-mode 555 has no oscillating SPICE macro-model" is resolved
+  (`1fc3ac8`).
+
 ### bundle
 Phase 5 — `Breadbox.app` (`PLAT-3`), runtime resource resolution, start-up (`PLAT-4`),
 README, polish (`APP-4`, `MCU-4` first run, PCB silkscreen, glyphs). Contracts: ARCHITECTURE

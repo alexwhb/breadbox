@@ -12,6 +12,7 @@ use crate::screens;
 use crate::theme::{self, ThemeChoice, font, pal};
 use crate::toolchain::ToolchainService;
 use crate::widgets::{self, Btn, Icon, Toasts, Tone};
+use bb_core::SimTime;
 use eframe::egui::{
     self, Color32, CornerRadius, Key, KeyboardShortcut, Modifiers, Rect, Sense, Stroke, Ui, pos2,
     vec2,
@@ -185,6 +186,65 @@ impl AppCtx {
         self.project.as_ref()?;
         self.bench_link();
         self.bench.sim()
+    }
+
+    /// Pauses the bench and advances it by exactly one step (`SIM-3`).
+    pub fn step_sim(&mut self, size: crate::router::StepSize) {
+        let quantum_us = self
+            .circuit
+            .as_ref()
+            .map(|d| d.project().settings.sync_quantum_us)
+            .unwrap_or(1.0)
+            .max(0.01);
+        let dt = match size {
+            crate::router::StepSize::Quantum => SimTime::from_secs_f64(quantum_us * 1e-6),
+            crate::router::StepSize::Millisecond => SimTime::from_ms(1),
+        };
+        if self.bench.running {
+            self.bench_link().set_running(false);
+            self.bench.running = false;
+        }
+        if let Some(sim) = self.sim() {
+            sim.send(bb_sim::Command::Step(dt));
+        }
+    }
+
+    /// Restarts the firmware of one board (`Some(target)`) or every board, keeping the circuit,
+    /// world and radio state (`SIM-3` "reset MCU only").
+    pub fn reset_mcu(&mut self, target: Option<&str>) {
+        let targets: Vec<String> = match target {
+            Some(t) => vec![t.to_string()],
+            None => self
+                .bench_link()
+                .targets()
+                .into_iter()
+                .map(|t| t.id)
+                .collect(),
+        };
+        if let Some(l) = self.bench.existing() {
+            for t in targets {
+                l.reset(crate::bench::ResetScope::Mcu(t));
+            }
+        }
+    }
+
+    /// Stores new simulation settings (seed, sync quantum) and restarts the bench with them, so
+    /// the same seed replays the same run (`SIM-1`, `SIM-3`).
+    pub fn apply_sim_settings(&mut self, settings: bb_circuit::project::Settings) {
+        let Some(doc) = self.circuit.as_mut() else {
+            return;
+        };
+        doc.editor.set_settings(settings);
+        doc.touched();
+        let p = doc.project().clone();
+        if let Some(sim) = self.sim() {
+            sim.send(bb_sim::Command::UpdateProject(Box::new(p.clone())));
+            sim.send(bb_sim::Command::Reset);
+            sim.adopt_project(p);
+        }
+        if let Some(doc) = &self.circuit {
+            self.bench_generation = doc.generation();
+        }
     }
 
     /// The bench already has the document's current revision (a live `SetPartParam` edit).
@@ -847,6 +907,25 @@ impl BreadboxApp {
                     l.reset(crate::bench::ResetScope::Bench);
                 }
             }
+            Command::ResetMcu => {
+                if self.ctx.project.is_some() {
+                    self.ctx.reset_mcu(None);
+                }
+            }
+            Command::StepSim(size) => {
+                if self.ctx.project.is_some() {
+                    self.ctx.step_sim(size);
+                }
+            }
+            Command::ImportCir => {
+                if let Some(path) = platform::open_file(
+                    "Import a SPICE netlist",
+                    "SPICE netlist",
+                    &["cir", "net", "sp", "spice", "ckt"],
+                ) {
+                    self.open_path(&path);
+                }
+            }
             Command::Verify | Command::Upload => {
                 if self.ctx.project.is_some() {
                     self.ctx.navigate(Route::Firmware);
@@ -876,12 +955,31 @@ impl BreadboxApp {
     }
 
     pub fn open_path(&mut self, dir: &Path) {
-        // a shared `.breadbox.zip` bundle unpacks into ~/Documents/Breadbox first (PRJ-5)
+        // a shared `.breadbox.zip` bundle unpacks into ~/Documents/Breadbox first (PRJ-5); a
+        // SPICE netlist becomes a new Pro project there (PRJ-4)
         let unpacked;
-        let dir = if dir
+        let ext = dir
             .extension()
-            .is_some_and(|e| e.eq_ignore_ascii_case("zip"))
-        {
+            .map(|e| e.to_string_lossy().to_ascii_lowercase())
+            .unwrap_or_default();
+        let dir = if crate::export::CIR_EXTENSIONS.contains(&ext.as_str()) && dir.is_file() {
+            let parent = project::default_projects_dir();
+            let _ = std::fs::create_dir_all(&parent);
+            let lib = self.ctx.plugins.library();
+            match crate::export::import_cir_project(dir, &parent, &lib) {
+                Ok(d) => {
+                    self.ctx
+                        .toasts
+                        .success(format!("Imported {} as a Pro project", file_label(dir)));
+                    unpacked = d;
+                    unpacked.as_path()
+                }
+                Err(e) => {
+                    self.ctx.toasts.error(format!("Import failed: {e:#}"));
+                    return;
+                }
+            }
+        } else if ext == "zip" {
             let parent = project::default_projects_dir();
             let _ = std::fs::create_dir_all(&parent);
             match crate::export::import_bundle(dir, &parent) {
@@ -931,6 +1029,12 @@ fn slash(ui: &mut Ui, p: &theme::Palette) {
             .font(font::ui(13.0))
             .color(p.text_ghost),
     );
+}
+
+fn file_label(p: &Path) -> String {
+    p.file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| p.display().to_string())
 }
 
 impl eframe::App for BreadboxApp {

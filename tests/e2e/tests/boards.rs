@@ -326,6 +326,68 @@ fn ble_button_virtual_phone_read_notify_and_terminal() {
     sim.shutdown();
 }
 
+/// ble-button: the phone taps "Notify" and the button is pressed at the same simulated instant
+/// (a paused bench, or a starved engine thread at Max speed) or a few ms later. The CCCD write
+/// goes out in the phone's half of the next connection event, the HM-10's notification in its
+/// half of that event or a later one, so `pressed #1` always reaches the phone (this used to be
+/// dropped when the press came < 10 ms after the subscribe — the flaky GUI test).
+#[test]
+fn ble_button_press_right_after_subscribe_notifies() {
+    for gap_ms in [0u64, 3] {
+        let mut sim = Sim::example("ble-button").unwrap();
+        sim.run_secs(2.0);
+        let tel = sim.tel();
+        let id = tel.radio.as_ref().unwrap().phone.scan[0].id;
+        sim.send(Command::Radio(RadioCommand::Phone(PhoneCommand::Connect {
+            id,
+            pin: None,
+        })));
+        sim.run_secs(1.0);
+        let tel = sim.tel();
+        let ch = tel.radio.as_ref().unwrap().phone.services[0].characteristics[0].clone();
+        sim.send(Command::Radio(RadioCommand::Phone(
+            PhoneCommand::Subscribe {
+                handle: ch.handle,
+                on: true,
+            },
+        )));
+        if gap_ms > 0 {
+            sim.run_for(ms(gap_ms));
+        }
+        sim.send(Command::Input {
+            part: "sw1".into(),
+            input: UserInput::Press(true),
+        });
+        sim.run_secs(0.15);
+        sim.send(Command::Input {
+            part: "sw1".into(),
+            input: UserInput::Press(false),
+        });
+        sim.run_secs(0.35);
+        let tel = sim.tel();
+        let log: Vec<(String, String)> = tel
+            .radio
+            .as_ref()
+            .unwrap()
+            .phone
+            .log
+            .iter()
+            .map(|r| (r.kind.clone(), r.text.clone()))
+            .collect();
+        let sub = log
+            .iter()
+            .position(|(k, t)| k == "subscribed" && t == "notifications on · FFE1");
+        let note = log
+            .iter()
+            .position(|(k, t)| k == "notify" && t == "pressed #1\n");
+        assert!(
+            sub.is_some() && note.is_some() && sub < note,
+            "gap {gap_ms} ms: {log:#?}"
+        );
+        sim.shutdown();
+    }
+}
+
 /// pico-blink: the API-level Pico blinks GP25 at 2 Hz and reads the knob on GP26 (12-bit).
 #[test]
 fn pico_blink_reads_the_knob() {

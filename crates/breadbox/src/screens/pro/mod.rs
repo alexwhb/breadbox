@@ -190,14 +190,18 @@ impl AnalysisScreen {
                             if let Err(e) = sync::apply(doc, &props) {
                                 app.toasts.error(format!("{e}"));
                             }
-                            self.synced_gen = None;
+                            // the edited text now describes the circuit: later edits compare
+                            // against it (not the text before this one)
+                            self.synced_text = self.doc.text.clone();
+                            self.synced_gen = Some(doc.generation());
                         }
                         sync::EditMapping::Cards { props, cards } => {
                             if let Err(e) = sync::apply(doc, &props) {
                                 app.toasts.error(format!("{e}"));
                             }
                             sync::apply_cards(doc, &cards);
-                            self.synced_gen = None;
+                            self.synced_text = self.doc.text.clone();
+                            self.synced_gen = Some(doc.generation());
                         }
                         sync::EditMapping::Detach => {
                             doc.detached_netlist = Some(self.doc.text.clone());

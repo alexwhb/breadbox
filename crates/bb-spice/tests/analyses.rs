@@ -339,6 +339,43 @@ fn per_element_tolerance_survives_export_as_an_ngspice_comment() {
 }
 
 #[test]
+fn a_switch_closing_onto_an_led_converges() {
+    // the 555 output stage in miniature: a hysteretic switch flips a latch node, a linear B
+    // source follows it, and the step turns an LED on through 470 Ω. Newton needs more than
+    // ITL4 iterations across that discontinuity; retries resume from the last iterate.
+    // ngspice-47: v(n5) = 0.0500 V off, 2.1020 V on.
+    let r = run("switch onto an LED
+.model led_green D(is=1e-20 n=1.9 rs=5)
+.model swl SW(VT=0 VH=0.5 RON=1 ROFF=1g)
+vc c 0 PULSE(-1 1 1m 1u 1u 1m 2m)
+vr r1 0 1
+rl r1 q 1k
+sl q 0 c 0 swl OFF
+bo oi 0 V={max(9.37-1.7,0)*(1-v(q)) + 0.05*v(q)}
+ro oi out 10
+r3 out n5 470
+d1 n5 0 led_green
+.tran 1u 5m
+");
+    let tran = r.plot(PlotKind::Tran).unwrap();
+    let t = tran.vectors[0].reals();
+    let v = tran.vector("v(n5)").unwrap().reals();
+    let at = |x: f64| v[t.iter().position(|&ti| ti >= x).unwrap()];
+    assert!((at(0.5e-3) - 0.0500).abs() < 1e-3, "off: {}", at(0.5e-3));
+    assert!((at(1.5e-3) - 2.1020).abs() < 2e-3, "on: {}", at(1.5e-3));
+    assert!(
+        (at(2.5e-3) - 0.0500).abs() < 1e-3,
+        "off again: {}",
+        at(2.5e-3)
+    );
+    assert!(
+        (at(3.5e-3) - 2.1020).abs() < 2e-3,
+        "on again: {}",
+        at(3.5e-3)
+    );
+}
+
+#[test]
 fn raw_and_csv_export() {
     let r = run(
         "t\nV1 in 0 DC 1 AC 1\nR1 in out 1k\nC1 out 0 1u\n.op\n.ac dec 5 10 10k\n.tran 10u 1m\n",
