@@ -114,11 +114,24 @@ pub fn show(ctx: &egui::Context, app: &mut AppCtx) {
             }
         }
     };
+    // below the top bar (its "?" stays clickable) and never wider than the screen
+    let screen = ctx.content_rect();
+    let area = egui::Rect::from_min_max(
+        egui::pos2(screen.left(), screen.top() + crate::theme::size::HEADER),
+        screen.max,
+    )
+    .shrink(12.0);
+    let size = vec2(760.0f32.min(area.width()), 620.0f32.min(area.height()));
     egui::Window::new("Breadbox Help")
         .id(Id::unique("help-window"))
         .open(&mut open)
-        .default_size(vec2(760.0, 620.0))
-        .min_size(vec2(480.0, 320.0))
+        .default_rect(egui::Rect::from_center_size(area.center(), size))
+        .min_size(vec2(
+            480.0f32.min(area.width()),
+            320.0f32.min(area.height()),
+        ))
+        .max_size(area.size())
+        .constrain_to(area)
         .collapsible(false)
         .resizable(true)
         .show(ctx, |ui| {
@@ -135,13 +148,25 @@ pub fn show(ctx: &egui::Context, app: &mut AppCtx) {
                     }
                 });
                 ui.separator();
+                // the page's width: the window's first (sizing) pass has no width limit, and
+                // the Markdown widget lays out to the width it is given
+                let doc_w = if ui.is_sizing_pass() {
+                    size.x - 200.0
+                } else {
+                    ui.available_width()
+                };
                 egui::ScrollArea::vertical()
                     .id_salt(("help-scroll", topic))
+                    .max_width(doc_w)
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
-                        ui.style_mut().override_font_id = Some(font::ui(13.0));
-                        ui.visuals_mut().override_text_color = Some(p.text_dim);
-                        markdown::show(ui, &text);
+                        // top-down: the scroll area would inherit the row's left-to-right
+                        ui.vertical(|ui| {
+                            ui.set_max_width(doc_w - 14.0);
+                            ui.style_mut().override_font_id = Some(font::ui(13.0));
+                            ui.visuals_mut().override_text_color = Some(p.text_dim);
+                            markdown::show(ui, &text);
+                        });
                     });
             });
         });

@@ -129,12 +129,23 @@ impl Dock {
                                 .and_then(|tl| tl.mcus.iter().find(|m| &m.reference == t))
                         })
                         .map(|m| port_label(m, app))
-                        .unwrap_or_else(|| "no MCU on this bench".into());
-                    ui.label(
-                        egui::RichText::new(port)
-                            .font(font::mono(12.0))
-                            .color(p.text_muted),
-                    );
+                        .unwrap_or_else(|| "No board".into());
+                    let port_w = if targets.len() > 1 {
+                        (ui.available_width() - 90.0 * targets.len() as f32).max(80.0)
+                    } else {
+                        ui.available_width()
+                    };
+                    ui.scope(|ui| {
+                        ui.set_max_width(port_w);
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(port)
+                                    .font(font::mono(12.0))
+                                    .color(p.text_muted),
+                            )
+                            .truncate(),
+                        );
+                    });
                     if targets.len() > 1 {
                         for t in targets.iter().rev() {
                             if widgets::filter_chip(ui, t, self.target.as_ref() == Some(t))
@@ -192,9 +203,9 @@ impl Dock {
                 ui.spacing_mut().item_spacing.y = 0.0;
                 if lines.is_empty() {
                     let msg = if app.bench.running {
-                        "waiting for serial output…"
+                        "Waiting for output…"
                     } else {
-                        "Press Run — the firmware's Serial output appears here."
+                        "No output yet"
                     };
                     ui.label(
                         egui::RichText::new(msg)
@@ -351,7 +362,7 @@ fn probes_power(ui: &mut Ui, app: &mut AppCtx) {
         .show(&mut cui, |ui| {
             let Some(t) = tel else {
                 ui.label(
-                    egui::RichText::new("Run the bench to see live probes and power.")
+                    egui::RichText::new("Bench not running")
                         .font(font::ui(12.0))
                         .color(p.text_faint),
                 );

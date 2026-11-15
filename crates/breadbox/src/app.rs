@@ -628,8 +628,30 @@ impl BreadboxApp {
     }
 
     fn top_bar(&mut self, ui: &mut Ui) {
-        let p = pal(ui);
         ui.spacing_mut().item_spacing.x = 10.0;
+        // "?" at the far right opens this screen's Help page; the rest of the bar fills the
+        // space to its left
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let topic = help_topic(self.ctx.route);
+            let open = self.ctx.help == Some(topic);
+            if Btn::plain("Help")
+                .icon_only(Icon::Help)
+                .height(28.0)
+                .selected(open)
+                .tooltip("Help for this screen")
+                .show(ui)
+                .clicked()
+            {
+                self.ctx.help = if open { None } else { Some(topic) };
+            }
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                self.top_bar_main(ui)
+            });
+        });
+    }
+
+    fn top_bar_main(&mut self, ui: &mut Ui) {
+        let p = pal(ui);
         // logo + wordmark → Home
         let (lr, logo_resp) = ui.allocate_exact_size(vec2(26.0, 26.0), Sense::click());
         widgets::paint_logo(ui.painter(), lr);
@@ -648,11 +670,19 @@ impl BreadboxApp {
             ui.add_space(4.0);
             if let Some(proj) = &self.ctx.project {
                 slash(ui, p);
-                ui.label(
-                    egui::RichText::new(&proj.name)
-                        .font(font::ui(13.0))
-                        .color(p.text_dim),
-                );
+                // a long project name truncates (full name on hover) so the screen's own
+                // header controls keep their room at the minimum window width
+                ui.scope(|ui| {
+                    ui.set_max_width(160.0);
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(&proj.name)
+                                .font(font::ui(13.0))
+                                .color(p.text_dim),
+                        )
+                        .truncate(),
+                    );
+                });
             }
             // section crumb with a screen switcher
             let section = crumb.unwrap_or_else(|| self.ctx.route.title().to_string());
@@ -1095,6 +1125,19 @@ impl BreadboxApp {
                 self.ctx.egui.request_repaint();
             }
         }
+    }
+}
+
+/// The Help page for a screen (the top bar's "?").
+pub fn help_topic(route: Route) -> crate::widgets::help::HelpTopic {
+    use crate::widgets::help::HelpTopic;
+    match route {
+        Route::Home => HelpTopic::Guide,
+        Route::Workbench => HelpTopic::Workbench,
+        Route::Firmware => HelpTopic::Firmware,
+        Route::Pro(_) => HelpTopic::Pro,
+        Route::Plugins => HelpTopic::Plugins,
+        Route::Lessons => HelpTopic::Lessons,
     }
 }
 

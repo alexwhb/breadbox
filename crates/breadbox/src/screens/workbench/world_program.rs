@@ -112,7 +112,9 @@ pub fn objects(ui: &mut Ui, app: &mut AppCtx) {
     }
     let tel = app.bench.sim().and_then(|s| s.telemetry());
     ui.add_space(4.0);
-    widgets::section_header_row(ui, "Objects", "drag them on the bench");
+    widgets::section_header(ui, "Objects").on_hover_text(
+        "Things the distance, motion and hall sensors see · drag them on the bench to move them",
+    );
     let mut remove = None;
     for o in &cfg.objects {
         let live = tel
@@ -133,23 +135,26 @@ pub fn objects(ui: &mut Ui, app: &mut AppCtx) {
         };
         ui.horizontal(|ui| {
             icon.show(ui, 14.0, p.text_muted);
-            ui.label(
-                egui::RichText::new(&o.id)
-                    .font(font::medium(12.5))
-                    .color(p.text),
-            );
-            ui.label(
-                egui::RichText::new(format!("{what}{:.2}, {:.2} m", live.x, live.y))
-                    .font(font::mono(11.0))
-                    .color(p.text_faint),
-            );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let b = Btn::mini("").icon(Icon::Trash).show(ui);
                 let l = format!("Remove {}", o.id);
-                b.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &l));
-                if b.on_hover_text(&l).clicked() {
+                if Btn::mini(&l).icon_only(Icon::Trash).show(ui).clicked() {
                     remove = Some(o.id.clone());
                 }
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    ui.label(
+                        egui::RichText::new(&o.id)
+                            .font(font::medium(12.5))
+                            .color(p.text),
+                    );
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(format!("{what}{:.2}, {:.2} m", live.x, live.y))
+                                .font(font::mono(11.0))
+                                .color(p.text_faint),
+                        )
+                        .truncate(),
+                    );
+                });
             });
         });
     }
@@ -290,12 +295,10 @@ pub fn program(ui: &mut Ui, app: &mut AppCtx, st: &mut WorldProgramUi) {
     let mut changed = false;
 
     // ---------------------------------------------------------------- scripts
-    ui.label(
-        egui::RichText::new(
-            "Scripts run every step: `variable = expression` with t, t_hours, sin(), …",
-        )
-        .font(font::ui(11.5))
-        .color(p.text_faint),
+    sub_label(
+        ui,
+        "Scripts",
+        "Each runs every step: `variable = expression`, with t, t_hours, sin() … · See Help → Workbench",
     );
     let mut remove_script = None;
     for (i, s) in cfg.scripts.iter().enumerate() {
@@ -312,10 +315,12 @@ pub fn program(ui: &mut Ui, app: &mut AppCtx, st: &mut WorldProgramUi) {
                 Some((j, t, _)) if *j == i => t.clone(),
                 _ => s.source.clone(),
             };
+            // leave room for the remove button (mini height) + spacing
+            let room = crate::theme::size::MINI_BUTTON + ui.spacing().item_spacing.x + 2.0;
             let te = ui.add(
                 egui::TextEdit::singleline(&mut text)
                     .font(font::mono(12.0))
-                    .desired_width(ui.available_width() - 34.0),
+                    .desired_width(ui.available_width() - room),
             );
             let l = format!("Script {}", i + 1);
             te.widget_info(|| egui::WidgetInfo::labeled(egui::Role::TextInput, true, &l));
@@ -332,10 +337,8 @@ pub fn program(ui: &mut Ui, app: &mut AppCtx, st: &mut WorldProgramUi) {
                     Err(e) => st.editing = Some((i, text.clone(), Some(e.to_string()))),
                 }
             }
-            let b = Btn::mini("").icon(Icon::Trash).show(ui);
             let l = format!("Remove script {}", i + 1);
-            b.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &l));
-            if b.clicked() {
+            if Btn::mini(&l).icon_only(Icon::Trash).show(ui).clicked() {
                 remove_script = Some(i);
             }
         });
@@ -382,10 +385,10 @@ pub fn program(ui: &mut Ui, app: &mut AppCtx, st: &mut WorldProgramUi) {
 
     // ---------------------------------------------------------------- timelines
     ui.add_space(6.0);
-    ui.label(
-        egui::RichText::new("Timelines set a variable from keyframes over world time")
-            .font(font::ui(11.5))
-            .color(p.text_faint),
+    sub_label(
+        ui,
+        "Timelines",
+        "Drive a variable from keyframes over world time",
     );
     let vars = variables(&cfg);
     ui.horizontal_wrapped(|ui| {
@@ -451,10 +454,8 @@ pub fn program(ui: &mut Ui, app: &mut AppCtx, st: &mut WorldProgramUi) {
                         done = true;
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let b = Btn::mini("").icon(Icon::Trash).show(ui);
                         let l = format!("Remove timeline {}", tl.var);
-                        b.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &l));
-                        if b.clicked() {
+                        if Btn::mini(&l).icon_only(Icon::Trash).show(ui).clicked() {
                             remove = true;
                         }
                     });
@@ -516,10 +517,8 @@ pub fn program(ui: &mut Ui, app: &mut AppCtx, st: &mut WorldProgramUi) {
                             egui::WidgetInfo::labeled(egui::Role::SpinButton, true, &lb)
                         });
                         done |= released(&a) || released(&b);
-                        let x = Btn::mini("").icon(Icon::Close).show(ui);
                         let lx = format!("Remove keyframe {}", k + 1);
-                        x.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &lx));
-                        if x.clicked() {
+                        if Btn::mini(&lx).icon_only(Icon::Close).show(ui).clicked() {
                             del = Some(k);
                         }
                     });
@@ -562,6 +561,17 @@ pub fn program(ui: &mut Ui, app: &mut AppCtx, st: &mut WorldProgramUi) {
     if changed {
         commit(app, new_cfg);
     }
+}
+
+/// A small muted sub-heading (`Scripts`, `Timelines`) whose hover text explains it.
+fn sub_label(ui: &mut Ui, text: &str, tip: &str) {
+    let p = pal(ui);
+    ui.label(
+        egui::RichText::new(text)
+            .font(font::semibold(11.0))
+            .color(p.text_muted),
+    )
+    .on_hover_text(tip);
 }
 
 /// A field finished changing (drag released, typed value committed).
