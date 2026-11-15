@@ -142,6 +142,10 @@
         "$(el:R:d3) $(n:lo) $(GND) 5k",
         "$(el:R:q) $(VCC) $(GND) 1.5k"
       ],
+      "pro": ["$(el:X) $(GND) $(TRIG) $(OUT) $(RESET) $(CTRL) $(THR) $(DIS) $(VCC) NE555"],
+      "library": [
+        ".subckt NE555 g trig out reset ctrl thr dis vcc\n* behavioural 555: 5k/5k/5k divider; comparators at CTRL (THR) and CTRL/2 (TRIG) as steep continuous ramps; RS latch = a hysteretic switch on their difference (RESET low dominates; the operating point is the power-on set state, released over the first 1 us); output high = Vcc - 1.7 V; open-collector discharge\nRd1 vcc ctrl 5k\nRd2 ctrl lo 5k\nRd3 lo g 5k\nRq vcc g 1.5k\nBc c g V={min(time/1u,1)*(max(min((v(lo,g)-v(trig,g))*20+0.5,1),0) - max(min((v(thr,g)-v(ctrl,g))*20+0.5,1),0)) + (1-min(time/1u,1)) - 2*max(min((0.7-v(reset,g))*20+0.5,1),0)}\nRc c g 1g\nVr r1 g 1\nRl r1 q 1k\nSl q g c g NE555_LATCH OFF\nBo oi g V={max(v(vcc,g)-1.7,0)*(1-v(q,g)) + 0.05*v(q,g)}\nRo oi out 10\nSd dis g q g NE555_DIS\n.model NE555_LATCH SW(VT=0 VH=0.5 RON=1 ROFF=1g)\n.model NE555_DIS SW(VT=0.5 VH=0.1 RON=10 ROFF=1g)\n.ends NE555"
+      ],
       "behaviour": "ne555",
       "device_pins": ["TRIG", "OUT", "RESET", "THR", "DIS"]
     },
