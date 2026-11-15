@@ -48,13 +48,21 @@ pub fn in_app_bundle() -> bool {
     bundle_resources().is_some()
 }
 
+/// This crate's folder in the source checkout, or `None` in builds made for an app bundle
+/// (`BREADBOX_BUNDLE=1 cargo build`, `scripts/bundle-macos.sh`): those never contain the
+/// path of the machine they were built on.
+const MANIFEST_DIR: Option<&str> = match option_env!("BREADBOX_BUNDLE") {
+    Some(_) => None,
+    None => Some(env!("CARGO_MANIFEST_DIR")),
+};
+
 /// The source checkout this binary was built from (development builds only; `None` inside an
-/// app bundle or when the checkout is gone).
+/// app bundle, in bundle builds, or when the checkout is gone).
 pub fn dev_root() -> Option<PathBuf> {
     if in_app_bundle() {
         return None;
     }
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let root = Path::new(MANIFEST_DIR?).join("../..");
     root.join("examples")
         .is_dir()
         .then(|| root.canonicalize().unwrap_or(root))
