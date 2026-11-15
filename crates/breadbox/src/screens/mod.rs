@@ -3,6 +3,7 @@
 
 pub mod firmware;
 pub mod home;
+pub mod lessons;
 pub mod placeholder;
 pub mod plugins;
 pub mod pro;
@@ -49,13 +50,7 @@ pub fn default_registry() -> ScreenRegistry {
     );
     r.register(
         ScreenSlot::Lessons,
-        Box::new(Placeholder::new(
-            ScreenSlot::Lessons,
-            "Lessons",
-            Icon::Book,
-            "Lesson tracks with a live bench, step panel, predictions and measurements, and the lesson editor.",
-            "ui-plug-les (phase 4)",
-        )),
+        Box::new(lessons::LessonsScreen::default()),
     );
     r
 }

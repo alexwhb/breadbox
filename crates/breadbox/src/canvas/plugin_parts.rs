@@ -56,6 +56,26 @@ pub fn register(host: &bb_plugin::PluginHost) {
     }
 }
 
+/// Instrument parts whose displays show `----` (a lesson's meter waiting for the prediction).
+static MASKED: RwLock<Vec<String>> = RwLock::new(Vec::new());
+
+/// Sets the masked instrument parts (by part id) for the following draws.
+pub fn set_masked(parts: Vec<String>) {
+    if let Ok(mut g) = MASKED.write() {
+        *g = parts;
+    }
+}
+
+fn apply_mask(part: &str, state: &mut Option<PanelState>) {
+    let masked = MASKED.read().is_ok_and(|g| g.iter().any(|p| p == part));
+    if masked && let Some(s) = state.as_mut() {
+        for d in s.displays.values_mut() {
+            d.text = "----".into();
+            d.bar = None;
+        }
+    }
+}
+
 /// The front panel of a plugin instrument part definition.
 pub fn panel_for(def_id: &str) -> Option<Arc<Panel>> {
     REGISTERED
@@ -84,10 +104,11 @@ pub fn draw(lp: &Pen, cx: &ArtCtx) -> bool {
         let (w, h) = cx.def.bench.size;
         let screen = lp.r(WRect::new(0.0, 0.0, w, h));
         let face = Face::exact(&panel, screen);
-        let state = cx
+        let mut state = cx
             .instrument
             .and_then(|v| v.panel.as_ref())
             .and_then(PanelState::from_json);
+        apply_mask(&cx.part.id, &mut state);
         instrument::paint(lp.painter, &face, &panel, state.as_ref());
         return true;
     }
@@ -274,10 +295,11 @@ pub fn interact(
             continue;
         }
         let face = Face::exact(&panel, screen);
-        let state = tel
+        let mut state = tel
             .and_then(|t| t.parts.iter().find(|p| &p.part == id))
             .and_then(|p| p.panel.as_ref())
             .and_then(PanelState::from_json);
+        apply_mask(id, &mut state);
         let mut child = ui.new_child(egui::UiBuilder::new().max_rect(clip));
         child.set_clip_rect(clip);
         for (key, value) in instrument::controls(
