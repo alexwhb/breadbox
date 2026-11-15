@@ -1,103 +1,189 @@
 [
- {
-  "id": "logic_analyzer",
-  "name": "Logic analyzer",
-  "category": "instruments",
-  "icon": "logic",
-  "ref_prefix": "LA",
-  "description": "16-channel logic analyzer: clip D0–D15 to digital signals; set decoders like `uart:D0@9600, i2c:D2/D3`.",
-  "props": [
-   {
-    "key": "decoders",
-    "label": "Decoders",
-    "type": "text",
-    "default": "uart:D0@9600"
-   },
-   {
-    "key": "window",
-    "label": "Window",
-    "unit": "s",
-    "type": "number",
-    "default": 0.02,
-    "live": true
-   },
-   {
-    "key": "threshold",
-    "label": "Threshold",
-    "unit": "V",
-    "type": "number",
-    "default": 1.4
-   }
-  ],
-  "pins": [
-   "D0:input",
-   "D1:input",
-   "D2:input",
-   "D3:input",
-   "D4:input",
-   "D5:input",
-   "D6:input",
-   "D7:input",
-   "D8:input",
-   "D9:input",
-   "D10:input",
-   "D11:input",
-   "D12:input",
-   "D13:input",
-   "D14:input",
-   "D15:input",
-   "GND:passive"
-  ],
-  "model": {
-   "behaviour": "wasm",
-   "device_pins": [
-    "D0",
-    "D1",
-    "D2",
-    "D3",
-    "D4",
-    "D5",
-    "D6",
-    "D7",
-    "D8",
-    "D9",
-    "D10",
-    "D11",
-    "D12",
-    "D13",
-    "D14",
-    "D15"
-   ]
-  },
-  "inspector": [
-   {
-    "label": "Channels",
-    "value": "16"
-   },
-   {
-    "label": "Decoders",
-    "value": "$(decoders)"
-   },
-   {
-    "label": "Threshold",
-    "value": "$(threshold|V)"
-   }
-  ],
-  "bench": {
-   "art": "la.bench.svg",
-   "layout": "row",
-   "off_board": true,
-   "size": [
-    24,
-    10
-   ]
-  },
-  "schematic": {
-   "symbol": "none"
-  },
-  "tags": [
-   "instrument",
-   "plugin"
-  ]
- }
+  {
+    "id": "logic_analyzer",
+    "name": "Logic analyzer",
+    "category": "instruments",
+    "icon": "logic",
+    "ref_prefix": "LA",
+    "description": "16-channel logic analyzer: clip D0–D15 to digital signals; set decoders like `uart:D0@9600, i2c:D2/D3`.",
+    "props": [
+      {
+        "key": "decoders",
+        "label": "Decoders",
+        "type": "text",
+        "default": "uart:D0@9600"
+      },
+      {
+        "key": "window",
+        "label": "Window",
+        "unit": "s",
+        "type": "number",
+        "default": 0.02,
+        "live": true
+      },
+      {
+        "key": "threshold",
+        "label": "Threshold",
+        "unit": "V",
+        "type": "number",
+        "default": 1.4
+      }
+    ],
+    "pins": [
+      "D0:input",
+      "D1:input",
+      "D2:input",
+      "D3:input",
+      "D4:input",
+      "D5:input",
+      "D6:input",
+      "D7:input",
+      "D8:input",
+      "D9:input",
+      "D10:input",
+      "D11:input",
+      "D12:input",
+      "D13:input",
+      "D14:input",
+      "D15:input",
+      "GND:passive"
+    ],
+    "model": {
+      "behaviour": "wasm",
+      "device_pins": [
+        "D0",
+        "D1",
+        "D2",
+        "D3",
+        "D4",
+        "D5",
+        "D6",
+        "D7",
+        "D8",
+        "D9",
+        "D10",
+        "D11",
+        "D12",
+        "D13",
+        "D14",
+        "D15"
+      ]
+    },
+    "inspector": [
+      {
+        "label": "Channels",
+        "value": "16"
+      },
+      {
+        "label": "Decoders",
+        "value": "$(decoders)"
+      },
+      {
+        "label": "Threshold",
+        "value": "$(threshold|V)"
+      }
+    ],
+    "bench": {
+      "art": "la.bench.svg",
+      "off_board": true,
+      "size": [
+        25.44,
+        13.2
+      ],
+      "leads": [
+        {
+          "pin": "D0",
+          "x": 0.96,
+          "y": 12.24
+        },
+        {
+          "pin": "D1",
+          "x": 2.28,
+          "y": 12.24
+        },
+        {
+          "pin": "D2",
+          "x": 3.6,
+          "y": 12.24
+        },
+        {
+          "pin": "D3",
+          "x": 4.92,
+          "y": 12.24
+        },
+        {
+          "pin": "D4",
+          "x": 6.24,
+          "y": 12.24
+        },
+        {
+          "pin": "D5",
+          "x": 7.56,
+          "y": 12.24
+        },
+        {
+          "pin": "D6",
+          "x": 8.88,
+          "y": 12.24
+        },
+        {
+          "pin": "D7",
+          "x": 10.2,
+          "y": 12.24
+        },
+        {
+          "pin": "D8",
+          "x": 11.52,
+          "y": 12.24
+        },
+        {
+          "pin": "D9",
+          "x": 12.84,
+          "y": 12.24
+        },
+        {
+          "pin": "D10",
+          "x": 14.16,
+          "y": 12.24
+        },
+        {
+          "pin": "D11",
+          "x": 15.48,
+          "y": 12.24
+        },
+        {
+          "pin": "D12",
+          "x": 16.8,
+          "y": 12.24
+        },
+        {
+          "pin": "D13",
+          "x": 18.12,
+          "y": 12.24
+        },
+        {
+          "pin": "D14",
+          "x": 19.44,
+          "y": 12.24
+        },
+        {
+          "pin": "D15",
+          "x": 20.76,
+          "y": 12.24
+        },
+        {
+          "pin": "GND",
+          "x": 22.08,
+          "y": 12.24
+        }
+      ]
+    },
+    "schematic": {
+      "symbol": "none"
+    },
+    "tags": [
+      "instrument",
+      "plugin"
+    ]
+  }
 ]

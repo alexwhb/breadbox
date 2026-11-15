@@ -746,6 +746,8 @@ dependencies = [
  "bb-circuit",
  "bb-core",
  "bb-firmware",
+ "bb-lessons",
+ "bb-plugin",
  "bb-radio",
  "bb-sim",
  "bb-spice",

@@ -7,33 +7,133 @@
     "ref_prefix": "SCOPE",
     "description": "Bench oscilloscope: clip CH1–CH4 to nets and the ground clip to circuit ground.",
     "props": [
-      {"key": "timebase", "label": "Timebase", "unit": "s/div", "type": "number", "default": 0.001, "live": true},
-      {"key": "trigger_level", "label": "Trigger level", "unit": "V", "type": "number", "default": 2.5, "live": true}
+      {
+        "key": "timebase",
+        "label": "Timebase",
+        "unit": "s/div",
+        "type": "number",
+        "default": 0.001,
+        "live": true
+      },
+      {
+        "key": "trigger_level",
+        "label": "Trigger level",
+        "unit": "V",
+        "type": "number",
+        "default": 2.5,
+        "live": true
+      }
     ],
-    "pins": ["CH1:input", "CH2:input", "CH3:input", "CH4:input", "GND:passive"],
+    "pins": [
+      "CH1:input",
+      "CH2:input",
+      "CH3:input",
+      "CH4:input",
+      "GND:passive"
+    ],
     "model": {
       "spice": [
-        "$(el:R:ch1) $(CH1) $(GND) {$(ext:r1)}", "$(el:C:ch1) $(CH1) $(GND) {$(ext:c1)}",
-        "$(el:R:ch2) $(CH2) $(GND) {$(ext:r2)}", "$(el:C:ch2) $(CH2) $(GND) {$(ext:c2)}",
-        "$(el:R:ch3) $(CH3) $(GND) {$(ext:r3)}", "$(el:C:ch3) $(CH3) $(GND) {$(ext:c3)}",
-        "$(el:R:ch4) $(CH4) $(GND) {$(ext:r4)}", "$(el:C:ch4) $(CH4) $(GND) {$(ext:c4)}",
+        "$(el:R:ch1) $(CH1) $(GND) {$(ext:r1)}",
+        "$(el:C:ch1) $(CH1) $(GND) {$(ext:c1)}",
+        "$(el:R:ch2) $(CH2) $(GND) {$(ext:r2)}",
+        "$(el:C:ch2) $(CH2) $(GND) {$(ext:c2)}",
+        "$(el:R:ch3) $(CH3) $(GND) {$(ext:r3)}",
+        "$(el:C:ch3) $(CH3) $(GND) {$(ext:c3)}",
+        "$(el:R:ch4) $(CH4) $(GND) {$(ext:r4)}",
+        "$(el:C:ch4) $(CH4) $(GND) {$(ext:c4)}",
         "$(el:R:earth) $(GND) $(gnd) 0.1"
       ],
       "ext": [
-        {"name": "r1", "default": 1e7}, {"name": "c1", "default": 1.2e-11},
-        {"name": "r2", "default": 1e7}, {"name": "c2", "default": 1.2e-11},
-        {"name": "r3", "default": 1e7}, {"name": "c3", "default": 1.2e-11},
-        {"name": "r4", "default": 1e7}, {"name": "c4", "default": 1.2e-11}
+        {
+          "name": "r1",
+          "default": 10000000.0
+        },
+        {
+          "name": "c1",
+          "default": 1.2e-11
+        },
+        {
+          "name": "r2",
+          "default": 10000000.0
+        },
+        {
+          "name": "c2",
+          "default": 1.2e-11
+        },
+        {
+          "name": "r3",
+          "default": 10000000.0
+        },
+        {
+          "name": "c3",
+          "default": 1.2e-11
+        },
+        {
+          "name": "r4",
+          "default": 10000000.0
+        },
+        {
+          "name": "c4",
+          "default": 1.2e-11
+        }
       ],
       "behaviour": "wasm"
     },
     "inspector": [
-      {"label": "Inputs", "value": "4 × 1 MΩ ∥ 15 pF (+ probe)"},
-      {"label": "Probes", "value": "10×: 10 MΩ ∥ 12 pF · 1×: 1 MΩ ∥ 100 pF"},
-      {"label": "Ground clip", "value": "earth-referenced"}
+      {
+        "label": "Inputs",
+        "value": "4 × 1 MΩ ∥ 15 pF (+ probe)"
+      },
+      {
+        "label": "Probes",
+        "value": "10×: 10 MΩ ∥ 12 pF · 1×: 1 MΩ ∥ 100 pF"
+      },
+      {
+        "label": "Ground clip",
+        "value": "earth-referenced"
+      }
     ],
-    "bench": {"art": "scope.bench.svg", "layout": "row", "off_board": true, "size": [30, 18]},
-    "schematic": {"symbol": "none"},
-    "tags": ["instrument", "plugin"]
+    "bench": {
+      "art": "scope.bench.svg",
+      "off_board": true,
+      "size": [
+        25.92,
+        17.76
+      ],
+      "leads": [
+        {
+          "pin": "CH1",
+          "x": 6.12,
+          "y": 16.68
+        },
+        {
+          "pin": "CH2",
+          "x": 9.72,
+          "y": 16.68
+        },
+        {
+          "pin": "CH3",
+          "x": 13.32,
+          "y": 16.68
+        },
+        {
+          "pin": "CH4",
+          "x": 16.92,
+          "y": 16.68
+        },
+        {
+          "pin": "GND",
+          "x": 20.28,
+          "y": 16.68
+        }
+      ]
+    },
+    "schematic": {
+      "symbol": "none"
+    },
+    "tags": [
+      "instrument",
+      "plugin"
+    ]
   }
 ]

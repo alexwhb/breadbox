@@ -148,6 +148,8 @@ pub struct BenchCanvas {
     /// Fit the view on the next frame.
     pub refit: bool,
     t0: std::time::Instant,
+    /// Plugin instruments: probe-lead tip being dragged (`canvas::plugin_parts`).
+    pub lead_drag: super::plugin_parts::LeadDrag,
 }
 
 impl Default for BenchCanvas {
@@ -167,6 +169,7 @@ impl Default for BenchCanvas {
             rect: Rect::NOTHING,
             refit: false,
             t0: std::time::Instant::now(),
+            lead_drag: Default::default(),
         }
     }
 }
@@ -300,6 +303,17 @@ impl BenchCanvas {
         resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Canvas, true, "Bench canvas"));
         ui.ctx()
             .data_mut(|d| d.insert_temp(Id::unique("bench-view"), self.view));
+        // plugin instrument controls + probe-lead tips sit on top of the canvas
+        out.sim.extend(super::plugin_parts::interact(
+            ui,
+            &self.view,
+            rect,
+            doc,
+            &scene,
+            tel,
+            &mut self.lead_drag,
+        ));
+        let scene = self.scene(doc);
         let conn = doc.connectivity();
         self.handle_view_input(ui, &resp);
         self.handle_input(ui, &resp, doc, &scene, &conn, tel, &mut out);
@@ -1185,6 +1199,9 @@ impl BenchCanvas {
         // 4. wires
         let hl_net = self.hover.net;
         for w in &project.wires {
+            if super::plugin_parts::lead_of(doc, w).is_some() {
+                continue; // drawn as probe leads after the instruments
+            }
             let (Some(mut a), Some(mut b)) = (scene.endpoint_pos(&w.a), scene.endpoint_pos(&w.b))
             else {
                 continue;
@@ -1288,10 +1305,11 @@ impl BenchCanvas {
                 }
             }
         }
-        // 6. instruments themselves (on top)
+        // 6. instruments themselves (on top), then plugin instruments' probe leads
         for it in scene.parts.iter().filter(|p| p.layer >= 4) {
             draw_part(it, Pass::Body, &pen);
         }
+        super::plugin_parts::draw_leads(&pen, doc, scene, &self.lead_drag);
         // 7. night: the bench dims with ambient light; LEDs then glow over it
         let night = (1.0 - ambient).powi(2) * 0.36;
         if night > 0.01 {
@@ -1464,6 +1482,14 @@ impl BenchCanvas {
         for ins in &doc.project().instruments {
             if let (Some(part), Some(imp)) = (&ins.part, self.instruments.get(&ins.kind)) {
                 m.insert(part.as_str(), imp.view(ins, tel));
+            }
+        }
+        // plugin instruments: their live front panel
+        for p in &doc.project().parts {
+            if let Some(pt) = tel.parts.iter().find(|t| t.part == p.id)
+                && let Some(panel) = &pt.panel
+            {
+                m.entry(p.id.as_str()).or_default().panel = Some(panel.clone());
             }
         }
         m

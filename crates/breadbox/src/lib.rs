@@ -8,6 +8,7 @@ pub mod circuit;
 pub mod export;
 pub mod jobs;
 pub mod platform;
+pub mod plugins;
 pub mod project;
 pub mod router;
 pub mod screens;

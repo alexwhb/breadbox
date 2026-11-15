@@ -35,6 +35,10 @@ pub struct AppOptions {
     pub sim_speed: SimSpeed,
     /// Bench audio (buzzers, relay clicks) through the default output device.
     pub audio: bool,
+    /// User plugin folder (`None` = `~/Library/Application Support/Breadbox/plugins`).
+    pub plugin_dir: Option<PathBuf>,
+    /// Lesson progress file (`None` = `bb_lessons::Progress::default_path()`).
+    pub progress_path: Option<PathBuf>,
 }
 
 impl Default for AppOptions {
@@ -47,6 +51,8 @@ impl Default for AppOptions {
             bench_factory: None,
             sim_speed: SimSpeed::RealTime(1.0),
             audio: true,
+            plugin_dir: None,
+            progress_path: None,
         }
     }
 }
@@ -63,6 +69,9 @@ impl AppOptions {
             bench_factory: None,
             sim_speed: SimSpeed::Max,
             audio: false,
+            // a fresh plugin folder + lesson progress per test app
+            plugin_dir: Some(crate::plugins::temp_dir("plugins")),
+            progress_path: Some(crate::plugins::temp_dir("progress").join("progress.json")),
         }
     }
 }
@@ -93,6 +102,10 @@ pub struct AppCtx {
     pub bench: BenchService,
     pub theme: ThemeChoice,
     pub repaint: Repaint,
+    /// Plugins: registry, active host, bench factory, hot reload, themes.
+    pub plugins: crate::plugins::PluginService,
+    /// Lesson progress file.
+    pub progress_path: PathBuf,
     /// Bumped whenever the open project changes.
     pub project_generation: u64,
     /// Circuit electrical generation the bench last saw.
@@ -130,6 +143,10 @@ impl AppCtx {
                 .map_err(|e| log::warn!("circuit of {}: {e:#}", p.dir.display()))
                 .ok()
         });
+        // plugin parts (instruments, boards, …) come with the plugins' library
+        if let Some(doc) = self.circuit.as_mut() {
+            doc.set_library(self.plugins.library());
+        }
         self.bench_generation = self.circuit.as_ref().map(|c| c.generation()).unwrap_or(0);
         self.project = p;
         self.project_generation += 1;
@@ -201,6 +218,38 @@ impl AppCtx {
         }
     }
 
+    /// Re-applies the plugins after they changed (install, enable, hot reload): the open
+    /// circuit gets the new parts library and the bench respawns with the new behaviours.
+    pub fn apply_plugins(&mut self) {
+        if self.plugins.has_local() {
+            self.plugins.poll_hot_reload();
+            self.egui
+                .request_repaint_after(crate::plugins::HOT_RELOAD_EVERY);
+        }
+        for name in std::mem::take(&mut self.plugins.reloaded) {
+            self.toasts.info(format!(
+                "Reloaded {name} — the bench restarted with the new version"
+            ));
+        }
+        if self.plugins.applied == self.plugins.generation {
+            return;
+        }
+        let first = self.plugins.applied == 0;
+        self.plugins.applied = self.plugins.generation;
+        if first {
+            return;
+        }
+        if self.circuit.is_some() {
+            let lib = self.plugins.library();
+            if let Some(doc) = self.circuit.as_mut() {
+                doc.set_library(lib);
+            }
+        }
+        if self.bench.is_active() {
+            self.bench.shutdown();
+        }
+    }
+
     /// True if keyboard focus is in a text field (editor shortcuts then belong to it).
     pub fn text_has_focus(&self) -> bool {
         self.egui.memory(|m| m.focused().is_some()) && self.egui.egui_wants_keyboard_input()
@@ -246,7 +295,12 @@ impl BreadboxApp {
             .examples()
             .map(|d| project::scan_examples(&d))
             .unwrap_or_default();
-        let factory = opts.bench_factory.clone().unwrap_or_else(SimBench::factory);
+        let plugins = crate::plugins::PluginService::open(opts.plugin_dir.as_deref());
+        let factory = opts
+            .bench_factory
+            .clone()
+            .unwrap_or_else(|| plugins.bench_factory());
+        let _ = SimBench::factory;
         let menu = if opts.native_menu {
             platform::NativeMenu::install(ctx)
         } else {
@@ -268,6 +322,11 @@ impl BreadboxApp {
             },
             theme: persisted.theme,
             repaint,
+            plugins,
+            progress_path: opts
+                .progress_path
+                .clone()
+                .unwrap_or_else(bb_lessons::Progress::default_path),
             project_generation: 0,
             bench_generation: 0,
             circuit: None,
@@ -334,6 +393,7 @@ impl BreadboxApp {
             log::info!("first frame {} ms after start", t0.elapsed().as_millis());
         }
         self.ctx.toolchain.poll();
+        self.ctx.apply_plugins();
         self.ctx.bench.poll();
         if let Some(m) = &self.menu {
             for cmd in m.take_commands() {

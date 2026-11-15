@@ -56,6 +56,8 @@ pub struct InstrumentView {
     pub traces: Vec<Vec<(f32, f32)>>,
     pub caption: String,
     pub triggered: bool,
+    /// A plugin instrument's live front panel (`bb_plugin::panel::PanelState` JSON).
+    pub panel: Option<serde_json::Value>,
 }
 
 impl ArtCtx<'_> {
@@ -203,6 +205,7 @@ pub fn local_bounds(def: &PartDef) -> WRect {
         "desk_lamp" | "hand" => WRect::new(0.0, 0.0, w, h),
         "mini_scope" => WRect::new(-1.0, -1.0, 19.0, 10.0),
         "dmm" => WRect::new(-1.0, -1.0, 12.0, 15.6),
+        a if a.starts_with("plugin://") && (w > 0.0 || h > 0.0) => WRect::new(0.0, 0.0, w, h),
         _ => {
             if w > 0.0 || h > 0.0 {
                 WRect::new(-0.5, -0.5, w.max(lx1 + 1.0) - 0.5, h.max(ly1 + 1.0) - 0.5)
@@ -296,7 +299,12 @@ pub fn draw(pen: &Pen, cx: &ArtCtx, pass: Pass) {
         "hand" => modules::hand(&lp, cx),
         "mini_scope" => modules::mini_scope(&lp, cx),
         "dmm" => modules::dmm(&lp, cx),
-        _ => generic(&lp, cx),
+        _ => {
+            // plugin parts: instrument front panels / SVG art (canvas::plugin_parts)
+            if !super::plugin_parts::draw(&lp, cx) {
+                generic(&lp, cx)
+            }
+        }
     }
     if pass != Pass::Back {
         overlay_health(pen, cx);

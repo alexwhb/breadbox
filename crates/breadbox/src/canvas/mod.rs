@@ -6,5 +6,6 @@ pub mod art;
 pub mod bench;
 pub mod instruments;
 pub mod pen;
+pub mod plugin_parts;
 pub mod scene;
 pub mod schematic;
