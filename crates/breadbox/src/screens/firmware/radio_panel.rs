@@ -43,6 +43,8 @@ pub struct RadioPanelState {
     plan_view: Option<PlanView>,
     /// The project's `radios` value the fields were last loaded from.
     loaded: Option<serde_json::Value>,
+    /// The floor plan's walls as saved in the project.
+    walls: Vec<bb_radio::geo::Wall>,
 }
 
 impl Default for RadioPanelState {
@@ -61,6 +63,7 @@ impl Default for RadioPanelState {
             bench_pending: None,
             plan_view: None,
             loaded: None,
+            walls: Vec::new(),
         }
     }
 }
@@ -88,6 +91,7 @@ impl RadioPanelState {
         if let Some(b) = &r.settings.lan_bridge {
             self.bridge_addr = format!("{}:{}", b.host, b.port);
         }
+        self.walls = r.settings.walls.clone();
         // the floor plan shows the saved position until the bench reports it back
         if !first && self.bench_drag.is_none() {
             self.bench_pending = Some(((r.bench_pos.x, r.bench_pos.y), Instant::now()));
@@ -144,6 +148,8 @@ pub enum RadioEdit {
     Conditions(NetConditionsView),
     /// "Bridge to my real LAN broker" (`host`, `port`), `None` = off.
     LanBridge(Option<(String, u16)>),
+    /// The floor plan's walls (added, made concrete / interior, removed).
+    Walls(Vec<bb_radio::geo::Wall>),
 }
 
 /// What the panel wants done.
@@ -239,6 +245,9 @@ pub fn radio_panel(
             floor_plan(ui, p, st, pl, &mut cmds, &mut dropped);
             if let Some(pos) = dropped {
                 out.edits.push(RadioEdit::BenchPos(pos));
+            }
+            if let Some(w) = walls_ui(ui, p, st, pl) {
+                out.edits.push(RadioEdit::Walls(w));
             }
         });
     }
@@ -468,6 +477,109 @@ impl PlanView {
             self.y0 + (p.y - r.top()) as f64 / self.ppm,
         )
     }
+}
+
+/// The walls under the floor plan: one row each (material toggle, remove) and "Add wall".
+/// Returns the new list when something changed.
+fn walls_ui(
+    ui: &mut Ui,
+    p: &Palette,
+    st: &RadioPanelState,
+    pl: &PlacementView,
+) -> Option<Vec<bb_radio::geo::Wall>> {
+    let mut next = None;
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 6.0;
+        ui.label(
+            egui::RichText::new(format!("Walls ({})", st.walls.len()))
+                .font(font::semibold(12.0))
+                .color(p.text_muted),
+        );
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if Btn::mini("Add wall")
+                .icon(Icon::Plus)
+                .tooltip("An interior wall across the line from the access point to the bench")
+                .show(ui)
+                .clicked()
+            {
+                let mut w = st.walls.clone();
+                w.push(new_wall(pl));
+                next = Some(w);
+            }
+        });
+    });
+    for (i, wall) in st.walls.iter().enumerate() {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 6.0;
+            let len = ((wall.b.x - wall.a.x).powi(2) + (wall.b.y - wall.a.y).powi(2)).sqrt();
+            let concrete = wall.loss_db >= 20.0;
+            ui.label(
+                egui::RichText::new(format!(
+                    "Wall {} · {:.1} m · −{:.0} dB",
+                    i + 1,
+                    len,
+                    wall.loss_db
+                ))
+                .font(font::mono(11.5))
+                .color(p.text),
+            );
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let remove = format!("Remove wall {}", i + 1);
+                if Btn::plain(&remove)
+                    .icon_only(Icon::Close)
+                    .height(22.0)
+                    .tooltip(&remove)
+                    .show(ui)
+                    .clicked()
+                {
+                    let mut w = st.walls.clone();
+                    w.remove(i);
+                    next = Some(w);
+                }
+                let kind = format!(
+                    "Wall {}: {}",
+                    i + 1,
+                    if concrete { "concrete" } else { "interior" }
+                );
+                let r = Btn::mini(if concrete { "concrete" } else { "interior" })
+                    .selected(concrete)
+                    .tooltip("Interior (−15 dB) / concrete (−25 dB)")
+                    .show(ui);
+                r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &kind));
+                if r.clicked() {
+                    let mut w = st.walls.clone();
+                    let (a, b) = (w[i].a, w[i].b);
+                    w[i] = if concrete {
+                        bb_radio::geo::Wall::interior(a, b)
+                    } else {
+                        bb_radio::geo::Wall::exterior(a, b)
+                    };
+                    next = Some(w);
+                }
+            });
+        });
+    }
+    next
+}
+
+/// A 4 m interior wall across the middle of the line from the strongest access point to the
+/// bench (snapped to 0.1 m).
+fn new_wall(pl: &PlacementView) -> bb_radio::geo::Wall {
+    use bb_radio::geo::{Pos, Wall};
+    let bench = pl.bench;
+    let ap = pl
+        .best_ap()
+        .map(|a| (a.x, a.y))
+        .unwrap_or((bench.0 - 3.0, bench.1));
+    let mid = ((ap.0 + bench.0) / 2.0, (ap.1 + bench.1) / 2.0);
+    let (dx, dy) = (bench.0 - ap.0, bench.1 - ap.1);
+    let len = (dx * dx + dy * dy).sqrt().max(1e-6);
+    let (nx, ny) = (-dy / len * 2.0, dx / len * 2.0);
+    // beside the existing default wall (x = 1.5 for the default bench) rather than on it
+    let shift = (dx / len * 0.3, dy / len * 0.3);
+    let a = snap_pos((mid.0 + shift.0 - nx, mid.1 + shift.1 - ny));
+    let b = snap_pos((mid.0 + shift.0 + nx, mid.1 + shift.1 + ny));
+    Wall::interior(Pos::new(a.0, a.1), Pos::new(b.0, b.1))
 }
 
 /// Snaps a floor-plan position to 0.1 m inside ±100 m.
@@ -810,6 +922,10 @@ pub fn apply_radio_edit(doc: &mut CircuitDoc, edit: &RadioEdit) -> bool {
             n.loss_pct = c.loss_pct;
             n.drop_ap_at_s = c.drop_ap_at_s;
             "Network conditions"
+        }
+        RadioEdit::Walls(w) => {
+            r.settings.walls = w.clone();
+            "Walls"
         }
         RadioEdit::LanBridge(b) => {
             r.settings.lan_bridge = b.as_ref().map(|(host, port)| {

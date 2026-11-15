@@ -571,3 +571,98 @@ fn radio_settings_are_saved_with_the_project_and_undoable() {
     drop(broker);
     let _ = std::fs::remove_dir_all(&tmp);
 }
+
+/// The link from the bench to the strongest AP in the running bench: (walls, RSSI dBm).
+fn link(h: &H) -> Option<(usize, f64)> {
+    let pl = h.state().ctx.bench.radio.as_ref()?.placement.clone()?;
+    pl.best_ap().map(|a| (a.walls as usize, a.rssi_dbm))
+}
+
+/// RF-1: walls on the floor plan are part of the project too — added, made concrete and
+/// removed from the Radios panel, each one undo step, followed by the running bench's RSSI,
+/// saved and restored.
+#[test]
+fn floor_plan_walls_are_editable_undoable_and_saved() {
+    let tmp = std::env::temp_dir().join(format!("bb-radio-walls-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&tmp);
+    let dir = tmp.join("walls.breadbox");
+    copy_dir(&repo().join("examples/garden-node"), &dir);
+    let mut h = harness();
+    h.state_mut().open_path(&dir);
+    h.run_steps(4);
+    h.get_by_label("Run").click();
+    h.run_steps(2);
+    go(&mut h, "Firmware");
+    assert!(
+        wait_for(&mut h, 120.0, |h| link(h).is_some()),
+        "no placement from the bench"
+    );
+    let (w0, rssi0) = link(&h).unwrap();
+    assert_eq!(w0, 1, "the default interior wall");
+    let walls = |h: &H| saved(h).settings.walls;
+    // Add wall: a second interior wall across the link → ~15 dB weaker
+    let add = h.get_by_label("Add wall");
+    add.scroll_to_me();
+    // let the scroll animation settle before clicking by position
+    h.run_steps(12);
+    h.get_by_label("Add wall").click();
+    h.run_steps(3);
+    assert_eq!(walls(&h).len(), 2);
+    assert!(
+        wait_for(&mut h, 30.0, |h| link(h)
+            .is_some_and(|(w, r)| w == 2 && r < rssi0 - 10.0)),
+        "{:?} (was {rssi0})",
+        link(&h)
+    );
+    // undo / redo
+    undo(&mut h, false);
+    assert_eq!(walls(&h).len(), 1);
+    assert!(
+        wait_for(&mut h, 30.0, |h| link(h).is_some_and(|(w, _)| w == 1)),
+        "{:?}",
+        link(&h)
+    );
+    undo(&mut h, true);
+    assert_eq!(walls(&h).len(), 2);
+    // the new wall made concrete: another ~10 dB
+    assert!(wait_for(&mut h, 30.0, |h| link(h).is_some_and(|(w, _)| w == 2)));
+    let (_, rssi2) = link(&h).unwrap();
+    h.get_by_label("Wall 2: interior").click();
+    h.run_steps(3);
+    assert!(walls(&h)[1].loss_db >= 25.0, "{:?}", walls(&h));
+    assert!(
+        wait_for(&mut h, 30.0, |h| link(h)
+            .is_some_and(|(_, r)| r < rssi2 - 5.0)),
+        "{:?} (was {rssi2})",
+        link(&h)
+    );
+    // remove the default wall: the concrete one is left
+    h.get_by_label("Remove wall 1").click();
+    h.run_steps(3);
+    let w = walls(&h);
+    assert_eq!(w.len(), 1);
+    assert!(w[0].loss_db >= 25.0);
+    {
+        let doc = h.state().ctx.circuit.as_ref().unwrap();
+        assert_eq!(doc.editor.undo_label(), Some("Walls"));
+    }
+    // saved and restored
+    h.state_mut().flush();
+    drop(h);
+    let r = bb_sim::radio::ProjectRadios::from_project(&bb_circuit::Project::load(&dir).unwrap());
+    assert_eq!(r.settings.walls, w);
+    let mut h = harness();
+    h.state_mut().open_path(&dir);
+    h.run_steps(4);
+    h.get_by_label("Run").click();
+    h.run_steps(2);
+    go(&mut h, "Firmware");
+    assert!(
+        wait_for(&mut h, 120.0, |h| link(h).is_some_and(|(w, _)| w == 1)),
+        "{:?}",
+        link(&h)
+    );
+    assert!(has_label(&h, "Wall 1: concrete"));
+    drop(h);
+    let _ = std::fs::remove_dir_all(&tmp);
+}
