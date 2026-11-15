@@ -37,6 +37,7 @@ mod variant;
 pub use avr::Avr;
 pub use debug::{CallFrame, CallKind, StepFilter, Watchpoint};
 pub use decode::{Op, decode, is_two_word};
+pub use io::{IoRegister, io_registers};
 pub use loader::{FirmwareImage, LoadError, Segment};
 pub use variant::{Irq, Mcu};
 
