@@ -131,6 +131,16 @@ impl AppCtx {
     pub fn open_project(&mut self, dir: &Path) -> anyhow::Result<()> {
         let mut p = Project::load(dir)?;
         p.read_only = self.resources.is_example(dir);
+        log::info!(
+            "opened project {} ({}{})",
+            p.name,
+            dir.display(),
+            if p.read_only {
+                ", read-only example"
+            } else {
+                ""
+            }
+        );
         self.set_project(Some(p));
         Ok(())
     }
@@ -308,6 +318,9 @@ impl BreadboxApp {
         } else {
             None
         };
+        if opts.native_menu {
+            platform::set_wake(ctx);
+        }
         let mut app_ctx = AppCtx {
             egui: ctx.clone(),
             route: Route::Home,
@@ -394,6 +407,14 @@ impl BreadboxApp {
             && let Some(t0) = crate::STARTED.get()
         {
             log::info!("first frame {} ms after start", t0.elapsed().as_millis());
+        }
+        // projects / bundles the system asked us to open (Finder, Dock, command line); only
+        // the real app (with its native menu) takes them
+        if self.menu.is_some() {
+            for path in platform::take_opened() {
+                log::info!("opening {}", path.display());
+                self.open_path(&path);
+            }
         }
         // key events a menu item handed to the focused text field (Undo, Redo, Select All)
         if !self.inject.is_empty() {

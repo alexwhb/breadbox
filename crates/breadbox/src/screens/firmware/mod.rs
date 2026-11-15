@@ -304,7 +304,13 @@ impl FirmwareScreen {
             target,
             debug: self.step_mode,
         };
-        let key = format!("{:016x}", fnv(&sk.dir.to_string_lossy()));
+        // per sketch and build flavour: a debug (-Og) build and a plain Verify of the same
+        // sketch never share (and overwrite) one staging folder
+        let key = format!(
+            "{:016x}{}",
+            fnv(&sk.dir.to_string_lossy()),
+            if req.debug { "-debug" } else { "" }
+        );
         self.output.clear();
         self.bottom = BottomTab::Output;
         self.output.push(OutputLine::new(

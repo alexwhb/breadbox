@@ -174,11 +174,34 @@ if [ $window -eq 1 ]; then
     echo "first_frame_ms=$first open_to_frame_ms=$wall" > "$scratch/startup.txt"
   fi
   if grep -qF "$repo" "$log"; then bad "the app log mentions the checkout"; fi
-  if [ -n "$pid" ]; then
+  quit_app() {
+    local pid="$1"
+    [ -n "$pid" ] || return 0
     kill -TERM "$pid" 2>/dev/null || true
     for _ in $(seq 1 50); do kill -0 "$pid" 2>/dev/null || break; sleep 0.1; done
     if kill -0 "$pid" 2>/dev/null; then kill -KILL "$pid" 2>/dev/null || true; bad "the app did not quit on SIGTERM"; else ok "quit"; fi
+  }
+  quit_app "$pid"
+
+  # a project folder handed over by the system (Finder "Open With", the Dock, open -a)
+  project="$scratch/My Garden.breadbox"
+  cp -R "$copy/Contents/Resources/examples/garden-node" "$project"
+  log2="$scratch/open-document.log"
+  : > "$log2"
+  open -n -F --env BREADBOX_APP_SUPPORT="$scratch/support" --env BREADBOX_CACHES="$scratch/caches" \
+    --env RUST_LOG=info --stdout "$log2" --stderr "$log2" -a "$copy" "$project"
+  opened=""
+  for _ in $(seq 1 150); do
+    opened=$(grep -F "opened project" "$log2" | grep -F "$project" | head -1 || true)
+    [ -n "$opened" ] && break
+    sleep 0.1
+  done
+  if [ -n "$opened" ]; then
+    ok "open -a Breadbox.app <project folder> opens it (Apple Event odoc)"
+  else
+    bad "the app did not open the project it was handed (log: $(tail -3 "$log2" | tr '\n' ' '))"
   fi
+  quit_app "$(pgrep -f "$copy/Contents/MacOS/breadbox" | head -1 || true)"
 fi
 
 echo

@@ -9,7 +9,8 @@ and must not break other crates' use of it.
 ```
 crates/
   bb-core        shared types: SimTime, SI units/formatting, ids, PinDrive, Device trait,
-                 WorldView, events. Tiny, dependency-light. Everyone depends on it.
+                 WorldView, events, `paths` (resources + user-data folders). Tiny,
+                 dependency-light. Everyone depends on it.
   bb-spice       analog engine (parser, MNA, models, analyses, incremental transient session)
   bb-avr         AVR emulator (ATmega328P, ATmega2560): core, peripherals, loaders, debugger hooks
   bb-firmware    arduino-cli management + compile, ELF/DWARF (lines, symbols, types),
@@ -34,8 +35,9 @@ plugins/         first-party plugin sources (Rust → wasm) + their plugin.json 
 lessons/         lesson content (TOML), one folder per track
 examples/        example projects (*.breadbox/)
 tests/e2e/       cross-crate headless scenario tests (a crate: `breadbox-e2e`, added when needed)
-scripts/         test-all.sh, bundle-macos.sh, build-test-firmware.sh, regen-spice-golden.sh
-assets/          fonts (+ OFL licenses), icons, app icon
+scripts/         test-all.sh, bundle-macos.sh, check-bundle.sh, build-plugins.sh,
+                 build-test-firmware.sh, regen-spice-golden.sh
+assets/          fonts (+ OFL licenses), app icon (icon/breadbox-icon.svg)
 docs/            ARCHITECTURE.md, DESIGN.md, PLUGIN-SDK.md, LESSON-FORMAT.md, design/
 ```
 
@@ -320,10 +322,13 @@ is a snapshot). Time is counted in oscillator cycles (`cycle()`); `time()` conve
 
 **Toolchain + debugging (`bb-firmware`).**
 
-- `Toolchain::detect()` (env `BREADBOX_ARDUINO_CLI`, `PATH`, Homebrew, app-support dir) →
+- `Toolchain::detect()` (env `BREADBOX_ARDUINO_CLI` — when set, `PATH` and Homebrew are not
+  searched, so a missing path simulates a first run — `PATH`, Homebrew, app-support dir) →
   `{ arduino_cli, cli_version, source, avr_core_version, avr_gcc_version, overrides }`;
   `ready()`, `compiler_label()` ("avr-gcc 7.3.0"). `Toolchain::install(dir, progress)` =
-  `install_cli` (download + extract + private `arduino-cli.yaml`) + `install_core`.
+  `install_cli` (download + extract + private `arduino-cli.yaml`; `$BREADBOX_ARDUINO_CLI_URL`
+  overrides the archive URL, `file://` works) + `install_core` (+ native avr-gcc / ctags on
+  Rosetta-less Apple Silicon).
   `lib_search/lib_install/lib_list`. On Apple Silicon without Rosetta the bundled x86_64
   avr-gcc/ctags cannot run: `NativeOverrides` (native avr-gcc from Homebrew `osx-cross`, native
   Arduino ctags under `toolchain/native/`) are passed as build properties automatically.
@@ -699,13 +704,18 @@ via `FontTweak::coords`).
 **Module map** (`crates/breadbox/src/`):
 
 ```
-main.rs              env_logger + breadbox::run()
-lib.rs               native_options() (1440×900, min 1280×800, persisted geometry), run(), STARTED
+main.rs              env_logger + breadbox::run() (or `--smoke`)
+lib.rs               native_options() (1440×900, min 1280×800, persisted geometry in
+                     platform::app_state_file()), run(), STARTED, APP_ID
+smoke.rs             `breadbox --smoke <project | example | lesson:<id>> [--place <plugin>]`
 app.rs               BreadboxApp (eframe::App), AppCtx (shared services), AppOptions, PersistedState,
                      top bar (logo + wordmark → Home, breadcrumb + screen switcher, mode badge,
                      Pro tabs), shortcuts, command routing, raw_input_hook (menu → editor keys)
 router.rs            Route, ProTab, ScreenSlot, Screen trait, ScreenRegistry, Command
-platform.rs          NativeMenu (muda; File/Edit/View/Simulate/Window/Help), file dialogs (rfd)
+platform.rs          resources() / app_support() / caches() (over bb_core::paths), MENUS (the
+                     menu table) + NativeMenu (muda), open-documents Apple Event (`odoc`) +
+                     command-line paths → queue_open/take_opened, file dialogs (rfd;
+                     `BREADBOX_TEST_PICK` answers them in tests)
 theme.rs             Palette DARK/LIGHT (DESIGN.md tokens), font helpers, style_for(), paper/dots grids
 project.rs           Project (project.json as plain JSON: name, mode, MCUs + sketch dirs, radios),
                      examples scan, Resources (examples/fixtures location), recents
@@ -768,15 +778,37 @@ navigate with `app.navigate(Route)` and queue app commands with `app.command(Com
 `project_generation`; `open_project`, `set_project`, `bench_link()` (creates the link for the
 open project on first use).
 
-**Commands + shortcuts** (`APP-2`, `APP-4`): ⌘N new, ⌘O open, ⌘S save (examples are read-only:
-Save copies the project), ⌘⇧S save as, ⌘Z/⌘⇧Z undo/redo (text fields get them as key events),
-⌘W close project (window on Home), ⌘F find, ⌘B verify, ⌘U upload, ⌘R run/pause, ⌘1–5 screens,
-⌘⇧H Home, View → Theme (dark default, light token set). The native menu (muda) sends the same
-`Command`s; its items with key equivalents consume the keys, so egui shortcut handling only runs
-without the menu (tests, other OSes).
+**Commands + shortcuts** (`APP-2`, `APP-4`): ⌘N new, ⌘O open, File → Import Project Bundle
+(`.breadbox.zip`), ⌘S save (examples are read-only: Save copies the project), ⌘⇧S save as,
+⌘Z/⌘⇧Z undo/redo, ⌘X/⌘C/⌘V/⌘A cut/copy/paste/select all, ⌘W close project (window on Home), ⌘F
+find, ⌘B verify, ⌘U upload, ⌘R run/pause, ⌘1–5 screens, ⌘⇧H Home, View → Theme (dark default,
+light token set), Help → the guide / Plugin SDK / lesson format (`widgets::help`, the bundled
+docs in a window). `platform::MENUS` is the one table of items (id, title, shortcut) the native
+menu (muda) is built from; `command_for(id)` maps each to a `Command`. Items with key
+equivalents consume the keys, so egui shortcut handling only runs without the menu (tests, other
+OSes). Undo / Redo / Select All for a focused text field are re-injected as key events at the
+start of the next frame; Cut / Copy / Paste send `ViewportCommand::RequestCut/Copy/Paste`, which
+egui-winit answers with `Event::Cut/Copy/Paste` (text fields; the bench copies / cuts / pastes
+the selected parts on those events). About uses the standard macOS About panel.
+
+**Resources & user data** (`PLAT-3`): `bb_core::paths` is the one resolver — resources from
+`$BREADBOX_RESOURCES`, else `Breadbox.app/Contents/Resources` when the executable sits in an app
+bundle (never the checkout), else the repository (development builds; compiled out when built
+with `BREADBOX_BUNDLE=1`). User data: `app_support()` = `~/Library/Application Support/Breadbox`
+(`$BREADBOX_APP_SUPPORT`: plugins, `lessons/progress.json`, `toolchain/`, `app-state.ron`),
+`caches()` = `~/Library/Caches/Breadbox` (`$BREADBOX_CACHES`: `builds/`, `staging/`).
+`bb_lessons::{examples_dir, lessons_dir}`, `Registry::default_bundled_dir/default_user_dir`,
+`Toolchain::app_dir`, `build_cache_root`, `Progress::default_path` and the app's `Resources`
+all resolve through it (their older specific env overrides still win). Bundled examples open
+read-only; Save / Save As copy them into `~/Documents/Breadbox`. Documents handed over by
+macOS (Finder "Open With", the Dock, `open -a`) or given on the command line are queued by
+`platform` and opened by the app on its next frame.
 
 **Persistence** (`APP-5`): eframe storage key `breadbox-app` → `PersistedState { route, theme,
-recent, last_project, screens: {slot key → JSON} }`; window geometry by eframe. Projects
+recent, last_project, screens: {slot key → JSON} }`; window geometry by eframe; the file is
+`~/Library/Application Support/Breadbox/app-state.ron` (copied once from the old
+`dev.breadbox.Breadbox/app.ron`). `Screen::on_enter` / `on_leave` bracket a screen's visibility
+(the Lessons screen pauses its own bench behind other screens). Projects
 autosave edited sketch files 1.2 s after the last keystroke (bundled examples stay read-only).
 Idle cost: nothing repaints unless input, a job, a toast or the running bench asks.
 
@@ -980,7 +1012,12 @@ prompt → install, Handheld DMM on garden-node A0 ≈ 1.88 V, probe tips dragge
 dial → Ω; local plugin + hot reload, theme, SDK docs, analysis plugin), `tests/lessons.rs`
 (lesson 3 step 3 math mode + hints + working + measurements, break it + Repair, free play;
 the lesson editor → pack → Lessons), `tests/radio_tools.rs` (phone ↔ ble-button notify, MQTT
-explorer `garden/pot1`), `tests/pcb.rs` (blink: auto-place, route, DRC, Gerbers parse back). `BREADBOX_EXPORT_DIR` / `BREADBOX_PROJECTS_DIR` redirect Share and
+explorer `garden/pot1`), `tests/pcb.rs` (blink: auto-place, route, DRC, Gerbers parse back), `tests/menu.rs` (every
+`platform::MENUS` item through its command on the real app), `tests/glyphs.rs` (every character
+in UI strings, part / lesson / plugin / example data and the rendered docs is drawable by the
+bundled fonts; `widgets::instrument::SHAPED_SYMBOLS` — `⎓ ∿ ⊓ ⋀ ⎍` — are painted as shapes),
+`tests/toolchain_first_run.rs` (no toolchain: the install offer + an offline failure;
+`--ignored`: the real one-click install into scratch folders, then Verify). `BREADBOX_EXPORT_DIR` / `BREADBOX_PROJECTS_DIR` redirect Share and
 bundle imports in tests. GUI tests use `AppOptions::test()` (no persistence,
 no native menu, bench at max speed); compile tests skip gracefully without a toolchain.
 
@@ -1002,3 +1039,19 @@ garden-node.breadbox/
 - External tools used by tests/dev (install with Homebrew when missing): `arduino-cli` (+
   `arduino-cli core install arduino:avr`), `ngspice` (golden-data regeneration only).
 - `scripts/test-all.sh` is the single green-light command.
+- `scripts/build-plugins.sh [--check]` rebuilds the plugin wasm with the checkout path and
+  `$HOME` remapped, so the committed modules are byte-identical from any clone or worktree.
+- `scripts/bundle-macos.sh [--dmg] [--check]` → `dist/Breadbox.app` (+ `dist/Breadbox.dmg`):
+  release build with `BREADBOX_BUNDLE=1` and remapped paths in its own target dir
+  (`target/bundle-macos`), `Info.plist` (`app.breadbox.Breadbox`, version from the workspace,
+  macOS 14+, high-DPI, dark-mode friendly, document types `.breadbox` folders /
+  `.breadbox.zip` / folders), `Breadbox.icns` from `assets/icon/breadbox-icon.svg` (the
+  `app_icon` example + `iconutil`), `Contents/Resources` = `examples/`, `lessons/`, `plugins/`
+  (+ `crates/bb-plugin-sdk` so the plugin sources build), `docs/` (README, PLUGIN-SDK,
+  LESSON-FORMAT, schema), `fonts/` + OFL, `hostcore/` (reference copy; the app compiles the
+  embedded one), `licenses/THIRD-PARTY.md`, `build-info.json`; ad-hoc `codesign`.
+- `scripts/check-bundle.sh [app] [--no-window]`: signature / plist / resources / no `$HOME`
+  path in the binary or bundled files, then smoke runs of the copied app under `sandbox-exec`
+  with the checkout denied (garden-node, a lesson bench, the DMM plugin placed on a bench, an
+  ESP32 host build, a real window), the real app via `open` (first frame < 2 s) and a project
+  folder handed over with `open -a`.

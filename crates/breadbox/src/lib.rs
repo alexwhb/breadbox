@@ -64,6 +64,7 @@ pub static STARTED: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLoc
 pub fn run() -> eframe::Result<()> {
     STARTED.get_or_init(std::time::Instant::now);
     migrate_app_state();
+    platform::install_open_documents();
     eframe::run_native(
         "Breadbox",
         native_options(),

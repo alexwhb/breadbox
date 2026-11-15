@@ -31,6 +31,125 @@ pub fn app_state_file() -> PathBuf {
     app_support().join("app-state.ron")
 }
 
+/// Projects / bundles the system asked Breadbox to open (Finder "Open With", a drop on the
+/// Dock icon, `open -a Breadbox <folder>`, `breadbox <path>`), until the app takes them.
+static OPENED: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
+/// The app's egui context, to wake it when a document arrives while it is idle.
+static WAKE: std::sync::Mutex<Option<eframe::egui::Context>> = std::sync::Mutex::new(None);
+
+/// Queues documents to open and wakes the app.
+pub fn queue_open(paths: impl IntoIterator<Item = PathBuf>) {
+    if let Ok(mut q) = OPENED.lock() {
+        q.extend(paths);
+    }
+    if let Ok(w) = WAKE.lock()
+        && let Some(ctx) = w.as_ref()
+    {
+        ctx.request_repaint();
+    }
+}
+
+/// Documents waiting to be opened (drained; the app calls this every frame).
+pub fn take_opened() -> Vec<PathBuf> {
+    OPENED
+        .lock()
+        .map(|mut q| std::mem::take(&mut *q))
+        .unwrap_or_default()
+}
+
+/// Lets [`queue_open`] wake this context.
+pub fn set_wake(ctx: &eframe::egui::Context) {
+    if let Ok(mut w) = WAKE.lock() {
+        *w = Some(ctx.clone());
+    }
+}
+
+/// Before the event loop starts: listen for the system's open-documents requests (macOS
+/// Apple Event `odoc`; the documents of the launch itself arrive this way too) and queue the
+/// paths given on the command line.
+pub fn install_open_documents() {
+    let args: Vec<PathBuf> = std::env::args_os()
+        .skip(1)
+        .filter(|a| !a.to_string_lossy().starts_with('-'))
+        .map(PathBuf::from)
+        .filter(|p| p.exists())
+        .collect();
+    queue_open(args);
+    #[cfg(target_os = "macos")]
+    open_documents::install();
+}
+
+#[cfg(target_os = "macos")]
+mod open_documents {
+    use block2::RcBlock;
+    use objc2::rc::Retained;
+    use objc2::runtime::NSObject;
+    use objc2::{AllocAnyThread, define_class, msg_send, sel};
+    use objc2_foundation::{
+        NSAppleEventDescriptor, NSAppleEventManager, NSNotification, NSNotificationCenter, NSString,
+    };
+    use std::ptr::NonNull;
+
+    const CORE_EVENT_CLASS: u32 = u32::from_be_bytes(*b"aevt");
+    const OPEN_DOCUMENTS: u32 = u32::from_be_bytes(*b"odoc");
+    const DIRECT_OBJECT: u32 = u32::from_be_bytes(*b"----");
+
+    define_class!(
+        #[unsafe(super(NSObject))]
+        #[name = "BreadboxOpenDocumentsHandler"]
+        struct Handler;
+
+        impl Handler {
+            #[unsafe(method(handleOpenDocuments:withReplyEvent:))]
+            fn handle(&self, event: &NSAppleEventDescriptor, _reply: &NSAppleEventDescriptor) {
+                // SAFETY: `paramDescriptorForKeyword:` takes an AEKeyword (u32)
+                let list: Option<Retained<NSAppleEventDescriptor>> =
+                    unsafe { msg_send![event, paramDescriptorForKeyword: DIRECT_OBJECT] };
+                let Some(list) = list else { return };
+                let paths: Vec<std::path::PathBuf> = (1..=list.numberOfItems())
+                    .filter_map(|i| list.descriptorAtIndex(i))
+                    .filter_map(|d| d.fileURLValue())
+                    .filter_map(|u| u.to_file_path())
+                    .collect();
+                for p in &paths {
+                    log::info!("asked to open {}", p.display());
+                }
+                super::queue_open(paths);
+            }
+        }
+    );
+
+    /// NSApplication installs its own `odoc` handler while it finishes launching; ours goes in
+    /// right after (`NSApplicationWillFinishLaunchingNotification`), before the launch's own
+    /// documents are delivered.
+    pub fn install() {
+        let block = RcBlock::new(|_n: NonNull<NSNotification>| {
+            let handler: Retained<Handler> = unsafe { msg_send![Handler::alloc(), init] };
+            let manager = NSAppleEventManager::sharedAppleEventManager();
+            // SAFETY: a live handler object with the selector's signature; event class and id
+            // are FourCharCodes
+            unsafe {
+                let _: () = msg_send![
+                    &*manager,
+                    setEventHandler: &*handler,
+                    andSelector: sel!(handleOpenDocuments:withReplyEvent:),
+                    forEventClass: CORE_EVENT_CLASS,
+                    andEventID: OPEN_DOCUMENTS
+                ];
+            }
+            // the event manager does not retain its handlers
+            std::mem::forget(handler);
+        });
+        let name = NSString::from_str("NSApplicationWillFinishLaunchingNotification");
+        let center = NSNotificationCenter::defaultCenter();
+        // SAFETY: the block only touches the main-thread event manager, posted on the main thread
+        let observer = unsafe {
+            center.addObserverForName_object_queue_usingBlock(Some(&name), None, None, &block)
+        };
+        std::mem::forget(observer);
+    }
+}
+
 /// GUI tests answer file dialogs through `$BREADBOX_TEST_PICK` (the path to return).
 fn test_pick() -> Option<PathBuf> {
     std::env::var_os("BREADBOX_TEST_PICK").map(PathBuf::from)
@@ -486,6 +605,14 @@ mod tests {
             ["Breadbox", "File", "Edit", "View", "Simulate", "Help"]
         );
         assert_eq!(menu_spec("verify").unwrap().shortcut, cmd('B'));
+    }
+
+    #[test]
+    fn opened_documents_queue_until_taken() {
+        let a = PathBuf::from("/tmp/a.breadbox");
+        queue_open([a.clone()]);
+        assert_eq!(take_opened(), vec![a]);
+        assert!(take_opened().is_empty());
     }
 
     #[test]

@@ -684,3 +684,94 @@ bb-radio (pending station events / gateway downlinks wake the space, AT parser b
 bb-spice (watch added mid-trail no longer panics); bb-world (`<pot>.evaporation_scale`);
 bb-sim rebuilds keep capacitor charge (`.ic` on capacitor nodes instead of `.nodeset`);
 capsoil v1.2 output resistance 2.2 kΩ (design's −0.4 mV meter load).
+
+### bundle
+Phase 5 — `Breadbox.app` (`PLAT-3`), runtime resource resolution, start-up (`PLAT-4`),
+README, polish (`APP-4`, `MCU-4` first run, PCB silkscreen, glyphs). Contracts: ARCHITECTURE
+§8 ("Resources & user data", "Commands + shortcuts") and §10.
+
+- `PLAT-3` **done** — `scripts/bundle-macos.sh [--dmg] [--check]` → `dist/Breadbox.app` (44 MB;
+  `dist/Breadbox.dmg` 19 MB): release build with `BREADBOX_BUNDLE=1` + remapped paths (own
+  target dir), `Info.plist` (`app.breadbox.Breadbox`, workspace version, macOS 14+, high-DPI,
+  dark mode, document types: `.breadbox` project folders, `.breadbox.zip`, folders as
+  Alternate), `Breadbox.icns` rendered from the design's logo mark
+  (`assets/icon/breadbox-icon.svg`, `app_icon` example → `iconutil`), `Contents/Resources`
+  (examples + fixtures, lessons + firmware, plugins + wasm + art + sources, the plugin SDK
+  crate, docs, fonts + OFL, the ESP32/Pico host core, `licenses/THIRD-PARTY.md`,
+  `build-info.json`), ad-hoc `codesign`; `--dmg` via `hdiutil`.
+- Runtime resources **done** — `bb_core::paths` is the one resolver (bundle →
+  `Contents/Resources`, never the checkout; dev → the repo, compiled out of bundle builds; user
+  data in `~/Library/Application Support/Breadbox` + `~/Library/Caches/Breadbox`, overridable
+  with `BREADBOX_APP_SUPPORT` / `BREADBOX_CACHES`). bb-lessons, bb-plugin, bb-firmware and the
+  app (`platform::resources()`) go through it; eframe state moved to
+  `Application Support/Breadbox/app-state.ron` (copied once from the old folder). Examples open
+  read-only from the bundle, Save / Save As copy them out.
+- "No repo paths at runtime" **proven** — `scripts/check-bundle.sh`: no `$HOME` path in the
+  binary or bundled files; the copied app runs under `sandbox-exec` with the checkout denied,
+  from a scratch cwd with scratch user data:
+  `garden-node` (bundled path) 5 s headless `realtime=15.8 status=ok`; `lesson:ohms-law-led`
+  `instruments=DMM1:13.97mA status=ok`; `garden-node --place community.dmm-handheld`
+  `instruments=DMM1:1.878V status=ok`; `esp32-weather` host-compiled against the bundled host
+  core `status=ok`; garden-node in a real wgpu window `first_frame_ms≈450–600 status=ok`; the
+  checkout untouched. A control run of the dev binary under the same sandbox finds no examples.
+- `PLAT-4` **done (bundle)** — `open Breadbox.app` → first frame **143–175 ms** after process
+  start, **~320 ms** from `open`; quit. `open -a Breadbox.app <project folder>` opens it
+  (Apple Event `odoc` handler, installed at `NSApplicationWillFinishLaunching` so launch
+  documents arrive too; `breadbox <path>` on the command line).
+- `--smoke` grew `lesson:<id>` (a lesson's own bench) and `--place <plugin id>` (a plugin
+  instrument placed like "Place on bench"; readings in the SMOKE line as `instruments=`).
+- `APP-4` menu bar **audited + fixed** — `platform::MENUS` is the one table; `tests/menu.rs`
+  sends every item through its command on the real app and checks the effect. Fixes: Edit →
+  Cut / Copy / Paste / Select All were predefined items with no responder (greyed out) — now
+  real items (`ViewportCommand::RequestCut/Copy/Paste`, Select All into the focused field); the
+  bench copied/pasted parts only on ⌘C/⌘V *key* events, which egui-winit never sends (it sends
+  `Event::Copy/Paste`) — now both, plus Cut; File → Import Project Bundle (Open only picks
+  folders); About → the standard macOS panel; Help → a Help window with the guide, Plugin SDK
+  and lesson format (was: a Finder folder). Menu → text-field key injection moved from eframe's
+  `raw_input_hook` into the frame (testable).
+- `MCU-4` first run **verified end to end** — `tests/toolchain_first_run.rs` simulates a Mac
+  without a toolchain (`BREADBOX_ARDUINO_CLI` → nowhere now skips PATH/Homebrew; scratch
+  Application Support): Verify offers the install, an offline install fails cleanly and can be
+  retried; `--ignored`: the real one-click install (arduino-cli 1.6.0 + arduino:avr + native
+  avr-gcc 8.5.0 + ctags built from source, 29 s) then Verify compiles blink. The user's own
+  toolchain is never touched. `BREADBOX_ARDUINO_CLI_URL` overrides the download.
+- Lessons: the lesson bench **pauses** when another screen opens (`Screen::on_leave`) and
+  resumes on return (test). PCB: **reference designators** on the F_SilkS Gerber (stroke font,
+  where the screen shows them; read back in the test).
+- Glyphs **checked** — `tests/glyphs.rs` scans string/char literals of every crate + plugin
+  source, parts / lesson / plugin / example data, example + lesson sketches and the rendered
+  docs, and fails on any character a font family can't draw. Fixes: `∥` → `‖` (Inter has no
+  `∥`; data, docs, DMM + scope plugins), waveform switch symbols `∿ ⊓ ⋀ ⎍` drawn as shapes
+  like `⎓`, LCD unknown char `□`, docs rendered through `markdown::displayable`, the
+  plugin.json pane escapes glyphs the code font lacks, plugin SVG art renders its text with the
+  bundled fonts (its font database was empty — e.g. "RYLR896" never showed).
+- `scripts/build-plugins.sh` remaps the checkout path (the SDK path dependency leaked
+  `~/…/breadbox/crates/…` into every module, so `--check` failed from any other checkout);
+  all wasm rebuilt, `--check` is green.
+- README.md written (what it is, screenshots, requirements + the no-Rosetta toolchain path,
+  build/test/bundle, layout, first plugin, make your own lesson).
+- Firmware staging is keyed by sketch **and** build flavour (debug `-Og` vs Verify), so the
+  two never overwrite one staging folder (this raced in `tests/gui.rs`: the compile-error test
+  clobbered the breakpoint test's sources).
+
+Changes outside the bundle scope (small, tests green): bb-core (`paths`, additive),
+bb-firmware (`app_dir`/`build_cache_root` via `paths`, `BREADBOX_ARDUINO_CLI` semantics,
+`BREADBOX_ARDUINO_CLI_URL`), bb-lessons / bb-plugin (dirs via `paths`), bb-sim (LCD `□`),
+bb-circuit (silkscreen references), plugins (`‖`, rebuilt wasm), `docs/PLUGIN-SDK.md` +
+`docs/plugin.schema.json` (`‖`), `lessons/1-electricity/05-voltage-dividers.toml` (`‖`),
+`crates/breadbox` app files (`app.rs`, `platform.rs`, `router.rs`, `canvas/bench.rs`, …).
+Not touched: `tests/e2e/**`, `scripts/test-all.sh`, `tests/gui.rs`, `tests/workbench.rs`,
+`screens/pro/mod.rs`.
+
+Open issues / notes:
+- `scripts/check-bundle.sh` is not in `scripts/test-all.sh` (owned by `e2e`); suggested:
+  `scripts/bundle-macos.sh --check` as an optional (slow, ~3 min) stage.
+- The bundle is ad-hoc signed (no Developer ID / notarization): on another Mac Gatekeeper asks
+  for right-click → Open the first time. JIT (wasmtime) needs no entitlement without the
+  hardened runtime.
+- `.breadbox` project folders are plain folders in Finder (double-click navigates in); they
+  open in Breadbox via Open With, the Dock icon or `open -a`. A multi-dot extension
+  (`.breadbox.zip`) may not bind in LaunchServices — File → Import Project Bundle works.
+- The menu bar could not be inspected from outside here (no Accessibility permission for
+  scripted UI); `tests/menu.rs` covers each item's behaviour through its command.
+- `Help` shows docs as text (images in the README are skipped).
