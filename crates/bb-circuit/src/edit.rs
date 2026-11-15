@@ -79,6 +79,12 @@ pub enum Op {
         before: crate::project::Settings,
         after: crate::project::Settings,
     },
+    /// Radio settings (`project.radios`: floor plan + bench position, network conditions,
+    /// LAN bridge — `RF-1`, `RF-3`), opaque here (`bb_sim::radio::ProjectRadios`).
+    Radios {
+        before: serde_json::Value,
+        after: serde_json::Value,
+    },
 }
 
 impl Op {
@@ -154,6 +160,10 @@ impl Op {
                 before: after,
                 after: before,
             },
+            Op::Radios { before, after } => Op::Radios {
+                before: after,
+                after: before,
+            },
         }
     }
 
@@ -181,7 +191,8 @@ impl Op {
             | Op::World { .. }
             | Op::Meta { .. }
             | Op::Settings { .. }
-            | Op::Directives { .. } => false,
+            | Op::Directives { .. }
+            | Op::Radios { .. } => false,
         }
     }
 }
@@ -252,6 +263,7 @@ fn apply_op(p: &mut Project, op: &mut Op) {
         }
         Op::Directives { after, .. } => p.spice.directives = after.clone(),
         Op::Settings { after, .. } => p.settings = after.clone(),
+        Op::Radios { after, .. } => p.radios = after.clone(),
     }
 }
 
@@ -678,6 +690,20 @@ impl Editor {
         tx.ops.push(Op::Settings {
             before: self.project.settings.clone(),
             after: settings,
+        });
+        self.commit(tx);
+    }
+
+    /// Replaces the project's radio settings (`project.radios`) as one undoable change named
+    /// `label` ("Move the bench", "Network conditions", "LAN bridge").
+    pub fn set_radios(&mut self, label: &str, radios: serde_json::Value) {
+        if radios == self.project.radios {
+            return;
+        }
+        let mut tx = Transaction::new(label);
+        tx.ops.push(Op::Radios {
+            before: self.project.radios.clone(),
+            after: radios,
         });
         self.commit(tx);
     }

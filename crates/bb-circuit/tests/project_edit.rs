@@ -139,3 +139,36 @@ fn copy_paste_and_duplicate_remap_ids_and_refs() {
     ed.set_reference(&r1, "R10").unwrap();
     assert!(ed.set_reference(&d1, "R10").is_err());
 }
+
+#[test]
+fn radio_settings_are_one_undo_step_and_survive_save_load() {
+    let lib = Library::builtin();
+    let mut ed = Editor::new(Project::new("radios", Mode::Playground));
+    ed.add_part(&lib, "uno", 0.0, 0.0).unwrap();
+    let electrical = ed.electrical_generation;
+    let a = serde_json::json!({ "bench_pos": { "x": 3.2, "y": 0.0 }, "conditions": { "latency_ms": 3.0 } });
+    let b = serde_json::json!({ "bench_pos": { "x": 7.5, "y": -1.0 }, "conditions": { "latency_ms": 120.0 } });
+    ed.set_radios("Move the bench", a.clone());
+    ed.set_radios("Network conditions", b.clone());
+    // the same value again is not a new step
+    ed.set_radios("Network conditions", b.clone());
+    assert_eq!(ed.project.radios, b);
+    assert_eq!(ed.undo_label(), Some("Network conditions"));
+    // not electrical: no bench rebuild
+    assert_eq!(ed.electrical_generation, electrical);
+    assert!(ed.undo());
+    assert_eq!(ed.project.radios, a);
+    assert!(ed.undo());
+    assert!(ed.project.radios.is_null());
+    assert!(ed.redo());
+    assert!(ed.redo());
+    assert_eq!(ed.project.radios, b);
+    assert_eq!(ed.redo_label(), None);
+    // saved with the project
+    let dir = std::env::temp_dir().join(format!("bb-radios-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    ed.project.save(&dir).unwrap();
+    let back = Project::load(&dir).unwrap();
+    assert_eq!(back.radios, b);
+    let _ = std::fs::remove_dir_all(&dir);
+}

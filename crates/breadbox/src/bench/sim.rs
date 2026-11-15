@@ -411,6 +411,8 @@ impl SimBench {
             || project.wires != self.project.wires
             || project.schematic != self.project.schematic;
         let instruments = project.instruments != self.project.instruments;
+        let radios = (project.radios != self.project.radios)
+            .then(|| bb_sim::radio::ProjectRadios::from_project(&self.project));
         let old_probes = std::mem::take(&mut self.project.probes);
         let new_probes = project.probes.clone();
         self.project = project;
@@ -449,6 +451,29 @@ impl SimBench {
         }
         if electrical || instruments {
             h.send(Command::UpdateProject(Box::new(self.project.clone())));
+        }
+        if let Some(old) = radios {
+            // the Radios panel's edits and their undo / redo; only what changed, so moving the
+            // bench does not re-create the access points under associated stations
+            use bb_sim::RadioCommand as R;
+            let new = bb_sim::radio::ProjectRadios::from_project(&self.project);
+            let (o, n) = (&old.settings, &new.settings);
+            let mut rest = o.clone();
+            rest.conditions = n.conditions.clone();
+            rest.lan_bridge = n.lan_bridge.clone();
+            if rest != *n {
+                h.send(Command::Radio(R::ApplySettings(n.clone())));
+            } else {
+                if o.conditions != n.conditions {
+                    h.send(Command::Radio(R::SetConditions(n.conditions.clone())));
+                }
+                if o.lan_bridge != n.lan_bridge {
+                    h.send(Command::Radio(R::SetLanBridge(n.lan_bridge.clone())));
+                }
+            }
+            if old.bench_pos != new.bench_pos {
+                h.send(Command::Radio(R::SetBenchPos(new.bench_pos)));
+            }
         }
         self.kick();
     }

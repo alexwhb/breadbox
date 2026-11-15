@@ -376,9 +376,11 @@ impl AppCtx {
         }
     }
 
-    /// True if keyboard focus is in a text field (editor shortcuts then belong to it).
+    /// True if keyboard focus is in a text field (editor shortcuts then belong to it). A
+    /// focused slider, button or the floor-plan marker is not one: ⌘Z there is the project's
+    /// undo (`egui_wants_keyboard_input` is true for any focused widget).
     pub fn text_has_focus(&self) -> bool {
-        self.egui.memory(|m| m.focused().is_some()) && self.egui.egui_wants_keyboard_input()
+        self.egui.text_edit_focused()
     }
 
     pub fn has_native_menu(&self) -> bool {

@@ -744,6 +744,26 @@ impl Screen for FirmwareScreen {
 
     fn command(&mut self, cmd: &Command, app: &mut AppCtx) -> bool {
         match cmd {
+            // the code editor keeps its own text undo (it has focus); otherwise ⌘Z / ⌘⇧Z step
+            // through the project's history, e.g. the Radios panel's placement and conditions
+            Command::Undo | Command::Redo if !app.text_has_focus() => {
+                let Some(doc) = app.circuit.as_mut() else {
+                    return false;
+                };
+                let ok = if *cmd == Command::Undo {
+                    doc.undo()
+                } else {
+                    doc.redo()
+                };
+                if !ok {
+                    app.toasts.info(if *cmd == Command::Undo {
+                        "Nothing to undo"
+                    } else {
+                        "Nothing to redo"
+                    });
+                }
+                true
+            }
             Command::Verify => {
                 self.start_verify(app, false);
                 true
@@ -880,6 +900,9 @@ impl Screen for FirmwareScreen {
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
                         let model = app.bench.radio.clone();
+                        if let Some(doc) = app.circuit.as_ref() {
+                            self.radio.sync_from_project(&doc.project().radios);
+                        }
                         let out = radio_panel::radio_panel(ui, model.as_ref(), &mut self.radio);
                         radio_actions(app, out);
                     });
@@ -1382,7 +1405,7 @@ impl FirmwareScreen {
 }
 
 /// Acts on the Radios panel: bench commands, "Add BLE hat" (a circuit edit), packet-log
-/// export, the bench's new floor-plan position (stored with the project).
+/// export, finished radio changes (stored with the project, undoable; the bench follows).
 fn radio_actions(app: &mut AppCtx, out: radio_panel::RadioPanelOutput) {
     for c in out.commands {
         if c == crate::bench::RadioCommand::AddBleHat {
@@ -1396,10 +1419,10 @@ fn radio_actions(app: &mut AppCtx, out: radio_panel::RadioPanelOutput) {
     if let Some(f) = out.export {
         export_packet_log(app, f);
     }
-    if let Some(pos) = out.bench_pos
-        && let Some(doc) = app.circuit.as_mut()
-    {
-        radio_panel::store_bench_pos(doc, pos);
+    if let Some(doc) = app.circuit.as_mut() {
+        for e in &out.edits {
+            radio_panel::apply_radio_edit(doc, e);
+        }
     }
 }
 

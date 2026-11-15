@@ -2,6 +2,12 @@
 //! bench's placement (`RF-1`), packet log with pcap-ng / CSV export (`RF-4`), network
 //! conditions (`RF-3`), Bluetooth LE card with "Add BLE hat". A pure view over
 //! [`RadioPanelModel`] that returns [`RadioPanelOutput`] — the Workbench can reuse it.
+//!
+//! The bench position, the network conditions and the LAN bridge belong to the project
+//! (`project.json` → `radios`): the panel shows the saved values
+//! ([`RadioPanelState::sync_from_project`]) and every finished change is a [`RadioEdit`] that
+//! [`apply_radio_edit`] records as one undoable `Op::Radios`; the bench follows the project
+//! (also on undo / redo) through `SimBench::update_project`.
 
 use crate::bench::{
     NetConditionsView, PlacementView, RadioCommand, RadioKind, RadioPanelModel, StatusTone,
@@ -29,13 +35,14 @@ pub struct RadioPanelState {
     pub bridge_addr: String,
     /// Virtual-phone terminal input.
     pub phone_input: String,
-    synced: bool,
     /// Bench position while it is being dragged (metres).
     bench_drag: Option<(f64, f64)>,
     /// Position set here that the bench has not reported back yet.
     bench_pending: Option<((f64, f64), Instant)>,
     /// Floor-plan view, frozen while dragging.
     plan_view: Option<PlanView>,
+    /// The project's `radios` value the fields were last loaded from.
+    loaded: Option<serde_json::Value>,
 }
 
 impl Default for RadioPanelState {
@@ -50,15 +57,43 @@ impl Default for RadioPanelState {
             drop_ap_text: "60".into(),
             bridge: false,
             bridge_addr: "localhost:1883".into(),
-            synced: false,
             bench_drag: None,
             bench_pending: None,
             plan_view: None,
+            loaded: None,
         }
     }
 }
 
 impl RadioPanelState {
+    /// Shows the project's saved radio settings (`project.json` → `radios`): on open, after
+    /// undo / redo, after a change made elsewhere. Cheap when nothing changed.
+    pub fn sync_from_project(&mut self, radios: &serde_json::Value) {
+        if self.loaded.as_ref() == Some(radios) {
+            return;
+        }
+        let first = self.loaded.is_none();
+        self.loaded = Some(radios.clone());
+        let r = project_radios(radios);
+        let c = &r.settings.conditions;
+        self.latency = c.latency_ms;
+        self.jitter = c.jitter_ms;
+        self.loss = c.loss_pct;
+        self.drop_ap = c.drop_ap_at_s.is_some();
+        if let Some(t) = c.drop_ap_at_s {
+            self.drop_ap_s = t;
+        }
+        self.drop_ap_text = format!("{}", self.drop_ap_s);
+        self.bridge = r.settings.lan_bridge.is_some();
+        if let Some(b) = &r.settings.lan_bridge {
+            self.bridge_addr = format!("{}:{}", b.host, b.port);
+        }
+        // the floor plan shows the saved position until the bench reports it back
+        if !first && self.bench_drag.is_none() {
+            self.bench_pending = Some(((r.bench_pos.x, r.bench_pos.y), Instant::now()));
+        }
+    }
+
     fn conditions(&self) -> NetConditionsView {
         NetConditionsView {
             latency_ms: self.latency,
@@ -100,15 +135,27 @@ impl LogFormat {
     }
 }
 
+/// A finished change to the project's radio settings (one undo step, [`apply_radio_edit`]).
+#[derive(Debug, Clone, PartialEq)]
+pub enum RadioEdit {
+    /// The bench was dropped at a new floor-plan position (metres).
+    BenchPos((f64, f64)),
+    /// Latency, jitter, packet loss, "drop the AP at t = N s".
+    Conditions(NetConditionsView),
+    /// "Bridge to my real LAN broker" (`host`, `port`), `None` = off.
+    LanBridge(Option<(String, u16)>),
+}
+
 /// What the panel wants done.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct RadioPanelOutput {
-    /// Commands for the bench (`AddBleHat` is the caller's: it edits the circuit).
+    /// Live commands for the bench while something is being dragged, the phone, the MQTT
+    /// explorer (`AddBleHat` is the caller's: it edits the circuit).
     pub commands: Vec<RadioCommand>,
     /// "Export pcap-ng…" / "Export CSV…" was clicked.
     pub export: Option<LogFormat>,
-    /// The bench was dropped at a new floor-plan position: store it with the project.
-    pub bench_pos: Option<(f64, f64)>,
+    /// Finished changes to store with the project (undoable).
+    pub edits: Vec<RadioEdit>,
 }
 
 /// Draws the panel; returns commands for the bench and actions for the screen.
@@ -123,16 +170,6 @@ pub fn radio_panel(
     ui.spacing_mut().item_spacing.y = 16.0;
     section_header_row(ui, "Radios", "virtual RF space");
     crate::widgets::radio_tools::buttons(ui);
-
-    // push the panel's conditions to a fresh space once
-    if let Some(m) = model
-        && !st.synced
-    {
-        st.synced = true;
-        if m.conditions != st.conditions() {
-            cmds.push(RadioCommand::SetConditions(st.conditions()));
-        }
-    }
 
     let cards = model.map(|m| m.cards.as_slice()).unwrap_or(&[]);
     if cards.is_empty() {
@@ -198,7 +235,11 @@ pub fn radio_panel(
                     );
                 });
             });
-            floor_plan(ui, p, st, pl, &mut cmds, &mut out.bench_pos);
+            let mut dropped = None;
+            floor_plan(ui, p, st, pl, &mut cmds, &mut dropped);
+            if let Some(pos) = dropped {
+                out.edits.push(RadioEdit::BenchPos(pos));
+            }
         });
     }
 
@@ -260,6 +301,9 @@ pub fn radio_panel(
         let b = StopSlider::new("Packet loss", 0.0..=50.0, &loss_fmt)
             .step(1.0)
             .show(ui, &mut st.loss);
+        // live while dragging, one undo step when the slider is released
+        let done = |r: &egui::Response| r.drag_stopped() || (r.changed() && !r.dragged());
+        let mut commit = done(&a) || done(&j) || done(&b);
         let mut drop_changed = false;
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 6.0;
@@ -291,8 +335,12 @@ pub fn radio_panel(
                     .color(p.text),
             );
         });
-        if a.changed() || j.changed() || b.changed() || drop_changed {
+        if a.changed() || j.changed() || b.changed() {
             cmds.push(RadioCommand::SetConditions(st.conditions()));
+        }
+        commit |= drop_changed;
+        if commit {
+            out.edits.push(RadioEdit::Conditions(st.conditions()));
         }
         let c2 = checkbox(ui, &mut st.bridge, "Bridge to my real LAN broker");
         if st.bridge {
@@ -312,15 +360,18 @@ pub fn radio_panel(
                         .font(font::ui(11.0))
                         .color(p.text_muted),
                 );
+                r.widget_info(|| {
+                    egui::WidgetInfo::labeled(egui::Role::TextInput, true, "LAN broker address")
+                });
                 if r.lost_focus()
                     && let Some(b) = parse_addr(&st.bridge_addr)
                 {
-                    cmds.push(RadioCommand::SetLanBridge(Some(b)));
+                    out.edits.push(RadioEdit::LanBridge(Some(b)));
                 }
             });
         }
         if c2.changed() {
-            cmds.push(RadioCommand::SetLanBridge(if st.bridge {
+            out.edits.push(RadioEdit::LanBridge(if st.bridge {
                 parse_addr(&st.bridge_addr)
             } else {
                 None
@@ -733,19 +784,62 @@ pub fn add_ble_hat(doc: &mut CircuitDoc) -> Result<BleHatReport, String> {
     })
 }
 
-/// Stores the bench's floor-plan position with the project's radio settings
-/// (`project.json` → `radios.bench_pos`), so it survives a reload.
-pub fn store_bench_pos(doc: &mut CircuitDoc, (x, y): (f64, f64)) {
-    let mut r = bb_sim::radio::ProjectRadios::from_project(doc.project());
-    let pos = bb_radio::geo::Pos::new(x, y);
-    if r.bench_pos == pos {
-        return;
+/// The radio settings stored in a project's `radios` value (defaults when absent).
+pub fn project_radios(radios: &serde_json::Value) -> bb_sim::radio::ProjectRadios {
+    if radios.is_null() {
+        return Default::default();
     }
-    r.bench_pos = pos;
-    r.store(&mut doc.editor.project);
-    // not an undoable circuit edit (like the network conditions); dirty → autosave
-    doc.editor.generation += 1;
+    serde_json::from_value(radios.clone()).unwrap_or_default()
+}
+
+/// Records a radio change in the project (`project.json` → `radios`) as one undoable edit
+/// ("Move the bench", "Network conditions", "LAN bridge"); the open bench follows through
+/// `SimBench::update_project`. Returns whether anything changed.
+pub fn apply_radio_edit(doc: &mut CircuitDoc, edit: &RadioEdit) -> bool {
+    let before = project_radios(&doc.project().radios);
+    let mut r = before.clone();
+    let label = match edit {
+        RadioEdit::BenchPos((x, y)) => {
+            r.bench_pos = bb_radio::geo::Pos::new(*x, *y);
+            "Move the bench"
+        }
+        RadioEdit::Conditions(c) => {
+            let n = &mut r.settings.conditions;
+            n.latency_ms = c.latency_ms;
+            n.jitter_ms = c.jitter_ms;
+            n.loss_pct = c.loss_pct;
+            n.drop_ap_at_s = c.drop_ap_at_s;
+            "Network conditions"
+        }
+        RadioEdit::LanBridge(b) => {
+            r.settings.lan_bridge = b.as_ref().map(|(host, port)| {
+                // keep the rest of a saved bridge (client id, topics, credentials)
+                match before.settings.lan_bridge.clone() {
+                    Some(mut c) => {
+                        c.host = host.clone();
+                        c.port = *port;
+                        c
+                    }
+                    None => bb_radio::bridge::BridgeConfig::new(host, *port),
+                }
+            });
+            "LAN bridge"
+        }
+    };
+    if r == before {
+        return false;
+    }
+    let mut p = doc.project().clone();
+    r.store(&mut p);
+    doc.editor.set_radios(label, p.radios);
     doc.touched();
+    true
+}
+
+/// Stores the bench's floor-plan position with the project's radio settings
+/// (`project.json` → `radios.bench_pos`), so it survives a reload; one undo step.
+pub fn store_bench_pos(doc: &mut CircuitDoc, pos: (f64, f64)) {
+    apply_radio_edit(doc, &RadioEdit::BenchPos(pos));
 }
 
 /// The virtual phone: scan list, the connected device's GATT table, the BLE serial terminal.
@@ -1130,6 +1224,70 @@ mod tests {
         let g = doc.generation();
         store_bench_pos(&mut doc, (7.5, -1.0));
         assert_eq!(doc.generation(), g, "no change, no save");
+        // one undo step, not electrical (no bench rebuild)
+        assert_eq!(doc.editor.undo_label(), Some("Move the bench"));
+        assert!(doc.undo());
+        assert!(doc.project().radios.is_null());
+        assert!(doc.redo());
+        assert_eq!(
+            project_radios(&doc.project().radios).bench_pos,
+            bb_radio::geo::Pos::new(7.5, -1.0)
+        );
+    }
+
+    #[test]
+    fn conditions_and_lan_bridge_round_trip_through_the_project() {
+        let mut doc = doc_with("uno");
+        let mut st = RadioPanelState::default();
+        st.sync_from_project(&doc.project().radios);
+        // no saved settings: the engine's defaults (what the bench really runs)
+        assert_eq!((st.latency, st.jitter, st.loss), (3.0, 1.0, 0.0));
+        assert!(!st.drop_ap && !st.bridge);
+        let c = NetConditionsView {
+            latency_ms: 120.0,
+            jitter_ms: 30.0,
+            loss_pct: 5.0,
+            drop_ap_at_s: Some(45.0),
+            ..Default::default()
+        };
+        assert!(apply_radio_edit(
+            &mut doc,
+            &RadioEdit::Conditions(c.clone())
+        ));
+        assert!(!apply_radio_edit(&mut doc, &RadioEdit::Conditions(c)));
+        assert!(apply_radio_edit(
+            &mut doc,
+            &RadioEdit::LanBridge(Some(("192.168.1.20".into(), 1884)))
+        ));
+        assert_eq!(doc.editor.undo_label(), Some("LAN bridge"));
+        let r = project_radios(&doc.project().radios);
+        assert_eq!(r.settings.conditions.latency_ms, 120.0);
+        assert_eq!(r.settings.conditions.drop_ap_at_s, Some(45.0));
+        let b = r.settings.lan_bridge.as_ref().unwrap();
+        assert_eq!((b.host.as_str(), b.port), ("192.168.1.20", 1884));
+        // the panel shows what the project holds
+        st.sync_from_project(&doc.project().radios);
+        assert_eq!((st.latency, st.jitter, st.loss), (120.0, 30.0, 5.0));
+        assert!(st.drop_ap && st.drop_ap_s == 45.0 && st.drop_ap_text == "45");
+        assert!(st.bridge && st.bridge_addr == "192.168.1.20:1884");
+        // undo the bridge, then the conditions: the panel follows
+        assert!(doc.undo());
+        st.sync_from_project(&doc.project().radios);
+        assert!(!st.bridge);
+        assert_eq!(st.latency, 120.0);
+        assert!(doc.undo());
+        st.sync_from_project(&doc.project().radios);
+        assert_eq!((st.latency, st.jitter, st.loss), (3.0, 1.0, 0.0));
+        assert!(!st.drop_ap);
+        // turning the bridge off keeps nothing; on again keeps the address
+        assert!(doc.redo() && doc.redo());
+        assert!(apply_radio_edit(&mut doc, &RadioEdit::LanBridge(None)));
+        assert!(
+            project_radios(&doc.project().radios)
+                .settings
+                .lan_bridge
+                .is_none()
+        );
     }
 
     #[test]
