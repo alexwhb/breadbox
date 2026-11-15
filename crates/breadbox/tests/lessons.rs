@@ -55,6 +55,30 @@ fn type_prediction(h: &mut H, v: &str) {
     h.run_steps(1);
     h.get_by_label("Check").click();
     h.run_steps(3);
+    // the check waits for the meter to settle after the last change
+    assert!(
+        wait_for(h, 30.0, |h| !has_label(h, "Checking against the meter…")),
+        "the meter never settled"
+    );
+    h.run_steps(2);
+}
+
+/// "220Ω · 13.6 mA · 13.4 mA" → the meter column in mA.
+fn row_meter(h: &H, option: &str) -> f64 {
+    let l = h
+        .query_all_by_role(egui::accesskit::Role::Row)
+        .filter_map(|n| {
+            let a = n.accesskit_node();
+            a.label().or_else(|| a.value())
+        })
+        .find(|l| l.starts_with(&format!("{option} · ")))
+        .unwrap_or_else(|| panic!("no row for {option}"));
+    l.rsplit(" · ")
+        .next()
+        .unwrap()
+        .trim_end_matches(" mA")
+        .parse()
+        .unwrap_or_else(|_| panic!("{l}"))
 }
 
 fn rows(h: &H) -> usize {
@@ -149,6 +173,20 @@ fn ohms_law_step_3_math_check_break_it_and_free_play() {
         );
     }
     assert!(has_label(&h, "Checkpoint passed"));
+    // every row quotes what the meter showed for that resistor (not a stale reading)
+    let (r220, r1k, r100) = (
+        row_meter(&h, "220Ω"),
+        row_meter(&h, "1kΩ"),
+        row_meter(&h, "100Ω"),
+    );
+    assert!((12.5..14.5).contains(&r220), "220Ω: {r220}");
+    assert!((2.8..3.5).contains(&r1k), "1kΩ: {r1k}");
+    assert!((24.0..31.0).contains(&r100), "100Ω: {r100}");
+    let verdict = text_of(&h, "Nailed it. The meter agrees:").unwrap();
+    assert!(
+        verdict.contains(&format!("{r100:.1} mA")),
+        "{verdict} vs {r100}"
+    );
     h.state_mut().ctx.toasts.clear();
     screenshot(&mut h, "lessons-checkpoint");
     next(&mut h, "Next: break it on purpose");

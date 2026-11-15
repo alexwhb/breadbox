@@ -498,6 +498,101 @@ Deviations / notes:
 - Open: Logic analyzer / bench supply / function generator panels render through the
   instrument hook once the plugins UI registers them; PCB (`PRO-7`) and Gerbers are phase 4b.
 
+### ui-plug-les
+Phase 4 — Plugins screen, plugin instruments on the bench, Lessons + lesson editor, virtual
+phone + MQTT explorer UI, PCB. Module map + contracts: ARCHITECTURE §8 ("Plugins in the app",
+"Instrument panels", "Lessons", "Radio tools", "PCB"). Screenshots (1440×900, rendered by the
+GUI tests with `BREADBOX_UPDATE_SCREENSHOTS=1`): `docs/screenshots/{plugins,lessons,pcb,phone}.png`
+(+ `pro-pcb.png` from `tests/gui.rs`).
+
+- `PLUG-4` **done** — Plugins screen per design: category nav (6 categories) + installed list
+  (+ lesson packs), search, detail page (live front-panel art from the plugin's `panel.json`,
+  `INSTRUMENT · installed` chip, specs grid from `highlights`, the live loading callout
+  `Probing A0 (J1 out): meter load shifts the node by −0.4 mV — …` from
+  `host::loading_callout` on the running bench, Place on bench, Edit model (a local, hot-reloaded
+  copy in `plugin-dev/`), Enable / Disable, Uninstall (confirm), Apply theme / Open in Pro /
+  Open in Lessons), "More to add" cards with Install → permission prompt (`Permission::describe`)
+  → `install_bundled` / `install_package` / `load_local`, read-only `plugin.json` pane with JSON
+  highlighting, "Load local plugin…" (folder or `.bbplugin`), "Plugin SDK docs" (renders
+  `docs/PLUGIN-SDK.md`), hot-reload toasts. App glue: `PluginService` (`AppCtx::plugins`) —
+  plugin-aware bench factory, plugin library on the open circuit (plugin parts in the palette),
+  theme palettes over the tokens, lesson packs in Lessons, analysis plugins in Pro → Analysis.
+- `PLUG-6` **done** (rendering) — `widgets::instrument`: declarative panels with live
+  `PanelState` (LCD / 7-seg / VFD digits + annunciators + bar graph, buttons, rotary dial,
+  knobs, switches, LEDs, jacks, scope / logic screens with graticule, traces, markers, cursors)
+  and working controls → `Command::Input`. On the bench (`canvas::plugin_parts`, hooked into
+  `BenchCanvas` / `art::draw`): the panel is the part's art, controls work in place, wires in
+  jacks are probe leads whose tips drag onto any pin (or dangle). The Handheld DMM looks like the
+  design's meter (grey body, green LCD, dial labels on the ring, red/black jacks).
+- `PLUG-7` UI surfaces **done** — themes (Apply theme), analyses (Pro → Analysis cards + Run),
+  parts (palette via the plugin library), lesson packs (Lessons catalog), instruments (bench).
+- `LES-2` **done** — Lessons screen per design: track nav with ✓ / current / numbers + More
+  tracks + Make your own lesson, the lesson's live bench (the Workbench's `BenchCanvas`
+  embedded over the lesson circuit with its own `SimBench`; Pro lessons show the schematic),
+  callouts under it, the step panel for every step kind (step bar, `Step 3 of 5`, body, formula
+  card, `Pick R1` grid, "Do the math myself" → prediction + Check + conditional hints + "Show me
+  the working", meter masked `----` until right, "Your measurements" filled from the settled
+  meter + checkpoint, damage card + Repair, quiz, code editor + Compile & upload (or the
+  reference build without a toolchain), goals), `Lesson 3 of 8` progress bar, Back / Next gated
+  by the goals, progress saved per step.
+- `LES-5` **done** — "Open in free play" writes the lesson bench (+ its sketches) as a
+  Playground project and opens it on the Workbench.
+- `LES-6` **done** (UI) — lesson editor: title / track / pack, steps (add by kind, reorder,
+  remove, text, formula, quiz, prediction), "Capture the current bench" (Workbench project or the
+  open lesson), goals suggested for a picked part (with its live readings) or two pins, Validate,
+  Save lesson pack (user plugin folder → active → opens in Lessons), Package .bbplugin….
+- Content fix (bb-lessons): "Nailed it. The meter agrees: …" quotes the meter's reading
+  (`{meter}`, e.g. 13.4 mA through the meter's burden) instead of the formula (13.6 mA); the same
+  for the voltage-divider lesson; LESSON-FORMAT documents it.
+- `RF-6` / `RF-7` UI **done** — `widgets::radio_tools`: virtual phone window (scan list with RSSI
+  bars, connect / disconnect, services → characteristics with props, value text + hex, Read,
+  Notify, Write, Bluetooth serial terminal, activity log) and MQTT explorer window (wildcard
+  subscriptions, live messages with size / QoS / retain, filter, publish with QoS + retain);
+  buttons in the Radios panel and two Workbench rail buttons.
+- `PRO-7` **done** — `bb_circuit::pcb` (footprints for every part's footprint name — THT pitch /
+  drill / shapes parsed from the KiCad-style names, 0805/0603/1206/SOT-23/SOD-123/SOT-223/PLCC4
+  SMD, boards / modules from their bench leads; placement + auto-place + outline; copper
+  connectivity; ratsnest; DRC: clearance, shorts, width, drill, edge, unrouted; Gerber RS-274X F/B
+  copper, F/B mask, F silk, Edge.Cuts + Excellon, with readers) and Pro → PCB (drag / rotate,
+  Auto-place, Fit outline, Route tool pad → corners → pad on Top / Bottom with 0.25–1.0 mm widths,
+  V = via + layer switch, Via tool, delete, live DRC list + header summary, Export Gerbers…,
+  own undo). Persisted in `project.json` (`PartInstance::pcb`, `Project::pcb`).
+- `TEST-5` (my screens) — `cargo test -p breadbox`: `tests/plugins.rs` 2 (install the scope
+  through the permission prompt; DMM detail; Place on bench → DMM1 on garden-node A0 reads
+  ≈ 1.88 V AUTO DC; the live callout; probe tips dragged onto a 4k7 → dial Ω → `4.7… kΩ`; local
+  plugin + hot reload, theme on/off, SDK docs, analysis plugin run in Pro), `tests/lessons.rs` 3
+  (lesson 3 → step 3: wrong value → hint, full-5-V hint, working, 13.6 → "Nailed it. The meter
+  agrees: 13.x mA", three rows → Checkpoint passed → break it (None) → LED pops → Repair → free
+  play; the design screenshot; the lesson editor → pack → Lessons), `tests/radio_tools.rs` 2
+  (phone ↔ ble-button: scan, connect, notify on, button press → `pressed #1` notification; MQTT
+  explorer `garden/#` sees `garden/pot1` and its own publish), `tests/pcb.rs` 1 (blink:
+  auto-place, unrouted → routed on two layers → `DRC clean`, a via, 7 Gerber/drill files parse
+  back with every pad + hole inside the board); unit tests for the panel geometry, markdown /
+  JSON, place-on-bench, plugin service, guess parsing, editor helpers, plugin analyses;
+  bb-circuit pcb 5 (footprints for every part, placement, copper + ratsnest, DRC, Gerbers).
+
+Changes outside my paths (small, all tests green): `app.rs` (`AppCtx::plugins`,
+`AppCtx::progress_path`, `AppOptions::{plugin_dir, progress_path}` — tests get fresh temp
+folders, `apply_plugins` each frame, radio tool windows), `theme.rs` (plugin palette override),
+`canvas/bench.rs` + `canvas/art/mod.rs` (plugin-part hooks: `plugin_parts::interact/draw/
+draw_leads`, `InstrumentView::panel`, plugin art bounds), `screens/mod.rs` (registry),
+`screens/pro/mod.rs` (plugin analyses section; Bode legend `φ` — Inter has no `∠`),
+`screens/firmware/radio_panel.rs` + `screens/workbench/mod.rs` (radio tool buttons),
+`tests/gui.rs` (asserts the real Plugins / Lessons / PCB screens), `plugins/*/parts.json`
+(instrument leads on their panel jacks), `plugins/dmm-handheld/panel.json` (design grey),
+`lessons/1-electricity/0{3,5}-*.toml` + `bb-lessons` test (`{meter}`).
+
+Notes / open issues:
+- The lesson bench keeps running in the background while another screen is open (cheap for
+  the lesson circuits; it pauses when a new lesson opens).
+- The design's lesson meter is a landscape bench meter; Breadbox draws the Handheld DMM plugin's
+  own (portrait) front panel everywhere for consistency.
+- PCB: manual routing only (no autorouter); traces are straight polylines (no arcs / 45°
+  helpers); the silkscreen has outlines + references on screen but only outlines in the
+  Gerber; rotations are 90° steps; SMD footprints are placed on the top side only.
+- "Edit model" copies a bundled plugin into `plugin-dev/<id>` next to the user plugin folder and
+  runs it as a local (hot-reloaded) plugin; rebuilding its wasm is up to the author's toolchain.
+
 ### plugins
 Phase 3 — radio/host-board glue, `bb-plugin`, `bb-plugin-sdk`, first-party plugins, `bb-lessons`.
 **All five items done.**

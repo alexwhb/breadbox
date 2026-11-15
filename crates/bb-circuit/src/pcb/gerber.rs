@@ -212,6 +212,9 @@ pub fn excellon(board: &Board, pads: &[WorldPad], outline: (f64, f64, f64, f64))
     s
 }
 
+/// A drawn segment: (D-code, from, to) in mm.
+pub type Draw = (u32, (f64, f64), (f64, f64));
+
 /// What a Gerber file contains (validation / tests).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Parsed {
@@ -220,7 +223,7 @@ pub struct Parsed {
     /// (D-code, x, y) in mm.
     pub flashes: Vec<(u32, f64, f64)>,
     /// (D-code, from, to) in mm.
-    pub draws: Vec<(u32, (f64, f64), (f64, f64))>,
+    pub draws: Vec<Draw>,
     pub function: String,
 }
 

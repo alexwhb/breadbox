@@ -280,8 +280,8 @@ pub fn footprint(def: &PartDef, smd_variant: bool) -> Footprint {
         ));
     } else if lname.contains("sw_push_6mm") && n >= 2 {
         let at = [(0.0, 0.0), (0.0, 4.5), (6.5, 0.0), (6.5, 4.5)];
-        for i in 0..n.min(4) {
-            pads.push(tht(&pin(i), at[i].0, at[i].1, 2.0, 1.1, PadShape::Round));
+        for (i, (x, y)) in at.iter().enumerate().take(n.min(4)) {
+            pads.push(tht(&pin(i), *x, *y, 2.0, 1.1, PadShape::Round));
         }
         silk.extend(rect_silk(0.25, -0.75, 6.25, 5.25));
     }

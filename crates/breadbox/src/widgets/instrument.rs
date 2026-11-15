@@ -245,7 +245,7 @@ fn paint_element(painter: &egui::Painter, face: &Face, el: &Element, state: Opti
                 StrokeKind::Inside,
             );
             ptext(
-                &painter,
+                painter,
                 r.center(),
                 Align2::CENTER_CENTER,
                 label,
@@ -278,7 +278,7 @@ fn paint_element(painter: &egui::Painter, face: &Face, el: &Element, state: Opti
                 } else {
                     rgb(0xD9D9D9)
                 };
-                ptext(&painter, at, Align2::CENTER_CENTER, &p.label, mono(fs), col);
+                ptext(painter, at, Align2::CENTER_CENTER, &p.label, mono(fs), col);
             }
             // pointer bar
             let a = position_angle(positions, cur);
@@ -325,7 +325,7 @@ fn paint_element(painter: &egui::Painter, face: &Face, el: &Element, state: Opti
             );
             let fs = (rad * 0.42).clamp(4.0, 11.0);
             ptext(
-                &painter,
+                painter,
                 pos2(c.x, r.bottom()),
                 Align2::CENTER_BOTTOM,
                 format!("{label} {}", fmt_value(v, unit)),
@@ -365,7 +365,7 @@ fn paint_element(painter: &egui::Painter, face: &Face, el: &Element, state: Opti
                     );
                 }
                 ptext(
-                    &painter,
+                    painter,
                     s.center(),
                     Align2::CENTER_CENTER,
                     o,
@@ -378,7 +378,7 @@ fn paint_element(painter: &egui::Painter, face: &Face, el: &Element, state: Opti
                 );
             }
             ptext(
-                &painter,
+                painter,
                 pos2(r.left(), r.top()),
                 Align2::LEFT_TOP,
                 label,
@@ -409,7 +409,7 @@ fn paint_element(painter: &egui::Painter, face: &Face, el: &Element, state: Opti
             );
             painter.circle_filled(c, rad * 0.35, rgb(0x1A1A1A));
             ptext(
-                &painter,
+                painter,
                 pos2(c.x, r.bottom() + face.mm(0.3)),
                 Align2::CENTER_TOP,
                 label,
@@ -445,7 +445,7 @@ fn paint_element(painter: &egui::Painter, face: &Face, el: &Element, state: Opti
             );
             if !label.is_empty() {
                 ptext(
-                    &painter,
+                    painter,
                     pos2(r.right() + face.mm(1.0), c.y),
                     Align2::LEFT_CENTER,
                     label,
@@ -468,7 +468,7 @@ fn paint_element(painter: &egui::Painter, face: &Face, el: &Element, state: Opti
         Element::Label { rect, text, color } => {
             let r = face.r(*rect);
             ptext(
-                &painter,
+                painter,
                 r.left_center(),
                 Align2::LEFT_CENTER,
                 text,
@@ -559,7 +559,7 @@ fn paint_display(
         .iter()
         .partition(|a| matches!(a.as_str(), "AUTO" | "MANU" | "HOLD"));
     ptext(
-        &painter,
+        painter,
         pos2(r.left() + pad, r.top() + pad * 0.8),
         Align2::LEFT_TOP,
         left.iter()
@@ -570,7 +570,7 @@ fn paint_display(
         faint,
     );
     ptext(
-        &painter,
+        painter,
         pos2(r.right() - pad, r.top() + pad * 0.8),
         Align2::RIGHT_TOP,
         right
@@ -598,7 +598,7 @@ fn paint_display(
         digits_fs = (digits_fs * room / gw).max(5.0);
     }
     ptext(
-        &painter,
+        painter,
         pos2(r.right() - pad - unit_w, r.top() + r.height() * 0.62),
         Align2::RIGHT_CENTER,
         &text,
@@ -607,7 +607,7 @@ fn paint_display(
     );
     if !unit.is_empty() {
         ptext(
-            &painter,
+            painter,
             pos2(r.right() - pad * 0.7, r.top() + r.height() * 0.78),
             Align2::RIGHT_CENTER,
             &unit,

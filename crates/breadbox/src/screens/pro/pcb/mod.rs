@@ -262,7 +262,7 @@ impl PcbScreen {
                 self.auto_place(app, true);
             }
             if Btn::ghost("Fit outline").show(ui).clicked() {
-                self.edit(app, |p, lib| pcb::fit_outline(p, lib));
+                self.edit(app, pcb::fit_outline);
             }
         });
         if let Some(b) = Self::board(app).and_then(|b| b.outline) {

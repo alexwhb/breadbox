@@ -30,6 +30,8 @@ impl LessonsScreen {
         let Some(run) = self.run.as_mut() else { return };
         let tel = run.telemetry();
         run.evaluate(false);
+        run.track_meter(tel.as_deref());
+        run.resolve_pending(tel.as_deref());
         run.auto_record(tel.as_deref());
         run.poll_build();
         let step = run.session.current().clone();
@@ -276,7 +278,14 @@ impl LessonsScreen {
                                         cmd = Some(Action::Check);
                                     }
                                 });
-                                if let Some(v) = st.verdict {
+                                if run.pending.is_some() {
+                                    label(
+                                        ui,
+                                        "Checking against the meter…",
+                                        font::ui(13.0),
+                                        p.text_muted,
+                                    );
+                                } else if let Some(v) = st.verdict {
                                     let (text, col) = if v {
                                         (run.session.render(&pr.correct_text, meter), GREEN)
                                     } else {

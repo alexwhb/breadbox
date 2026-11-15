@@ -729,15 +729,25 @@ canvas/schematic.rs  Sheet (symbols, mirrored bench wiring, flags, junctions), S
                      SVG backends), SchematicCanvas (Workbench + Pro → Schematic; net-label
                      tool: label_tool / label_snap onto pin anchors or schematic wires)
 canvas/instruments.rs  BenchInstrument trait + InstrumentRegistry (mini scope, DMM; plugins)
+canvas/plugin_parts.rs  plugin parts on the bench: instrument front panels with live controls,
+                     SVG art (resvg → texture), probe leads (wires plugged into jacks) with
+                     draggable tips, display masking (lesson meters)
+plugins.rs           PluginService (AppCtx::plugins): Registry, lazily built PluginHost, the
+                     plugin-aware bench factory, hot reload, theme palettes
 widgets/             the kit (below)
 screens/mod.rs       default_registry() — the ONE place screens are registered
 screens/home.rs      Home (APP-2)
-screens/placeholder.rs  slots for later phases
+screens/placeholder.rs  generic "coming later" slot (unused by the default registry)
+screens/plugins/     mod.rs (Plugins screen, PLUG-4), place.rs ("Place on bench")
+screens/lessons/     mod.rs (Lessons screen + track nav + embedded bench), run.rs (LessonRun:
+                     Session + CircuitDoc + own SimBench + goals + meter + progress), step.rs
+                     (step panel), editor.rs ("Make your own lesson", LES-6)
 screens/firmware/    mod.rs (screen), build.rs (staging + compile), debug_panel.rs,
                      radio_panel.rs (RF-7 panel, reusable), libraries.rs (library manager, installer)
 screens/pro/         mod.rs (Analysis tab), cards.rs (dot-card editing), model.rs (Results → view
                      data), demo.rs (design netlist + stand-in subcircuits), sync.rs (netlist
-                     synced from the circuit), schematic.rs (Pro → Schematic tab)
+                     synced from the circuit), schematic.rs (Pro → Schematic tab), pcb/ (Pro →
+                     PCB, PRO-7), plugin_analyses.rs (analysis plugins' cards)
 screens/workbench/   mod.rs (screen: header, layout, status strip, rail), palette.rs, panels.rs
                      (World / Instruments / Probes / Waveforms), inspector.rs, dock.rs (Serial
                      monitor, Probes & power), share.rs (Share menu)
@@ -894,6 +904,68 @@ co-simulation bb-sim provides the real ones. Cards in the sidebar are dot-card l
 comments them out as `*off .ac …`. Export `.cir` is `Netlist::to_spice_text()` with stand-ins
 inlined (ngspice-runnable); each plot exports CSV / PNG / SVG.
 
+**Plugins in the app** (`plugins.rs`, `PLUG-4`/`PLUG-7`). `AppCtx::plugins: PluginService`
+opens the registry (`AppOptions::plugin_dir` or `~/Library/Application Support/Breadbox/
+plugins`, bundled first-party plugins) and builds the `PluginHost` on first use
+(`host()`/`library()`); `bench_factory()` is the app's default `BenchFactory` (`SimBench::with`
+the plugin library + an options hook adding plugin device factories, radio packs and world
+models). Anything that changes the active set calls `changed()`; `AppCtx::apply_plugins`
+(every frame) then hands the new library to the open `CircuitDoc` (plugin parts appear in the
+palette) and respawns the bench, and polls local plugins for hot reload (toast "Reloaded …").
+Theme plugins: `theme::palette_with_tokens` + `theme::set_plugin_palette` override `pal()`.
+Lesson packs feed the Lessons catalog (`host.lesson_dirs()`); analysis plugins get cards in
+Pro → Analysis (`plugin_analyses.rs`). Registering the host also registers its instrument
+panels and part art with `canvas::plugin_parts` (`register`).
+
+**Instrument panels** (`widgets/instrument.rs`): `Face::fit/exact` map a `Panel` (mm) into a
+screen rect; `paint` draws the body, displays (LCD / 7-seg / VFD with annunciators, unit and
+bar graph), buttons, the rotary dial (labels on the ring, current position amber), knobs,
+switches, LEDs, jacks and screens (graticule, traces, markers, cursors, header); `controls`
+lays AccessKit widgets over the face (`DMM1 HOLD`, `DMM1 dial`, `DMM1 dial Ω`, `DMM1 display:
+1.882 V AUTO DC`) and returns `(control id, value)` pairs for `Command::Input`. `⎓` (missing
+from every bundled font) is drawn as the DC sign (`ptext`). Plugin instrument parts put their
+leads on the panel's jacks (`plugins/*/parts.json` lead positions = jack centres × 0.12 grid
+per mm), so a wire into a jack starts at the jack. On the bench (`canvas/plugin_parts.rs`)
+wires with exactly one end on a jack are drawn as probe leads (red / black from the jack ring)
+whose free tip (`<REF> VΩ probe tip`) drags onto any pin or stays dangling (`Endpoint::Free`).
+"Place on bench" (`screens/plugins/place.rs`) adds the part with its leads in one undoable
+transaction; a meter takes over the built-in DMM placeholder's probes (and designator), a
+scope copies the mini scope's channels, otherwise the leads dangle.
+
+**Lessons** (`screens/lessons/`): the screen loads `bb_lessons::Catalog::builtin()` + packs and
+`Progress` (`AppCtx::progress_path`); `LessonRun::open` builds a `Session`, a read-only
+`CircuitDoc` of the lesson circuit (shown by an embedded `BenchCanvas` / `SchematicCanvas` for
+Pro lessons) and its own `SimBench` (plugin library + hook + `loaded.images`), sends the world
+overrides and an MQTT `#` subscription, and runs. Choices go to the session, the doc and the
+bench (`SetPartParam`); student edits on the canvas reach the bench (`update_project`) and the
+session; goals are evaluated on the engine thread every 0.5 s (`check::evaluate_step` via
+`with_bench`) and gate Next; the step meter (`measure` / `predict.meter` × scale) is masked
+`----` while `meter_hidden()`, settled readings fill "Your measurements"; damage shows the
+break-it card + Repair (`RepairAll` + default choice); code steps compile on a job
+(`code::compile`) and `Flash`; "Open in free play" writes the bench as a Playground project
+under `default_projects_dir()` and opens it. The lesson editor saves a lesson-pack plugin into
+the user plugin folder (it is active at once) and opens its first lesson.
+
+**Radio tools** (`widgets/radio_tools.rs`, `RF-6`/`RF-7`): the virtual phone (scan + RSSI,
+connect, GATT read / notify / write, BLE serial terminal, log) and the MQTT explorer (wildcard
+subscriptions, live messages, publish) are floating windows drawn by the app every frame from
+the open bench's `Telemetry.radio`, sending `RadioCommand`s; `radio_tools::open` / `buttons` /
+`rail_buttons` (Radios panel, Workbench rail).
+
+**PCB** (`screens/pro/pcb`, model in `bb_circuit::pcb`, `PRO-7`): footprints come from the
+parts' footprint names (pitch, drill, shape parsed from KiCad-style names; boards / modules
+from their bench leads × 2.54 mm); `PartInstance::pcb` = placement in mm (90° rotations),
+`Project::pcb` (`PcbLayout`) = outline `(x0, y0, x1, y1)` + traces `{ id, layer: top|bottom,
+width, points }` + vias `{ id, x, y, drill, diameter }` (JSON values, `pcb::Board::load/store`).
+`pcb::Copper::build` turns pads / trace segments / vias into capsules joined by union-find
+(pins bonded inside a part count as joined) → `ratsnest()`, `unrouted()`; `pcb::drc::check`
+(clearance 0.2 mm between copper groups on a shared layer, shorts, width ≥ 0.2, drill ≥ 0.3,
+edge 0.3, unrouted) → `summary()` (`DRC clean`); `pcb::gerber::export` writes F/B copper, F/B
+mask, F silk, Edge.Cuts (RS-274X, 4.6 mm, Y up from the board's bottom-left) + Excellon
+drill, and `gerber::parse` / `parse_excellon` read them back. The screen edits through the
+shared `CircuitDoc` (own undo stack), auto-places unplaced footprints, routes (pad → corners →
+pad, V = via + layer switch), and exports into a folder (`BREADBOX_EXPORT_DIR/gerbers` in tests).
+
 **Tests** (`TEST-5`): `cargo test -p breadbox` — unit tests in modules, `tests/gui.rs` (the app
 driven by AccessKit labels through `egui_kittest` + wgpu; renders 1440×900 screenshots into
 the test scratch dir, or refreshes `docs/screenshots/*.png` with `BREADBOX_UPDATE_SCREENSHOTS=1`), `tests/widgets.rs` (widget behaviour + `tests/snapshots/widget-gallery.png`
@@ -902,7 +974,12 @@ co-simulation: run + serial, World slider, palette drag-and-drop, wire drawing +
 inspector edits, undo/redo, LED burnout, upload on the live bench, ESP32 host board, virtual
 phone, Pro synced netlist + bench probes, Share + reopen, schematic net labels, every library
 part on one bench (art QA, zoomed tiles in `target/…/tmp/parts-qa/`); `--ignored perf`
-measures frame time with garden-node running). `BREADBOX_EXPORT_DIR` / `BREADBOX_PROJECTS_DIR` redirect Share and
+measures frame time with garden-node running), `tests/plugins.rs` (catalog → permission
+prompt → install, Handheld DMM on garden-node A0 ≈ 1.88 V, probe tips dragged across a resistor,
+dial → Ω; local plugin + hot reload, theme, SDK docs, analysis plugin), `tests/lessons.rs`
+(lesson 3 step 3 math mode + hints + working + measurements, break it + Repair, free play;
+the lesson editor → pack → Lessons), `tests/radio_tools.rs` (phone ↔ ble-button notify, MQTT
+explorer `garden/pot1`), `tests/pcb.rs` (blink: auto-place, route, DRC, Gerbers parse back). `BREADBOX_EXPORT_DIR` / `BREADBOX_PROJECTS_DIR` redirect Share and
 bundle imports in tests. GUI tests use `AppOptions::test()` (no persistence,
 no native menu, bench at max speed); compile tests skip gracefully without a toolchain.
 

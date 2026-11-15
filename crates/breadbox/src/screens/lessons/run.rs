@@ -44,7 +44,10 @@ pub struct LessonRun {
     prepared: Option<usize>,
     /// The prediction text field.
     pub guess: String,
-    meter_hist: Vec<(Instant, f64)>,
+    /// (sim seconds, reading) since the last change (choice, repair, step).
+    meter_hist: Vec<(f64, f64)>,
+    /// A Check waiting for the meter to settle after the last change: (guess, since).
+    pub pending: Option<(f64, Instant)>,
     /// (choice index, value) last recorded into the table.
     recorded: Option<(usize, f64)>,
     pub code: Option<CodeDoc>,
@@ -136,6 +139,7 @@ impl LessonRun {
             prepared: None,
             guess: String::new(),
             meter_hist: Vec::new(),
+            pending: None,
             recorded: None,
             code: None,
             code_view: EditorView::default(),
@@ -174,6 +178,7 @@ impl LessonRun {
         self.goals_step = self.session.step;
         self.guess.clear();
         self.meter_hist.clear();
+        self.pending = None;
         self.recorded = None;
         self.show_hint = false;
         self.code = self.session.current().code.as_ref().map(|c| {
@@ -239,29 +244,36 @@ impl LessonRun {
             .or_else(|| step.predict.as_ref().and_then(|p| p.meter.clone()))
     }
 
-    /// A reading that held still for 0.6 s (wall clock), for the measurements table.
-    pub fn settled_meter(&mut self, tel: Option<&Telemetry>) -> Option<f64> {
-        let now = Instant::now();
-        let m = self.meter(tel);
-        match m {
-            Some(v) => self.meter_hist.push((now, v)),
+    /// Feeds the meter history with this frame's reading (sim-time stamped; call every frame).
+    pub fn track_meter(&mut self, tel: Option<&Telemetry>) {
+        let Some(t) = tel else { return };
+        let now = t.time.as_secs_f64();
+        match self.meter(Some(t)) {
+            Some(v) => {
+                if self.meter_hist.last().is_none_or(|x| now > x.0) {
+                    self.meter_hist.push((now, v));
+                }
+            }
+            // ranging / settling: start over
             None => self.meter_hist.clear(),
         }
-        self.meter_hist
-            .retain(|(t, _)| now.duration_since(*t) < Duration::from_millis(1500));
-        let v = m?;
-        let window: Vec<f64> = self
-            .meter_hist
-            .iter()
-            .filter(|(t, _)| now.duration_since(*t) < Duration::from_millis(600))
-            .map(|x| x.1)
-            .collect();
-        let oldest = self.meter_hist.first().map(|x| now.duration_since(x.0))?;
-        if oldest < Duration::from_millis(600) {
+        self.meter_hist.retain(|x| now - x.0 < 2.0);
+    }
+
+    /// A reading that held still for 0.5 s of simulated time since the last change (the
+    /// meter's display refresh + autorange have caught up), for checks and the table.
+    pub fn settled_meter(&self) -> Option<f64> {
+        let (t_last, v) = *self.meter_hist.last()?;
+        let first = self.meter_hist.first()?.0;
+        if t_last - first < 0.5 {
             return None;
         }
         let tol = (v.abs() * 0.01).max(0.02);
-        window.iter().all(|x| (x - v).abs() <= tol).then_some(v)
+        self.meter_hist
+            .iter()
+            .filter(|x| t_last - x.0 <= 0.5)
+            .all(|x| (x.1 - v).abs() <= tol)
+            .then_some(v)
     }
 
     /// Records a settled reading for the current choice into "Your measurements".
@@ -274,7 +286,7 @@ impl LessonRun {
             return;
         };
         let damaged = self.damaged(tel).is_some();
-        let Some(m) = self.settled_meter(tel) else {
+        let Some(m) = self.settled_meter() else {
             return;
         };
         if damaged {
@@ -311,6 +323,7 @@ impl LessonRun {
         let edit = self.session.choose(i).map_err(|e| e.to_string())?;
         self.guess.clear();
         self.meter_hist.clear();
+        self.pending = None;
         self.apply_edit(edit);
         Ok(())
     }
@@ -394,10 +407,34 @@ impl LessonRun {
         self.goals_ready && self.goals_step == self.session.step && self.goals.iter().all(|g| g.ok)
     }
 
-    /// The prediction field → `Session::predict` (with the meter reading).
+    /// The prediction field → `Session::predict`. With an instrument on the step the check
+    /// waits for its reading to settle after the last change, so the verdict ("the meter
+    /// agrees: …") and the table quote what the meter really shows.
     pub fn check_prediction(&mut self, tel: Option<&Telemetry>) -> Option<bool> {
         let g = parse_guess(&self.guess)?;
-        let meter = self.meter(tel);
+        if self.bench.is_some() && self.meter_part().is_some() {
+            self.pending = Some((g, Instant::now()));
+            self.resolve_pending(tel);
+            return Some(false);
+        }
+        Some(self.finish_check(g, None))
+    }
+
+    /// Completes a pending Check once the meter settled (or after 5 s, with what it shows).
+    pub fn resolve_pending(&mut self, tel: Option<&Telemetry>) {
+        let Some((g, since)) = self.pending else {
+            return;
+        };
+        let m = match self.settled_meter() {
+            Some(m) => Some(m),
+            None if since.elapsed() > Duration::from_secs(5) => self.meter(tel),
+            None => return,
+        };
+        self.pending = None;
+        self.finish_check(g, m);
+    }
+
+    fn finish_check(&mut self, g: f64, meter: Option<f64>) -> bool {
         let v = self.session.predict(g, meter);
         if v.correct
             && let Some(m) = meter
@@ -408,7 +445,7 @@ impl LessonRun {
             }
         }
         self.evaluate(true);
-        Some(v.correct)
+        v.correct
     }
 
     /// Starts compiling the code step's sketch.

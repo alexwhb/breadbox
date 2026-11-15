@@ -466,7 +466,7 @@ impl PluginsScreen {
                 let art_size = vec2(240.0, 376.0);
                 let panel = plugin
                     .as_ref()
-                    .and_then(|pl| panel_of(pl));
+                    .and_then(panel_of);
                 match &panel {
                     Some(panel) => {
                         let state = instrument_on_bench(app, &e.id).and_then(|part| live_panel(app, &part));
@@ -590,11 +590,10 @@ impl PluginsScreen {
                                     });
                                 }
                             }
-                            CatalogStatus::UpdateAvailable { version } => {
-                                if Btn::ghost(&format!("Update to {version}")).show(ui).clicked() {
+                            CatalogStatus::UpdateAvailable { version }
+                                if Btn::ghost(&format!("Update to {version}")).show(ui).clicked() => {
                                     self.request_install(app, &e.id);
                                 }
-                            }
                             _ => {}
                         }
                         if e.kinds.contains(&Kind::Theme) && active {
