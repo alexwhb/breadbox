@@ -192,12 +192,13 @@ fn workbench_panels_fit_without_overlap_at_both_sizes() {
     ] {
         h.set_size(size);
         h.run_steps(4);
-        let sets: [(&str, Vec<RailPanel>); 9] = [
+        let sets: [(&str, Vec<RailPanel>); 10] = [
             ("world", vec![RailPanel::World]),
             ("world-more", vec![RailPanel::World]),
             ("program", vec![RailPanel::World]),
             ("instruments", vec![RailPanel::Instruments]),
             ("probes", vec![RailPanel::Probes, RailPanel::Inspector]),
+            ("waveforms", vec![RailPanel::Waveforms]),
             (
                 "inspector",
                 vec![RailPanel::Inspector, RailPanel::Waveforms],
