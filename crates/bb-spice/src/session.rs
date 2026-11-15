@@ -591,7 +591,9 @@ impl Session {
                 if !w.active {
                     continue;
                 }
-                let (va, vb) = (w.last_v, vals[k]);
+                // a watch added after this trail point was recorded has no value there yet:
+                // no crossing inside this sub-segment
+                let (va, vb) = (w.last_v, vals.get(k).copied().unwrap_or(w.last_v));
                 let mut high = w.high;
                 // up to two crossings per segment (a swing through both thresholds)
                 let mut ta = t0;
@@ -631,7 +633,8 @@ impl Session {
                 // values at tc
                 let frac = if tp > t0 { (tc - t0) / (tp - t0) } else { 1.0 };
                 for (k, w) in self.s.watches.iter_mut().enumerate() {
-                    w.last_v += (vals[k] - w.last_v) * frac;
+                    let v = vals.get(k).copied().unwrap_or(w.last_v);
+                    w.last_v += (v - w.last_v) * frac;
                 }
                 stop = Some(tc);
                 break 'outer;
@@ -645,7 +648,7 @@ impl Session {
                 });
             }
             for (k, w) in self.s.watches.iter_mut().enumerate() {
-                w.last_v = vals[k];
+                w.last_v = vals.get(k).copied().unwrap_or(w.last_v);
             }
             t0 = tp;
         }

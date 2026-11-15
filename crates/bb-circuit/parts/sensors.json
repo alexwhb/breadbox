@@ -42,7 +42,7 @@
       "behaviour": "capsoil",
       "pro": ["$(el:X) $(VCC) $(GND) $(AOUT) CAPSOIL vwc=$(world:vwc)"],
       "library": [
-        ".subckt CAPSOIL vcc vss out params: vwc=40\nB1 int vss V={3.03-0.02737*vwc}\nR1 int out 1k\nR2 vcc vss 1k\n.ends CAPSOIL"
+        ".subckt CAPSOIL vcc vss out params: vwc=40\nB1 int vss V={3.03-0.02737*vwc}\nR1 int out 2.2k\nR2 vcc vss 1k\n.ends CAPSOIL"
       ]
     },
     "inspector": [

@@ -6,3 +6,11 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
+serde = { version = "1", default-features = false, features = ["derive", "alloc"] }
+serde_json = { version = "1", default-features = false, features = ["alloc"] }
+dlmalloc = { version = "0.2", features = ["global"], optional = true }
+
+[features]
+default = []
+# For `#![no_std]` plugins: installs dlmalloc as the global allocator.
+global-allocator = ["dep:dlmalloc"]

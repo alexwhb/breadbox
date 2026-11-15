@@ -1,0 +1,31 @@
+# First-party plugins (PLUG-5) + SDK examples. Built to wasm by scripts/build-plugins.sh; the
+# built .wasm files are committed so the app and tests don't need a wasm toolchain.
+[workspace]
+resolver = "3"
+members = [
+    "dmm-handheld",
+    "scope-4ch",
+    "logic-analyzer",
+    "bench-psu",
+    "function-generator",
+    "soil-weather",
+    "lora-gateway",
+    "examples/template",
+    "examples/sawtooth",
+    "examples/sensitivity",
+]
+
+[workspace.package]
+version = "1.0.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+bb-plugin-sdk = { path = "../crates/bb-plugin-sdk" }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

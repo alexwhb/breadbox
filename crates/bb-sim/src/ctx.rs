@@ -136,6 +136,15 @@ impl DeviceCtx for DevCtx<'_> {
     fn service(&mut self, name: &str) -> Option<&mut dyn std::any::Any> {
         self.bench.service_mut(name)
     }
+    fn capture(&mut self, pin: usize, period: SimTime) {
+        if pin < self.bench.devices[self.dev].drives.len() {
+            let now = self.now;
+            self.bench.set_capture(self.dev, pin, period, now);
+        }
+    }
+    fn samples(&self, pin: usize, from: SimTime, to: SimTime) -> Vec<(SimTime, f64)> {
+        self.bench.capture_samples(self.dev, pin, from, to)
+    }
     fn emit(&mut self, ev: DeviceEvent) {
         let source = self.bench.devices[self.dev].spec.reference.clone();
         match &ev {

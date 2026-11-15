@@ -64,6 +64,13 @@ pub trait DeviceCtx {
     fn service(&mut self, _name: &str) -> Option<&mut dyn std::any::Any> {
         None
     }
+    /// Starts (period > 0) or stops (`SimTime::ZERO`) recording `pin`'s voltage at least every
+    /// `period` (instruments: scopes). Digital nets record every change exactly.
+    fn capture(&mut self, _pin: usize, _period: SimTime) {}
+    /// Recorded `(time, volts)` samples of a captured pin between `from` and `to`.
+    fn samples(&self, _pin: usize, _from: SimTime, _to: SimTime) -> Vec<(SimTime, f64)> {
+        Vec::new()
+    }
 }
 
 /// A simulated behavioural part.
@@ -94,6 +101,11 @@ pub trait Device: Send {
         serde_json::Value::Null
     }
     fn load_state(&mut self, _s: &serde_json::Value) {}
+    /// Live state of an instrument's front panel (`bb_plugin::panel::PanelState` JSON) for the
+    /// UI; `None` for parts without a panel.
+    fn panel(&self) -> Option<serde_json::Value> {
+        None
+    }
     /// Transaction-level I²C for API-level masters (ESP32 / Pico `Wire`): `write` bytes to
     /// 7-bit `addr`, then read `read` bytes. `None` = not this device's address (NACK);
     /// `Some(bytes)` (empty for a pure write) = acknowledged. Bit-level masters (AVR TWI) talk to

@@ -362,3 +362,27 @@ fn engine_types_are_send() {
     assert_send::<bb_spice::Results>();
     assert_send::<bb_spice::SessionSnapshot>();
 }
+
+/// A watch added while speculative trail points exist (an instrument re-arming its trigger
+/// between small quanta) must not index past the trail's stored values.
+#[test]
+fn watches_added_mid_trail_are_safe() {
+    let (nl, pin) = rc_with_port();
+    let mut s = Session::new(&nl).unwrap();
+    s.watch("out", 1.0, 2.0).unwrap();
+    s.set_port(pin, PinDrive::Thevenin { v: 5.0, r: 25.0 });
+    let mut t = 0.0;
+    let mut crossings = 0;
+    for k in 0..400 {
+        t += 5e-6;
+        crossings += s.advance_to(t).unwrap().len();
+        if k % 7 == 0 {
+            let w = s.watch("out", 2.4, 2.6).unwrap();
+            if k % 14 == 0 {
+                s.unwatch(w);
+            }
+        }
+    }
+    assert!(crossings >= 1);
+    assert!(s.voltage("out").unwrap() > 0.5);
+}

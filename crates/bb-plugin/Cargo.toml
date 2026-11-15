@@ -7,3 +7,23 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+bb-core = { workspace = true }
+bb-spice = { workspace = true }
+bb-circuit = { workspace = true }
+bb-world = { workspace = true }
+bb-radio = { workspace = true }
+bb-firmware = { workspace = true }
+bb-sim = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }
+wasmtime = { version = "50", default-features = false, features = ["runtime", "cranelift", "std", "parallel-compilation", "cache"] }
+wasmtime-wasi = { version = "50", default-features = false, features = ["p1"] }
+zip = { version = "9", default-features = false, features = ["deflate"] }
+semver = "1"
+sha2 = "0.10"
+
+[dev-dependencies]
+wat = "1"
+bb-avr = { workspace = true }

@@ -54,7 +54,12 @@ impl Bench {
         let t0 = self.time;
         let quiet = self.analog_quiescent() && self.edges.is_empty();
         let single_mcu = self.mcus.len() <= 1;
-        let q = if self.mcus.is_empty() || (quiet && single_mcu) {
+        let settle = std::mem::take(&mut self.settle_next);
+        let q = if settle {
+            // an MCU output just switched an analog node: look again right after it settles
+            // (capacitive nodes can't jump at the re-solve), so samples and integrals see it
+            self.quantum
+        } else if self.mcus.is_empty() || (quiet && single_mcu) {
             // device watches are exact (the solver stops at every crossing), and nothing else
             // needs a short quantum
             self.max_quantum
@@ -71,6 +76,9 @@ impl Bench {
             if let Some(w) = s.next_wake() {
                 target = target.min(w.max(t0));
             }
+        }
+        if let Some(c) = self.next_capture() {
+            target = target.min(c.max(t0 + SimTime::from_ns(10)));
         }
         if target <= t0 {
             // something is due right now
@@ -169,6 +177,11 @@ impl Bench {
             let t = t.max(self.time);
             self.advance_analog(t)?;
             self.time = t;
+            if let Some(net) = self.mcus[mi].pins.get(e.pin).and_then(|p| p.net)
+                && matches!(self.nets[net.0].kind, NetKind::Analog(_))
+            {
+                self.settle_next = true;
+            }
             self.apply_mcu_drive_now(mi, e.pin, e.drive, t);
             self.process_edges()?;
         }
@@ -416,6 +429,7 @@ impl Bench {
     /// Bookkeeping after each sync point: integrals, supplies, serial, damage, instruments.
     fn after_sync(&mut self, t: SimTime) -> Result<(), SimError> {
         self.integrate(t);
+        self.record_captures(t, None);
         for mi in 0..self.mcus.len() {
             self.update_vcc(mi);
             let bytes = self.mcus[mi].core.take_serial();
@@ -497,6 +511,15 @@ impl Bench {
             return;
         };
         for tr in self.tracked.iter_mut() {
+            // the value at the end of the interval stands for it: inputs change at sync points
+            // (the start of an interval), and a node with capacitance only settles to its new
+            // value after the re-solve there
+            let i = s.current(&tr.element).unwrap_or(0.0);
+            let va = tr.a.map(|n| s.voltage_at(n)).unwrap_or(0.0);
+            let vb = tr.b.map(|n| s.voltage_at(n)).unwrap_or(0.0);
+            tr.i = i;
+            tr.v = va - vb;
+            tr.p = i * (va - vb);
             let dt = (t - tr.last).as_secs_f64();
             if dt > 0.0 {
                 tr.charge += tr.i * dt;
@@ -504,12 +527,6 @@ impl Bench {
                 self.damage.integrate_one(&tr.element, tr.i, tr.p, tr.v, dt);
                 tr.last = t;
             }
-            let i = s.current(&tr.element).unwrap_or(0.0);
-            let va = tr.a.map(|n| s.voltage_at(n)).unwrap_or(0.0);
-            let vb = tr.b.map(|n| s.voltage_at(n)).unwrap_or(0.0);
-            tr.i = i;
-            tr.v = va - vb;
-            tr.p = i * (va - vb);
         }
         self.damage.pin_integrate(t, &self.mcus, s, &self.nets);
     }

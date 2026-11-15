@@ -75,6 +75,24 @@ pub struct ServiceNote {
 /// [`crate::RadioService`] from the project's radio settings.
 pub type ServiceFactory = Arc<dyn Fn(&Project) -> Box<dyn Service> + Send + Sync>;
 
+/// Creates a world model for a new bench (world-model plugins, WORLD-5).
+pub type WorldModelFactory = Arc<dyn Fn(&Project) -> Box<dyn bb_world::WorldModel> + Send + Sync>;
+
+/// A waveform a device records (scope plugins): every change on digital nets, at least every
+/// `period` on analog nets (the scheduler syncs that often while it is active).
+#[derive(Debug, Clone)]
+pub(crate) struct Capture {
+    pub part: String,
+    pub pin: usize,
+    pub net: Option<NetId>,
+    pub period: SimTime,
+    pub next: SimTime,
+    pub buf: VecDeque<(SimTime, f64)>,
+}
+
+/// Samples kept per capture.
+const CAPTURE_CAP: usize = 1 << 19;
+
 /// Bench options.
 #[derive(Clone)]
 pub struct BenchOptions {
@@ -95,6 +113,8 @@ pub struct BenchOptions {
     /// Services created with every bench. The default holds the radio space
     /// ([`crate::radio::service_factory`]); plugin hosts add theirs.
     pub services: Vec<ServiceFactory>,
+    /// World models stepped with the world (world-model plugins).
+    pub world_models: Vec<WorldModelFactory>,
 }
 
 impl Default for BenchOptions {
@@ -108,6 +128,7 @@ impl Default for BenchOptions {
             firmware: HashMap::new(),
             host_firmware: HashMap::new(),
             services: vec![crate::radio::service_factory()],
+            world_models: Vec::new(),
         }
     }
 }
@@ -291,6 +312,9 @@ pub struct Bench {
     pub(crate) paused: Option<String>,
     /// Designator → MCUs whose I/O pins share a net with that part (annotation routing).
     pub(crate) routes: HashMap<String, Vec<usize>>,
+    pub(crate) captures: Vec<Capture>,
+    /// Sync again one quantum after an MCU drive change on an analog net.
+    pub(crate) settle_next: bool,
     pub stats: BenchStats,
 }
 
@@ -305,8 +329,11 @@ impl Bench {
         let quantum = opts.quantum.unwrap_or_else(|| {
             SimTime::from_secs_f64(project.settings.sync_quantum_us.max(0.01) * 1e-6)
         });
-        let world =
+        let mut world =
             World::new(project.world.clone()).map_err(|e| SimError::Build(e.to_string()))?;
+        for f in &opts.world_models {
+            world.add_model(f(&project));
+        }
         let built = netlist::build(&project, &lib, &NetlistOptions::bench())
             .map_err(|e| SimError::Build(e.to_string()))?;
         let mut bench = Bench {
@@ -345,6 +372,8 @@ impl Bench {
             host_firmware: opts.host_firmware.clone(),
             paused: None,
             routes: HashMap::new(),
+            captures: Vec::new(),
+            settle_next: false,
             stats: BenchStats::default(),
             project,
         };
@@ -679,7 +708,123 @@ impl Bench {
             self.mcus[mi].core.set_serial_waveform(0, wired);
         }
         self.compute_routes();
+        for c in self.captures.iter_mut() {
+            c.net = self
+                .devices
+                .iter()
+                .find(|d| d.spec.part == c.part)
+                .and_then(|d| d.nets.get(c.pin).copied().flatten());
+        }
         Ok(())
+    }
+
+    /// Starts/stops a capture for device `di`'s pin (`DeviceCtx::capture`).
+    pub(crate) fn set_capture(&mut self, di: usize, pin: usize, period: SimTime, now: SimTime) {
+        let part = self.devices[di].spec.part.clone();
+        if period == SimTime::ZERO {
+            self.captures.retain(|c| !(c.part == part && c.pin == pin));
+            return;
+        }
+        let net = self.devices[di].nets.get(pin).copied().flatten();
+        let v = self.device_pin_voltage(di, pin);
+        match self
+            .captures
+            .iter_mut()
+            .find(|c| c.part == part && c.pin == pin)
+        {
+            Some(c) => {
+                c.period = period;
+                c.next = c.next.min(now + period);
+            }
+            None => {
+                let mut buf = VecDeque::new();
+                buf.push_back((now, v));
+                self.captures.push(Capture {
+                    part,
+                    pin,
+                    net,
+                    period,
+                    next: now + period,
+                    buf,
+                });
+            }
+        }
+    }
+
+    /// Samples of a capture between `from` and `to` (plus the last one before `from`).
+    pub(crate) fn capture_samples(
+        &self,
+        di: usize,
+        pin: usize,
+        from: SimTime,
+        to: SimTime,
+    ) -> Vec<(SimTime, f64)> {
+        let part = &self.devices[di].spec.part;
+        let Some(c) = self
+            .captures
+            .iter()
+            .find(|c| &c.part == part && c.pin == pin)
+        else {
+            return Vec::new();
+        };
+        let i0 = c.buf.partition_point(|s| s.0 < from).saturating_sub(1);
+        c.buf
+            .iter()
+            .skip(i0)
+            .take_while(|s| s.0 <= to)
+            .copied()
+            .collect()
+    }
+
+    /// Earliest analog capture sample due.
+    pub(crate) fn next_capture(&self) -> Option<SimTime> {
+        self.captures
+            .iter()
+            .filter(|c| {
+                c.net
+                    .is_none_or(|n| !matches!(self.nets[n.0].kind, NetKind::Digital))
+            })
+            .map(|c| c.next)
+            .min()
+    }
+
+    /// Records analog captures due at `t` and every capture on a digital net that changed.
+    pub(crate) fn record_captures(&mut self, t: SimTime, changed: Option<(NetId, f64)>) {
+        if self.captures.is_empty() {
+            return;
+        }
+        for i in 0..self.captures.len() {
+            let net = self.captures[i].net;
+            let (due, v) = match (changed, net) {
+                (Some((n, v)), Some(cn)) if n == cn => (true, v),
+                (Some(_), _) => (false, 0.0),
+                (None, Some(n)) if matches!(self.nets[n.0].kind, NetKind::Digital) => (false, 0.0),
+                (None, n) => {
+                    let due = self.captures[i].next <= t;
+                    let v = match n {
+                        Some(n) if !matches!(self.nets[n.0].kind, NetKind::Isolated) => {
+                            self.net_voltage(n)
+                        }
+                        _ => 0.0,
+                    };
+                    (due, v)
+                }
+            };
+            if !due {
+                continue;
+            }
+            let c = &mut self.captures[i];
+            if changed.is_none() {
+                c.next = (c.next + c.period).max(t + SimTime(c.period.0 / 2));
+            }
+            if c.buf.back().is_some_and(|b| b.0 > t) {
+                continue;
+            }
+            c.buf.push_back((t, v));
+            if c.buf.len() > CAPTURE_CAP {
+                c.buf.pop_front();
+            }
+        }
     }
 
     /// Which MCU(s) a part's annotations belong to: those sharing a signal net with it.
@@ -906,6 +1051,69 @@ impl Bench {
     pub fn voltage(&self, net_name: &str) -> Option<f64> {
         let n = self.built.connectivity.net_by_name(net_name)?;
         Some(self.net_voltage(n.id))
+    }
+
+    /// Voltages of `nets` if external variable `name` were `value` — a what-if DC operating
+    /// point of the circuit with every drive frozen at its present value (the bench itself is
+    /// left unchanged). Used for instrument loading callouts ("meter load shifts the node by
+    /// −0.4 mV"). Returns `(with the present value, with value)`.
+    pub fn what_if_ext(
+        &self,
+        name: &str,
+        value: f64,
+        nets: &[NetId],
+    ) -> Option<(Vec<f64>, Vec<f64>)> {
+        let s = self.analog.session.as_ref()?;
+        let text = s.to_spice_text();
+        let param: String = std::iter::once("ext_".to_string())
+            .chain(name.chars().map(|c| {
+                if c.is_ascii_alphanumeric() {
+                    c.to_ascii_lowercase().to_string()
+                } else {
+                    "_".to_string()
+                }
+            }))
+            .collect();
+        let prefix = format!(".param {param}=");
+        if !text.lines().any(|l| l.starts_with(&prefix)) {
+            return None;
+        }
+        let changed: String = text
+            .lines()
+            .map(|l| {
+                if l.starts_with(&prefix) {
+                    format!("{prefix}{}", bb_spice::expr::fmt_g(value))
+                } else {
+                    l.to_string()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let nodes: Vec<Option<String>> = nets
+            .iter()
+            .map(|n| match &self.nets.get(n.0)?.kind {
+                NetKind::Analog(name) => Some(name.clone()),
+                _ => None,
+            })
+            .collect();
+        let op = |t: &str| -> Option<Vec<f64>> {
+            let nl = bb_spice::Netlist::parse(t).ok()?;
+            let mut sess = Session::new(&nl).ok()?;
+            sess.op().ok()?;
+            Some(
+                nodes
+                    .iter()
+                    .map(|n| match n.as_deref() {
+                        Some("0") | None => 0.0,
+                        Some(n) => sess
+                            .voltage(n)
+                            .or_else(|| sess.voltage(&n.to_ascii_lowercase()))
+                            .unwrap_or(0.0),
+                    })
+                    .collect(),
+            )
+        };
+        Some((op(&text)?, op(&changed)?))
     }
 
     /// Current through a part's SPICE element (local spec `"D"`, `"R"`).
@@ -1137,6 +1345,7 @@ impl Bench {
             }
         }
         self.instruments.on_net_change(net, t, v);
+        self.record_captures(t, Some((net, v)));
     }
 
     pub(crate) fn set_device_drive(&mut self, di: usize, pi: usize, drive: PinDrive, t: SimTime) {
@@ -1338,6 +1547,7 @@ impl Bench {
             self.ext_values.entry(k.clone()).or_insert(*v);
         }
         // devices: keep matching ones, add new, drop removed
+        let old_parts: Vec<String> = self.devices.iter().map(|d| d.spec.part.clone()).collect();
         let mut old: Vec<DevRt> = std::mem::take(&mut self.devices);
         let mut new_devs = Vec::new();
         let mut fresh = Vec::new();
@@ -1421,7 +1631,27 @@ impl Bench {
                 );
             }
         }
-        let _ = wakes; // device wakes (protocol timers) restart from the devices' own state
+        // pending device wake-ups (protocol timers, conversions) follow their device
+        for w in wakes {
+            if let WakeKind::Device {
+                dev,
+                token,
+                generation,
+            } = w.kind
+                && let Some(part) = old_parts.get(dev)
+                && let Some(ni) = self.devices.iter().position(|d| &d.spec.part == part)
+                && !fresh.contains(&ni)
+            {
+                self.push_wake(
+                    w.time.max(self.time),
+                    WakeKind::Device {
+                        dev: ni,
+                        token,
+                        generation,
+                    },
+                );
+            }
+        }
         let t = self.time;
         for &i in &fresh {
             self.with_device(i, t, |d, ctx| d.on_start(ctx));

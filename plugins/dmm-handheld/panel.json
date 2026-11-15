@@ -1,0 +1,32 @@
+{
+  "size": [80, 160],
+  "color": "#F2C14E",
+  "art": "dmm.bench.svg",
+  "elements": [
+    {"type": "display", "id": "lcd", "rect": [8, 10, 64, 34], "digits": 4, "style": "lcd",
+     "units": ["mV", "V", "Ω", "kΩ", "MΩ", "A", "mA", "Hz"],
+     "annunciators": ["AUTO", "MANU", "AC", "DC", "HOLD", "MAX", "MIN", "AVG", "·)))", "⊣⊢", "LEAD", "FUSE"],
+     "bar": 31},
+    {"type": "button", "id": "hold", "rect": [8, 50, 18, 8], "label": "HOLD"},
+    {"type": "button", "id": "minmax", "rect": [31, 50, 18, 8], "label": "MIN MAX"},
+    {"type": "button", "id": "range", "rect": [54, 50, 18, 8], "label": "RANGE"},
+    {"type": "rotary", "id": "dial", "rect": [15, 64, 50, 50], "default": 2, "positions": [
+      {"value": "off", "label": "OFF", "angle": -135},
+      {"value": "ac_v", "label": "V~", "angle": -105},
+      {"value": "dc_v", "label": "V⎓", "angle": -75},
+      {"value": "mv", "label": "mV", "angle": -45},
+      {"value": "ohm", "label": "Ω", "angle": -15},
+      {"value": "continuity", "label": "·)))", "angle": 15},
+      {"value": "diode", "label": "⊣⊢", "angle": 45},
+      {"value": "a", "label": "A", "angle": 75},
+      {"value": "ma", "label": "mA", "angle": 105},
+      {"value": "hz", "label": "Hz", "angle": 135}
+    ]},
+    {"type": "led", "id": "beep", "rect": [68, 64, 4, 4], "label": "·)))", "color": "#F7C77A"},
+    {"type": "jack", "id": "j_a", "rect": [8, 132, 12, 12], "pin": "A", "label": "10A", "color": "#D9453B"},
+    {"type": "jack", "id": "j_ma", "rect": [25, 132, 12, 12], "pin": "MA", "label": "mA", "color": "#D9453B"},
+    {"type": "jack", "id": "j_com", "rect": [43, 132, 12, 12], "pin": "COM", "label": "COM", "color": "#1C1C1C"},
+    {"type": "jack", "id": "j_vo", "rect": [60, 132, 12, 12], "pin": "VO", "label": "VΩ", "color": "#D9453B"},
+    {"type": "button", "id": "replace_fuse", "rect": [8, 148, 30, 6], "label": "Replace fuse"}
+  ]
+}

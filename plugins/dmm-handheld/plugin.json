@@ -1,0 +1,37 @@
+{
+  "id": "community.dmm-handheld",
+  "version": "1.4.0",
+  "name": "Handheld DMM",
+  "kind": ["instrument"],
+  "summary": "6000-count handheld multimeter that loads the circuit like the real thing.",
+  "description": "Clip the probes onto any two nodes on the bench. The meter behaves like the real thing: it loads the circuit with its input impedance, auto-ranges with a settling delay, shows last-digit flicker from noise, and reads true-RMS on AC.",
+  "author": "Breadbox",
+  "license": "MIT",
+  "provides": {
+    "instrument": "Handheld DMM",
+    "probes": 2,
+    "model": "./dmm.wasm",
+    "view3d": "./dmm.bench.svg",
+    "view2d": "./dmm.symbol.svg",
+    "parts": "./parts.json",
+    "panel": "./panel.json"
+  },
+  "spice": { "load": "R 10Meg ∥ C 100p" },
+  "specs": {
+    "counts": 6000,
+    "dcv_ranges": ["600m", "6", "60", "600"],
+    "dcv_accuracy": "0.05% + 1",
+    "autorange_ms": 350,
+    "input": "10 MΩ ∥ 100 pF",
+    "burden_10a": "0.03 V/A",
+    "modes": ["V⎓", "V~", "mV", "Ω", "·)))", "⊣⊢", "A", "mA", "Hz"]
+  },
+  "highlights": [
+    { "label": "Display", "value": "6000 counts" },
+    { "label": "DC V accuracy", "value": "±(0.05% + 1)" },
+    { "label": "Input impedance", "value": "10 MΩ ∥ 100 pF" },
+    { "label": "Burden (10 A)", "value": "0.03 V/A" }
+  ],
+  "permissions": ["read:nets", "inject:load"],
+  "assets": ["./dmm.bench.svg", "./dmm.symbol.svg"]
+}

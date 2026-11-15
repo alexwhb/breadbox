@@ -38,6 +38,9 @@ pub struct PartTelemetry {
     pub reference: String,
     pub visual: VisualState,
     pub readings: Vec<(String, f64)>,
+    /// Live front panel of an instrument (`bb_plugin::panel::PanelState` JSON).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub panel: Option<serde_json::Value>,
 }
 
 /// One MCU's status.
@@ -142,6 +145,7 @@ impl Bench {
                     reference: d.spec.reference.clone(),
                     visual: v,
                     readings: d.dev.readings(),
+                    panel: d.dev.panel(),
                 }
             })
             .chain(self.mcus.iter_mut().map(|m| {
@@ -177,6 +181,7 @@ impl Bench {
                         smoke: 0.0,
                     },
                     readings: vec![("vcc".into(), m.vcc)],
+                    panel: None,
                 }
             }))
             .collect();

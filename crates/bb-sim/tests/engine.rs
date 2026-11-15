@@ -128,7 +128,7 @@ fn instrument_load_shifts_the_node_like_a_real_meter() {
     let mut b = Bench::new(p, lib(), opts).unwrap();
     b.run_until(SimTime::from_millis_compat(500)).unwrap();
     let v0 = b.pin_voltage("j1", "AOUT").unwrap();
-    // a 10 kΩ meter input on the sensor output (1 kΩ source): −9 % of the reading
+    // a 10 kΩ meter input on the sensor output (2.2 kΩ source): −18 % of the reading
     b.add_load(Load {
         id: "dmm".into(),
         a: Endpoint::pin("j1", "AOUT"),
@@ -139,7 +139,7 @@ fn instrument_load_shifts_the_node_like_a_real_meter() {
     .unwrap();
     b.run_until(SimTime::from_millis_compat(600)).unwrap();
     let v1 = b.pin_voltage("j1", "AOUT").unwrap();
-    let expect = v0 * 10e3 / 11e3;
+    let expect = v0 * 10e3 / 12.2e3;
     assert!((v1 - expect).abs() < 0.02, "{v0} → {v1} (expect {expect})");
     b.remove_load("dmm").unwrap();
     b.run_until(SimTime::from_millis_compat(700)).unwrap();

@@ -429,7 +429,14 @@ impl CapSoil {
         }
         self.v = v.max(0.0);
         if ok(self.aout) {
-            ctx.set_drive(self.aout, PinDrive::Thevenin { v: self.v, r: 1e3 });
+            // v1.2 board: 2.2 kΩ output resistor (a 10 MΩ meter shifts A0 by −0.4 mV)
+            ctx.set_drive(
+                self.aout,
+                PinDrive::Thevenin {
+                    v: self.v,
+                    r: 2.2e3,
+                },
+            );
         }
     }
 }

@@ -1,0 +1,45 @@
+[
+  {
+    "id": "dmm_handheld",
+    "name": "Handheld DMM",
+    "category": "instruments",
+    "icon": "dmm",
+    "ref_prefix": "DMM",
+    "description": "6000-count handheld multimeter: clip VΩ and COM to any two nodes; current through the 10 A or mA jack in series.",
+    "props": [
+      {"key": "mode", "label": "Dial", "type": "choice", "default": "dc_v",
+       "options": [{"value": "off"}, {"value": "ac_v"}, {"value": "dc_v"}, {"value": "mv"}, {"value": "ohm"},
+                   {"value": "continuity"}, {"value": "diode"}, {"value": "a"}, {"value": "ma"}, {"value": "hz"}]}
+    ],
+    "pins": ["VO:input:VΩ", "COM:passive", "A:input:10A", "MA:input:mA"],
+    "model": {
+      "spice": [
+        "$(el:R:in) $(VO) $(COM) {$(ext:rin)}",
+        "$(el:C:in) $(VO) $(COM) 100p",
+        "$(el:V:ohm) $(n:src) $(COM) {$(ext:vohm)}",
+        "$(el:R:ohm) $(n:src) $(VO) {$(ext:rohm)}",
+        "$(el:R:a) $(A) $(COM) {$(ext:ra)}",
+        "$(el:R:ma) $(MA) $(COM) {$(ext:rma)}",
+        "$(el:R:leak) $(COM) $(gnd) 1e12"
+      ],
+      "ext": [
+        {"name": "rin", "default": 1e7},
+        {"name": "vohm", "default": 0},
+        {"name": "rohm", "default": 1e12},
+        {"name": "ra", "default": 0.03},
+        {"name": "rma", "default": 1.8}
+      ],
+      "behaviour": "wasm"
+    },
+    "inspector": [
+      {"label": "Display", "value": "6000 counts"},
+      {"label": "DC V accuracy", "value": "±(0.05% + 1)"},
+      {"label": "Input", "value": "10 MΩ ∥ 100 pF"},
+      {"label": "Burden", "value": "10 A: 0.03 V/A · mA: 1.8 V/A"},
+      {"label": "Fuses", "value": "11 A · 440 mA"}
+    ],
+    "bench": {"art": "dmm.bench.svg", "layout": "row", "off_board": true, "size": [12, 16]},
+    "schematic": {"symbol": "none"},
+    "tags": ["instrument", "plugin"]
+  }
+]

@@ -430,6 +430,8 @@ impl World {
                         match field {
                             "vwc" => p.vwc = value.clamp(0.0, 100.0),
                             "evaporation" => p.evaporation = on,
+                            // a world-model plugin taking over evaporation sets this to 0
+                            "evaporation_scale" => p.evaporation_scale = value.clamp(0.0, 100.0),
                             "field_capacity" => p.field_capacity = value.clamp(0.0, 100.0),
                             _ => {
                                 self.cfg.vars.insert(key.to_string(), value);
@@ -637,6 +639,7 @@ impl WorldView for World {
                         return match field {
                             "vwc" => Some(p.vwc),
                             "evaporation" => Some(p.evaporation as u8 as f64),
+                            "evaporation_scale" => Some(p.evaporation_scale),
                             "evap_rate" => self.evap_rate.get(i).copied(),
                             "field_capacity" => Some(p.field_capacity),
                             "saturation" => Some(p.saturation),

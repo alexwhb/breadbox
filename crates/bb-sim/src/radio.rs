@@ -94,7 +94,33 @@ impl ProjectRadios {
 /// A service factory building the radio space from a project's settings (part of
 /// `BenchOptions::default()`).
 pub fn service_factory() -> ServiceFactory {
-    Arc::new(|p: &Project| Box::new(RadioService::for_project(p)) as Box<dyn Service>)
+    service_factory_with(Vec::new())
+}
+
+/// Something that lives in the radio space next to the modems (radio plugins: an uplink
+/// decoder, a dashboard client). Called after every radio step and at its own wake time.
+pub trait RadioExtension: Send {
+    fn name(&self) -> &str;
+    /// The space has advanced to `now`; returns the next time it needs a call.
+    fn step(&mut self, space: &mut RadioSpace, now: SimTime) -> Option<SimTime>;
+    /// Log lines for the bench (errors, notes).
+    fn take_logs(&mut self) -> Vec<String> {
+        Vec::new()
+    }
+}
+
+/// Adjusts a new bench's radio service (radio packs: gateway settings, extensions).
+pub type RadioSetup = Arc<dyn Fn(&mut RadioService, &Project) + Send + Sync>;
+
+/// [`service_factory`] plus setup hooks (plugin radio packs).
+pub fn service_factory_with(setup: Vec<RadioSetup>) -> ServiceFactory {
+    Arc::new(move |p: &Project| {
+        let mut s = RadioService::for_project(p);
+        for f in &setup {
+            f(&mut s, p);
+        }
+        Box::new(s) as Box<dyn Service>
+    })
 }
 
 /// One MQTT message seen by the explorer.
@@ -267,6 +293,7 @@ pub struct RadioService {
     mqtt_log: VecDeque<MqttRow>,
     subscriptions: Vec<String>,
     uart_log: HashMap<DeviceId, VecDeque<UartByte>>,
+    extensions: Vec<(Box<dyn RadioExtension>, Option<SimTime>)>,
     active: bool,
 }
 
@@ -299,7 +326,40 @@ impl RadioService {
             mqtt_log: VecDeque::new(),
             subscriptions: Vec::new(),
             uart_log: HashMap::new(),
+            extensions: Vec::new(),
             active: false,
+        }
+    }
+
+    /// Adds an extension (radio plugin); it is first called at the next radio step.
+    pub fn add_extension(&mut self, e: Box<dyn RadioExtension>) {
+        self.active = true;
+        self.extensions.push((e, Some(SimTime::ZERO)));
+    }
+
+    /// Marks the space as in use (a radio pack without modules yet).
+    pub fn activate(&mut self) {
+        self.active = true;
+    }
+
+    fn run_extensions(&mut self, now: SimTime, all: bool) {
+        for i in 0..self.extensions.len() {
+            let due = all || self.extensions[i].1.is_some_and(|w| w <= now);
+            if !due {
+                continue;
+            }
+            let (e, wake) = &mut self.extensions[i];
+            *wake = e.step(&mut self.space, now);
+            for line in e.take_logs() {
+                let source = e.name().to_string();
+                self.notes.push(ServiceNote {
+                    time: now,
+                    part: None,
+                    source,
+                    channel: "net".into(),
+                    text: line,
+                });
+            }
         }
     }
 
@@ -864,14 +924,18 @@ impl Service for RadioService {
         "radio"
     }
     fn next_wake(&self) -> Option<SimTime> {
-        if self.active {
-            self.space.next_wake()
-        } else {
-            None
+        if !self.active {
+            return None;
+        }
+        let ext = self.extensions.iter().filter_map(|e| e.1).min();
+        match (self.space.next_wake(), ext) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
         }
     }
     fn step(&mut self, now: SimTime) {
         self.space.advance(now);
+        self.run_extensions(now, true);
         self.collect(now);
     }
     fn as_any(&mut self) -> &mut dyn Any {
