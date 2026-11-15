@@ -184,6 +184,14 @@ impl ToolchainService {
             .find(|l| l.name.eq_ignore_ascii_case(name))
             .map(|l| l.version.as_str())
     }
+
+    /// Version of a user-installed (Library Manager) library; core-bundled ones return `None`.
+    pub fn user_library_version(&self, name: &str) -> Option<&str> {
+        self.libraries
+            .iter()
+            .find(|l| l.name.eq_ignore_ascii_case(name) && l.location == "user")
+            .map(|l| l.version.as_str())
+    }
 }
 
 fn classify(r: Result<Toolchain, FirmwareError>) -> ToolchainState {

@@ -45,6 +45,7 @@ pub fn repo() -> PathBuf {
 
 /// Renders and saves `docs/screenshots/<name>.png` (1440×900).
 pub fn screenshot(h: &mut Harness<'static, BreadboxApp>, name: &str) {
+    h.remove_cursor();
     h.run_steps(2);
     match h.render() {
         Ok(img) => {
@@ -56,9 +57,9 @@ pub fn screenshot(h: &mut Harness<'static, BreadboxApp>, name: &str) {
 }
 
 pub fn has_label(h: &Harness<'static, BreadboxApp>, label: &str) -> bool {
-    h.query_by_label(label).is_some()
+    h.query_all_by_label(label).next().is_some()
 }
 
 pub fn has_label_containing(h: &Harness<'static, BreadboxApp>, label: &str) -> bool {
-    h.query_by_label_contains(label).is_some()
+    h.query_all_by_label_contains(label).next().is_some()
 }

@@ -1209,3 +1209,87 @@ pub fn wrapped_text(ui: &mut Ui, text: &str, font: FontId, color: Color32, max_r
     resp.widget_info(|| WidgetInfo::labeled(Role::Label, true, &t));
     resp
 }
+
+/// Design `<select>`: 32 px, raised fill, chevron; clicking opens a menu built by `items`.
+/// `label` is the accessible name (e.g. `"Target"`).
+pub fn select<R>(
+    ui: &mut Ui,
+    label: &str,
+    selected_text: &str,
+    width: f32,
+    items: impl FnOnce(&mut Ui) -> R,
+) -> (Response, Option<R>) {
+    let p = pal(ui);
+    let (rect, resp) = ui.allocate_exact_size(vec2(width, 32.0), Sense::click());
+    let l = format!("{label}: {selected_text}");
+    resp.widget_info(|| WidgetInfo::labeled(Role::ComboBox, true, &l));
+    let fill = if resp.hovered() {
+        theme::mix(p.bg_raised, p.bg_selected, 0.35)
+    } else {
+        p.bg_raised
+    };
+    ui.painter().rect(
+        rect,
+        CornerRadius::same(6),
+        fill,
+        Stroke::new(1.0, p.border_strong),
+        StrokeKind::Inside,
+    );
+    let g = ui.painter().layout(
+        selected_text.to_string(),
+        font::ui(13.0),
+        p.text,
+        rect.width() - 34.0,
+    );
+    ui.painter()
+        .with_clip_rect(rect.shrink(1.0))
+        .galley(pos2(rect.left() + 10.0, rect.center().y - g.size().y / 2.0), g, p.text);
+    Icon::ChevronDown.paint(
+        ui.painter(),
+        Rect::from_center_size(pos2(rect.right() - 14.0, rect.center().y), vec2(12.0, 12.0)),
+        p.text_muted,
+    );
+    let inner = egui::Popup::menu(&resp)
+        .width(width.max(180.0))
+        .show(items)
+        .map(|r| r.inner);
+    (resp.on_hover_cursor(CursorIcon::PointingHand), inner)
+}
+
+/// A menu row for [`select`] / popups. Returns true when clicked.
+pub fn menu_item(ui: &mut Ui, text: &str, selected: bool, enabled: bool) -> bool {
+    let p = pal(ui);
+    let w = ui.available_width().max(160.0);
+    let (rect, resp) = ui.allocate_exact_size(vec2(w, 28.0), if enabled { Sense::click() } else { Sense::hover() });
+    let t = text.to_string();
+    resp.widget_info(|| WidgetInfo::selected(Role::MenuItem, enabled, selected, &t));
+    if resp.hovered() && enabled {
+        ui.painter().rect_filled(rect, CornerRadius::same(5), p.bg_hover);
+    }
+    let color = if !enabled {
+        p.text_faint
+    } else if selected {
+        p.accent_soft
+    } else {
+        p.text
+    };
+    if selected {
+        Icon::Check.paint(
+            ui.painter(),
+            Rect::from_center_size(pos2(rect.left() + 12.0, rect.center().y), vec2(12.0, 12.0)),
+            p.accent,
+        );
+    }
+    ui.painter().text(
+        pos2(rect.left() + 26.0, rect.center().y),
+        Align2::LEFT_CENTER,
+        text,
+        font::ui(13.0),
+        color,
+    );
+    let clicked = resp.clicked() && enabled;
+    if clicked {
+        ui.close();
+    }
+    clicked
+}

@@ -257,32 +257,61 @@ impl<'a> CodeEditor<'a> {
             let content_h = top_pad * 2.0 + n_lines as f32 * lh;
             let (all, _) = ui.allocate_exact_size(vec2(content_w, content_h.max(viewport.height())), Sense::hover());
             let code_left = origin.x + gutter_w;
-            let row_top = |line0: usize| origin.y + top_pad + line0 as f32 * lh;
-            let first = ((viewport.top() - top_pad) / lh).floor().max(0.0) as usize;
-            let last = (((viewport.bottom() - top_pad) / lh).ceil() as usize + 1).min(n_lines);
             let painter = ui.painter().clone();
+            // backgrounds go into this slot, under the text painted by the TextEdit below
+            let bg_slot = painter.add(egui::Shape::Noop);
 
-            // ---- backgrounds (under the text)
+            // ---- text
+            let text_rect = Rect::from_min_max(pos2(code_left, origin.y), pos2(all.right(), origin.y + content_h.max(viewport.height())));
+            let te = egui::TextEdit::multiline(&mut doc.text)
+                .id(id)
+                .font(font.clone())
+                .code_editor()
+                .frame(egui::Frame::NONE)
+                .background_color(Color32::TRANSPARENT)
+                .margin(Margin {
+                    left: 16,
+                    right: 16,
+                    top: top_pad as i8,
+                    bottom: top_pad as i8,
+                })
+                .desired_width(text_rect.width())
+                .min_size(text_rect.size())
+                .lock_focus(true)
+                .interactive(!read_only)
+                .layouter(&mut layouter);
+            let output = ui
+                .scope_builder(UiBuilder::new().max_rect(text_rect), |ui| te.show(ui))
+                .inner;
+            // geometry from the laid-out galley (exact, whatever margins egui applied)
+            let text_x = output.galley_pos.x;
+            let text_y = output.galley_pos.y;
+            let row_top = |line0: usize| text_y + line0 as f32 * lh;
+            let first = ((viewport.top() - (text_y - origin.y)) / lh).floor().max(0.0) as usize;
+            let last = (((viewport.bottom() - (text_y - origin.y)) / lh).ceil() as usize + 1).min(n_lines);
+
+            // ---- backgrounds
+            let mut bg: Vec<egui::Shape> = Vec::new();
             let cursor_line0 = view.cursor.0.saturating_sub(1) as usize;
             if te_focused && cursor_line0 < n_lines && exec_line != Some(view.cursor.0) {
                 let y = row_top(cursor_line0);
-                painter.rect_filled(
+                bg.push(egui::Shape::rect_filled(
                     Rect::from_min_max(pos2(code_left, y), pos2(all.right(), y + lh)),
                     0.0,
                     p.code_cursor_line,
-                );
+                ));
             }
             if let Some(l) = exec_line {
                 let l0 = l.saturating_sub(1) as usize;
                 if l0 < n_lines {
                     let y = row_top(l0);
-                    let band = Rect::from_min_max(pos2(code_left, y), pos2(all.right().max(viewport.right()), y + lh));
-                    painter.rect_filled(band, 0.0, p.code_current);
-                    painter.rect_filled(
+                    let band = Rect::from_min_max(pos2(code_left, y), pos2(all.right(), y + lh));
+                    bg.push(egui::Shape::rect_filled(band, 0.0, p.code_current));
+                    bg.push(egui::Shape::rect_filled(
                         Rect::from_min_max(band.min, pos2(band.left() + 3.0, band.bottom())),
                         0.0,
                         p.accent,
-                    );
+                    ));
                 }
             }
             for (k, m) in matches.iter().enumerate() {
@@ -292,36 +321,41 @@ impl<'a> CodeEditor<'a> {
                 }
                 let cols = visual_cols(&doc.text[m.clone()]);
                 let y = row_top(l0);
-                let x = code_left + 16.0 + c0 as f32 * char_w;
+                let x = text_x + c0 as f32 * char_w;
                 let r = Rect::from_min_size(pos2(x - 1.0, y + 1.0), vec2(cols as f32 * char_w + 2.0, lh - 2.0));
                 let on = k == current_match;
-                painter.rect(
+                bg.push(egui::Shape::Rect(egui::epaint::RectShape::new(
                     r,
                     CornerRadius::same(3),
                     if on { p.accent_bg } else { p.bg_selected },
                     if on { Stroke::new(1.0, p.accent) } else { Stroke::NONE },
                     egui::StrokeKind::Inside,
-                );
+                )));
             }
+            painter.set(bg_slot, egui::Shape::Vec(bg));
 
-            // ---- gutter
-            let gutter = Rect::from_min_max(origin, pos2(code_left, origin.y + content_h.max(viewport.height())));
-            let g_resp = ui.interact(gutter, id.with("gutter"), if bp_gutter { Sense::click() } else { Sense::hover() });
-            let g_label = format!("{} breakpoint gutter", doc.name);
-            g_resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &g_label));
-            let hover_line = g_resp
-                .hover_pos()
-                .map(|pt| ((pt.y - origin.y - top_pad) / lh).floor())
-                .filter(|l| *l >= 0.0 && (*l as usize) < n_lines)
-                .map(|l| l as u32 + 1);
-            if bp_gutter && g_resp.clicked()
-                && let Some(l) = hover_line
-            {
-                doc.toggle_breakpoint(l);
-                out.toggled_breakpoint = Some(l);
-            }
-            if bp_gutter && hover_line.is_some() {
-                g_resp.clone().on_hover_cursor(egui::CursorIcon::PointingHand);
+            // ---- gutter: one accessible target per visible line ("Breakpoint line 8")
+            let mut hover_line = None;
+            for l0 in first..last {
+                let y = row_top(l0);
+                let line = l0 as u32 + 1;
+                let lr = Rect::from_min_max(pos2(origin.x, y), pos2(code_left - 2.0, y + lh));
+                let lresp = ui.interact(lr, id.with(("gutter", l0)), if bp_gutter { Sense::click() } else { Sense::hover() });
+                if bp_gutter {
+                    let label = format!("Breakpoint line {line}");
+                    let on = doc.breakpoints.contains(&line);
+                    lresp.widget_info(|| egui::WidgetInfo::selected(egui::Role::CheckBox, true, on, &label));
+                }
+                if lresp.hovered() {
+                    hover_line = Some(line);
+                }
+                if bp_gutter && lresp.clicked() {
+                    doc.toggle_breakpoint(line);
+                    out.toggled_breakpoint = Some(line);
+                }
+                if bp_gutter {
+                    lresp.on_hover_cursor(egui::CursorIcon::PointingHand);
+                }
             }
             for l0 in first..last {
                 let y = row_top(l0);
@@ -350,29 +384,6 @@ impl<'a> CodeEditor<'a> {
                     );
                 }
             }
-
-            // ---- text
-            let text_rect = Rect::from_min_max(pos2(code_left, origin.y), pos2(all.right(), origin.y + content_h.max(viewport.height())));
-            let te = egui::TextEdit::multiline(&mut doc.text)
-                .id(id)
-                .font(font.clone())
-                .code_editor()
-                .frame(egui::Frame::NONE)
-                .background_color(Color32::TRANSPARENT)
-                .margin(Margin {
-                    left: 16,
-                    right: 16,
-                    top: top_pad as i8,
-                    bottom: top_pad as i8,
-                })
-                .desired_width(text_rect.width())
-                .min_size(text_rect.size())
-                .lock_focus(true)
-                .interactive(!read_only)
-                .layouter(&mut layouter);
-            let output = ui
-                .scope_builder(UiBuilder::new().max_rect(text_rect), |ui| te.show(ui))
-                .inner;
             let resp = &output.response;
             if resp.changed() {
                 out.changed = true;
@@ -420,8 +431,8 @@ impl<'a> CodeEditor<'a> {
                 let line_text = &doc.text[ls..le.max(ls)];
                 let (c_from, c_to) = squiggle_cols(line_text, d.col);
                 let y = row_top(l0) + lh - 3.0;
-                let x0 = code_left + 16.0 + c_from as f32 * char_w;
-                let x1 = code_left + 16.0 + c_to.max(c_from + 1) as f32 * char_w;
+                let x0 = text_x + c_from as f32 * char_w;
+                let x1 = text_x + c_to.max(c_from + 1) as f32 * char_w;
                 let c = diag_color(p, d.severity);
                 let mut pts = Vec::new();
                 let mut x = x0;
