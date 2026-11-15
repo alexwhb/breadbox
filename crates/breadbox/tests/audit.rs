@@ -738,3 +738,29 @@ fn world_panel_schedules_watering() {
         "the running world waters too"
     );
 }
+
+/// RF-8: radio annotations (`wifi: AT+CWJAP … → OK …`, `mqtt: PUB …`) appear in the serial
+/// monitor between the firmware's lines, and the "Radio annotations" toggle hides them.
+#[test]
+fn serial_monitor_radio_annotations_toggle() {
+    scratch();
+    let mut h = harness();
+    open_example(&mut h, "garden-node");
+    h.get_by_label("Run").click();
+    assert!(
+        wait_for(&mut h, 90.0, |h| has_label_containing(h, "mqtt: PUB garden/pot1")),
+        "no mqtt annotation"
+    );
+    assert!(has_label_containing(&h, "soil_raw="));
+    h.get_by_label("Radio annotations").click();
+    h.run_steps(3);
+    assert!(!has_label_containing(&h, "mqtt: PUB"), "annotations hidden");
+    assert!(!has_label_containing(&h, "wifi: "), "annotations hidden");
+    assert!(
+        wait_for(&mut h, 30.0, |h| has_label_containing(h, "soil_raw=")),
+        "firmware lines stay"
+    );
+    h.get_by_label("Radio annotations").click();
+    h.run_steps(3);
+    assert!(has_label_containing(&h, "mqtt: PUB"), "shown again");
+}
