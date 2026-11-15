@@ -480,3 +480,140 @@ fn share_bundle_exports_and_reopens() {
     assert!(!p.read_only, "an imported bundle is a normal project");
     let _ = std::fs::remove_dir_all(&tmp);
 }
+
+fn have_cxx() -> bool {
+    std::process::Command::new(std::env::var("BREADBOX_CXX").unwrap_or_else(|_| "clang++".into()))
+        .arg("--version")
+        .output()
+        .is_ok_and(|o| o.status.success())
+}
+
+#[test]
+fn esp32_host_board_runs_and_uploads_through_flash_host() {
+    if !have_cxx() {
+        eprintln!("skipping: no C++ compiler for API-level boards");
+        return;
+    }
+    let mut h = harness();
+    open_example(&mut h, "esp32-weather");
+    h.get_by_label("Run").click();
+    // the bench host-compiles the ESP32 sketch in the background and runs it
+    assert!(
+        wait_for(&mut h, 60.0, |h| h
+            .state()
+            .ctx
+            .bench
+            .serial
+            .iter()
+            .any(|l| l.kind == breadbox::bench::LineKind::Normal)),
+        "ESP32 serial never arrived: {:#?} events {:#?}",
+        h.state().ctx.bench.serial,
+        h.state().ctx.bench.events
+    );
+    // Firmware → Upload: Verify (host C++), then FlashHost into the running bench
+    h.state_mut()
+        .ctx
+        .navigate(breadbox::router::Route::Firmware);
+    h.run_steps(4);
+    h.get_by_label("Upload to sim").click();
+    assert!(
+        wait_for(&mut h, 240.0, |h| serial_has(h, "Loaded new sketch into")),
+        "FlashHost never reached the bench"
+    );
+}
+
+#[test]
+fn virtual_phone_connects_to_the_hm10_of_ble_button() {
+    let mut h = harness();
+    open_example(&mut h, "ble-button");
+    h.get_by_label("Run").click();
+    h.run_steps(2);
+    h.state_mut()
+        .ctx
+        .navigate(breadbox::router::Route::Firmware);
+    h.run_steps(4);
+    assert!(
+        wait_for(&mut h, 120.0, |h| h
+            .query_all_by_label_contains("Connect ")
+            .next()
+            .is_some()),
+        "the phone never saw an advertiser"
+    );
+    h.query_all_by_label_contains("Connect ")
+        .next()
+        .unwrap()
+        .click();
+    assert!(
+        wait_for(&mut h, 60.0, |h| has_label_containing(
+            h,
+            "Virtual phone · connected to"
+        )),
+        "phone did not connect"
+    );
+    screenshot(&mut h, "firmware-phone");
+}
+
+/// UI cost of the Workbench with garden-node running at 1× real time (`cargo test --release
+/// -p breadbox --test workbench -- --ignored perf --nocapture`).
+#[test]
+#[ignore]
+fn perf_workbench_frame_time_with_garden_node_running() {
+    let opts = breadbox::AppOptions {
+        sim_speed: breadbox::bench::SimSpeed::RealTime(1.0),
+        ..breadbox::AppOptions::test()
+    };
+    let mut h = app_harness(opts);
+    open_example(&mut h, "garden-node");
+    h.get_by_label("Run").click();
+    assert!(wait_for(&mut h, 60.0, |h| serial_has(h, "soil_raw=")));
+    // warm up, then time 300 frames (UI + layout + tessellation, as the app does per frame)
+    h.run_steps(30);
+    let t0 = std::time::Instant::now();
+    let sim0 = h.state().ctx.bench.sim_time;
+    let n = 300;
+    let mut worst = std::time::Duration::ZERO;
+    let mut total = std::time::Duration::ZERO;
+    let mut tris = 0usize;
+    for _ in 0..n {
+        let f = std::time::Instant::now();
+        h.run_steps(1);
+        // tessellate like the wgpu integration does every frame
+        let shapes = h.output().shapes.clone();
+        let prims = h.state().ctx.egui.tessellate(shapes, 1.0);
+        tris = prims
+            .iter()
+            .map(|p| match &p.primitive {
+                egui::epaint::Primitive::Mesh(m) => m.indices.len() / 3,
+                _ => 0,
+            })
+            .sum();
+        let e = f.elapsed();
+        total += e;
+        worst = worst.max(e);
+        // pace like a 60 Hz display
+        std::thread::sleep(std::time::Duration::from_millis(16).saturating_sub(f.elapsed()));
+    }
+    let wall = t0.elapsed().as_secs_f64();
+    let sim = (h.state().ctx.bench.sim_time - sim0).as_secs_f64();
+    let rt = h
+        .state_mut()
+        .ctx
+        .bench
+        .sim()
+        .and_then(|s| s.telemetry())
+        .map(|t| t.realtime_factor)
+        .unwrap_or(0.0);
+    let busy = wall - n as f64 * 0.016;
+    eprintln!(
+        "workbench: {n} frames in {wall:.2} s · CPU per frame avg {:.2} ms / worst {:.1} ms (≈ {:.0} fps headroom) · {tris} triangles · sim {sim:.2} s ({:.2}× real time, engine reports {rt:.2}×)",
+        total.as_secs_f64() * 1000.0 / n as f64,
+        worst.as_secs_f64() * 1000.0,
+        n as f64 / total.as_secs_f64(),
+        sim / wall
+    );
+    let _ = busy;
+    assert!(
+        sim / wall > 0.9,
+        "garden-node fell behind real time with the UI open"
+    );
+}

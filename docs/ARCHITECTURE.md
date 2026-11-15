@@ -657,8 +657,22 @@ project.rs           Project (project.json as plain JSON: name, mode, MCUs + ske
 toolchain.rs         ToolchainService: background detect, one-click install job, library list
 jobs.rs              Job<T> (thread + progress + cancel + repaint on change)
 bench/mod.rs         BenchLink trait + view models (the UI ↔ simulator contract, below)
+bench/sim.rs         SimBench: the default BenchLink over bb_sim::SimHandle (+ Workbench API)
+bench/audio.rs       AudioOut: buzzer PCM / relay clicks / pops through rodio on its own thread
 bench/avr.rs         AvrBench: BenchLink over bb_avr::Avr + bb_firmware::Debugger (+ ESP-01 radio)
 bench/service.rs     BenchService: owns the link, accumulates serial/debug/radio/pins/probes/events
+circuit.rs           CircuitDoc: the open project's bb_circuit Editor + library + cached
+                     connectivity / ERC-DRC, autosave; shared by Workbench, schematic, Pro
+export.rs            Share/export: .breadbox.zip bundle + import, .cir, BOM CSV, SVG → PNG
+canvas/pen.rs        View (pan/zoom, 100 % = 8 pt per 0.1"), Pen: world-unit drawing (shadows,
+                     gradients, deferred glows, beziers, scaled text)
+canvas/art/          procedural 2.5D art for every library bench art id (boards, breadboard,
+                     passives, modules, world objects, instruments); bounds; magic smoke
+canvas/scene.rs      Scene: parts in draw order, world leads/bounds, pin + hole spatial index
+canvas/bench.rs      BenchCanvas: the breadboard view (draw + every bench interaction)
+canvas/schematic.rs  Sheet (symbols, mirrored bench wiring, flags, junctions), SchDraw (egui +
+                     SVG backends), SchematicCanvas (Workbench + Pro → Schematic)
+canvas/instruments.rs  BenchInstrument trait + InstrumentRegistry (mini scope, DMM; plugins)
 widgets/             the kit (below)
 screens/mod.rs       default_registry() — the ONE place screens are registered
 screens/home.rs      Home (APP-2)
@@ -666,7 +680,11 @@ screens/placeholder.rs  slots for later phases
 screens/firmware/    mod.rs (screen), build.rs (staging + compile), debug_panel.rs,
                      radio_panel.rs (RF-7 panel, reusable), libraries.rs (library manager, installer)
 screens/pro/         mod.rs (Analysis tab), cards.rs (dot-card editing), model.rs (Results → view
-                     data), demo.rs (design netlist + stand-in subcircuits)
+                     data), demo.rs (design netlist + stand-in subcircuits), sync.rs (netlist
+                     synced from the circuit), schematic.rs (Pro → Schematic tab)
+screens/workbench/   mod.rs (screen: header, layout, status strip, rail), palette.rs, panels.rs
+                     (World / Instruments / Probes / Waveforms), inspector.rs, dock.rs (Serial
+                     monitor, Probes & power), share.rs (Share menu)
 ```
 
 **Router.** `Route::{Home, Workbench, Firmware, Pro(ProTab::{Schematic, Analysis, Pcb}),
@@ -751,7 +769,44 @@ limit)`; `SerialLine { target, time, text, kind: Normal|System|Net|Warn|Error }`
 targets, radios, repaint, speed }`; register the sim-backed one with
 `AppOptions::bench_factory` or `app.ctx.bench.set_factory(..)`.
 
-`AvrBench` (until bb-sim's link lands): one AVR target (UNO/Nano/Mega), fixed ADC voltages
+**SimBench** (`bench/sim.rs`, the default `BenchFactory`): spawns `SimHandle` for the open
+circuit (`BenchSpec::circuit`, the in-memory `CircuitDoc` project) with prebuilt firmware
+(`examples/fixtures/<sketch>.<board>.elf` or the project's `firmware.image`) so Run works at
+once; API-level boards are host-compiled in the background and the bench is rebuilt with their
+executables. `upload` sends `Flash` (AVR) or `FlashHost` (ESP32 / Pico), then a
+`Command::With` closure attaches a `bb_firmware::Debugger` (ELF) and syncs breakpoints on the
+engine thread; debug view models are built by more closures and come back over a channel;
+pauses are detected from `Telemetry::mcus[].paused`. `poll` also turns telemetry into the
+Pro bench-probe keys (`V(A1)`, `I(D1) avg`, `P(R2)`), `RadioTelemetry` into the Radios panel
+(+ virtual phone), device events into `BenchEvent`s and plays audio. Extra API for screens:
+`telemetry()`, `send(bb_sim::Command)`, `update_project` (electrical edits → `UpdateProject`,
+probe edits → `AddProbe`/`RemoveProbe`, instrument edits → `Instruments::set_instruments` +
+rebuild; a board added/removed respawns), `adopt_project` (live `SetPartParam` edits),
+`with_bench(closure)` (lessons, tests), `export_packet_log`. A watcher thread repaints ≤ 30 Hz
+while the bench changes and stays quiet when idle. Screens reach it with
+`app.sim()` / `app.bench.sim()` (`BenchLink::as_sim`).
+
+**CircuitDoc** (`AppCtx::circuit`): every circuit edit goes through `doc.editor`
+(`bb_circuit::edit::Editor`, undoable) followed by `doc.touched()` (autosave timer +
+schematic auto-placement of new parts). `AppCtx::sync_circuit` (end of every frame) pushes new
+revisions to the bench and autosaves user projects 1.2 s after the last edit (examples stay
+in memory; Save As writes the edited copy).
+
+**Workbench canvas contracts.** `BenchCanvas::show(ui, rect, doc, telemetry, generation) →
+BenchOutput { sim: Vec<Command>, selection_changed, live_edit }` (inputs and live parameters
+the screen forwards to the bench). Coordinates are bb-circuit bench units (0.1"); the view is
+stored in egui temp data under `Id::unique("bench-view")` (tests map pins to screen points).
+Palette tiles are egui DnD sources with `PartDrop(def_id)`; dropping snaps the first lead to
+the grid (`scene::snap_drop`). **Instrument hook:** `canvas::instruments::BenchInstrument`
+(`kind`, `view(def, telemetry) → InstrumentView`, optional `draw` to replace the part art with
+a front panel, `lead_pin`, `lead_color`, `tip_label`) registered in
+`BenchCanvas::instruments` (`InstrumentRegistry::register`); the mini scope and the DMM
+placeholder use it. Plugin panels (`PartTelemetry::panel`, `bb_plugin::panel`) plug in there.
+**Embedding the bench** (lesson canvas): a screen owns a `BenchCanvas` and calls
+`show(ui, rect, app.circuit, telemetry, app.project_generation)`, forwarding `BenchOutput::sim`
+to `app.sim()`; `SchematicCanvas::show` works the same way.
+
+`AvrBench` (kept for tests and boards-only use): one AVR target (UNO/Nano/Mega), fixed ADC voltages
 (soil 42 % → 1.88 V on A0, 180 lux → 2.60 V on A1), and — if the project has an `esp01` part —
 a `bb_radio::RadioSpace` ESP-01 on SoftwareSerial D2 (TX) / D3 (RX) via `UartWire`, exactly
 like the garden-node example. Upload without a toolchain falls back to the project's prebuilt
@@ -764,7 +819,12 @@ image / `examples/fixtures/<sketch>.<board>.elf`.
 breakpoints via `BenchLink::set_breakpoints`; pauses follow the executing line across tabs.
 Bottom tabs: Output · Serial monitor · Debug (call stack, variables, registers + SREG).
 
-**Pro → Analysis** (design screen 3): the netlist editor (SPICE highlighting, parse errors as
+**Pro → Analysis** (design screen 3): for a project with a circuit the netlist is **synced
+from the schematic** (`screens/pro/sync.rs`: bb-circuit's Pro netlist with world values as
+`.param`s and the MCU's outputs replayed from the live bench); edits that only change an R / C
+/ L value round-trip into the circuit, anything else detaches it (`project.spice.detached`,
+Re-sync button); the `.op` table's bench-probe column reads `SimBench`'s probe keys. The
+netlist editor (SPICE highlighting, parse errors as
 diagnostics, autosave for `analyses/*.cir`) feeds `model::run` on a job (`run_with` + cancel +
 progress). Breadbox-only parts the analog solver can't elaborate (`CAPSOIL`, `ATMEGA328P`) get
 stand-in subcircuits from `demo::STUB_PARTS` and their file-name parameters are stripped; in
@@ -775,7 +835,12 @@ inlined (ngspice-runnable); each plot exports CSV / PNG / SVG.
 **Tests** (`TEST-5`): `cargo test -p breadbox` — unit tests in modules, `tests/gui.rs` (the app
 driven by AccessKit labels through `egui_kittest` + wgpu; saves `docs/screenshots/*.png` at
 1440×900), `tests/widgets.rs` (widget behaviour + `tests/snapshots/widget-gallery.png`
-snapshot; `UPDATE_SNAPSHOTS=1` to refresh). GUI tests use `AppOptions::test()` (no persistence,
+snapshot; `UPDATE_SNAPSHOTS=1` to refresh), `tests/workbench.rs` (the Workbench on the real
+co-simulation: run + serial, World slider, palette drag-and-drop, wire drawing + ratsnest,
+inspector edits, undo/redo, LED burnout, upload on the live bench, ESP32 host board, virtual
+phone, Pro synced netlist + bench probes, Share + reopen; `--ignored perf` measures frame time
+with garden-node running). `BREADBOX_EXPORT_DIR` / `BREADBOX_PROJECTS_DIR` redirect Share and
+bundle imports in tests. GUI tests use `AppOptions::test()` (no persistence,
 no native menu, bench at max speed); compile tests skip gracefully without a toolchain.
 
 ## 9. Project file layout

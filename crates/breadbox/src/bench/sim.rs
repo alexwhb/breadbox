@@ -125,7 +125,19 @@ pub struct SimBench {
     last_status: String,
     host_build: Option<JoinHandle<()>>,
     host_notes: Arc<Mutex<Vec<BenchEvent>>>,
+    /// Host-compiled executables of API-level boards (part id → exe), loaded at spawn.
+    host_exes: HashMap<String, PathBuf>,
+    /// Executables the background build produced (picked up by `poll`).
+    host_ready: Arc<Mutex<Option<HashMap<String, PathBuf>>>>,
+    /// Prebuilt fixtures folder (respawns reuse it).
+    fixtures: Option<PathBuf>,
+    /// System lines to show with the next poll.
+    pending_serial: Vec<SerialLine>,
+    options: Option<OptionsHook>,
 }
+
+/// Adjusts `BenchOptions` before every (re)spawn (plugin device factories, services).
+pub type OptionsHook = Arc<dyn Fn(&mut BenchOptions) + Send + Sync>;
 
 const RECENT_EVENTS: usize = 200;
 
@@ -135,11 +147,24 @@ impl SimBench {
         Arc::new(|spec: &BenchSpec| Box::new(SimBench::new(spec)) as Box<dyn BenchLink>)
     }
 
+    /// A factory with a different parts library (plugin parts) and a hook that adjusts the
+    /// bench options (plugin device factories, services) — what the Plugins UI registers via
+    /// `app.ctx.bench.set_factory(..)`. Use the same library for `CircuitDoc::set_library`.
+    pub fn factory_with(lib: Arc<Library>, options: OptionsHook) -> BenchFactory {
+        Arc::new(move |spec: &BenchSpec| {
+            Box::new(SimBench::with(spec, lib.clone(), Some(options.clone()))) as Box<dyn BenchLink>
+        })
+    }
+
     /// Builds the bench for `spec` (paused). A circuit that cannot be simulated still yields
     /// a link: its error shows in the Workbench and every command is a no-op until an edit
     /// fixes the circuit.
     pub fn new(spec: &BenchSpec) -> SimBench {
-        let lib = Library::builtin();
+        SimBench::with(spec, Library::builtin(), None)
+    }
+
+    /// Builds the bench with a parts library and an options hook (see [`Self::factory_with`]).
+    pub fn with(spec: &BenchSpec, lib: Arc<Library>, options: Option<OptionsHook>) -> SimBench {
         let project = spec
             .circuit
             .clone()
@@ -178,6 +203,11 @@ impl SimBench {
             last_status: String::new(),
             host_build: None,
             host_notes: Arc::new(Mutex::new(Vec::new())),
+            host_exes: HashMap::new(),
+            host_ready: Arc::new(Mutex::new(None)),
+            fixtures: spec.fixtures.clone(),
+            pending_serial: Vec::new(),
+            options,
         };
         b.refresh_targets();
         b.spawn(spec.fixtures.as_deref());
@@ -228,7 +258,20 @@ impl SimBench {
     fn spawn(&mut self, fixtures: Option<&Path>) {
         self.watcher = None;
         self.handle = None;
+        let fixtures_owned = fixtures
+            .map(Path::to_path_buf)
+            .or_else(|| self.fixtures.clone());
+        let fixtures = fixtures_owned.as_deref();
         let mut opts = BenchOptions::default();
+        if let Some(hook) = &self.options {
+            hook(&mut opts);
+        }
+        opts.host_firmware = self.host_exes.clone();
+        for part in self.host_exes.keys() {
+            if let Some(st) = self.mcus.values_mut().find(|m| &m.part == part) {
+                st.flashed = true;
+            }
+        }
         // prebuilt images so Run works straight away (Upload replaces them)
         for p in &self.project.parts {
             let Some(def) = self.lib.get(&p.part) else {
@@ -258,7 +301,9 @@ impl SimBench {
                 ));
                 self.handle = Some(h);
                 self.build_error = None;
-                self.build_host_boards();
+                if self.host_exes.is_empty() {
+                    self.build_host_boards();
+                }
             }
             Err(e) => {
                 self.build_error = Some(e.to_string());
@@ -269,7 +314,6 @@ impl SimBench {
 
     /// Compiles API-level boards' sketches (ESP32 / Pico) in the background and loads them.
     fn build_host_boards(&mut self) {
-        let Some(h) = self.handle.clone() else { return };
         let Some(dir) = self.dir.clone() else { return };
         let hosts: Vec<_> = self
             .project
@@ -289,14 +333,15 @@ impl SimBench {
         }
         let lib = self.lib.clone();
         let notes = self.host_notes.clone();
+        let ready = self.host_ready.clone();
         let project = self.project.clone();
         self.host_build = std::thread::Builder::new()
             .name("host-build".into())
             .spawn(
                 move || match bb_sim::firmware::compile_host_project(&project, &dir, &lib) {
                     Ok(exes) => {
-                        for (part, exe) in exes {
-                            h.send(Command::FlashHost { part, exe });
+                        if let Ok(mut r) = ready.lock() {
+                            *r = Some(exes);
                         }
                     }
                     Err(e) => {
@@ -646,10 +691,42 @@ impl BenchLink for SimBench {
         let t0 = Instant::now();
         let first = !self.mcus.get(target).is_some_and(|m| m.flashed);
         if let Some(exe) = &fw.host_exe {
-            h.send(Command::FlashHost {
-                part: part.clone(),
-                exe: exe.clone(),
-            });
+            if self.host_exes.contains_key(&part) {
+                h.send(Command::FlashHost {
+                    part: part.clone(),
+                    exe: exe.clone(),
+                });
+            } else {
+                // the board was an idle placeholder: rebuild the bench around the new sketch
+                self.host_exes.insert(part.clone(), exe.clone());
+                self.spawn(None);
+                self.pending_serial.push(SerialLine {
+                    target: target.to_string(),
+                    time: SimTime::ZERO,
+                    text: format!("Loaded new sketch into {target} · board started"),
+                    kind: LineKind::System,
+                });
+            }
+            {
+                let st = self.mcus.entry(target.to_string()).or_default();
+                st.part = part.clone();
+                st.flashed = true;
+            }
+            self.set_running(true);
+            let elapsed = t0.elapsed().max(Duration::from_millis(10));
+            let report = UploadReport {
+                target: target.to_string(),
+                elapsed,
+                message: format!(
+                    "Loaded {} into {target} in {:.2} s · API-level board restarted",
+                    exe.file_name()
+                        .map(|s| s.to_string_lossy().into_owned())
+                        .unwrap_or_default(),
+                    elapsed.as_secs_f64()
+                ),
+            };
+            self.events.push(BenchEvent::Flashed(report.clone()));
+            return Ok(report);
         } else {
             let image = if let Some(elf) = &fw.elf {
                 bb_avr::FirmwareImage::from_elf(elf)
@@ -897,6 +974,18 @@ impl BenchLink for SimBench {
                 retain: false,
             },
             RadioCommand::MqttSubscribe(f) => R::ExplorerSubscribe(f),
+            RadioCommand::Phone(a) => {
+                use bb_sim::radio::PhoneCommand as P;
+                R::Phone(match a {
+                    PhoneAction::Connect(id) => P::Connect { id, pin: None },
+                    PhoneAction::Disconnect => P::Disconnect,
+                    PhoneAction::Read(handle) => P::Read { handle },
+                    PhoneAction::Subscribe(handle, on) => P::Subscribe { handle, on },
+                    PhoneAction::Write(handle, data) => P::Write { handle, data },
+                    PhoneAction::TerminalOpen => P::TerminalOpen,
+                    PhoneAction::TerminalSend(b) => P::TerminalSend(b),
+                })
+            }
         };
         self.send(Command::Radio(c));
     }
@@ -905,6 +994,18 @@ impl BenchLink for SimBench {
         let mut u = BenchUpdate::default();
         if let Ok(mut n) = self.host_notes.lock() {
             self.events.append(&mut n);
+        }
+        let ready = self.host_ready.lock().ok().and_then(|mut r| r.take());
+        if let Some(exes) = ready
+            && !exes.is_empty()
+        {
+            // API-level boards start as idle placeholders: rebuild with their sketches
+            self.host_exes.extend(exes);
+            let was_running = self.running;
+            self.spawn(None);
+            if was_running {
+                self.set_running(true);
+            }
         }
         let Some(h) = self.handle.clone() else {
             u.events = std::mem::take(&mut self.events);
@@ -931,11 +1032,9 @@ impl BenchLink for SimBench {
         u.running = self.running;
         u.sim_time = tel.time;
         // serial
-        u.serial = h
-            .serial_lines()
-            .into_iter()
-            .map(|l| self.convert_serial(l))
-            .collect();
+        u.serial = std::mem::take(&mut self.pending_serial);
+        u.serial
+            .extend(h.serial_lines().into_iter().map(|l| self.convert_serial(l)));
         // events + audio
         for e in h.events() {
             self.handle_event(&e);
@@ -1082,7 +1181,48 @@ pub fn radio_model(r: &bb_sim::RadioTelemetry) -> RadioPanelModel {
             dropped: e.dropped,
         })
         .collect();
+    let phone = PhoneModel {
+        scan: r
+            .phone
+            .scan
+            .iter()
+            .map(|d| PhoneDevice {
+                id: d.id,
+                name: d.name.clone(),
+                addr: d.addr.clone(),
+                rssi: d.rssi,
+            })
+            .collect(),
+        connected: r.phone.connected,
+        connected_name: r.phone.connected_name.clone(),
+        chars: r
+            .phone
+            .services
+            .iter()
+            .flat_map(|s| {
+                s.characteristics.iter().map(move |c| PhoneChar {
+                    service: s.uuid.clone(),
+                    handle: c.handle,
+                    uuid: c.uuid.clone(),
+                    props: c.props.clone(),
+                    value: c.value_text.clone(),
+                    notifying: c.notifying,
+                })
+            })
+            .collect(),
+        terminal: r.phone.terminal.clone(),
+        log: r
+            .phone
+            .log
+            .iter()
+            .rev()
+            .take(20)
+            .rev()
+            .map(|l| l.text.clone())
+            .collect(),
+    };
     let ble = (r.has_ble || cards.iter().any(|c| c.kind == RadioKind::Ble)).then(|| BleView {
+        phone: Some(phone),
         devices: if r.phone.scan.is_empty() {
             cards
                 .iter()

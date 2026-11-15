@@ -74,6 +74,13 @@ impl CircuitDoc {
         }
     }
 
+    /// Replaces the parts library (plugin parts); caches are recomputed.
+    pub fn set_library(&mut self, lib: Arc<Library>) {
+        self.lib = lib;
+        self.conn = None;
+        self.checks = None;
+    }
+
     pub fn project(&self) -> &Project {
         &self.editor.project
     }

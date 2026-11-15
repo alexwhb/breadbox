@@ -623,6 +623,7 @@ impl Worker {
                     .explorer_publish(&topic, payload.as_bytes(), 0, false);
             }
             RadioCommand::MqttSubscribe(f) => r.space.explorer_subscribe(&f),
+            RadioCommand::Phone(_) => {}
         }
     }
 

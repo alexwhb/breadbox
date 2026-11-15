@@ -404,6 +404,96 @@ Notes / deviations:
 - egui_plot draws the plot area; overlays (cursors, markers, threshold labels) are painted on
   top. The design's `.op` "bench probe" values need the live bench (phase 4).
 
+### ui-bench
+Phase 4 — the Workbench, breadboard + schematic canvases, `SimBench`, Pro → Schematic, Pro
+netlist sync + bench probes, Share/export. Module map + contracts: ARCHITECTURE §8.
+Screenshots (1440×900, rendered by `tests/workbench.rs`): `docs/screenshots/{workbench,
+workbench-schematic,workbench-edit,workbench-smoke,pro-schematic,pro-analysis-synced,
+firmware-phone}.png`.
+
+- `SimBench` **done** — the app's default `BenchLink` over `bb_sim::SimHandle`: prebuilt
+  firmware at start (Run works without the toolchain), Upload → `Flash` (AVR) / `FlashHost`
+  (ESP32 / Pico; host-compiled in the background, bench rebuilt around the executable), source
+  debugger attached + breakpoints synced on the engine thread (`Command::With`), step / pause /
+  continue, per-MCU debug + serial (`MCU-5`, `MCU-7`), Radios panel + virtual phone from
+  `RadioTelemetry` (`RF-6/7`), probe keys for the Pro bench column (`PRO-4`), device events →
+  output/toasts, buzzer PCM + relay clicks via `rodio`, idle-quiet repaint watcher. Circuit
+  edits flow in via `update_project` (electrical → `UpdateProject`, probes → `Add/RemoveProbe`,
+  instruments → `set_instruments` + rebuild, live props → `SetPartParam`) keeping MCU/world
+  state (`SIM-7`). `AvrBench` stays for tests.
+- `WB-1` **done** — header: Breadboard ⇄ Schematic, Run/Pause (amber), `t = mm:ss.mmm`, speed
+  menu (0.1×…Max), status dot (running / paused / stopped / error), Share.
+- `WB-2` **done** — palette: Simple (25 tiles by category) / Advanced (all parts by category,
+  part numbers, filter chips), search, hover descriptions, drag tiles onto the bench (egui DnD,
+  ghost preview with the holes it lands in) or click-then-place.
+- `WB-3` **done** — 2.5D bench art for every `Library::builtin()` art id (UNO/Nano/Mega/ESP32/
+  Pico with labelled headers and live ON/L/TX/RX LEDs, 830/400 breadboards with rails + numbers,
+  resistors with live colour bands, LEDs/RGB with bloom ∝ current, caps, DIP ICs, ESP-01,
+  HM-10/HC-05, sensors, LCD + OLED framebuffers, 7-seg, bar graph, NeoPixels, buzzer waves,
+  motor/servo/stepper angles, relay, draggable pot knob, pressable buttons, batteries, USB, pot
+  of soil with plant + sensor depth, mini scope with live trace, DMM); soft shadows, gradients,
+  night dimming with ambient light; zoom (⌘-scroll / pinch, 25–400 %, readout), pan (scroll,
+  space- / middle-drag), `.dots` grid.
+- `WB-4` **done** — jumper wires from any pin/hole to any pin/hole (press-origin snapping),
+  sagging beziers with shadow + highlight + plug ends, auto colours (red +, black GND), colour
+  picker (inspector + context menu), bend points (double-click add/remove, drag), delete, net
+  highlight on hover.
+- `WB-5` **done** — select / ⇧ / box select, move with 0.1" snapping, R / F / ⌫ / ⌘D / ⌘C /
+  ⌘V / arrows, undo/redo through `Editor` (⌘Z / ⌘⇧Z), inline properties in the inspector
+  (E-series stepping, colour bands update live).
+- `WB-6` **done** — floating probe labels with live values (leaders to the nearest point of the
+  probed net), probe tool, hover tooltips with net voltage + LED current.
+- `WB-7` **done** — schematic view + Pro → Schematic: ANSI / IEC symbols for every symbol id,
+  designators + values, bench wiring mirrored as orthogonal routes, power / ground flags, net
+  labels for long nets, junction dots, live value chips, ERC line + title block; editing (move,
+  rotate, draw orthogonal wires, delete) through the shared model; auto-placement of new parts;
+  ratsnest both ways. garden-node's sheet laid out like the design.
+- `WB-8…12` **done** — right rail + collapsible panels (World with stop sliders, evaporation
+  rate, day/night + location picker, noise, water, humidity + time-warp under "More settings";
+  Instruments with add/remove + "Clip CH1/+/COM" probe clipping; Probes with min/max/avg;
+  Inspector with datasheet fields, live readings, editable params, health, Repair all;
+  Waveforms with the scope screen + timebase/V-div), bottom dock (Serial monitor: colour-coded
+  timestamped lines, port label with the standard baud, per-MCU tabs, send box, line ending,
+  baud, Clear, autoscroll, radio annotations; Probes & power: probe cards, rails, total draw,
+  dissipation table, USB budget bar), status strip (bench summary, ERC/DRC click-to-list → select
+  parts, zoom menu).
+- `WB-13` **done** — LED bloom ∝ current (perceptual), RGB mixing, buzzer audio + waves, motors
+  / servos / steppers move, LCD/OLED framebuffers, 7-seg, relay clicks, magic smoke (top layer)
+  + damage badges, Repair all.
+- `PRO-1/2` **done** — Pro → Schematic tab (net list with live values, ANSI/IEC, SVG/PNG/
+  .cir/BOM export); Pro → Analysis "synced from schematic" (world values as `.param`s so
+  `.dc lux` / `.step` act on the parts, MCU outputs replayed from the bench), value edits
+  round-trip, other edits detach with Re-sync; bench-probe column live (`PRO-4`).
+- `PRJ-5` **done** (Gerbers are the PCB agent's) — `.breadbox.zip` (+ opening bundles from
+  Open / `open_path`), `.cir`, BOM CSV, schematic SVG + PNG (resvg with the bundled fonts), bench
+  PNG (viewport screenshot crop).
+- Instrument hook + embedding — `canvas::instruments::{BenchInstrument, InstrumentRegistry}`
+  (mini scope + DMM go through it); `BenchCanvas` / `SchematicCanvas` are embeddable widgets;
+  `SimBench::factory_with(library, options_hook)` + `CircuitDoc::set_library` take plugin parts
+  and device factories.
+- `TEST-5` — `cargo test -p breadbox`: 67 unit, 12 GUI (`tests/gui.rs`), 8 widget, 10
+  workbench (`tests/workbench.rs`: garden-node run + serial + J1 inspector; schematic toggle +
+  Pro schematic; palette drag + jumper wire + ratsnest + undo/redo + inspector 4k7 + colour
+  bands; soil slider → `moisture=0%`; LED on the rail burns out with smoke; Firmware upload on
+  the live bench + Pro synced netlist + bench probes; ESP32 host board + FlashHost; virtual
+  phone connects to the HM-10; Share bundle/.cir/BOM/SVG/PNG + reopen; perf, ignored).
+  clippy `-D warnings` + fmt clean.
+- Perf (`cargo test --release -p breadbox --test workbench -- --ignored perf --nocapture`, M3
+  Max): Workbench with garden-node running at 1×: **0.65 ms CPU per frame** (UI + tessellation,
+  worst 1.0 ms, ≈ 41 k triangles) — far inside 60 fps; the bench holds **1.00× real time**.
+
+Deviations / notes:
+- The bench is drawn flat 2.5D (no CSS-style perspective tilt): parts stand up off the board,
+  shadows/gradients give the depth.
+- Changes outside my paths (small, committed alone): `bb_sim::Instruments::set_instruments`
+  (additive); garden-node schematic placements in `bb-circuit/examples/write_examples.rs` +
+  `examples/garden-node/project.json`. ui-core's `tests/gui.rs` updated where it asserted the
+  old placeholders / the ideal-5 V demo netlist.
+- `Cargo.lock` carries both my deps (rodio/cpal, zip, resvg, crossbeam-channel) and the plugins
+  agent's; left for whoever commits the lock next.
+- Open: Logic analyzer / bench supply / function generator panels render through the
+  instrument hook once the plugins UI registers them; PCB (`PRO-7`) and Gerbers are phase 4b.
+
 ### plugins
 Phase 3 — radio/host-board glue, `bb-plugin`, `bb-plugin-sdk`, first-party plugins, `bb-lessons`.
 (In progress — lessons next.)

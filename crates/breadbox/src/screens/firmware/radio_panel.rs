@@ -15,12 +15,15 @@ pub struct RadioPanelState {
     pub drop_ap: bool,
     pub bridge: bool,
     pub bridge_addr: String,
+    /// Virtual-phone terminal input.
+    pub phone_input: String,
     synced: bool,
 }
 
 impl Default for RadioPanelState {
     fn default() -> Self {
         RadioPanelState {
+            phone_input: String::new(),
             latency: 40.0,
             loss: 2.0,
             drop_ap: false,
@@ -191,16 +194,21 @@ pub fn radio_panel(
                             .color(p.text),
                     );
                 });
-                for (name, status) in &ble.devices {
-                    ui.horizontal(|ui| {
-                        Icon::Phone.show(ui, 14.0, p.text_muted);
-                        ui.label(
-                            egui::RichText::new(name)
-                                .font(font::mono(12.0))
-                                .color(p.text),
-                        );
-                        widgets::tag(ui, status, Tone::Neutral);
-                    });
+                match &ble.phone {
+                    Some(phone) => cmds.extend(phone_ui(ui, p, phone, &mut st.phone_input)),
+                    None => {
+                        for (name, status) in &ble.devices {
+                            ui.horizontal(|ui| {
+                                Icon::Phone.show(ui, 14.0, p.text_muted);
+                                ui.label(
+                                    egui::RichText::new(name)
+                                        .font(font::mono(12.0))
+                                        .color(p.text),
+                                );
+                                widgets::tag(ui, status, Tone::Neutral);
+                            });
+                        }
+                    }
                 }
             });
         }
@@ -217,6 +225,133 @@ pub fn radio_panel(
             }
         }
     }
+    cmds
+}
+
+/// The virtual phone: scan list, the connected device's GATT table, the BLE serial terminal.
+fn phone_ui(
+    ui: &mut Ui,
+    p: &Palette,
+    phone: &crate::bench::PhoneModel,
+    input: &mut String,
+) -> Vec<RadioCommand> {
+    use crate::bench::PhoneAction;
+    let mut cmds = Vec::new();
+    ui.horizontal(|ui| {
+        Icon::Phone.show(ui, 14.0, p.text_muted);
+        let title = match &phone.connected_name {
+            Some(n) => format!("Virtual phone · connected to {n}"),
+            None => "Virtual phone · scanning".to_string(),
+        };
+        ui.label(
+            egui::RichText::new(title)
+                .font(font::ui(12.0))
+                .color(p.text_muted),
+        );
+    });
+    if phone.connected.is_none() {
+        if phone.scan.is_empty() {
+            ui.label(
+                egui::RichText::new("No advertisers in range.")
+                    .font(font::ui(12.0))
+                    .color(p.text_faint),
+            );
+        }
+        for d in &phone.scan {
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new(format!("{} · {} dBm", d.name, d.rssi))
+                        .font(font::mono(12.0))
+                        .color(p.text),
+                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if Btn::mini(&format!("Connect {}", d.name)).show(ui).clicked() {
+                        cmds.push(RadioCommand::Phone(PhoneAction::Connect(d.id)));
+                    }
+                });
+            });
+        }
+        return cmds;
+    }
+    ui.horizontal(|ui| {
+        if Btn::mini("Disconnect").show(ui).clicked() {
+            cmds.push(RadioCommand::Phone(PhoneAction::Disconnect));
+        }
+        if Btn::mini("Open terminal").show(ui).clicked() {
+            cmds.push(RadioCommand::Phone(PhoneAction::TerminalOpen));
+        }
+    });
+    for c in &phone.chars {
+        let short = c.uuid.chars().take(8).collect::<String>();
+        ui.label(
+            egui::RichText::new(format!("{short} · {}", c.props.join(" / ")))
+                .font(font::mono(11.0))
+                .color(p.text_muted),
+        );
+        ui.horizontal(|ui| {
+            let v = if c.value.is_empty() {
+                "—"
+            } else {
+                c.value.as_str()
+            };
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(v)
+                        .font(font::mono(12.0))
+                        .color(p.accent_soft),
+                )
+                .truncate(),
+            );
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if c.props.iter().any(|x| x.contains("notify"))
+                    && Btn::mini(if c.notifying { "Stop" } else { "Notify" })
+                        .show(ui)
+                        .clicked()
+                {
+                    cmds.push(RadioCommand::Phone(PhoneAction::Subscribe(
+                        c.handle,
+                        !c.notifying,
+                    )));
+                }
+                if c.props.iter().any(|x| x.contains("read"))
+                    && Btn::mini("Read").show(ui).clicked()
+                {
+                    cmds.push(RadioCommand::Phone(PhoneAction::Read(c.handle)));
+                }
+            });
+        });
+    }
+    if !phone.terminal.is_empty() {
+        let tail: String = phone
+            .terminal
+            .chars()
+            .rev()
+            .take(400)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect();
+        ui.label(
+            egui::RichText::new(tail)
+                .font(font::mono(11.5))
+                .color(p.text_dim),
+        );
+    }
+    ui.horizontal(|ui| {
+        let te = ui.add(
+            egui::TextEdit::singleline(input)
+                .hint_text("Send over BLE…")
+                .desired_width(ui.available_width() - 70.0)
+                .font(font::mono(12.0)),
+        );
+        te.widget_info(|| egui::WidgetInfo::labeled(egui::Role::TextInput, true, "Phone terminal"));
+        let enter = te.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+        if (Btn::mini("Send").show(ui).clicked() || enter) && !input.is_empty() {
+            let mut b = std::mem::take(input).into_bytes();
+            b.extend_from_slice(b"\r\n");
+            cmds.push(RadioCommand::Phone(PhoneAction::TerminalSend(b)));
+        }
+    });
     cmds
 }
 

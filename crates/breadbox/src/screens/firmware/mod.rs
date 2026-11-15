@@ -377,10 +377,28 @@ impl FirmwareScreen {
             return;
         };
         if t.fqbn.is_none() {
-            self.output.push(OutputLine::new(
-                LineTone::Note,
-                format!("{} runs API-level firmware on the Workbench bench (bb-sim). Verify compiles it here.", t.label),
-            ));
+            // API-level boards (ESP32 / Pico): host-compile, then load the executable
+            let versions = self
+                .sketch
+                .as_ref()
+                .map(|s| s.versions())
+                .unwrap_or_default();
+            let exe = self
+                .builds
+                .get(&t.id)
+                .filter(|b| b.versions == versions)
+                .and_then(|b| b.result.host_exe.clone());
+            match exe {
+                Some(exe) => {
+                    let fw = Firmware {
+                        origin: format!("host build {}", exe.display()),
+                        host_exe: Some(exe),
+                        ..Default::default()
+                    };
+                    self.flash(app, &t.id, fw);
+                }
+                None => self.start_verify(app, true),
+            }
             return;
         }
         let versions = self

@@ -143,6 +143,20 @@ pub enum RadioCommand {
         payload: String,
     },
     MqttSubscribe(String),
+    /// The virtual phone (BLE central, `RF-6`).
+    Phone(PhoneAction),
+}
+
+/// Virtual-phone actions.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PhoneAction {
+    Connect(u32),
+    Disconnect,
+    Read(u16),
+    Subscribe(u16, bool),
+    Write(u16, Vec<u8>),
+    TerminalOpen,
+    TerminalSend(Vec<u8>),
 }
 
 /// Colour class of a serial-monitor line (`WB-11`).
@@ -390,6 +404,40 @@ impl Default for NetConditionsView {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct BleView {
     pub devices: Vec<(String, String)>,
+    /// The virtual phone (co-simulation benches).
+    pub phone: Option<PhoneModel>,
+}
+
+/// One advertiser in the phone's scan list.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PhoneDevice {
+    pub id: u32,
+    pub name: String,
+    pub addr: String,
+    pub rssi: i32,
+}
+
+/// A GATT characteristic of the connected device.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PhoneChar {
+    pub service: String,
+    pub handle: u16,
+    pub uuid: String,
+    pub props: Vec<String>,
+    pub value: String,
+    pub notifying: bool,
+}
+
+/// What the virtual phone shows (`RF-6`).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct PhoneModel {
+    pub scan: Vec<PhoneDevice>,
+    pub connected: Option<u32>,
+    pub connected_name: Option<String>,
+    pub chars: Vec<PhoneChar>,
+    /// Bluetooth-serial terminal text (HM-10 / Nordic UART / SPP).
+    pub terminal: String,
+    pub log: Vec<String>,
 }
 
 /// Everything the Radios panel shows.
@@ -458,6 +506,7 @@ impl RadioPanelModel {
             .iter()
             .any(|c| c.kind == RadioKind::Ble)
             .then(|| BleView {
+                phone: None,
                 devices: cards
                     .iter()
                     .filter(|c| c.kind == RadioKind::Ble)

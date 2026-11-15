@@ -65,6 +65,8 @@ pub struct BuildResult {
     pub diagnostics: Vec<(String, EditorDiagnostic)>,
     /// AVR output (ELF/HEX for upload).
     pub avr: Option<Arc<BuildOutput>>,
+    /// Host-compiled executable (ESP32 / Pico, API-level) for `FlashHost`.
+    pub host_exe: Option<PathBuf>,
     pub debug: bool,
     pub duration: std::time::Duration,
 }
@@ -135,6 +137,7 @@ pub fn run_build(key: &str, req: &BuildRequest) -> BuildResult {
                         debug: req.debug,
                         duration: t0.elapsed(),
                         avr: Some(Arc::new(out)),
+                        host_exe: None,
                     }
                 }
                 Err(e) => failed(e.to_string(), req.debug),
@@ -174,6 +177,7 @@ pub fn run_build(key: &str, req: &BuildRequest) -> BuildResult {
                         lines,
                         diagnostics: map_diags(&b.diagnostics),
                         avr: None,
+                        host_exe: b.exe.clone().filter(|_| b.success),
                         debug: req.debug,
                         duration: t0.elapsed(),
                     }
@@ -190,6 +194,7 @@ fn failed(msg: String, debug: bool) -> BuildResult {
         lines: vec![OutputLine::new(LineTone::Error, msg)],
         diagnostics: Vec::new(),
         avr: None,
+        host_exe: None,
         debug,
         duration: Default::default(),
     }
