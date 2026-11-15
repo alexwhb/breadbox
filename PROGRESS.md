@@ -21,8 +21,8 @@ reviews and integrates between phases. Agents update **only their own section** 
 
 - (lead) Toolchain installer must work on Apple Silicon without Rosetta (avr-gcc 7.3.0 + ctags are x86_64-only) → assigned to `radio` in phase 2.
 
-- (sim → plugins/radio glue) Replace the `esp01` / `hm10` / `hc05` factories in `bb_sim::DeviceRegistry` with devices that bridge `UartPort` to `bb_radio::RadioSpace` modules (`UartWire`), and register a `BenchOptions::services` factory that builds `bb_sim::RadioService` from the project's `radios` settings (host boards get `add_host`). Today those parts run `bb_sim::devices::AtStub` (enough for garden-node / ble-button AT flows, no real network).
-- (sim → plugins) Wasm parts plug in as `DeviceRegistry::register(id, factory)` + `Library::add_json(part file)`; plugin instruments can use `Bench::add_load` / `remove_load` (R‖C between two nets) and `Bench::readings`.
+- ~~(sim → plugins/radio glue) Replace the `esp01` / `hm10` / `hc05` factories …~~ **done** (plugins): `bb_sim::devices::RadioModule` bridges ESP-01 / HM-10 / HC-05 / RYLR896 pins to the real modems; `BenchOptions::default().services` holds `bb_sim::radio::service_factory()` (RadioService from `project.radios`); host boards get a radio on first use. See `### plugins`.
+- ~~(sim → plugins) Wasm parts plug in as `DeviceRegistry::register` + `Library::add_json` …~~ **done** (plugins): `bb_plugin::PluginHost` does exactly that; plugin instruments load the circuit through their part's SPICE template (ext-controlled elements, `inject:load`), `Bench::add_load` stays for non-part probe leads.
 
 ## Status
 
@@ -403,3 +403,55 @@ Notes / deviations:
   arduino-cli version instead (true for this app).
 - egui_plot draws the plot area; overlays (cursors, markers, threshold labels) are painted on
   top. The design's `.op` "bench probe" values need the live bench (phase 4).
+
+### plugins
+Phase 3 — radio/host-board glue, `bb-plugin`, `bb-plugin-sdk`, first-party plugins, `bb-lessons`.
+(In progress — lessons next.)
+
+- Radio glue **done** — `bb_sim::devices::RadioModule` (esp01/hm10/hc05/rylr896: UART pins
+  decoded with exact bit timing following the module's baud, TX frames as Thevenin edges,
+  VCC/EN/RST/KEY/STATE pins, AtStub fallback without a radio service); `bb_sim::radio::
+  RadioService` (+ `service_factory()` in `BenchOptions::default()`, `ProjectRadios` =
+  `project.radios` incl. `bench_pos`, default floor plan reads `-54 dBm (3.2 m, 1 wall)`);
+  annotations routed to the serial monitor of the MCU wired to the radio; host boards: Wire →
+  `Device::i2c_transfer` (BME280, SSD1306, PCF8574 LCD), SPI → `Device::spi_transfer` (74HC595),
+  Serial1/2 as real UART waveforms on their pins.
+- `PLUG-1/2/7` **done** (engine) — see ARCHITECTURE §7. `PLUG-3` SDK **done** (docs in progress).
+  `PLUG-5` **done** — 7 first-party plugins built to wasm and committed + 5 SDK examples.
+
+APIs for the UI (details in ARCHITECTURE §6c/§7):
+- Radios panel / phone: `Telemetry.radio: Option<RadioTelemetry>` (cards, packet log rows,
+  conditions, APs, `has_ble` empty state, phone scan/services/log/terminal, MQTT explorer
+  rows, LAN bridge status) and `Command::Radio(RadioCommand::{SetConditions,
+  SetAccessPoints, SetLanBridge, SetBenchPos, ApplySettings, ExplorerSubscribe/Unsubscribe/
+  Publish, ClearLog, Phone(PhoneCommand::{Connect, Disconnect, Read, Write, Subscribe,
+  TerminalOpen, TerminalSend})})`; `Command::ExportPacketLog { format: "pcapng"|"csv",
+  reply }`; `Command::With(BenchFn)` runs a closure on the engine thread.
+- Plugins screen: `Registry::open_default()` → `catalog()` (cards with status Installed /
+  Available / UpdateAvailable / Disabled / NeedsApproval / Planned / Error, chip, category,
+  permissions), `get(id)` → `Plugin { manifest, root, manifest_text(), asset(path) }`,
+  `package::inspect(bytes)` (permission prompt: `Permission::describe()`),
+  `install_package/install_file/install_bundled(id, granted)`, `load_local(dir, granted)`,
+  `uninstall`, `set_enabled`, `grant`, `check_changes()` (hot reload; then rebuild the host and
+  send the sim a reset with the new library/options).
+- Bench integration: `PluginHost::new(&mut registry, project_dir)` → `library()`,
+  `bench_options()` / `apply(&mut opts)`; `instruments()` (part to place, `Panel`, art);
+  `panel_for_part(def)`; `asset_path("plugin://id/file.svg")` for part art;
+  `host::loading_callout(&mut bench, part)` (design callout text); `themes()`,
+  `lesson_dirs()`, `analyses()` + `run_analysis(id, netlist, options)`.
+- Instrument panels: static `bb_plugin::panel::Panel` (display, button, rotary, knob, switch,
+  jack, led, screen, label; mm coordinates) + live `PartTelemetry.panel` (`PanelState`:
+  displays text/unit/annunciators/bar, leds, screens traces/markers/header/cursors, controls,
+  readouts). Controls → `Command::Input { part, input: UserInput::Value { key: <control id>,
+  value } }` (rotary/switch = index, knob = value, button = 1).
+
+Tests so far: bb-plugin 7 unit + sandbox 6 + registry 4 + dmm 4 + instruments 4 + packs 8;
+bb-sim + radio 5 + host_bridges 4; bb-spice +1 (watch mid-trail).
+
+Changes outside my crates (all tests green): bb-core additive hooks (`DeviceCtx::service /
+capture / samples`, `Device::i2c_transfer / spi_transfer / panel`); bb-sim (radio, captures,
+world-model factories, `what_if_ext`, device wakes survive rebuilds, end-of-interval
+integration + 1 µs settle sync after MCU edges on analog nets, 10 µs analog max step);
+bb-radio (pending station events / gateway downlinks wake the space, AT parser byte-safe);
+bb-spice (watch added mid-trail no longer panics); bb-world (`<pot>.evaporation_scale`);
+capsoil v1.2 output resistance 2.2 kΩ (design's −0.4 mV meter load).
