@@ -353,3 +353,82 @@ fn servo_sweep_angles_follow_the_pulses() {
         other => panic!("{other:?}"),
     }
 }
+
+/// SIM-6 / WB-13: an MCU pin sourcing more than its 40 mA rating is flagged (stress), and a
+/// pin shorted to GND is destroyed (damage event, serial warning) while the rest of the board
+/// keeps running. Firmware: the real blink sketch (D13 high every other second).
+#[test]
+fn mcu_pin_over_40ma_is_stressed_and_a_short_destroys_it() {
+    use bb_circuit::PropValue;
+    let lib = lib();
+    // D13 → 68 Ω → GND: ≈ 5 V / (25 + 68) Ω ≈ 50 mA while high — over the rating, not fatal
+    let (mut b, u1, _bb) = uno_bench(&lib, "pin-50ma");
+    let r = b.offboard(
+        "resistor",
+        "R1",
+        40.0,
+        30.0,
+        &[("resistance", PropValue::Num(68.0))],
+    );
+    b.wire((&u1, "D13"), (&r, "1"), "orange");
+    b.wire((&r, "2"), (&u1, "GND"), "black");
+    let mut bench = start(b.finish(), &[(&u1, "blink")]);
+    bench.run_until(SimTime::from_ms(2500)).unwrap();
+    let ev = bench.take_events();
+    assert!(
+        ev.iter().any(|e| matches!(&e.event, DeviceEvent::Stress { reason } if reason.contains("pin D13 over 40 mA"))),
+        "{ev:?}"
+    );
+    assert!(
+        !ev.iter().any(|e| matches!(e.event, DeviceEvent::Damage { .. })),
+        "{ev:?}"
+    );
+    // D13 straight to GND: the pin burns out
+    let (mut b, u1, _bb) = uno_bench(&lib, "pin-short");
+    b.wire((&u1, "D13"), (&u1, "GND"), "black");
+    let mut bench = start(b.finish(), &[(&u1, "blink")]);
+    bench.run_until(SimTime::from_ms(2500)).unwrap();
+    let ev = bench.take_events();
+    assert!(
+        ev.iter().any(|e| matches!(&e.event, DeviceEvent::Damage { reason } if reason.contains("pin D13 destroyed"))),
+        "{ev:?}"
+    );
+    let warned = bench
+        .serial_mut(&u1)
+        .is_some_and(|s| s.take_new().iter().any(|l| l.text.contains("pin D13 destroyed")));
+    assert!(warned, "serial monitor warns");
+}
+
+/// SIM-6 / WB-13: an electrolytic capacitor wired backwards across 5 V pops (damage + sound)
+/// and stays damaged.
+#[test]
+fn reversed_electrolytic_pops() {
+    use bb_circuit::PropValue;
+    let lib = lib();
+    let (mut b, u1, _bb) = uno_bench(&lib, "reverse-cap");
+    let c = b.offboard(
+        "capacitor_electrolytic",
+        "C1",
+        40.0,
+        30.0,
+        &[("capacitance", PropValue::Num(100e-6))],
+    );
+    // + to GND, − to 5 V
+    b.wire((&c, "plus"), (&u1, "GND"), "black");
+    b.wire((&c, "minus"), (&u1, "5V"), "red");
+    let mut bench = start(b.finish(), &[]);
+    bench.run_until(SimTime::from_ms(500)).unwrap();
+    let ev = bench.take_events();
+    assert!(
+        ev.iter().any(|e| matches!(&e.event, DeviceEvent::Damage { reason } if reason.contains("electrolytic reversed"))),
+        "{ev:?}"
+    );
+    assert!(
+        ev.iter()
+            .any(|e| matches!(e.event, DeviceEvent::Sound(bb_core::Sound::Pop))),
+        "pop"
+    );
+    assert!(bench.health(&c).is_damaged(), "{:?}", bench.health(&c));
+    bench.run_until(SimTime::from_ms(1000)).unwrap();
+    assert!(bench.health(&c).is_damaged(), "stays damaged");
+}
