@@ -13,6 +13,305 @@ use std::fmt::Write as _;
 
 /// Solder-mask opening around pads (mm).
 pub const MASK_EXPANSION: f64 = 0.05;
+/// Silkscreen line width (mm).
+pub const SILK_WIDTH: f64 = 0.15;
+/// Height of reference designators on the silkscreen (mm).
+pub const REF_HEIGHT: f64 = 1.0;
+
+/// Where a part's reference designator goes: top-left of its courtyard (where the PCB screen
+/// shows it), board coordinates (mm, y down).
+pub fn reference_anchor(pl: &Placed) -> (f64, f64) {
+    let bb = pl.bounds();
+    (bb.0 + 0.4, bb.1 + 0.2)
+}
+
+/// One glyph of the silkscreen stroke font: polylines on a 4 × 6 grid (x right, y down).
+fn glyph(c: char) -> &'static [&'static [(f64, f64)]] {
+    match c.to_ascii_uppercase() {
+        '0' => &[
+            &[
+                (1.0, 0.0),
+                (3.0, 0.0),
+                (4.0, 1.0),
+                (4.0, 5.0),
+                (3.0, 6.0),
+                (1.0, 6.0),
+                (0.0, 5.0),
+                (0.0, 1.0),
+                (1.0, 0.0),
+            ],
+            &[(0.0, 5.0), (4.0, 1.0)],
+        ],
+        '1' => &[
+            &[(1.0, 1.0), (2.0, 0.0), (2.0, 6.0)],
+            &[(1.0, 6.0), (3.0, 6.0)],
+        ],
+        '2' => &[&[
+            (0.0, 1.0),
+            (1.0, 0.0),
+            (3.0, 0.0),
+            (4.0, 1.0),
+            (4.0, 2.0),
+            (0.0, 6.0),
+            (4.0, 6.0),
+        ]],
+        '3' => &[&[
+            (0.0, 0.0),
+            (4.0, 0.0),
+            (2.0, 2.5),
+            (3.0, 2.5),
+            (4.0, 3.5),
+            (4.0, 5.0),
+            (3.0, 6.0),
+            (1.0, 6.0),
+            (0.0, 5.0),
+        ]],
+        '4' => &[&[(3.0, 6.0), (3.0, 0.0), (0.0, 4.0), (4.0, 4.0)]],
+        '5' => &[&[
+            (4.0, 0.0),
+            (0.0, 0.0),
+            (0.0, 2.5),
+            (3.0, 2.5),
+            (4.0, 3.5),
+            (4.0, 5.0),
+            (3.0, 6.0),
+            (0.0, 6.0),
+        ]],
+        '6' => &[&[
+            (3.0, 0.0),
+            (1.0, 0.0),
+            (0.0, 1.0),
+            (0.0, 5.0),
+            (1.0, 6.0),
+            (3.0, 6.0),
+            (4.0, 5.0),
+            (4.0, 3.5),
+            (3.0, 2.5),
+            (0.0, 2.5),
+        ]],
+        '7' => &[&[(0.0, 0.0), (4.0, 0.0), (1.5, 6.0)]],
+        '8' => &[
+            &[
+                (1.0, 0.0),
+                (3.0, 0.0),
+                (4.0, 1.0),
+                (4.0, 2.0),
+                (3.0, 3.0),
+                (1.0, 3.0),
+                (0.0, 4.0),
+                (0.0, 5.0),
+                (1.0, 6.0),
+                (3.0, 6.0),
+                (4.0, 5.0),
+                (4.0, 4.0),
+                (3.0, 3.0),
+            ],
+            &[(1.0, 3.0), (0.0, 2.0), (0.0, 1.0), (1.0, 0.0)],
+        ],
+        '9' => &[&[
+            (4.0, 3.5),
+            (1.0, 3.5),
+            (0.0, 2.5),
+            (0.0, 1.0),
+            (1.0, 0.0),
+            (3.0, 0.0),
+            (4.0, 1.0),
+            (4.0, 5.0),
+            (3.0, 6.0),
+            (1.0, 6.0),
+        ]],
+        'A' => &[
+            &[(0.0, 6.0), (0.0, 2.0), (2.0, 0.0), (4.0, 2.0), (4.0, 6.0)],
+            &[(0.0, 3.5), (4.0, 3.5)],
+        ],
+        'B' => &[&[
+            (0.0, 3.0),
+            (3.0, 3.0),
+            (4.0, 4.0),
+            (4.0, 5.0),
+            (3.0, 6.0),
+            (0.0, 6.0),
+            (0.0, 0.0),
+            (3.0, 0.0),
+            (4.0, 1.0),
+            (4.0, 2.0),
+            (3.0, 3.0),
+        ]],
+        'C' => &[&[
+            (4.0, 1.0),
+            (3.0, 0.0),
+            (1.0, 0.0),
+            (0.0, 1.0),
+            (0.0, 5.0),
+            (1.0, 6.0),
+            (3.0, 6.0),
+            (4.0, 5.0),
+        ]],
+        'D' => &[&[
+            (0.0, 0.0),
+            (0.0, 6.0),
+            (2.5, 6.0),
+            (4.0, 4.5),
+            (4.0, 1.5),
+            (2.5, 0.0),
+            (0.0, 0.0),
+        ]],
+        'E' => &[
+            &[(4.0, 0.0), (0.0, 0.0), (0.0, 6.0), (4.0, 6.0)],
+            &[(0.0, 3.0), (3.0, 3.0)],
+        ],
+        'F' => &[
+            &[(4.0, 0.0), (0.0, 0.0), (0.0, 6.0)],
+            &[(0.0, 3.0), (3.0, 3.0)],
+        ],
+        'G' => &[&[
+            (4.0, 1.0),
+            (3.0, 0.0),
+            (1.0, 0.0),
+            (0.0, 1.0),
+            (0.0, 5.0),
+            (1.0, 6.0),
+            (3.0, 6.0),
+            (4.0, 5.0),
+            (4.0, 3.5),
+            (2.0, 3.5),
+        ]],
+        'H' => &[
+            &[(0.0, 0.0), (0.0, 6.0)],
+            &[(4.0, 0.0), (4.0, 6.0)],
+            &[(0.0, 3.0), (4.0, 3.0)],
+        ],
+        'I' => &[
+            &[(1.0, 0.0), (3.0, 0.0)],
+            &[(2.0, 0.0), (2.0, 6.0)],
+            &[(1.0, 6.0), (3.0, 6.0)],
+        ],
+        'J' => &[&[(4.0, 0.0), (4.0, 5.0), (3.0, 6.0), (1.0, 6.0), (0.0, 5.0)]],
+        'K' => &[
+            &[(0.0, 0.0), (0.0, 6.0)],
+            &[(4.0, 0.0), (0.0, 4.0)],
+            &[(1.5, 2.5), (4.0, 6.0)],
+        ],
+        'L' => &[&[(0.0, 0.0), (0.0, 6.0), (4.0, 6.0)]],
+        'M' => &[&[(0.0, 6.0), (0.0, 0.0), (2.0, 3.0), (4.0, 0.0), (4.0, 6.0)]],
+        'N' => &[&[(0.0, 6.0), (0.0, 0.0), (4.0, 6.0), (4.0, 0.0)]],
+        'O' => &[&[
+            (1.0, 0.0),
+            (3.0, 0.0),
+            (4.0, 1.0),
+            (4.0, 5.0),
+            (3.0, 6.0),
+            (1.0, 6.0),
+            (0.0, 5.0),
+            (0.0, 1.0),
+            (1.0, 0.0),
+        ]],
+        'P' => &[&[
+            (0.0, 6.0),
+            (0.0, 0.0),
+            (3.0, 0.0),
+            (4.0, 1.0),
+            (4.0, 2.0),
+            (3.0, 3.0),
+            (0.0, 3.0),
+        ]],
+        'Q' => &[
+            &[
+                (1.0, 0.0),
+                (3.0, 0.0),
+                (4.0, 1.0),
+                (4.0, 5.0),
+                (3.0, 6.0),
+                (1.0, 6.0),
+                (0.0, 5.0),
+                (0.0, 1.0),
+                (1.0, 0.0),
+            ],
+            &[(2.5, 4.5), (4.0, 6.0)],
+        ],
+        'R' => &[
+            &[
+                (0.0, 6.0),
+                (0.0, 0.0),
+                (3.0, 0.0),
+                (4.0, 1.0),
+                (4.0, 2.0),
+                (3.0, 3.0),
+                (0.0, 3.0),
+            ],
+            &[(2.0, 3.0), (4.0, 6.0)],
+        ],
+        'S' => &[&[
+            (4.0, 1.0),
+            (3.0, 0.0),
+            (1.0, 0.0),
+            (0.0, 1.0),
+            (0.0, 2.0),
+            (1.0, 3.0),
+            (3.0, 3.0),
+            (4.0, 4.0),
+            (4.0, 5.0),
+            (3.0, 6.0),
+            (1.0, 6.0),
+            (0.0, 5.0),
+        ]],
+        'T' => &[&[(0.0, 0.0), (4.0, 0.0)], &[(2.0, 0.0), (2.0, 6.0)]],
+        'U' => &[&[
+            (0.0, 0.0),
+            (0.0, 5.0),
+            (1.0, 6.0),
+            (3.0, 6.0),
+            (4.0, 5.0),
+            (4.0, 0.0),
+        ]],
+        'V' => &[&[(0.0, 0.0), (2.0, 6.0), (4.0, 0.0)]],
+        'W' => &[&[(0.0, 0.0), (1.0, 6.0), (2.0, 3.0), (3.0, 6.0), (4.0, 0.0)]],
+        'X' => &[&[(0.0, 0.0), (4.0, 6.0)], &[(4.0, 0.0), (0.0, 6.0)]],
+        'Y' => &[
+            &[(0.0, 0.0), (2.0, 3.0), (4.0, 0.0)],
+            &[(2.0, 3.0), (2.0, 6.0)],
+        ],
+        'Z' => &[&[(0.0, 0.0), (4.0, 0.0), (0.0, 6.0), (4.0, 6.0)]],
+        '-' => &[&[(0.5, 3.0), (3.5, 3.0)]],
+        '+' => &[&[(0.5, 3.0), (3.5, 3.0)], &[(2.0, 1.5), (2.0, 4.5)]],
+        '.' => &[&[(2.0, 5.6), (2.0, 6.0)]],
+        '_' => &[&[(0.0, 6.0), (4.0, 6.0)]],
+        '/' => &[&[(0.0, 6.0), (4.0, 0.0)]],
+        ' ' => &[],
+        // anything else: a question mark
+        _ => &[
+            &[
+                (0.0, 1.0),
+                (1.0, 0.0),
+                (3.0, 0.0),
+                (4.0, 1.0),
+                (4.0, 2.0),
+                (2.0, 3.5),
+                (2.0, 4.5),
+            ],
+            &[(2.0, 5.6), (2.0, 6.0)],
+        ],
+    }
+}
+
+/// `text` in the silkscreen stroke font: polylines in board coordinates (mm, y down) with the
+/// top-left of the first glyph at `(x, y)` and capitals `h` mm tall.
+pub fn silk_text(text: &str, x: f64, y: f64, h: f64) -> Vec<Vec<(f64, f64)>> {
+    let u = h / 6.0;
+    let mut out = Vec::new();
+    for (i, c) in text.chars().enumerate() {
+        let x0 = x + i as f64 * 5.0 * u;
+        for stroke in glyph(c) {
+            out.push(
+                stroke
+                    .iter()
+                    .map(|(gx, gy)| (x0 + gx * u, y + gy * u))
+                    .collect(),
+            );
+        }
+    }
+    out
+}
 
 #[derive(Debug, Clone, PartialEq)]
 enum Ap {
@@ -163,7 +462,12 @@ pub fn export(name: &str, board: &Board, parts: &[Placed]) -> Vec<(String, Strin
         let mut w = Writer::new(outline);
         for pl in parts {
             for (a, b) in pl.silk() {
-                w.polyline(0.15, &[a, b]);
+                w.polyline(SILK_WIDTH, &[a, b]);
+            }
+            // the reference designator, where the PCB screen shows it
+            let (x, y) = reference_anchor(pl);
+            for stroke in silk_text(&pl.reference, x, y, REF_HEIGHT) {
+                w.polyline(SILK_WIDTH, &stroke);
             }
         }
         files.push((format!("{name}-F_SilkS.gbr"), w.finish("Legend,Top")));
@@ -369,6 +673,28 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_silkscreen_font_covers_designators() {
+        for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-+._/".chars() {
+            let s = silk_text(&c.to_string(), 0.0, 0.0, 6.0);
+            assert!(!s.is_empty(), "{c}");
+            for p in s.iter().flatten() {
+                assert!(
+                    (0.0..=4.0).contains(&p.0) && (0.0..=6.0).contains(&p.1),
+                    "{c}: {p:?}"
+                );
+            }
+            if c != 'O' && c != '?' {
+                assert_ne!(glyph(c), glyph('?'), "{c} falls back to ?");
+            }
+        }
+        // glyphs advance 5 units; lowercase draws as capitals
+        let r12 = silk_text("r12", 10.0, 20.0, 1.2);
+        let max_x = r12.iter().flatten().map(|p| p.0).fold(0.0, f64::max);
+        assert!((max_x - (10.0 + 14.0 * 0.2)).abs() < 1e-9, "{max_x}");
+        assert_eq!(silk_text("R", 0.0, 0.0, 6.0), silk_text("r", 0.0, 0.0, 6.0));
+    }
+
+    #[test]
     fn blink_gerbers_parse_back_with_every_pad_and_hole() {
         let (mut p, lib) = super::super::tests::blink();
         auto_place(&mut p, &lib, true);
@@ -428,6 +754,38 @@ mod tests {
                 assert_eq!(g.function, "Profile,NP");
             }
         }
+        // the silkscreen carries every reference designator next to its part's outline
+        let silk = parse(&files[4].1).unwrap();
+        let outlines: usize = parts.iter().map(|p| p.silk().len()).sum();
+        let to_gerber = |x: f64, y: f64| (x - x0, y1 - y);
+        for pl in &parts {
+            let strokes = silk_text(&pl.reference, 0.0, 0.0, REF_HEIGHT);
+            let segs: usize = strokes.iter().map(|s| s.len() - 1).sum();
+            assert!(segs > 0, "{}", pl.reference);
+            let (ax, ay) = reference_anchor(pl);
+            let w = pl.reference.len() as f64 * REF_HEIGHT * 5.0 / 6.0;
+            let (gx0, gy1) = to_gerber(ax, ay);
+            let (gx1, gy0) = to_gerber(ax + w, ay + REF_HEIGHT);
+            let inside = silk
+                .draws
+                .iter()
+                .filter(|(_, a, b)| {
+                    [a, b].iter().all(|p| {
+                        (gx0 - 1e-6..=gx1 + 1e-6).contains(&p.0)
+                            && (gy0 - 1e-6..=gy1 + 1e-6).contains(&p.1)
+                    })
+                })
+                .count();
+            assert!(
+                inside >= segs,
+                "{}: {inside} of {segs} strokes",
+                pl.reference
+            );
+        }
+        assert!(
+            silk.draws.len() > outlines,
+            "references drawn besides the outlines"
+        );
         let holes = parse_excellon(&files[6].1).unwrap();
         assert_eq!(holes.len(), tht + 1);
         assert!(holes.iter().any(|h| (h.0 - 0.4).abs() < 1e-9));
