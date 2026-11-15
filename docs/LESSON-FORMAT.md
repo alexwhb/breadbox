@@ -277,7 +277,7 @@ replay them for "Show me how"; the solver test replays all of them.
 | `run` | `seconds` | run the bench |
 | `press` | `part`, `on` | hold / release a button |
 | `position` | `part`, `value` (0…1) | turn a knob |
-| `control` | `part`, `key`, `value` | a panel control (`dmm1` `dial`: 0 off, 1 V~, 2 V⎓, 3 mV, 4 Ω, 5 continuity, 6 diode, 7 A, 8 mA, 9 Hz) |
+| `control` | `part`, `key`, `value` | a panel control (`dmm1` `dial`: 0 off, 1 V~, 2 V⎓, 3 mV, 4 Ω, 5 continuity, 6 capacitance (⊣⊢), 7 A, 8 mA, 9 Hz) |
 | `world` | `key`, `value` | set a world variable |
 | `firmware` | `mcu` | upload the code step's solution (its prebuilt image) |
 | `repair` | | "Repair all" |
