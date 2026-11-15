@@ -131,12 +131,7 @@ impl HomeScreen {
                 .font(font::brand(28.0))
                 .color(p.text_strong),
         );
-        ui.label(
-            egui::RichText::new("A breadboard bench where Arduinos run real firmware — and a SPICE workbench over the same circuit.")
-                .font(font::ui(14.0))
-                .color(p.text_muted),
-        );
-        ui.add_space(6.0);
+        ui.add_space(2.0);
         let card_w = (w - 16.0) / 2.0;
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 16.0;
@@ -145,39 +140,58 @@ impl HomeScreen {
                     ProjectMode::Playground,
                     Icon::Breadboard,
                     "Playground",
-                    "Breadboards, jumper wires, sensors in a pot of soil, radios — and an Arduino running your sketch.",
+                    "Breadboards · sensors · real firmware",
                     "New Playground project",
                 ),
                 (
                     ProjectMode::Pro,
                     Icon::Analysis,
                     "Pro",
-                    "Netlists, transient / DC / AC / Monte Carlo analyses, operating points against bench probes.",
+                    "Netlists · SPICE analyses · PCB",
                     "New Pro project",
                 ),
             ] {
-                let (r, _) = ui.allocate_exact_size(vec2(card_w, 132.0), Sense::hover());
-                ui.painter().rect(r, CornerRadius::same(10), p.bg_header, Stroke::new(1.0, p.border), egui::StrokeKind::Inside);
+                let (r, _) = ui.allocate_exact_size(vec2(card_w, 118.0), Sense::hover());
+                ui.painter().rect(
+                    r,
+                    CornerRadius::same(10),
+                    p.bg_header,
+                    Stroke::new(1.0, p.border),
+                    egui::StrokeKind::Inside,
+                );
                 let mut c = widgets::child_ui(ui, r.shrink2(vec2(18.0, 16.0)));
                 c.spacing_mut().item_spacing.y = 8.0;
                 c.horizontal(|ui| {
                     let (ir, _) = ui.allocate_exact_size(vec2(30.0, 30.0), Sense::hover());
                     icon.paint_with(ui.painter(), ir, p.text_dim, p.accent);
                     ui.add_space(4.0);
-                    ui.label(egui::RichText::new(title).font(font::heading(18.0)).color(p.text_strong));
+                    ui.label(
+                        egui::RichText::new(title)
+                            .font(font::heading(18.0))
+                            .color(p.text_strong),
+                    );
                     if mode == ProjectMode::Pro {
                         widgets::tag(ui, "SPICE", Tone::Info);
                     }
                 });
-                widgets::wrapped_text(&mut c, blurb, font::ui(13.0), p.text_muted, 2);
+                widgets::wrapped_text(&mut c, blurb, font::ui(13.0), p.text_muted, 1);
+                c.add_space(2.0);
                 c.horizontal(|ui| {
-                    if Btn::amber(button).icon(Icon::Plus).show(ui).clicked() {
+                    if Btn::amber("New project")
+                        .accessible_name(button)
+                        .icon(Icon::Plus)
+                        .show(ui)
+                        .clicked()
+                    {
                         self.open_new(mode);
                     }
-                    if mode == ProjectMode::Playground && Btn::ghost("Open project…").icon(Icon::Folder).show(ui).clicked() {
-                        app.command(Command::OpenProject);
-                    }
-                    if mode == ProjectMode::Pro && Btn::ghost("Import .cir…").icon(Icon::Folder).show(ui).clicked() {
+                    if mode == ProjectMode::Pro
+                        && Btn::ghost("Import .cir…")
+                            .icon(Icon::Folder)
+                            .tooltip("Open a SPICE netlist as a new Pro project")
+                            .show(ui)
+                            .clicked()
+                    {
                         app.command(Command::ImportCir);
                     }
                 });
@@ -194,7 +208,7 @@ impl HomeScreen {
             ui.painter().text(
                 pos2(r.left() + 16.0, r.center().y),
                 egui::Align2::LEFT_CENTER,
-                "Nothing here yet — open an example below or start a new project.",
+                "No recent projects",
                 font::ui(13.0),
                 p.text_muted,
             );
@@ -265,13 +279,11 @@ impl HomeScreen {
         ui.horizontal(|ui| {
             section_header(ui, "Examples");
             ui.label(
-                egui::RichText::new(format!(
-                    "{} projects · open read-only, Save As to keep changes",
-                    app.examples.len()
-                ))
-                .font(font::ui(12.0))
-                .color(p.text_muted),
-            );
+                egui::RichText::new(format!("{} projects", app.examples.len()))
+                    .font(font::ui(12.0))
+                    .color(p.text_muted),
+            )
+            .on_hover_text("Examples open read-only; File → Save As keeps your changes");
         });
         let cols = 3usize;
         let gap = 12.0;
@@ -337,9 +349,11 @@ impl HomeScreen {
         }
         if app.examples.is_empty() {
             ui.label(
-                egui::RichText::new("No examples folder found (set BREADBOX_RESOURCES).")
+                egui::RichText::new("No examples found")
+                    .font(font::ui(12.0))
                     .color(p.text_muted),
-            );
+            )
+            .on_hover_text("Set BREADBOX_RESOURCES to the folder that holds examples/");
         }
     }
 
@@ -349,14 +363,14 @@ impl HomeScreen {
             (
                 Icon::Book,
                 "Lessons",
-                "Electricity you can see, sensors, microcontrollers from zero, radios & IoT, SPICE analysis — do the math yourself.",
+                "Guided tracks, from LEDs to SPICE",
                 "Open lessons",
                 Route::Lessons,
             ),
             (
                 Icon::Plug,
                 "Plugins",
-                "Instruments, parts, radios and world models in a WebAssembly sandbox.",
+                "Instruments, parts and world models",
                 "Browse plugins",
                 Route::Plugins,
             ),
@@ -507,19 +521,35 @@ impl HomeScreen {
                     .font(font::ui(12.0))
                     .color(p.text_muted),
             );
-            ui.horizontal(|ui| {
-                ui.label(
+            // the button keeps its place; a long path truncates (full path on hover)
+            let (row, _) = ui.allocate_exact_size(vec2(ui.available_width(), 28.0), Sense::hover());
+            let mut right = ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(row)
+                    .layout(egui::Layout::right_to_left(egui::Align::Center)),
+            );
+            if Btn::ghost("Choose…").small().show(&mut right).clicked()
+                && let Some(dir) = crate::platform::pick_folder("Where should the project live?")
+            {
+                d.parent = dir;
+            }
+            let rest = Rect::from_min_max(
+                row.min,
+                pos2(row.right() - right.min_rect().width() - 10.0, row.bottom()),
+            );
+            let mut left = ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(rest)
+                    .layout(egui::Layout::left_to_right(egui::Align::Center)),
+            );
+            left.add(
+                egui::Label::new(
                     egui::RichText::new(d.parent.display().to_string())
                         .font(font::mono(12.0))
                         .color(p.text_dim),
-                );
-                if Btn::ghost("Choose…").small().show(ui).clicked()
-                    && let Some(dir) =
-                        crate::platform::pick_folder("Where should the project live?")
-                {
-                    d.parent = dir;
-                }
-            });
+                )
+                .truncate(),
+            );
             if let Some(e) = &d.error {
                 ui.label(
                     egui::RichText::new(e)

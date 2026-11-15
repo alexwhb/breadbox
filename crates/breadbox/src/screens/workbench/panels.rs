@@ -60,7 +60,7 @@ impl Panels {
                         .collect();
                     if order.is_empty() {
                         ui.label(
-                            egui::RichText::new("Pick a panel from the rail →")
+                            egui::RichText::new("No panels open")
                                 .font(font::ui(12.0))
                                 .color(pal(ui).text_faint),
                         );
@@ -220,43 +220,47 @@ impl Panels {
                 }
                 // scheduled watering (WORLD-1): 100 ml every N world hours
                 let cur = pt.schedule.map(|s| s.every_h);
-                let shown = match pt.schedule {
-                    Some(s) => format!("every {} h · {:.0} ml", s.every_h, s.ml),
-                    None => "off".into(),
+                const EVERY: [(&str, f64); 5] = [
+                    ("Off", 0.0),
+                    ("Every 6 h", 6.0),
+                    ("Every 12 h", 12.0),
+                    ("Every 24 h", 24.0),
+                    ("Every 48 h", 48.0),
+                ];
+                let shown = match cur {
+                    Some(h) => EVERY
+                        .iter()
+                        .find(|(_, v)| (v - h).abs() < 1e-9)
+                        .map(|(l, _)| l.to_string())
+                        .unwrap_or_else(|| format!("Every {h} h")),
+                    None => "Off".into(),
                 };
-                ui.horizontal(|ui| {
-                    ui.label(
-                        egui::RichText::new("Water automatically")
-                            .font(crate::theme::font::ui(13.0))
-                            .color(pal(ui).text_dim),
-                    );
-                    let (_, picked) =
-                        widgets::select(ui, "Water automatically", &shown, 150.0, |ui| {
-                            let mut pick = None;
-                            for (l, v) in [
-                                ("Off", 0.0),
-                                ("Every 6 h", 6.0),
-                                ("Every 12 h", 12.0),
-                                ("Every 24 h", 24.0),
-                                ("Every 48 h", 48.0),
-                            ] {
-                                let on = cur.map_or(v == 0.0, |c| (c - v).abs() < 1e-9);
-                                if widgets::menu_item(ui, l, on, true) {
-                                    pick = Some(v);
-                                }
+                let picked = select_row(
+                    ui,
+                    "Auto-water",
+                    "Water automatically",
+                    "Adds 100 ml to the pot on a schedule of world hours",
+                    &shown,
+                    |ui| {
+                        let mut pick = None;
+                        for (l, v) in EVERY {
+                            let on = cur.map_or(v == 0.0, |c| (c - v).abs() < 1e-9);
+                            if widgets::menu_item(ui, l, on, true) {
+                                pick = Some(v);
                             }
-                            pick
-                        });
-                    if let Some(Some(v)) = picked {
-                        pt.schedule = (v > 0.0).then_some(bb_world::WaterSchedule {
-                            every_h: v,
-                            ml: 100.0,
-                            at_h: 0.0,
-                        });
-                        sends.push((format!("{}.water_every_h", pt.id), v));
-                        commit = true;
-                    }
-                });
+                        }
+                        pick
+                    },
+                );
+                if let Some(v) = picked {
+                    pt.schedule = (v > 0.0).then_some(bb_world::WaterSchedule {
+                        every_h: v,
+                        ml: 100.0,
+                        at_h: 0.0,
+                    });
+                    sends.push((format!("{}.water_every_h", pt.id), v));
+                    commit = true;
+                }
             }
             let mut solar = new_cfg.light.mode == bb_world::LightMode::Solar;
             let loc = new_cfg.light.location.name.clone();
@@ -329,37 +333,47 @@ impl Panels {
             } else {
                 "More settings"
             };
-            if Btn::mini(more_label).show(ui).clicked() {
+            if Btn::mini(more_label)
+                .tooltip("Humidity and world time-warp")
+                .show(ui)
+                .clicked()
+            {
                 toggle_more = true;
             }
-            if !more {
-                return;
-            }
+        });
+        if more {
             let warp = tel
                 .as_ref()
                 .map(|t| t.world.time_warp)
                 .unwrap_or(cfg.time_warp);
-            let label = format!("World time ×{}", warp.round() as i64);
-            let (_, picked) = widgets::select(ui, "World time-warp", &label, 150.0, |ui| {
-                let mut pick = None;
-                for (l, v) in [
-                    ("×1 (real time)", 1.0),
-                    ("×60", 60.0),
-                    ("×600", 600.0),
-                    ("×3600", 3600.0),
-                ] {
-                    if widgets::menu_item(ui, l, (warp - v).abs() < 0.5, true) {
-                        pick = Some(v);
+            let shown = format!("×{}", warp.round() as i64);
+            let picked = select_row(
+                ui,
+                "World time",
+                "World time-warp",
+                "How fast world time (sun, evaporation, schedules) runs against bench time",
+                &shown,
+                |ui| {
+                    let mut pick = None;
+                    for (l, v) in [
+                        ("×1 (real time)", 1.0),
+                        ("×60", 60.0),
+                        ("×600", 600.0),
+                        ("×3600", 3600.0),
+                    ] {
+                        if widgets::menu_item(ui, l, (warp - v).abs() < 0.5, true) {
+                            pick = Some(v);
+                        }
                     }
-                }
-                pick
-            });
-            if let Some(Some(v)) = picked {
+                    pick
+                },
+            );
+            if let Some(v) = picked {
                 sends.push(("world.time_warp".into(), v));
                 new_cfg.time_warp = v;
                 commit = true;
             }
-        });
+        }
         if toggle_more {
             self.world.more = !self.world.more;
         }
@@ -391,6 +405,35 @@ impl Panels {
     }
 }
 
+/// A settings row: `label` left (truncated), a 120 px select right. `name` is the select's
+/// accessible name, `tip` the row's hover text.
+fn select_row<R>(
+    ui: &mut Ui,
+    label: &str,
+    name: &str,
+    tip: &str,
+    shown: &str,
+    items: impl FnOnce(&mut Ui) -> Option<R>,
+) -> Option<R> {
+    let p = pal(ui);
+    card_row(
+        ui,
+        32.0,
+        |ui| widgets::select(ui, name, shown, 120.0, items).1.flatten(),
+        |ui, _| {
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(label)
+                        .font(font::ui(13.0))
+                        .color(p.text_dim),
+                )
+                .truncate(),
+            )
+            .on_hover_text(tip);
+        },
+    )
+}
+
 /// Changing the day/night location rebuilds the world model at the same moisture.
 fn relocate(app: &mut AppCtx, cfg: bb_world::WorldConfig) {
     if let Some(sim) = app.sim() {
@@ -411,125 +454,267 @@ fn relocate(app: &mut AppCtx, cfg: bb_world::WorldConfig) {
 }
 
 /// Bench tools: built-in mini scope and DMM, plugin instruments (placed from the Plugins
-/// screen). Each probe can be clipped onto any pin.
+/// screen). Each lead can be clipped onto any pin (`Clip CH1`, then click a pin).
 fn instruments(ui: &mut Ui, app: &mut AppCtx, canvas: &mut BenchCanvas) {
     let p = pal(ui);
-    widgets::section_header_row(ui, "Instruments", "drag leads onto pins");
+    let placed_n = app
+        .circuit
+        .as_ref()
+        .map_or(0, |d| d.project().instruments.len());
+    let caption = if placed_n > 0 {
+        format!("{placed_n} on bench")
+    } else {
+        String::new()
+    };
+    widgets::section_header_row(ui, "Instruments", &caption);
     let Some(doc) = app.circuit.as_mut() else {
         return;
     };
     let defs = doc.project().instruments.clone();
-    let lib = doc.lib.clone();
-    let tools: [(&str, &str, Icon, &str, &[&str]); 2] = [
+    // kind, name, icon, subtitle (≤ 3 tokens), leads (key, shown as)
+    type Spec<'a> = (&'a str, &'a str, Icon, &'a str, &'a [(&'a str, &'a str)]);
+    let tools: [Spec; 2] = [
         (
             "mini_scope",
             "Oscilloscope",
             Icon::Oscilloscope,
-            "2 channels · trigger · duty",
-            &["ch1", "ch2"],
+            "2 channels",
+            &[("ch1", "CH1"), ("ch2", "CH2")],
         ),
         (
             "dmm",
             "Multimeter",
             Icon::Multimeter,
-            "DC volts · auto · 6000 counts",
-            &["plus", "com"],
+            "DC volts",
+            &[("plus", "+"), ("com", "COM")],
         ),
     ];
-    for (kind, name, icon, sub, keys) in tools {
-        let placed = defs.iter().find(|d| d.kind == kind).cloned();
-        widgets::inner_card_frame(p, placed.is_some()).show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.horizontal(|ui| {
-                icon.paint(
-                    ui.painter(),
-                    egui::Rect::from_min_size(ui.cursor().min + vec2(0.0, 4.0), vec2(22.0, 22.0)),
-                    if placed.is_some() { p.accent_soft } else { p.text_dim },
-                );
-                ui.add_space(30.0);
-                ui.vertical(|ui| {
-                    ui.spacing_mut().item_spacing.y = 2.0;
-                    ui.label(egui::RichText::new(name).font(font::medium(13.0)).color(p.text));
-                    let s = if placed.is_some() { "On bench".to_string() } else { sub.to_string() };
-                    ui.label(egui::RichText::new(s).font(font::ui(11.0)).color(p.text_muted));
+    let mut go_plugins = false;
+    ui.vertical(|ui| {
+        ui.spacing_mut().item_spacing.y = 8.0;
+        for (kind, name, icon, sub, leads) in tools {
+            let placed = defs.iter().find(|d| d.kind == kind).cloned();
+            widgets::inner_card_frame(p, placed.is_some()).show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.spacing_mut().item_spacing.y = 4.0;
+                let on = placed.is_some();
+                let ink = if on { p.accent_soft } else { p.text_dim };
+                let sub = if on { "On bench" } else { sub };
+                let (act, a11y) = if on {
+                    ("Remove", format!("Remove {name}"))
+                } else {
+                    ("Add", format!("Add {name}"))
+                };
+                let clicked = card_row(ui, 34.0, |ui| {
+                    Btn::ghost(act)
+                        .accessible_name(&a11y)
+                        .small()
+                        .show(ui)
+                        .clicked()
+                }, |ui, row| {
+                    icon.paint(
+                        ui.painter(),
+                        egui::Rect::from_center_size(
+                            egui::pos2(row.left() + 11.0, row.center().y),
+                            vec2(22.0, 22.0),
+                        ),
+                        ink,
+                    );
+                    let mut t = widgets::child_ui(
+                        ui,
+                        egui::Rect::from_min_max(
+                            egui::pos2(row.left() + 32.0, row.top()),
+                            row.max,
+                        ),
+                    );
+                    t.spacing_mut().item_spacing.y = 1.0;
+                    t.add(
+                        egui::Label::new(
+                            egui::RichText::new(name).font(font::medium(13.0)).color(p.text),
+                        )
+                        .truncate(),
+                    );
+                    t.add(
+                        egui::Label::new(
+                            egui::RichText::new(sub).font(font::ui(11.0)).color(p.text_muted),
+                        )
+                        .truncate(),
+                    );
                 });
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let act = if placed.is_some() { "Remove" } else { "Add" };
-                    if Btn::ghost(&format!("{act} {name}")).small().show(ui).clicked() {
-                        let mut tx = Transaction::new(&format!("{act} {name}"));
-                        match &placed {
-                            Some(d) => {
-                                tx.ops.push(Op::Instrument { before: Some(d.clone()), after: None, index: None });
-                                if let Some(part) = &d.part
-                                    && let Some(pi) = doc.project().part(part).cloned()
-                                {
-                                    tx.ops.push(Op::Part { before: Some(pi), after: None, index: None });
-                                }
-                            }
-                            None => {
-                                // place the instrument above / beside the bench
-                                let e = canvas_extent(doc);
-                                let (x, y) = if kind == "mini_scope" { (e.0, e.1 - 12.0) } else { (e.2 + 4.0, e.1) };
-                                let pid = doc.project().next_id(kind);
-                                let reference = doc.project().next_ref(if kind == "dmm" { "DMM" } else { "SCOPE" });
-                                let part = bb_circuit::PartInstance::new(&pid, &reference, kind).at(x.round(), y.round());
-                                let id = doc.project().next_id(&format!("{kind}_i"));
-                                let settings = if kind == "mini_scope" {
-                                    serde_json::json!({"timebase": 0.001, "vdiv": 2.0, "trigger": {"edge": "rising", "level": 2.5, "mode": "auto", "source": "ch1"}})
-                                } else {
-                                    serde_json::json!({"mode": "dc_v"})
-                                };
-                                tx.ops.push(Op::Part { before: None, after: Some(part), index: None });
-                                tx.ops.push(Op::Instrument {
-                                    before: None,
-                                    after: Some(InstrumentDef { id, kind: kind.into(), part: Some(pid), probes: Default::default(), settings }),
-                                    index: None,
-                                });
-                            }
-                        }
-                        doc.editor.commit(tx);
-                        doc.touched();
-                    }
-                });
-            });
-            if let Some(d) = &placed {
-                for key in keys {
-                    ui.horizontal(|ui| {
-                        ui.add_space(30.0);
-                        let target = d.probes.get(*key).map(|e| endpoint_label(doc, e)).unwrap_or_else(|| "not clipped".into());
-                        ui.label(
-                            egui::RichText::new(format!("{} → {target}", key.to_uppercase()))
-                                .font(font::mono(11.5))
-                                .color(if d.probes.contains_key(*key) { p.accent_soft } else { p.text_faint }),
-                        );
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            let armed = matches!(&canvas.tool, Tool::Clip { instrument, key: k } if instrument == &d.id && k == key);
-                            if Btn::mini(&format!("Clip {}", key.to_uppercase())).selected(armed).show(ui).clicked() {
-                                canvas.tool = if armed { Tool::Select } else { Tool::Clip { instrument: d.id.clone(), key: key.to_string() } };
-                            }
-                        });
-                    });
+                if clicked {
+                    toggle_instrument(doc, kind, name, placed.as_ref());
                 }
-            }
-        });
+                let Some(d) = &placed else {
+                    return;
+                };
+                for (key, shown) in leads {
+                    let armed = matches!(&canvas.tool, Tool::Clip { instrument, key: k } if instrument == &d.id && k == key);
+                    let target = d.probes.get(*key).map(|e| endpoint_label(doc, e));
+                    let btn = format!("Clip {shown}");
+                    let a11y = format!("Clip {}", key.to_uppercase());
+                    let tip = if armed {
+                        "Now click a pin or breadboard hole · Esc cancels"
+                    } else {
+                        "Clip this lead, then click a pin or breadboard hole to attach it"
+                    };
+                    let clicked = card_row(ui, 26.0, |ui| {
+                        Btn::mini(&btn)
+                            .accessible_name(&a11y)
+                            .selected(armed)
+                            .tooltip(tip)
+                            .show(ui)
+                            .clicked()
+                    }, |ui, _| {
+                        ui.add_space(32.0);
+                        ui.spacing_mut().item_spacing.x = 8.0;
+                        ui.add_sized(
+                            vec2(30.0, 18.0),
+                            egui::Label::new(
+                                egui::RichText::new(*shown)
+                                    .font(font::mono(11.5))
+                                    .color(p.text_muted),
+                            ),
+                        );
+                        let (text, col) = match &target {
+                            Some(t) => (t.as_str(), p.accent_soft),
+                            None => ("not clipped", p.text_faint),
+                        };
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(text).font(font::mono(11.5)).color(col),
+                            )
+                            .truncate(),
+                        );
+                    });
+                    if clicked {
+                        canvas.tool = if armed {
+                            Tool::Select
+                        } else {
+                            Tool::Clip {
+                                instrument: d.id.clone(),
+                                key: key.to_string(),
+                            }
+                        };
+                    }
+                }
+            });
+        }
+        // plugin instruments (placed from the Plugins screen)
+        for d in defs.iter().filter(|d| d.kind != "mini_scope" && d.kind != "dmm") {
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(format!("{} · {}", d.kind, d.id))
+                        .font(font::mono(12.0))
+                        .color(p.text_dim),
+                )
+                .truncate(),
+            );
+        }
+        go_plugins = Btn::plain("Browse plugins")
+            .icon(Icon::Plug)
+            .tooltip("Logic analyzer, bench supply and function generator come as plugins")
+            .show(ui)
+            .clicked();
+    });
+    if go_plugins {
+        app.navigate(crate::router::Route::Plugins);
     }
-    let _ = lib;
-    let plugin: Vec<_> = defs
-        .iter()
-        .filter(|d| d.kind != "mini_scope" && d.kind != "dmm")
-        .collect();
-    for d in plugin {
-        ui.label(
-            egui::RichText::new(format!("{} · {}", d.kind, d.id))
-                .font(font::mono(12.0))
-                .color(p.text_dim),
-        );
-    }
-    ui.label(
-        egui::RichText::new("Clip a lead, then click any pin, wire end or hole on the bench. Logic analyzer, bench supply and function generator come from the Plugins screen.")
-            .font(font::ui(11.0))
-            .color(p.text_faint),
+}
+
+/// One fixed-height card row: `trailing` controls laid out right-aligned first, then `leading`
+/// gets the rest of the row (its text truncates instead of running under the controls).
+fn card_row<R>(
+    ui: &mut Ui,
+    height: f32,
+    trailing: impl FnOnce(&mut Ui) -> R,
+    leading: impl FnOnce(&mut Ui, egui::Rect),
+) -> R {
+    let (row, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
+    let mut right = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(row)
+            .layout(egui::Layout::right_to_left(egui::Align::Center)),
     );
+    let r = trailing(&mut right);
+    let used = right.min_rect().width();
+    let rest =
+        egui::Rect::from_min_max(row.min, egui::pos2(row.right() - used - 8.0, row.bottom()));
+    let mut left = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(rest)
+            .layout(egui::Layout::left_to_right(egui::Align::Center)),
+    );
+    left.set_clip_rect(rest.intersect(ui.clip_rect()));
+    leading(&mut left, rest);
+    r
+}
+
+/// Adds a built-in instrument beside the bench, or removes it with its part.
+fn toggle_instrument(
+    doc: &mut crate::circuit::CircuitDoc,
+    kind: &str,
+    name: &str,
+    placed: Option<&InstrumentDef>,
+) {
+    let act = if placed.is_some() { "Remove" } else { "Add" };
+    let mut tx = Transaction::new(&format!("{act} {name}"));
+    match placed {
+        Some(d) => {
+            tx.ops.push(Op::Instrument {
+                before: Some(d.clone()),
+                after: None,
+                index: None,
+            });
+            if let Some(part) = &d.part
+                && let Some(pi) = doc.project().part(part).cloned()
+            {
+                tx.ops.push(Op::Part {
+                    before: Some(pi),
+                    after: None,
+                    index: None,
+                });
+            }
+        }
+        None => {
+            // place the instrument above / beside the bench
+            let e = canvas_extent(doc);
+            let (x, y) = if kind == "mini_scope" {
+                (e.0, e.1 - 12.0)
+            } else {
+                (e.2 + 4.0, e.1)
+            };
+            let pid = doc.project().next_id(kind);
+            let reference = doc
+                .project()
+                .next_ref(if kind == "dmm" { "DMM" } else { "SCOPE" });
+            let part =
+                bb_circuit::PartInstance::new(&pid, &reference, kind).at(x.round(), y.round());
+            let id = doc.project().next_id(&format!("{kind}_i"));
+            let settings = if kind == "mini_scope" {
+                serde_json::json!({"timebase": 0.001, "vdiv": 2.0, "trigger": {"edge": "rising", "level": 2.5, "mode": "auto", "source": "ch1"}})
+            } else {
+                serde_json::json!({"mode": "dc_v"})
+            };
+            tx.ops.push(Op::Part {
+                before: None,
+                after: Some(part),
+                index: None,
+            });
+            tx.ops.push(Op::Instrument {
+                before: None,
+                after: Some(InstrumentDef {
+                    id,
+                    kind: kind.into(),
+                    part: Some(pid),
+                    probes: Default::default(),
+                    settings,
+                }),
+                index: None,
+            });
+        }
+    }
+    doc.editor.commit(tx);
+    doc.touched();
 }
 
 fn canvas_extent(doc: &crate::circuit::CircuitDoc) -> (f64, f64, f64, f64) {
@@ -575,7 +760,18 @@ fn probes(ui: &mut Ui, app: &mut AppCtx, canvas: &mut BenchCanvas) {
         widgets::section_header(ui, "Probes");
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let on = canvas.tool == Tool::Probe;
-            if Btn::mini("Add probe").selected(on).show(ui).clicked() {
+            let tip = if on {
+                "Now click a pin · Esc cancels"
+            } else {
+                "Then click a pin to pin a live reading to it"
+            };
+            if Btn::mini("Add probe")
+                .icon(Icon::Plus)
+                .selected(on)
+                .tooltip(tip)
+                .show(ui)
+                .clicked()
+            {
                 canvas.tool = if on { Tool::Select } else { Tool::Probe };
             }
         });
@@ -587,7 +783,7 @@ fn probes(ui: &mut Ui, app: &mut AppCtx, canvas: &mut BenchCanvas) {
     let probes = doc.project().probes.clone();
     if probes.is_empty() {
         ui.label(
-            egui::RichText::new("No probes yet — Add probe, then click a pin.")
+            egui::RichText::new("No probes yet")
                 .font(font::ui(12.0))
                 .color(p.text_faint),
         );
@@ -598,32 +794,45 @@ fn probes(ui: &mut Ui, app: &mut AppCtx, canvas: &mut BenchCanvas) {
             .as_ref()
             .and_then(|t| t.probes.iter().find(|x| x.id == pr.id));
         ui.horizontal(|ui| {
-            ui.vertical(|ui| {
-                ui.spacing_mut().item_spacing.y = 2.0;
-                ui.label(
-                    egui::RichText::new(&pr.label)
-                        .font(font::ui(12.0))
-                        .color(p.text_muted),
-                );
-                let v = r.map(probe_text).unwrap_or_else(|| "—".into());
-                ui.label(
-                    egui::RichText::new(v)
-                        .font(font::mono_medium(15.0))
-                        .color(p.text),
-                );
-                if let Some(r) = r {
-                    ui.label(
-                        egui::RichText::new(format!(
-                            "min {} · max {} · avg {}",
-                            bb_core::si::format(r.min, &r.unit),
-                            bb_core::si::format(r.max, &r.unit),
-                            bb_core::si::format(r.avg, &r.unit)
-                        ))
-                        .font(font::mono(10.5))
-                        .color(p.text_faint),
+            // the close button keeps its 30 px; long labels / stats truncate (rule 6)
+            let w = (ui.available_width() - 30.0).max(40.0);
+            ui.allocate_ui_with_layout(
+                vec2(w, 0.0),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    ui.set_max_width(w);
+                    ui.spacing_mut().item_spacing.y = 2.0;
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(&pr.label)
+                                .font(font::ui(12.0))
+                                .color(p.text_muted),
+                        )
+                        .truncate(),
                     );
-                }
-            });
+                    let v = r.map(probe_text).unwrap_or_else(|| "—".into());
+                    ui.label(
+                        egui::RichText::new(v)
+                            .font(font::mono_medium(15.0))
+                            .color(p.text),
+                    );
+                    if let Some(r) = r {
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(format!(
+                                    "min {} · max {} · avg {}",
+                                    bb_core::si::format(r.min, &r.unit),
+                                    bb_core::si::format(r.max, &r.unit),
+                                    bb_core::si::format(r.avg, &r.unit)
+                                ))
+                                .font(font::mono(10.5))
+                                .color(p.text_faint),
+                            )
+                            .truncate(),
+                        );
+                    }
+                },
+            );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                 if Btn::plain(&format!("Remove probe {}", pr.label))
                     .icon_only(Icon::Close)
@@ -645,17 +854,37 @@ fn probes(ui: &mut Ui, app: &mut AppCtx, canvas: &mut BenchCanvas) {
 /// The mini scope's screen, large, with timebase / V/div / trigger controls.
 fn waveforms(ui: &mut Ui, app: &mut AppCtx) {
     let p = pal(ui);
-    widgets::section_header_row(ui, "Waveforms", "mini scope");
+    widgets::section_header(ui, "Waveforms");
     let tel = app.bench.sim().and_then(|s| s.telemetry());
     let Some(t) = tel else {
         return;
     };
-    if t.scopes.is_empty() {
-        ui.label(
-            egui::RichText::new("Add the oscilloscope from Instruments to see waveforms here.")
-                .font(font::ui(12.0))
-                .color(p.text_faint),
-        );
+    let has_scope = app.circuit.as_ref().is_some_and(|d| {
+        d.project()
+            .instruments
+            .iter()
+            .any(|i| i.kind == "mini_scope")
+    });
+    if t.scopes.is_empty() || !has_scope {
+        let mut add = false;
+        ui.horizontal(|ui| {
+            ui.label(
+                egui::RichText::new("No scope on the bench")
+                    .font(font::ui(12.0))
+                    .color(p.text_faint),
+            );
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                add = !has_scope
+                    && Btn::mini("Add scope")
+                        .icon(Icon::Plus)
+                        .accessible_name("Add scope to the bench")
+                        .show(ui)
+                        .clicked();
+            });
+        });
+        if add && let Some(doc) = app.circuit.as_mut() {
+            toggle_instrument(doc, "mini_scope", "Oscilloscope", None);
+        }
         return;
     }
     for f in &t.scopes {

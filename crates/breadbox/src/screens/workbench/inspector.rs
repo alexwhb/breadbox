@@ -196,33 +196,35 @@ impl Inspector {
                     doc.touched();
                     canvas.selection.clear();
                 }
-                if !wire.bends.is_empty() && Btn::ghost("Straighten").small().show(ui).clicked() {
+                if !wire.bends.is_empty()
+                    && Btn::ghost("Straighten")
+                        .small()
+                        .tooltip("Remove all bends")
+                        .show(ui)
+                        .clicked()
+                {
                     let mut nw = wire.clone();
                     nw.bends.clear();
                     let _ = doc.editor.update_wire(nw);
                     doc.touched();
                 }
             });
-            ui.label(
-                egui::RichText::new("Double-click the wire to add a bend; drag bends to route it.")
-                    .font(font::ui(11.0))
-                    .color(p.text_faint),
-            );
             return;
         }
         let Some(id) = canvas.selection.single_part().map(str::to_string) else {
             widgets::section_header(ui, "Inspector");
             let n = canvas.selection.parts.len();
             let msg = if n > 1 {
-                format!("{n} parts selected · R rotates, ⌫ deletes, ⌘D duplicates")
+                format!("{n} parts selected")
             } else {
-                "Select a part on the bench to see its datasheet values, live readings and settings.".into()
+                "Select a part".into()
             };
             ui.label(
                 egui::RichText::new(msg)
                     .font(font::ui(12.0))
                     .color(p.text_faint),
-            );
+            )
+            .on_hover_text("R rotates, F flips, ⌘D duplicates, ⌫ deletes · See Help → Workbench");
             self.repair(ui, app, &tel);
             return;
         };

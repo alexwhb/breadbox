@@ -188,7 +188,7 @@ impl Palette {
                                 .filter(|d| self.keep(d))
                                 .collect();
                             if hits.is_empty() {
-                                ui.label(egui::RichText::new("No parts match.").font(font::ui(12.0)).color(p.text_muted));
+                                ui.label(egui::RichText::new("No matching parts").font(font::ui(12.0)).color(p.text_muted));
                             }
                             if *simple {
                                 self.tiles(ui, &hits, canvas, true);
@@ -436,7 +436,7 @@ fn code_card(ui: &mut Ui, app: &mut AppCtx) {
             );
             ui.horizontal_wrapped(|ui| {
                 if widgets::Btn::ghost("Plugin SDK docs").small().show(ui).clicked() {
-                    app.navigate(crate::router::Route::Plugins);
+                    app.help = Some(crate::widgets::help::HelpTopic::PluginSdk);
                 }
             });
         });

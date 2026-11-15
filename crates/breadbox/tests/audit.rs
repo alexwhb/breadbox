@@ -562,7 +562,7 @@ fn hand_object_scripts_and_timelines_drive_the_world() {
         last_cm(&h)
     );
     // the World panel offers the objects the bench's sensors read
-    assert!(has_label_containing(&h, "drag them on the bench"));
+    assert!(has_label(&h, "OBJECTS"));
     h.get_by_label("Add hand").click();
     h.run_steps(3);
     assert!(

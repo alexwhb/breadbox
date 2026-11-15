@@ -112,7 +112,7 @@ fn sim_menu(ui: &mut Ui, app: &mut AppCtx, chosen: &mut Option<SimSpeed>) -> Opt
         .map(|(_, l)| l.to_string())
         .unwrap_or_else(|| format!("{} µs", settings.sync_quantum_us));
     ui.separator();
-    caption(ui, "Step (pauses first)");
+    caption(ui, "Step");
     ui.horizontal(|ui| {
         if Btn::mini(&format!("Step {q_label}"))
             .icon(Icon::Play)
@@ -149,7 +149,8 @@ fn sim_menu(ui: &mut Ui, app: &mut AppCtx, chosen: &mut Option<SimSpeed>) -> Opt
             egui::RichText::new("Seed")
                 .font(font::ui(12.5))
                 .color(p.text_dim),
-        );
+        )
+        .on_hover_text("The same seed replays the same run; changing it restarts the bench");
         // the value being edited lives in temp memory until the drag / typing ends
         let id = egui::Id::unique("wb-seed-edit");
         let mut seed = ui.data(|d| d.get_temp::<u64>(id)).unwrap_or(settings.seed);
@@ -172,7 +173,8 @@ fn sim_menu(ui: &mut Ui, app: &mut AppCtx, chosen: &mut Option<SimSpeed>) -> Opt
             egui::RichText::new("Sync quantum")
                 .font(font::ui(12.5))
                 .color(p.text_dim),
-        );
+        )
+        .on_hover_text("How often the boards and the circuit exchange pin states; changing it restarts the bench");
         // index into QUANTA_US (a custom value from the project file shows none selected)
         let cur = QUANTA_US
             .iter()
@@ -190,13 +192,6 @@ fn sim_menu(ui: &mut Ui, app: &mut AppCtx, chosen: &mut Option<SimSpeed>) -> Opt
             action = Some(SimAction::Settings(st));
         }
     });
-    ui.label(
-        egui::RichText::new(
-            "Changing the seed or quantum restarts the bench; the same seed replays the same run.",
-        )
-        .font(font::ui(11.0))
-        .color(p.text_faint),
-    );
     action
 }
 
@@ -301,7 +296,7 @@ impl WorkbenchScreen {
         items.sort_by_key(|(k, _)| *k);
         let items: Vec<String> = items.into_iter().map(|(_, s)| s).collect();
         if items.is_empty() {
-            "Bench — drag parts from the palette".into()
+            "Bench".into()
         } else {
             format!("Bench · {} — drag wires from any pin", items.join(" + "))
         }
@@ -313,7 +308,7 @@ impl WorkbenchScreen {
             .as_ref()
             .map(|p| p.name.clone())
             .unwrap_or_else(|| "untitled".into());
-        format!("Sheet 1 · {name}.sch — same netlist as the bench")
+        format!("Sheet 1 · {name}.sch")
     }
 
     /// The 40 px strip above the canvas (`WB-12`).
@@ -328,13 +323,14 @@ impl WorkbenchScreen {
             BenchView::Breadboard => Self::bench_title(app),
             BenchView::Schematic => Self::sheet_title(app),
         };
-        let mut child = widgets::child_ui(ui, rect.shrink2(vec2(14.0, 0.0)));
-        child.horizontal_centered(|ui| {
-            ui.label(
-                egui::RichText::new(&title)
-                    .font(font::ui(12.0))
-                    .color(p.text_muted),
-            );
+        let mut child = ui.new_child(
+            egui::UiBuilder::new()
+                .max_rect(rect.shrink2(vec2(14.0, 0.0)))
+                .layout(egui::Layout::left_to_right(egui::Align::Center)),
+        );
+        {
+            let ui = &mut child;
+            // right side first; the title truncates into what is left (`UI-TEXT` rule 6)
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.spacing_mut().item_spacing.x = 14.0;
                 // zoom (+ the symbol standard on the schematic)
@@ -425,7 +421,7 @@ impl WorkbenchScreen {
                                 ui.add_space(6.0);
                                 if items.is_empty() {
                                     ui.label(
-                                        egui::RichText::new("No findings — the circuit is clean.")
+                                        egui::RichText::new("No findings")
                                             .font(font::ui(12.0))
                                             .color(p.text_muted),
                                     );
@@ -467,11 +463,17 @@ impl WorkbenchScreen {
                 if let Some(s) = app.bench.sim()
                     && let Some(e) = s.build_error()
                 {
-                    ui.label(
-                        egui::RichText::new(format!("Bench: {e}"))
-                            .font(font::ui(12.0))
-                            .color(p.danger_soft),
-                    );
+                    ui.scope(|ui| {
+                        ui.set_max_width(320.0);
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(format!("Bench: {e}"))
+                                    .font(font::ui(12.0))
+                                    .color(p.danger_soft),
+                            )
+                            .truncate(),
+                        );
+                    });
                 }
                 if let Some(id) = &self.canvas.placing {
                     let name = app
@@ -480,24 +482,44 @@ impl WorkbenchScreen {
                         .and_then(|d| d.lib.get(id).map(|d| d.name.clone()))
                         .unwrap_or_default();
                     ui.label(
-                        egui::RichText::new(format!(
-                            "Click on the bench to place {name} · Esc cancels"
-                        ))
-                        .font(font::ui(12.0))
-                        .color(p.accent_soft),
-                    );
+                        egui::RichText::new(format!("Placing {name} · Esc cancels"))
+                            .font(font::ui(12.0))
+                            .color(p.accent_soft),
+                    )
+                    .on_hover_text("Click on the bench to drop it");
                 }
-                if self.canvas.tool == crate::canvas::bench::Tool::Probe {
+                let hint = match &self.canvas.tool {
+                    crate::canvas::bench::Tool::Probe => Some("Click a pin to probe".to_string()),
+                    crate::canvas::bench::Tool::Clip { key, .. } => {
+                        Some(format!("Click a pin for {}", key.to_uppercase()))
+                    }
+                    crate::canvas::bench::Tool::Select => None,
+                };
+                if let Some(h) = hint {
                     ui.label(
-                        egui::RichText::new(
-                            "Probe tool: click a pin to pin a live label · Esc cancels",
-                        )
-                        .font(font::ui(12.0))
-                        .color(p.accent_soft),
+                        egui::RichText::new(format!("{h} · Esc cancels"))
+                            .font(font::ui(12.0))
+                            .color(p.accent_soft),
                     );
                 }
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(&title)
+                                .font(font::ui(12.0))
+                                .color(p.text_muted),
+                        )
+                        .truncate(),
+                    )
+                    .on_hover_text(match self.state.view {
+                        BenchView::Breadboard => "Drag from any pin or hole to wire it",
+                        BenchView::Schematic => {
+                            "Same netlist as the bench: edits show up in both views"
+                        }
+                    });
+                });
             });
-        });
+        }
     }
 
     /// The right rail (icon buttons + collapse handles).
@@ -765,7 +787,7 @@ impl Screen for WorkbenchScreen {
             ui.painter().text(
                 canvas.center(),
                 Align2::CENTER_CENTER,
-                "Drag a board and a breadboard from the palette to start",
+                "Drag a board here to start",
                 font::ui(14.0),
                 p.text_faint,
             );
