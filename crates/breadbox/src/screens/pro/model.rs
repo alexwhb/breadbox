@@ -545,7 +545,7 @@ pub fn build_view(
             AcView {
                 title: format!(".ac — Bode of {}", upper(&out)),
                 mag: vec![Trace::new(format!("|{}| dB", upper(&out)), p.accent, mag)],
-                phase: vec![Trace::new(format!("∠{} °", upper(&out)), p.info, ph).width(1.6)],
+                phase: vec![Trace::new(format!("φ {} °", upper(&out)), p.info, ph).width(1.6)],
                 plot: plot.clone(),
             }
         });

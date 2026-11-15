@@ -241,7 +241,9 @@ impl PluginsScreen {
         match app.plugins.registry.uninstall(id) {
             Ok(()) => {
                 if app.plugins.theme.as_deref() == Some(id) {
-                    app.plugins.apply_theme(&app.egui.clone(), None);
+                    let ctx = app.egui.clone();
+                    app.plugins.apply_theme(&ctx, None);
+                    app.theme.apply(&ctx);
                 }
                 app.plugins.changed();
                 app.toasts.info(format!("Uninstalled {name}"));
@@ -341,7 +343,10 @@ impl PluginsScreen {
     }
 
     fn load_local_dialog(&mut self, app: &mut AppCtx, folder: bool) {
-        let path = if folder {
+        // GUI tests answer the file dialog through the environment
+        let path = if let Some(p) = std::env::var_os("BREADBOX_TEST_PICK") {
+            Some(PathBuf::from(p))
+        } else if folder {
             crate::platform::pick_folder("Load a plugin folder (with plugin.json)")
         } else {
             crate::platform::open_file(
@@ -600,6 +605,10 @@ impl PluginsScreen {
                             {
                                 let ctx = app.egui.clone();
                                 app.plugins.apply_theme(&ctx, (!on).then_some(e.id.as_str()));
+                                if on {
+                                    // back to the user's own theme choice
+                                    app.theme.apply(&ctx);
+                                }
                             }
                         }
                         if e.kinds.contains(&Kind::Analysis) && active && app.project.is_some()

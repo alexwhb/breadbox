@@ -167,12 +167,15 @@ fn every_screen_renders_and_is_saved() {
     open_example(&mut h, "garden-node");
     // the Workbench and Pro → Schematic are real screens now (tests/workbench.rs renders them)
     assert!(has_label(&h, "Bench canvas"));
+    // Plugins / Lessons / PCB are real screens too (tests/plugins.rs, lessons.rs, pcb.rs
+    // render their screenshots)
     go(&mut h, "Plugins");
-    assert!(has_label_containing(&h, "SCREEN SLOT · Plugins"));
-    screenshot(&mut h, "plugins");
+    assert!(has_label(&h, "Category Instruments"));
     go(&mut h, "Lessons");
-    assert!(has_label_containing(&h, "SCREEN SLOT · Lessons"));
-    screenshot(&mut h, "lessons");
+    assert!(has_label_containing(
+        &h,
+        "Track 1 · Electricity you can see"
+    ));
     go(&mut h, "Pro");
     h.get_by_label("Schematic").click();
     h.run_steps(3);
@@ -183,6 +186,7 @@ fn every_screen_renders_and_is_saved() {
     assert!(has_label(&h, "Schematic canvas"));
     h.get_by_label("PCB").click();
     h.run_steps(3);
+    assert!(has_label(&h, "PCB canvas"));
     screenshot(&mut h, "pro-pcb");
 }
 

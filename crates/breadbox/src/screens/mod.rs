@@ -10,8 +10,6 @@ pub mod pro;
 pub mod workbench;
 
 use crate::router::{ScreenRegistry, ScreenSlot};
-use crate::widgets::Icon;
-use placeholder::Placeholder;
 
 /// All screens of the app.
 pub fn default_registry() -> ScreenRegistry {
@@ -34,16 +32,7 @@ pub fn default_registry() -> ScreenRegistry {
         ScreenSlot::ProSchematic,
         Box::new(pro::schematic::ProSchematicScreen::default()),
     );
-    r.register(
-        ScreenSlot::ProPcb,
-        Box::new(Placeholder::new(
-            ScreenSlot::ProPcb,
-            "PCB",
-            Icon::Chip,
-            "Footprints, board outline, ratsnest, two-layer routing with vias, DRC and Gerber export.",
-            "ui-plug-les (phase 4)",
-        )),
-    );
+    r.register(ScreenSlot::ProPcb, Box::new(pro::pcb::PcbScreen::default()));
     r.register(
         ScreenSlot::Plugins,
         Box::new(plugins::PluginsScreen::default()),

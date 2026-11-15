@@ -192,3 +192,103 @@ fn install_scope_place_dmm_read_a0_then_ohms() {
     );
     assert!(label_text(&h, "DMM1 dial:").unwrap().ends_with("Ω"));
 }
+
+fn copy_dir(from: &std::path::Path, to: &std::path::Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for e in std::fs::read_dir(from).unwrap() {
+        let e = e.unwrap();
+        let dst = to.join(e.file_name());
+        if e.path().is_dir() {
+            if e.file_name() != "target" && e.file_name() != "src" {
+                copy_dir(&e.path(), &dst);
+            }
+        } else {
+            std::fs::copy(e.path(), dst).unwrap();
+        }
+    }
+}
+
+fn load_local(h: &mut H, dir: &std::path::Path, name: &str) {
+    // SAFETY: the only test in this binary that answers file dialogs
+    unsafe { std::env::set_var("BREADBOX_TEST_PICK", dir) };
+    h.get_by_label("Load local plugin…").click();
+    h.run_steps(2);
+    h.get_by_label("Plugin folder…").click();
+    h.run_steps(3);
+    assert!(
+        has_label_containing(h, &format!("Load {name}?")),
+        "permission prompt for {name}"
+    );
+    h.get_by_label("Allow and load").click();
+    h.run_steps(4);
+    assert!(has_label(h, &format!("Plugin {name}")), "{name} installed");
+}
+
+#[test]
+fn local_plugins_hot_reload_theme_sdk_docs_and_plugin_analysis() {
+    let mut h = harness();
+    let dir = repo().join("examples/rc-filter-bode");
+    h.state_mut().open_path(&dir);
+    h.run_steps(4);
+    assert!(h.state().ctx.project.is_some());
+    go(&mut h, Route::Plugins);
+    // SDK docs
+    h.get_by_label("Plugin SDK docs").click();
+    h.run_steps(3);
+    assert!(has_label(&h, "Breadbox Plugin SDK"));
+    h.get_by_label("Back to plugins").click();
+    h.run_steps(2);
+    // a local analysis plugin (development folder) …
+    let work = breadbox::plugins::temp_dir("local-plugins");
+    let sens = work.join("sensitivity");
+    copy_dir(&repo().join("plugins/examples/sensitivity"), &sens);
+    load_local(&mut h, &sens, "DC sensitivity");
+    assert!(has_label_containing(&h, "ANALYSIS · installed · local"));
+    // … hot-reloads when its files change
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    let manifest = sens.join("plugin.json");
+    let text = std::fs::read_to_string(&manifest)
+        .unwrap()
+        .replace("per +1 %", "per +1 % (edited)");
+    std::fs::write(&manifest, text).unwrap();
+    assert!(
+        wait_for(&mut h, 10.0, |h| h
+            .state()
+            .ctx
+            .toasts
+            .items()
+            .iter()
+            .any(|t| t.text.starts_with("Reloaded DC sensitivity"))),
+        "no hot-reload notice"
+    );
+    // a theme plugin applies to the tokens
+    let sol = work.join("solarized");
+    copy_dir(&repo().join("plugins/examples/solarized"), &sol);
+    load_local(&mut h, &sol, "Solarized light");
+    h.get_by_label("Plugin Solarized light").click();
+    h.run_steps(2);
+    h.get_by_label("Apply theme").click();
+    h.run_steps(3);
+    assert!(breadbox::theme::plugin_palette_active());
+    assert_eq!(
+        breadbox::theme::pal_ctx(&h.state().ctx.egui).bg_app,
+        egui::Color32::from_rgb(0xFD, 0xF6, 0xE3)
+    );
+    h.get_by_label("Stop using theme").click();
+    h.run_steps(3);
+    assert!(!breadbox::theme::plugin_palette_active());
+    assert_eq!(
+        h.state().ctx.egui.theme(),
+        egui::Theme::Dark,
+        "back to the user's theme"
+    );
+    // the analysis plugin shows up in Pro → Analysis and runs on the netlist
+    go(&mut h, Route::Pro(breadbox::router::ProTab::Analysis));
+    h.run_steps(4);
+    h.get_by_label("Run DC sensitivity").click();
+    h.run_steps(4);
+    assert!(
+        has_label_containing(&h, "DC sensitivity result:"),
+        "no analysis output"
+    );
+}

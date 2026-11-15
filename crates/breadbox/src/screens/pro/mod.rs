@@ -5,6 +5,8 @@
 pub mod cards;
 pub mod demo;
 pub mod model;
+pub mod pcb;
+pub mod plugin_analyses;
 pub mod schematic;
 pub mod sync;
 
@@ -822,6 +824,8 @@ impl AnalysisScreen {
             }
             let _ = app;
         }
+        // analysis plugins (PLUG-7)
+        plugin_analyses::section(ui, app, &self.doc.text);
         ui.add_space(4.0);
         widgets::hline(ui, p.border);
         ui.add_space(4.0);
