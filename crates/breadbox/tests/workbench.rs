@@ -571,6 +571,13 @@ fn virtual_phone_connects_to_the_hm10_of_ble_button() {
             .is_some()),
         "the phone never saw an advertiser"
     );
+    // the Bluetooth LE card sits below the floor plan and its walls: bring it into view and
+    // let the scroll settle (the click goes to the button's on-screen position)
+    h.query_all_by_label_contains("Connect ")
+        .next()
+        .unwrap()
+        .scroll_to_me();
+    h.run_steps(12);
     h.query_all_by_label_contains("Connect ")
         .next()
         .unwrap()
