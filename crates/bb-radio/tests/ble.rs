@@ -219,6 +219,9 @@ fn hm10_at_commands_and_transparent_uart() {
     assert_eq!(svc[0].characteristics[0].uuid, HM10_CHAR);
     let t = m.t;
     m.space.ble.disconnect(t);
+    // the hang-up is queued synchronously: the space must ask to be stepped now, or a bench
+    // that only advances the radio at `next_wake()` never tells the MCU (OK+LOST)
+    assert_eq!(m.space.next_wake(), Some(t));
     assert_eq!(m.run(ms(10)), "OK+LOST");
     // Baud change applies after AT+RESET.
     m.send("AT+BAUD4");

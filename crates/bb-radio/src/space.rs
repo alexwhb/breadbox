@@ -372,7 +372,12 @@ impl RadioSpace {
     pub fn next_wake(&self) -> Option<SimTime> {
         let pending = self.slots.iter().any(|s| match &s.module {
             Module::Esp01(m) => self.net.has_events(m.station),
-            Module::Host(h) => self.net.has_events(h.station),
+            Module::Host(h) => {
+                self.net.has_events(h.station) || self.ble.has_peripheral_events(h.peripheral)
+            }
+            // phone-side events (disconnect) are queued synchronously: poll the module now
+            Module::Hm10(m) => self.ble.has_peripheral_events(m.peripheral),
+            Module::Hc05(m) => self.ble.has_peripheral_events(m.device),
             _ => false,
         });
         // a downlink published to the gateway's MQTT topic is sent right away

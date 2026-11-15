@@ -598,6 +598,12 @@ impl BleSpace {
         }
     }
 
+    /// True when a peripheral has events its module has not taken yet (the space must poll the
+    /// module now, e.g. `OK+LOST` after the phone hung up).
+    pub fn has_peripheral_events(&self, id: PeripheralId) -> bool {
+        self.per(id).is_ok_and(|p| !p.events.is_empty())
+    }
+
     pub fn take_peripheral_events(&mut self, id: PeripheralId) -> Vec<PeripheralEvent> {
         self.per_mut(id)
             .map(|p| p.events.drain(..).collect())
