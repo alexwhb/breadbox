@@ -16,6 +16,8 @@ pub struct BenchService {
     pub debug: HashMap<String, DebugViewModel>,
     pub radio: Option<RadioPanelModel>,
     pub pins: HashMap<String, Vec<PinView>>,
+    /// Live probe values (`V(A0)` → volts) for the Pro `.op` table's bench column.
+    pub probes: HashMap<String, f64>,
     /// Unconsumed events (screens take them).
     pub events: Vec<BenchEvent>,
     pub running: bool,
@@ -35,6 +37,7 @@ impl BenchService {
             debug: HashMap::new(),
             radio: None,
             pins: HashMap::new(),
+            probes: HashMap::new(),
             events: Vec::new(),
             running: false,
             sim_time: SimTime::ZERO,
@@ -82,6 +85,7 @@ impl BenchService {
         self.debug.clear();
         self.radio = None;
         self.pins.clear();
+        self.probes.clear();
         self.events.clear();
         self.running = false;
         self.sim_time = SimTime::ZERO;
@@ -112,6 +116,9 @@ impl BenchService {
         }
         for (t, p) in u.pins {
             self.pins.insert(t, p);
+        }
+        for (k, v) in u.probes {
+            self.probes.insert(k, v);
         }
         self.events.extend(u.events);
         changed

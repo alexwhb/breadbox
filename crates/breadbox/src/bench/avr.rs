@@ -210,6 +210,7 @@ impl BenchLink for AvrBench {
             debug: vec![s.debug.clone()],
             radio: s.radio.clone(),
             pins: vec![(self.target.id.clone(), s.pins.clone())],
+            probes: Vec::new(),
             events: std::mem::take(&mut s.events),
         }
     }

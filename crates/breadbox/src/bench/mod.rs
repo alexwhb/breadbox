@@ -482,6 +482,9 @@ pub struct BenchUpdate {
     pub radio: Option<RadioPanelModel>,
     /// Latest pin states per target.
     pub pins: Vec<(String, Vec<PinView>)>,
+    /// Live probe readings keyed like the Pro `.op` table (`V(A0)`, `I(D1) avg`, `P(R2)`) —
+    /// the "bench probe" column. Empty for benches without a circuit.
+    pub probes: Vec<(String, f64)>,
     pub events: Vec<BenchEvent>,
 }
 

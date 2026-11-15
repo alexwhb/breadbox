@@ -88,3 +88,37 @@ fn firmware_breakpoint_hit_and_step_over() {
     h.get_by_label("Continue").click();
     assert!(wait_for(&mut h, 30.0, |h| paused_at(h) == Some(8)), "continue did not come back to the breakpoint");
 }
+
+#[test]
+fn pro_analysis_runs_demo_and_populates_plots() {
+    let mut h = harness();
+    open_example(&mut h, "garden-node");
+    go(&mut h, "Pro");
+    assert!(matches!(h.state().ctx.route, breadbox::router::Route::Pro(_)));
+    // auto-runs on first open
+    assert!(wait_for(&mut h, 120.0, |h| has_label(h, "tran plot") && has_label(h, "dc plot") && has_label(h, "mc histogram")), "plots never appeared");
+    h.run_steps(3);
+    screenshot(&mut h, "pro-analysis");
+    assert!(has_label_containing(&h, "3 steps · "));
+    assert!(has_label_containing(&h, "V(A1) 2.59") || has_label_containing(&h, "V(A1) 2.60"), "op table row");
+    assert!(has_label_containing(&h, "Transient (.tran) — 0 → 10 ms · step 1 µs"));
+    screenshot(&mut h, "pro-analysis");
+    // re-run explicitly
+    h.get_by_label("Run analyses").click();
+    assert!(wait_for(&mut h, 120.0, |h| !has_label(h, "Cancel") && has_label(h, "tran plot")));
+}
+
+#[test]
+fn navigate_home_firmware_pro_home() {
+    let mut h = harness();
+    open_example(&mut h, "blink");
+    assert_eq!(h.state().ctx.route, breadbox::router::Route::Workbench);
+    go(&mut h, "Firmware");
+    assert_eq!(h.state().ctx.route, breadbox::router::Route::Firmware);
+    go(&mut h, "Pro");
+    assert!(matches!(h.state().ctx.route, breadbox::router::Route::Pro(_)));
+    h.get_by_label("Breadbox").click();
+    h.run_steps(3);
+    assert_eq!(h.state().ctx.route, breadbox::router::Route::Home);
+    assert!(has_label_containing(&h, "Open recent blink"));
+}
