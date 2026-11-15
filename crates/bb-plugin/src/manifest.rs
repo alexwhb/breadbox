@@ -15,7 +15,7 @@
 //!     "parts": "./parts.json",
 //!     "panel": "./panel.json"
 //!   },
-//!   "spice": { "load": "R 10Meg ∥ C 100p" },
+//!   "spice": { "load": "R 10Meg ‖ C 100p" },
 //!   "specs": { "counts": 6000, "dcv_ranges": ["600m", "6", "60", "600"],
 //!              "dcv_accuracy": "0.05% + 1", "autorange_ms": 350 },
 //!   "permissions": ["read:nets", "inject:load"]
@@ -396,7 +396,7 @@ pub struct Provides {
 /// `spice`: circuit-facing summary.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct SpiceInfo {
-    /// The load the plugin puts on the circuit, for people (`R 10Meg ∥ C 100p`). A plugin with
+    /// The load the plugin puts on the circuit, for people (`R 10Meg ‖ C 100p`). A plugin with
     /// a load must declare `inject:load`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub load: Option<String>,
@@ -785,7 +785,7 @@ mod tests {
                 "view2d": "./dmm.symbol.svg",
                 "parts": "./parts.json"
             },
-            "spice": {"load": "R 10Meg ∥ C 100p"},
+            "spice": {"load": "R 10Meg ‖ C 100p"},
             "specs": {"counts": 6000, "dcv_ranges": ["600m", "6", "60", "600"],
                       "dcv_accuracy": "0.05% + 1", "autorange_ms": 350},
             "permissions": ["read:nets", "inject:load"]

@@ -73,10 +73,7 @@ pub struct BuildResult {
 
 /// Staging folder for a sketch: `~/Library/Caches/Breadbox/staging/<key>/<sketch>/`.
 pub fn staging_dir(key: &str, sketch_name: &str) -> PathBuf {
-    bb_firmware::compile::build_cache_root()
-        .parent()
-        .map(Path::to_path_buf)
-        .unwrap_or_else(std::env::temp_dir)
+    crate::platform::caches()
         .join("staging")
         .join(key)
         .join(sketch_name)

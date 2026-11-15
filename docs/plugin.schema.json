@@ -576,7 +576,7 @@
         "panel": "./panel.json"
       },
       "spice": {
-        "load": "R 10Meg ∥ C 100p"
+        "load": "R 10Meg ‖ C 100p"
       },
       "specs": {
         "counts": 6000,
@@ -588,7 +588,7 @@
         ],
         "dcv_accuracy": "0.05% + 1",
         "autorange_ms": 350,
-        "input": "10 MΩ ∥ 100 pF",
+        "input": "10 MΩ ‖ 100 pF",
         "burden_10a": "0.03 V/A",
         "modes": [
           "V⎓",
@@ -613,7 +613,7 @@
         },
         {
           "label": "Input impedance",
-          "value": "10 MΩ ∥ 100 pF"
+          "value": "10 MΩ ‖ 100 pF"
         },
         {
           "label": "Burden (10 A)",

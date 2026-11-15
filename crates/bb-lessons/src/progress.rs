@@ -31,8 +31,7 @@ impl Progress {
         if let Ok(d) = std::env::var("BREADBOX_PROGRESS") {
             return PathBuf::from(d);
         }
-        let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
-        PathBuf::from(home).join("Library/Application Support/Breadbox/lessons/progress.json")
+        bb_core::paths::app_support().join("lessons/progress.json")
     }
 
     /// Loads (or starts empty when the file doesn't exist yet).

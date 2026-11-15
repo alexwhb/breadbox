@@ -220,7 +220,7 @@ pub fn rom_char(c: u8) -> char {
         0xE4 => 'µ',
         0xF4 => 'Ω',
         0x20..=0x7D => c as char,
-        _ => '▯',
+        _ => '□',
     }
 }
 

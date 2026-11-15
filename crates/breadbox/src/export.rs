@@ -188,21 +188,43 @@ pub fn bom_csv(project: &Project, lib: &Library) -> String {
     out
 }
 
-/// Rasterises an SVG (the schematic export) to PNG with the bundled fonts.
-pub fn svg_to_png(svg: &str, scale: f32) -> Result<Vec<u8>> {
-    let mut opt = resvg::usvg::Options::default();
-    {
-        let db = opt.fontdb_mut();
+/// The bundled fonts (Inter, JetBrains Mono, Space Grotesk) as a resvg font database, built
+/// once. SVG text (schematic exports, plugin part art) renders with these and nothing else —
+/// never with whatever fonts the Mac happens to have.
+pub fn svg_fonts() -> std::sync::Arc<resvg::usvg::fontdb::Database> {
+    static DB: std::sync::OnceLock<std::sync::Arc<resvg::usvg::fontdb::Database>> =
+        std::sync::OnceLock::new();
+    DB.get_or_init(|| {
+        let mut db = resvg::usvg::fontdb::Database::new();
         for f in [
             crate::theme::INTER_REGULAR,
             crate::theme::INTER_MEDIUM_TTF,
+            crate::theme::INTER_SEMIBOLD_TTF,
             crate::theme::MONO_REGULAR,
             crate::theme::MONO_MEDIUM_TTF,
+            crate::theme::GROTESK_VARIABLE,
         ] {
             db.load_font_data(f.to_vec());
         }
+        db.set_sans_serif_family("Inter");
+        db.set_monospace_family("JetBrains Mono");
+        std::sync::Arc::new(db)
+    })
+    .clone()
+}
+
+/// usvg options over [`svg_fonts`] with `default_family` for text without a usable family.
+pub fn svg_options(default_family: &str) -> resvg::usvg::Options<'static> {
+    resvg::usvg::Options {
+        fontdb: svg_fonts(),
+        font_family: default_family.into(),
+        ..Default::default()
     }
-    opt.font_family = "JetBrains Mono".into();
+}
+
+/// Rasterises an SVG (the schematic export) to PNG with the bundled fonts.
+pub fn svg_to_png(svg: &str, scale: f32) -> Result<Vec<u8>> {
+    let opt = svg_options("JetBrains Mono");
     let tree = resvg::usvg::Tree::from_str(svg, &opt).context("svg")?;
     let size = tree.size();
     let w = (size.width() * scale).ceil().max(1.0) as u32;

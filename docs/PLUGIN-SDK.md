@@ -66,7 +66,7 @@ plugins enable its `global-allocator` feature.
     "parts": "./parts.json",
     "panel": "./panel.json"
   },
-  "spice": { "load": "R 10Meg ∥ C 100p" },
+  "spice": { "load": "R 10Meg ‖ C 100p" },
   "specs": { "counts": 6000, "dcv_ranges": ["600m", "6", "60", "600"],
              "dcv_accuracy": "0.05% + 1", "autorange_ms": 350 },
   "highlights": [{ "label": "Display", "value": "6000 counts" }],

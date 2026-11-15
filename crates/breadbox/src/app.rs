@@ -413,6 +413,12 @@ impl BreadboxApp {
             }
         }
         if self.entered != Some(self.ctx.route) {
+            if let Some(prev) = self.entered.map(Route::slot)
+                && prev != slot
+                && let Some(s) = self.screens.get_mut(prev)
+            {
+                s.on_leave(&mut self.ctx);
+            }
             self.entered = Some(self.ctx.route);
             if let Some(s) = self.screens.get_mut(slot) {
                 s.on_enter(&mut self.ctx);

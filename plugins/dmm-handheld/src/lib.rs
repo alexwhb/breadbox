@@ -1,6 +1,6 @@
 //! Handheld DMM (PLUG-5): a 6000-count meter that behaves like the real thing.
 //!
-//! * The input (10 MΩ ∥ 100 pF), the ohms source, and the 10 A / mA shunts are SPICE elements
+//! * The input (10 MΩ ‖ 100 pF), the ohms source, and the 10 A / mA shunts are SPICE elements
 //!   of the part, so the meter loads the circuit exactly like a real one (`inject:load`).
 //! * Readings integrate element charge/energy over a 100 ms conversion: DC = mean, AC =
 //!   AC-coupled true RMS (√(E[v²] − E[v]²)), current = mean shunt current.
@@ -469,7 +469,7 @@ impl Dmm {
                 ));
             }
         }
-        p.readouts.push(("Input".into(), "10 MΩ ∥ 100 pF".into()));
+        p.readouts.push(("Input".into(), "10 MΩ ‖ 100 pF".into()));
         ctx.set_panel(&p);
         ctx.set_readout(&if text.is_empty() {
             String::from("—")

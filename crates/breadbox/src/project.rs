@@ -481,29 +481,21 @@ pub struct Resources {
 }
 
 impl Resources {
-    /// `$BREADBOX_RESOURCES`, `Breadbox.app/Contents/Resources`, or the source checkout.
+    /// `$BREADBOX_RESOURCES`, `Breadbox.app/Contents/Resources`, or the source checkout in
+    /// development builds (`bb_core::paths::resources_root`; a bundled app never reads the
+    /// repository).
     pub fn locate() -> Resources {
-        if let Some(r) = std::env::var_os("BREADBOX_RESOURCES") {
-            return Resources {
-                root: Some(PathBuf::from(r)),
-            };
-        }
-        if let Ok(exe) = std::env::current_exe()
-            && let Some(res) = exe
-                .parent()
-                .and_then(|p| p.parent())
-                .map(|c| c.join("Resources"))
-            && res.join("examples").is_dir()
-        {
-            return Resources { root: Some(res) };
-        }
-        let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
         Resources {
-            root: dev
-                .join("examples")
-                .is_dir()
-                .then(|| dev.canonicalize().unwrap_or(dev)),
+            root: bb_core::paths::resources_root(),
         }
+    }
+
+    /// `<root>/<rel>` if it exists (`docs/PLUGIN-SDK.md`, `licenses`, …).
+    pub fn file(&self, rel: &str) -> Option<PathBuf> {
+        self.root
+            .as_ref()
+            .map(|r| r.join(rel))
+            .filter(|p| p.exists())
     }
 
     pub fn examples(&self) -> Option<PathBuf> {

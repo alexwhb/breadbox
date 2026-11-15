@@ -162,6 +162,12 @@ pub trait Screen {
     fn project_changed(&mut self, _app: &mut AppCtx) {}
     /// Called when the screen becomes visible.
     fn on_enter(&mut self, _app: &mut AppCtx) {}
+    /// Called when another screen replaces this one (pause private work, e.g. a lesson bench).
+    fn on_leave(&mut self, _app: &mut AppCtx) {}
+    /// The concrete screen (tests and cross-screen glue downcast through this).
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        None
+    }
     /// Per-screen state persisted with the app (window/screen restore, `APP-5`).
     fn save_state(&self) -> Option<serde_json::Value> {
         None

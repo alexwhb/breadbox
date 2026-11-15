@@ -1,11 +1,35 @@
-//! OS-specific glue (`PLAT-1`): the native menu bar (`APP-4`) and file dialogs. Everything
-//! platform-dependent lives here; other modules stay portable.
+//! OS-specific glue (`PLAT-1`): where resources and user data live, the native menu bar
+//! (`APP-4`) and file dialogs. Everything platform-dependent lives here; other modules stay
+//! portable.
 
 use crate::app::AppCtx;
-use crate::project::ProjectMode;
+use crate::project::{ProjectMode, Resources};
 use crate::router::{Command, ProTab, Route};
 use crate::theme::ThemeChoice;
 use std::path::PathBuf;
+
+/// Bundled read-only resources (examples, lessons, first-party plugins, docs, licences):
+/// `$BREADBOX_RESOURCES`, `Breadbox.app/Contents/Resources`, or the repository in development
+/// builds. The one resolver every crate uses is [`bb_core::paths`].
+pub fn resources() -> Resources {
+    Resources::locate()
+}
+
+/// Per-user data (plugins, lesson progress, toolchain, app state):
+/// `~/Library/Application Support/Breadbox` (or `$BREADBOX_APP_SUPPORT`).
+pub fn app_support() -> PathBuf {
+    bb_core::paths::app_support()
+}
+
+/// Per-user caches (build cache, staging): `~/Library/Caches/Breadbox` (or `$BREADBOX_CACHES`).
+pub fn caches() -> PathBuf {
+    bb_core::paths::caches()
+}
+
+/// The saved window + screen state (`APP-5`): `<app support>/app-state.ron`.
+pub fn app_state_file() -> PathBuf {
+    app_support().join("app-state.ron")
+}
 
 /// Folder picker (Open project).
 pub fn pick_folder(title: &str) -> Option<PathBuf> {

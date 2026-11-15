@@ -117,7 +117,7 @@ options = [
     "Current through R1 went down",
 ]
 answer = 1
-explain = "10 kΩ ∥ 10 kΩ = 5 kΩ, so V(out) = 5 × 5k ÷ 15k ≈ 1.67 V. Dividers only hold their value into loads much bigger than R2. The meter's 10 MΩ input is why measuring barely disturbs it."
+explain = "10 kΩ ‖ 10 kΩ = 5 kΩ, so V(out) = 5 × 5k ÷ 15k ≈ 1.67 V. Dividers only hold their value into loads much bigger than R2. The meter's 10 MΩ input is why measuring barely disturbs it."
 
 [[steps.solution]]
 do = "quiz"

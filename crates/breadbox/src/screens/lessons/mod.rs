@@ -557,9 +557,21 @@ impl Screen for LessonsScreen {
 
     fn on_enter(&mut self, app: &mut AppCtx) {
         self.ensure_catalog(app);
+        // resume the lesson bench paused by `on_leave`
         if let Some(r) = self.run.as_mut() {
             r.set_running(true);
         }
+    }
+
+    /// The lesson's own bench doesn't run behind other screens.
+    fn on_leave(&mut self, _app: &mut AppCtx) {
+        if let Some(r) = self.run.as_mut() {
+            r.set_running(false);
+        }
+    }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
     }
 
     fn ui(&mut self, ui: &mut Ui, app: &mut AppCtx) {

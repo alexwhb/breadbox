@@ -213,26 +213,17 @@ impl Registry {
         if let Ok(d) = std::env::var("BREADBOX_PLUGIN_DIR") {
             return PathBuf::from(d);
         }
-        let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
-        PathBuf::from(home).join("Library/Application Support/Breadbox/plugins")
+        bb_core::paths::app_support().join("plugins")
     }
 
-    /// First-party plugins: `$BREADBOX_BUNDLED_PLUGINS`, `<app>/Contents/Resources/plugins`, or
-    /// the repository's `plugins/` folder.
+    /// First-party plugins: `$BREADBOX_BUNDLED_PLUGINS`, else `plugins/` in the app resources
+    /// (`Breadbox.app/Contents/Resources/plugins` or the repository, see [`bb_core::paths`]).
     pub fn default_bundled_dir() -> Option<PathBuf> {
         if let Ok(d) = std::env::var("BREADBOX_BUNDLED_PLUGINS") {
             return Some(PathBuf::from(d));
         }
-        if let Ok(exe) = std::env::current_exe()
-            && let Some(macos) = exe.parent()
-        {
-            let res = macos.join("../Resources/plugins");
-            if res.join("catalog.json").exists() {
-                return Some(res);
-            }
-        }
-        let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins");
-        repo.join("catalog.json").exists().then_some(repo)
+        bb_core::paths::resource("plugins/catalog.json")
+            .and_then(|c| c.parent().map(Path::to_path_buf))
     }
 
     /// Opens the registry: scans bundled, user and local plugins and applies saved state.

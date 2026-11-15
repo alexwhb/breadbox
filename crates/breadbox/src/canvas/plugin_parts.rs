@@ -149,7 +149,8 @@ fn svg_texture(
         return Some(t.clone());
     }
     let text = std::fs::read_to_string(path).ok()?;
-    let opt = resvg::usvg::Options::default();
+    // text in the art renders with the bundled fonts
+    let opt = crate::export::svg_options("Inter");
     let tree = resvg::usvg::Tree::from_str(&text, &opt).ok()?;
     let ts = tree.size();
     let target = bucket as f32 * 64.0;

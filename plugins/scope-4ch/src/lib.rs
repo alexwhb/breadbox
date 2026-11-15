@@ -3,8 +3,8 @@
 //! * Acquisition: the host records each enabled channel's node (`bb_capture`) at the
 //!   timebase's sample rate; every ~33 ms the model fetches the samples, finds the trigger and
 //!   redraws its screen (`bb_set_panel`, needs `ui:panel`).
-//! * Inputs load the circuit like the real thing: 1 MΩ ∥ 100 pF (1× incl. cable) or
-//!   10 MΩ ∥ 12 pF (10× probe), SPICE elements of the part (`inject:load`).
+//! * Inputs load the circuit like the real thing: 1 MΩ ‖ 100 pF (1× incl. cable) or
+//!   10 MΩ ‖ 12 pF (10× probe), SPICE elements of the part (`inject:load`).
 //! * 10× probe compensation: a mis-adjusted trimmer shows the classic overshoot / rounding on
 //!   square waves (first-order probe response, τ ≈ 117 µs).
 //! * Coupling DC / AC (≈ 7 Hz high-pass) / GND; edge and pulse-width triggers; auto / normal /

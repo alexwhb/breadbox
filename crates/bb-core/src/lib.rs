@@ -5,6 +5,7 @@
 //! See `docs/ARCHITECTURE.md` §2–§3.
 
 pub mod device;
+pub mod paths;
 pub mod rng;
 pub mod si;
 mod time;
