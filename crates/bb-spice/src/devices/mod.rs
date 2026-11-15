@@ -219,8 +219,8 @@ impl Ckt {
         // divided differences over order+2 points
         let mut diff = [0.0f64; 4];
         let mut dt = [0.0f64; 4];
-        for i in 0..=order + 1 {
-            diff[i] = self.st[i][q];
+        for (i, d) in diff.iter_mut().enumerate().take(order + 2) {
+            *d = self.st[i][q];
         }
         for (i, d) in dt.iter_mut().enumerate().take(order + 1) {
             *d = self.delta_old[i];
