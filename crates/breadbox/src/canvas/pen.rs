@@ -513,6 +513,43 @@ impl<'a> Pen<'a> {
             .text(self.p(x, y), align, s, font(px), self.c(color));
     }
 
+    /// Silkscreen text along the part's local "up" direction (vertical pin labels). With
+    /// `from_anchor` the text starts at `(x, y)` and runs up; otherwise it ends there (and so
+    /// hangs below it). Rotated parts keep it readable (never upside down).
+    #[allow(clippy::too_many_arguments)]
+    pub fn text_up(
+        &self,
+        x: f64,
+        y: f64,
+        s: &str,
+        size: f64,
+        font: fn(f32) -> FontId,
+        color: Color32,
+        from_anchor: bool,
+    ) {
+        let px = self.len(size);
+        if px < 4.5 || s.is_empty() {
+            return;
+        }
+        let a = self.p(x, y);
+        let u = (self.p(x, y - 1.0) - a).normalized();
+        let galley = self
+            .painter
+            .layout_no_wrap(s.to_string(), font(px), self.c(color));
+        let (w, h) = (galley.size().x, galley.size().y);
+        // the text covers a + u·t for t in [0, w] (from the anchor) or [-w, 0]
+        let (mut start, mut dir) = if from_anchor { (a, u) } else { (a - u * w, u) };
+        if dir.x < -0.3 || (dir.x.abs() <= 0.3 && dir.y > 0.0) {
+            start += dir * w;
+            dir = -dir;
+        }
+        let n = egui::vec2(-dir.y, dir.x);
+        let pos = start - n * (h / 2.0);
+        let angle = dir.y.atan2(dir.x);
+        self.painter
+            .add(egui::epaint::TextShape::new(pos, galley, self.c(color)).with_angle(angle));
+    }
+
     /// Text with a fixed screen size (labels that stay readable when zoomed out).
     #[allow(clippy::too_many_arguments)]
     pub fn label_px(

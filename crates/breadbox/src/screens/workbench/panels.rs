@@ -380,7 +380,7 @@ fn instruments(ui: &mut Ui, app: &mut AppCtx, canvas: &mut BenchCanvas) {
             "dmm",
             "Multimeter",
             Icon::Multimeter,
-            "V⎓ auto · 6000 counts",
+            "DC volts · auto · 6000 counts",
             &["plus", "com"],
         ),
     ];

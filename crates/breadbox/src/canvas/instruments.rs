@@ -152,7 +152,7 @@ impl BenchInstrument for MiniScope {
     }
 
     fn tip_label(&self, key: &str, net: &str) -> Option<String> {
-        (key == "gnd").then(|| format!("⏚ → {net}"))
+        (key == "gnd").then(|| format!("GND → {net}"))
     }
 }
 

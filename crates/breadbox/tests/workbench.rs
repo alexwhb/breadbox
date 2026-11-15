@@ -738,3 +738,105 @@ fn crate_bounds(
     let b = breadbox::canvas::scene::world_bounds(def, &p.bench.as_ref().unwrap().at, &leads);
     (b.x0, b.y0, b.x1, b.y1)
 }
+
+/// Every library part on one bench (art QA): `docs/screenshots/workbench-parts.png`.
+#[test]
+fn every_part_has_bench_art() {
+    let tmp = std::env::temp_dir().join(format!("bb-parts-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&tmp);
+    std::fs::create_dir_all(&tmp).unwrap();
+    let lib = bb_circuit::Library::builtin();
+    let mut p = bb_circuit::Project::new("parts", bb_circuit::project::Mode::Playground);
+    let mut ed = bb_circuit::Editor::new(p.clone());
+    let mut parts: Vec<_> = lib.parts().filter(|d| !d.bench.hidden).cloned().collect();
+    parts.sort_by_key(|d| (breadbox::canvas::art::layer(d), d.id.clone()));
+    let (mut x, mut y, mut row_h) = (0.0f64, 0.0f64, 0.0f64);
+    for d in &parts {
+        let b = breadbox::canvas::art::local_bounds(d);
+        let (w, h) = (b.w() + 3.0, b.h() + 4.0);
+        if x + w > 150.0 {
+            x = 0.0;
+            y += row_h;
+            row_h = 0.0;
+        }
+        ed.add_part(&lib, &d.id, (x - b.x0).round(), (y - b.y0).round())
+            .unwrap();
+        x += w;
+        row_h = row_h.max(h);
+    }
+    p = ed.project.clone();
+    p.save(&tmp).unwrap();
+    let mut h = harness();
+    h.state_mut().open_path(&tmp);
+    h.run_steps(4);
+    assert_eq!(doc(&h).project().parts.len(), parts.len());
+    h.get_by_label("Run").click();
+    h.run_steps(30);
+    // fit everything and render
+    h.state_mut()
+        .ctx
+        .navigate(breadbox::router::Route::Workbench);
+    h.run_steps(4);
+    screenshot(&mut h, "workbench-parts");
+    // zoomed tiles for close inspection (target dir, not committed)
+    let canvas = h.get_by_label("Bench canvas").rect();
+    let v = view(&h);
+    let target = 18.0f32; // points per 0.1"
+    h.hover_at(canvas.center());
+    h.run_steps(1);
+    h.event(egui::Event::Zoom(target / v.scale));
+    h.run_steps(2);
+    let v = view(&h);
+    let (tw, th) = (
+        (canvas.width() / v.scale) as f64 - 2.0,
+        (canvas.height() / v.scale) as f64 - 2.0,
+    );
+    let ext = {
+        let d = doc(&h);
+        let mut e = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
+        for p in &d.project().parts {
+            let b = crate_bounds(d, p);
+            e = (e.0.min(b.0), e.1.min(b.1), e.2.max(b.2), e.3.max(b.3));
+        }
+        e
+    };
+    let out = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("parts-qa");
+    let _ = std::fs::create_dir_all(&out);
+    let mut n = 0;
+    let mut ty = ext.1;
+    while ty < ext.3 {
+        let mut tx = ext.0;
+        while tx < ext.2 {
+            // pan so the tile's top-left sits at the canvas top-left
+            let v = view(&h);
+            let at = v.to_screen(tx - 1.0, ty - 1.0);
+            h.event(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: canvas.min - at,
+                modifiers: egui::Modifiers::NONE,
+                phase: egui::TouchPhase::Move,
+                source: egui::MouseWheelSource::Trackpad,
+            });
+            h.run_steps(8);
+            h.remove_cursor();
+            h.run_steps(2);
+            if let Ok(img) = h.render() {
+                let crop = image::imageops::crop_imm(
+                    &img,
+                    canvas.min.x as u32,
+                    canvas.min.y as u32,
+                    canvas.width() as u32,
+                    canvas.height() as u32,
+                )
+                .to_image();
+                let _ = crop.save(out.join(format!("tile-{n:02}.png")));
+            }
+            h.hover_at(canvas.center());
+            h.run_steps(1);
+            n += 1;
+            tx += tw;
+        }
+        ty += th;
+    }
+    let _ = std::fs::remove_dir_all(&tmp);
+}

@@ -199,7 +199,7 @@ pub fn local_bounds(def: &PartDef) -> WRect {
         "battery_pack" => WRect::new(-0.6, -h + 0.4, w - 0.6, 0.6),
         "usb_supply" | "barrel_jack" => WRect::new(-0.6, -h + 0.4, w - 0.4, 0.6),
         "source" | "spice_box" => WRect::new(-0.6, -2.6, lx1 + 0.6, 0.5),
-        "pot_soil" => WRect::new(0.0, -6.0, w, h),
+        "pot_soil" => WRect::new(0.0, -12.5, w, h),
         "desk_lamp" | "hand" => WRect::new(0.0, 0.0, w, h),
         "mini_scope" => WRect::new(-1.0, -1.0, 19.0, 10.0),
         "dmm" => WRect::new(-1.0, -1.0, 12.0, 15.6),
