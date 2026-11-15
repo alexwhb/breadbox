@@ -556,13 +556,148 @@ Example sketches live in `examples/<project>/firmware/<MCU ref>/<sketch>/` with 
 
 ## 8. App (`breadbox`)
 
-- `eframe` + `egui` (wgpu), `egui_extras` (tables, svg), `egui_plot` (plots),
-  `egui_kittest` for GUI tests, `rfd` for native dialogs, `muda` (or eframe menus) for the
-  macOS menu bar, `rodio`/`cpal` for buzzer/speaker audio.
-- `screens/{home,workbench,firmware,pro,plugins,lessons}.rs`; `canvas/{breadboard,schematic,
-  pcb}.rs` renderers + hit-testing; `theme.rs` (tokens from `docs/DESIGN.md`); `widgets/`
-  (segmented control, tiles, sliders with stops, chips, code editor, plots, instrument faces).
-- Every interactive widget has an AccessKit label so `egui_kittest` can drive it by name.
+**Stack.** `eframe`/`egui` 0.37 (wgpu, AccessKit, persistence), `egui_plot` 0.38, `rfd` (file
+dialogs), `muda` (macOS menu bar), `image` (PNG export), `egui_kittest` 0.37 (wgpu snapshots)
+for GUI tests. Fonts are bundled (`assets/fonts/`, OFL licenses next to them) and embedded with
+`include_bytes!`: Inter 400/500/600, JetBrains Mono 400/500, Space Grotesk (variable, 500/600
+via `FontTweak::coords`).
+
+**Module map** (`crates/breadbox/src/`):
+
+```
+main.rs              env_logger + breadbox::run()
+lib.rs               native_options() (1440×900, min 1280×800, persisted geometry), run(), STARTED
+app.rs               BreadboxApp (eframe::App), AppCtx (shared services), AppOptions, PersistedState,
+                     top bar (logo + wordmark → Home, breadcrumb + screen switcher, mode badge,
+                     Pro tabs), shortcuts, command routing, raw_input_hook (menu → editor keys)
+router.rs            Route, ProTab, ScreenSlot, Screen trait, ScreenRegistry, Command
+platform.rs          NativeMenu (muda; File/Edit/View/Simulate/Window/Help), file dialogs (rfd)
+theme.rs             Palette DARK/LIGHT (DESIGN.md tokens), font helpers, style_for(), paper/dots grids
+project.rs           Project (project.json as plain JSON: name, mode, MCUs + sketch dirs, radios),
+                     examples scan, Resources (examples/fixtures location), recents
+toolchain.rs         ToolchainService: background detect, one-click install job, library list
+jobs.rs              Job<T> (thread + progress + cancel + repaint on change)
+bench/mod.rs         BenchLink trait + view models (the UI ↔ simulator contract, below)
+bench/avr.rs         AvrBench: BenchLink over bb_avr::Avr + bb_firmware::Debugger (+ ESP-01 radio)
+bench/service.rs     BenchService: owns the link, accumulates serial/debug/radio/pins/probes/events
+widgets/             the kit (below)
+screens/mod.rs       default_registry() — the ONE place screens are registered
+screens/home.rs      Home (APP-2)
+screens/placeholder.rs  slots for later phases
+screens/firmware/    mod.rs (screen), build.rs (staging + compile), debug_panel.rs,
+                     radio_panel.rs (RF-7 panel, reusable), libraries.rs (library manager, installer)
+screens/pro/         mod.rs (Analysis tab), cards.rs (dot-card editing), model.rs (Results → view
+                     data), demo.rs (design netlist + stand-in subcircuits)
+```
+
+**Router.** `Route::{Home, Workbench, Firmware, Pro(ProTab::{Schematic, Analysis, Pcb}),
+Plugins, Lessons}` maps to a `ScreenSlot`; `ScreenRegistry` holds one `Box<dyn Screen>` per
+slot. To plug a screen in, replace its placeholder in `screens::default_registry()`:
+`r.register(ScreenSlot::Workbench, Box::new(WorkbenchScreen::new()))`. The `Screen` trait:
+`crumb(&AppCtx) -> Option<String>` (breadcrumb text), `header(&mut Ui, &mut AppCtx)` (top-bar
+controls, right-aligned via a right-to-left layout), `ui(&mut Ui, &mut AppCtx)` (body below the
+56 px bar), `command(&Command, &mut AppCtx) -> bool` (menu/shortcut commands, visible screen
+first), `project_changed`, `on_enter`, `save_state`/`load_state` (JSON, persisted). Screens
+navigate with `app.navigate(Route)` and queue app commands with `app.command(Command)`.
+
+**AppCtx** (passed to every screen): `project: Option<Project>`, `resources`, `examples`,
+`recent`, `toasts`, `toolchain: ToolchainService`, `bench: BenchService`, `theme`, `repaint`,
+`project_generation`; `open_project`, `set_project`, `bench_link()` (creates the link for the
+open project on first use).
+
+**Commands + shortcuts** (`APP-2`, `APP-4`): ⌘N new, ⌘O open, ⌘S save (examples are read-only:
+Save copies the project), ⌘⇧S save as, ⌘Z/⌘⇧Z undo/redo (text fields get them as key events),
+⌘W close project (window on Home), ⌘F find, ⌘B verify, ⌘U upload, ⌘R run/pause, ⌘1–5 screens,
+⌘⇧H Home, View → Theme (dark default, light token set). The native menu (muda) sends the same
+`Command`s; its items with key equivalents consume the keys, so egui shortcut handling only runs
+without the menu (tests, other OSes).
+
+**Persistence** (`APP-5`): eframe storage key `breadbox-app` → `PersistedState { route, theme,
+recent, last_project, screens: {slot key → JSON} }`; window geometry by eframe. Projects
+autosave edited sketch files 1.2 s after the last keystroke (bundled examples stay read-only).
+Idle cost: nothing repaints unless input, a job, a toast or the running bench asks.
+
+**Widget kit** (`widgets/`, all with AccessKit names): `Btn` (ghost / amber / mini / plain /
+danger, icon, selected, disabled), `segmented` (`.seg`) and `mini_segmented` (`.mini`),
+`part_tile` (`.tile`, drag source), `tag` / `kind_tag` / `filter_chip` / `status_dot` /
+`legend_swatch`, `section_header(_row)`, `StopSlider` (World-panel slider with named stops +
+mono value), `checkbox`, `tab_strip` / `tab` (amber underline), `rail_button` (`.rb`),
+`collapsible_side` + `panel_title_with_collapse` (`<|` / `|>` handles, `.tab-out`),
+`card_frame` / `inner_card_frame` / `panel_frame`, `data_table`, `Toasts`, `modal`,
+`progress` / `spinner`, `select` + `menu_item`, `child_ui`, `wrapped_text`, `kv_grid`,
+`icons::Icon` (the design's SVG paths parsed and stroked; part, tool and UI glyphs; never
+sparkles), `paint_logo`; `CodeEditor` + `CodeDoc` + `EditorView` (gutter, accessible
+"Breakpoint line N" targets, executing-line band, cursor line, Arduino C++ / SPICE
+highlighting in `highlight.rs`, diagnostics squiggles + hover, find bar, `editor_tabs`);
+`plot::{LinePlot (dual Y, log axes, cursors, markers), histogram_plot, bode_plot,
+traces_to_csv, traces_to_svg, export_png, auto_cursors, fmt_si}`. `docs/screenshots/widgets.png`
+shows them all.
+
+**BenchLink** — the contract the `ui-bench` agent implements over `bb_sim::SimHandle`
+(`bench/mod.rs`; `AvrBench` is the reference implementation):
+
+```rust
+pub trait BenchLink: Send {
+    fn describe(&self) -> String;
+    fn targets(&self) -> Vec<BenchTarget>;            // MCUs: id "U1", label, board, fqbn, emulation, sketch_dir
+    fn upload(&mut self, target: &str, fw: &Firmware) -> Result<UploadReport, BenchError>;
+    fn set_running(&mut self, running: bool);
+    fn is_running(&self) -> bool;
+    fn reset(&mut self, scope: ResetScope);           // Bench | Mcu(id)
+    fn set_speed(&mut self, speed: SimSpeed);         // RealTime(k) | Max
+    fn set_breakpoints(&mut self, target: &str, bps: &[BreakpointSpec]); // file (tab), line, enabled, hit_count
+    fn debug(&mut self, target: &str, cmd: DebugCommand); // Continue/Pause/StepOver/StepInto/StepOut/StepInstruction
+    fn send_serial(&mut self, target: &str, data: &[u8]);
+    fn radio(&mut self, cmd: RadioCommand);           // SetConditions / SetLanBridge / AddBleHat / Mqtt*
+    fn poll(&mut self) -> BenchUpdate;                // never blocks
+}
+pub struct BenchUpdate { running, sim_time, serial: Vec<SerialLine>, debug: Vec<DebugViewModel>,
+                         radio: Option<RadioPanelModel>, pins: Vec<(String, Vec<PinView>)>,
+                         probes: Vec<(String, f64)>, events: Vec<BenchEvent> }
+```
+
+Rules: methods return quickly (the bench runs on its own thread); the link calls the
+`BenchSpec::repaint` callback when new data exists (≤ 30 Hz while running, only on change when
+idle); `poll` drains serial lines / events and returns the latest view models. View models:
+`DebugViewModel { state: NoFirmware|Running|Paused{reason}|Halted, location: SourcePos { file
+(tab name), line }, function, call_stack: [FrameView], locals/globals: [VarView], registers:
+RegistersView (r0–31, SREG, SP, PC, cycle), breakpoints: [BreakpointView { line, resolved_line,
+hits, enabled }], debug_build }`; `RadioPanelModel { cards: [RadioCardView { label, title,
+status, tone, kind, rows }], log: [PacketRow { time, dir, text, dropped }], conditions:
+NetConditionsView, ble: Option<BleView>, mqtt }` with `RadioPanelModel::from_space(&RadioSpace,
+limit)`; `SerialLine { target, time, text, kind: Normal|System|Net|Warn|Error }`; `BenchEvent::
+{Flashed(UploadReport), BreakpointArmed, Paused, Note, Error}`; `probes` keys match the Pro
+`.op` table (`V(A0)`, `I(D1) avg`, `P(R2)`) for its "bench probe" column. Factories:
+`BenchFactory = Arc<dyn Fn(&BenchSpec) -> Box<dyn BenchLink>>` with `BenchSpec { project_dir,
+targets, radios, repaint, speed }`; register the sim-backed one with
+`AppOptions::bench_factory` or `app.ctx.bench.set_factory(..)`.
+
+`AvrBench` (until bb-sim's link lands): one AVR target (UNO/Nano/Mega), fixed ADC voltages
+(soil 42 % → 1.88 V on A0, 180 lux → 2.60 V on A1), and — if the project has an `esp01` part —
+a `bb_radio::RadioSpace` ESP-01 on SoftwareSerial D2 (TX) / D3 (RX) via `UartWire`, exactly
+like the garden-node example. Upload without a toolchain falls back to the project's prebuilt
+image / `examples/fixtures/<sketch>.<board>.elf`.
+
+**Firmware screen** (design screen 2): Verify stages the editor buffers into
+`~/Library/Caches/Breadbox/staging/<hash>/<sketch>/` and runs `Toolchain::compile` (AVR) or
+`host::compile_host` (ESP32/Pico) on a job; `BuildOutput::output_lines()` fill the Output tab;
+`Diagnostic`s become editor squiggles. "Step · breakpoints" builds `-Og` and arms the gutter's
+breakpoints via `BenchLink::set_breakpoints`; pauses follow the executing line across tabs.
+Bottom tabs: Output · Serial monitor · Debug (call stack, variables, registers + SREG).
+
+**Pro → Analysis** (design screen 3): the netlist editor (SPICE highlighting, parse errors as
+diagnostics, autosave for `analyses/*.cir`) feeds `model::run` on a job (`run_with` + cancel +
+progress). Breadbox-only parts the analog solver can't elaborate (`CAPSOIL`, `ATMEGA328P`) get
+stand-in subcircuits from `demo::STUB_PARTS` and their file-name parameters are stripped; in
+co-simulation bb-sim provides the real ones. Cards in the sidebar are dot-card lines; disabling
+comments them out as `*off .ac …`. Export `.cir` is `Netlist::to_spice_text()` with stand-ins
+inlined (ngspice-runnable); each plot exports CSV / PNG / SVG.
+
+**Tests** (`TEST-5`): `cargo test -p breadbox` — unit tests in modules, `tests/gui.rs` (the app
+driven by AccessKit labels through `egui_kittest` + wgpu; saves `docs/screenshots/*.png` at
+1440×900), `tests/widgets.rs` (widget behaviour + `tests/snapshots/widget-gallery.png`
+snapshot; `UPDATE_SNAPSHOTS=1` to refresh). GUI tests use `AppOptions::test()` (no persistence,
+no native menu, bench at max speed); compile tests skip gracefully without a toolchain.
 
 ## 9. Project file layout
 

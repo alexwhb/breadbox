@@ -322,3 +322,82 @@ Deviations / open issues:
 - Small additive changes outside my crates: `bb-spice` `CircuitBuilder::cards`,
   `Session::is_quiescent`, `Session::with_ext` (tests green); `scripts/build-test-firmware.sh`
   builds `bb-sim` sketches too.
+
+### ui-core
+Phase 3 — `crates/breadbox` (app shell, theme, widget kit, Home, Firmware screen, Pro Analysis
+tab, kittest harness) + `assets/fonts`. Module map, router, widget kit and the `BenchLink`
+contract: ARCHITECTURE §8. Screenshots (1440×900, rendered by the GUI tests):
+`docs/screenshots/{home,home-light,firmware,firmware-serial,firmware-debug,firmware-error,
+pro-analysis,pro-schematic,pro-pcb,workbench,plugins,lessons,widgets}.png`.
+
+- `PLAT-2` **done** — eframe/egui 0.37 on wgpu; Inter 400/500/600, JetBrains Mono 400/500,
+  Space Grotesk (variable, 500/600) bundled in `assets/fonts/` with their OFL texts.
+- `PLAT-4` **done** — release build: first frame 596 ms after start (logged at info level);
+  0.0 % CPU when idle (nothing repaints without input/jobs/running bench; GUI test asserts it).
+- `PLAT-5` **done** — vector icon set from the design's SVG paths; a unit test rejects
+  sparkle/magic/wand names; none used anywhere.
+- `APP-1` **done** — top bar on every screen: logo mark (painted from the design SVG) +
+  "Breadbox" (Space Grotesk 600, click → Home), breadcrumb (project / section with a screen
+  switcher menu), mode badge (Playground / Pro).
+- `APP-2` **done** — Home: new Playground/Pro project (modal → `~/Documents/Breadbox/<name>.
+  breadbox`), Open project (folder picker), recent projects, examples gallery (11 projects from
+  `examples/*/project.json`, open read-only, ⌘S copies), Lessons + Plugins entry cards,
+  toolchain status card. Shortcuts ⌘N ⌘O ⌘S ⌘⇧S ⌘Z ⌘⇧Z ⌘W (+ ⌘F ⌘B ⌘U ⌘R ⌘1–5 ⌘⇧H).
+- `APP-3` **partial (mine done)** — Home, Firmware, Pro→Analysis built to the design; Workbench,
+  Pro→Schematic, Pro→PCB, Plugins, Lessons are clean placeholders registered in
+  `screens::default_registry()` for phase 4 (each names its slot + owner).
+- `APP-4` **done** — native menu bar via muda (Breadbox / File / Edit / View (+ Theme) /
+  Simulate / Window / Help) mirroring the shortcuts; dark default, light token set (screenshot).
+- `APP-5` **done** — window geometry (eframe), route, theme, recents, last project and per-
+  screen state (breakpoints, step mode, tabs) persist; edited sketches autosave (debounced
+  1.2 s) in user projects; tested by a persistence round trip.
+- `MCU-4` UI **done** — sketch tabs from the sketch folder, Libraries list (from `#include`s,
+  user-library versions), toolchain box (`compiler_label()`, "cycle-accurate AVR core" /
+  "API-level", arduino-cli version), target selector (project MCUs, radio modules shown,
+  "Compile for board" = `Board::all()` + ESP32/Pico host boards), Verify on a job with the real
+  arduino-cli lines + size report, diagnostics → editor squiggles/hover + Output, library
+  manager (search + install with progress), one-click toolchain install with progress.
+- `MCU-5` UI **done** — breakpoint gutter ("Breakpoint line N"), "Step · breakpoints" (-Og
+  builds, arms breakpoints, `note: line 8 — breakpoint armed on U1 (hits: 0)`), executing-line
+  band, debug toolbar (continue / pause / step over / into / out), Debug tab (call stack,
+  locals + globals, registers + SREG flags). Tested against real firmware (hit line 8 of blink,
+  step over → 9, continue → 8).
+- `RF-7` UI **done** (component) — Radios panel from `RadioPanelModel` (cards, packet log with
+  amber drop rows, latency / loss sliders, AP-drop + LAN-bridge checkboxes, BLE card / empty
+  state) emitting `RadioCommand`s; live with garden-node via the AVR bench's ESP-01.
+- `PRO-2` **partial** — SPICE-highlighted editable netlist with parse diagnostics; shows the
+  design's garden-node netlist as a built-in demo or a project's `analyses/*.cir`. "synced from
+  schematic" + detach/re-sync need bb-circuit (phase 4); header says "built-in demo · editable".
+- `PRO-3` **done** — Analyses cards (Transient, DC sweep, AC/Bode, Monte Carlo, Temperature
+  sweep, Noise, Op point) with config popovers that rewrite dot-cards, enable/disable (`*off`),
+  Run analyses on a job with progress + Cancel, header `Results::summary()`.
+- `PRO-4` **done** — .tran (V + mA axes, draggable cursors → `Δt 2.041 ms · f 490.0 Hz · duty
+  47.8%`), .dc + .step family on log x with `op: 180 lx → 2.60 V`, .mc histogram with
+  threshold marker, .ac Bode (mag + phase), .noise, .op table with "bench probe" column fed by
+  `BenchUpdate::probes` (empty until the bb-sim link provides values).
+- `PRO-5` **done** — mixed-signal panel (sync step from `sync=`, solver, integration +
+  reltol from `.options`). The analog-only run uses stand-ins for `CAPSOIL` / `ATMEGA328P`
+  (MCU replays its D9 PWM) — the real firmware co-sim is bb-sim's.
+- `PRO-6` **done** for plots + netlist — Export .cir (ngspice-runnable, stand-ins inlined,
+  `*!bb` directives), per-plot CSV / PNG (viewport screenshot crop) / SVG. Schematic export is
+  the schematic editor's (phase 4).
+- `TEST-5` **done for my screens** — `cargo test -p breadbox`: 45 unit, 10 GUI (navigation
+  Home→Firmware→Pro→Home, garden-node upload → serial + MQTT + radio panel, blink breakpoint
+  hit + step over + continue, Verify + real compile error mapped to the editor (skips without
+  a toolchain), Pro auto-run → plots + op table, every screen rendered, keyboard shortcuts,
+  idle repaint, light theme), 6 widget tests (segmented, mini-segmented/checkbox/tabs, stop
+  slider, buttons, editor gutter, gallery snapshot). clippy `-D warnings` + fmt clean.
+
+Contracts for phase 4 (`ui-bench`): implement `bench::BenchLink` over `bb_sim::SimHandle` and
+register it as the `BenchFactory`; replace the Workbench / Pro Schematic placeholders in
+`screens::default_registry()`; reuse `screens::firmware::radio_panel::radio_panel`,
+`debug_panel`, `widgets::*` (World sliders = `StopSlider`, right rail = `rail_button`, panels =
+`collapsible_side`), and feed `BenchUpdate::probes` for the Pro bench column.
+
+Notes / deviations:
+- The AVR bench is single-board with fixed ADC voltages; the ESP-01 wiring (D2/D3) is fixed —
+  real wiring comes from bb-circuit nets via bb-sim.
+- Firmware screen design shows "wasm · in-browser" in the toolchain box; Breadbox shows the
+  arduino-cli version instead (true for this app).
+- egui_plot draws the plot area; overlays (cursors, markers, threshold labels) are painted on
+  top. The design's `.op` "bench probe" values need the live bench (phase 4).
