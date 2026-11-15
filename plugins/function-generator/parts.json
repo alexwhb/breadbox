@@ -85,7 +85,7 @@
     ],
     "model": {
       "spice": [
-        "$(el:B:gen) $(n:g) $(COM) V={$(ext:offset)+$(ext:en)*$(ext:amp)*if($(ext:shape)<0.5,sin(2*pi*$(ext:freq)*time),if($(ext:shape)<1.5,2*u(0.5-fmod(time*$(ext:freq),1))-1,if($(ext:shape)<2.5,1-4*abs(fmod(time*$(ext:freq)+0.25,1)-0.5),if($(ext:shape)<3.5,2*u($(ext:duty)-fmod(time*$(ext:freq),1))-1,if($(ext:shape)<4.5,$(ext:noise),table(fmod(time*$(ext:freq),1),0.0000,$(ext:a0),0.0625,$(ext:a1),0.1250,$(ext:a2),0.1875,$(ext:a3),0.2500,$(ext:a4),0.3125,$(ext:a5),0.3750,$(ext:a6),0.4375,$(ext:a7),0.5000,$(ext:a8),0.5625,$(ext:a9),0.6250,$(ext:a10),0.6875,$(ext:a11),0.7500,$(ext:a12),0.8125,$(ext:a13),0.8750,$(ext:a14),0.9375,$(ext:a15),1,$(ext:a0)))))))}",
+        "$(el:B:gen) $(n:g) $(COM) V={$(ext:en)*($(ext:offset)+$(ext:amp)*if($(ext:shape)<0.5,sin(2*pi*$(ext:freq)*time),if($(ext:shape)<1.5,2*u(0.5-fmod(time*$(ext:freq),1))-1,if($(ext:shape)<2.5,1-4*abs(fmod(time*$(ext:freq)+0.25,1)-0.5),if($(ext:shape)<3.5,2*u($(ext:duty)-fmod(time*$(ext:freq),1))-1,if($(ext:shape)<4.5,$(ext:noise),table(fmod(time*$(ext:freq),1),0.0000,$(ext:a0),0.0625,$(ext:a1),0.1250,$(ext:a2),0.1875,$(ext:a3),0.2500,$(ext:a4),0.3125,$(ext:a5),0.3750,$(ext:a6),0.4375,$(ext:a7),0.5000,$(ext:a8),0.5625,$(ext:a9),0.6250,$(ext:a10),0.6875,$(ext:a11),0.7500,$(ext:a12),0.8125,$(ext:a13),0.8750,$(ext:a14),0.9375,$(ext:a15),1,$(ext:a0))))))))}",
         "$(el:R:out) $(n:g) $(OUT) 50",
         "$(el:R:earth) $(COM) $(gnd) 0.1"
       ],

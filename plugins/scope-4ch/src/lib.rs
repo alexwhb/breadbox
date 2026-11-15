@@ -250,49 +250,42 @@ impl Scope {
         m.vpp = vmax - vmin;
         m.vavg = sum / span;
         m.vrms = (sum2 / span).sqrt();
-        // frequency / duty by reciprocal counting around the mid level
+        // frequency / duty by reciprocal counting: an edge is confirmed past the hysteresis
+        // band and timed where the trace crossed the mid level (interpolated between samples,
+        // like a real scope's counter — the sample grid alone is off by up to a sample)
         let mid = 0.5 * (vmax + vmin);
         let hyst = 0.1 * m.vpp;
         let mut high = s[0].1 > mid;
         let mut rises = Vec::new();
-        let mut hi_time = 0.0;
-        let mut last_t = s[0].0;
-        for &(t, v) in s {
-            if high {
-                hi_time += t - last_t;
+        let mut falls = Vec::new();
+        let (mut up, mut down) = (None, None);
+        for w in s.windows(2) {
+            let ((t0, v0), (t1, v1)) = (w[0], w[1]);
+            let cross = || t0 + (t1 - t0) * ((mid - v0) / (v1 - v0)).clamp(0.0, 1.0);
+            if v0 <= mid && v1 > mid {
+                up = Some(cross());
+            } else if v0 >= mid && v1 < mid {
+                down = Some(cross());
             }
-            last_t = t;
-            if !high && v > mid + hyst {
+            if !high && v1 > mid + hyst {
                 high = true;
-                rises.push(t);
-            } else if high && v < mid - hyst {
+                rises.push(up.take().unwrap_or(t1));
+            } else if high && v1 < mid - hyst {
                 high = false;
+                falls.push(down.take().unwrap_or(t1));
             }
         }
         if rises.len() >= 2 && m.vpp > 1e-3 {
-            let span = rises[rises.len() - 1] - rises[0];
+            let (r0, r1) = (rises[0], rises[rises.len() - 1]);
+            let span = r1 - r0;
             m.freq = (rises.len() - 1) as f64 / span;
-            // duty over the whole periods
-            let mut hi = 0.0;
-            let mut h = false;
-            let mut lt = rises[0];
-            for &(t, v) in s
+            // duty over the whole periods: each rise to the fall after it
+            let hi: f64 = rises[..rises.len() - 1]
                 .iter()
-                .filter(|x| x.0 >= rises[0] && x.0 <= rises[rises.len() - 1])
-            {
-                if h {
-                    hi += t - lt;
-                }
-                lt = t;
-                if !h && v > mid + hyst {
-                    h = true;
-                } else if h && v < mid - hyst {
-                    h = false;
-                }
-            }
+                .filter_map(|r| falls.iter().find(|f| *f > r).map(|f| f - r))
+                .sum();
             m.duty = (hi / span).clamp(0.0, 1.0);
         }
-        let _ = hi_time;
         m
     }
 
@@ -354,7 +347,18 @@ impl Scope {
         let t0 = match (trig, self.trig_mode) {
             (Some(t), _) => t - pre,
             (None, TrigMode::Auto) => (now - window).max(0.0),
-            (None, _) => return, // normal / single: keep the last picture
+            (None, _) => {
+                // normal / single: keep the last picture, but say the scope is waiting (the
+                // trigger LED, the header and the `triggered` reading used to stay "Trig'd")
+                let header = self.header();
+                if let Some(sc) = self.last.screens.get_mut("screen") {
+                    sc.header = header;
+                }
+                self.last.leds.insert("trig".into(), 0.0);
+                ctx.set_panel(&self.last);
+                self.publish_readings(ctx);
+                return;
+            }
         };
         if self.trig_mode == TrigMode::Single && trig.is_some() && self.armed {
             self.armed = false;
@@ -426,19 +430,7 @@ impl Scope {
             text: "T".into(),
             channel: format!("CH{}", self.trig_src + 1),
         });
-        screen.header = format!(
-            "CH{} {}/div · {}/div · {}",
-            self.trig_src + 1,
-            si(self.ch[self.trig_src].vdiv, "V"),
-            si(self.timebase, "s"),
-            if self.frozen {
-                "Stop"
-            } else if self.triggered {
-                "Trig'd"
-            } else {
-                "Auto"
-            }
-        );
+        screen.header = self.header();
         p.screens.insert("screen".into(), screen);
         let m = self.meas;
         p.readouts = vec![
@@ -471,6 +463,30 @@ impl Scope {
             si(self.meas.freq, "Hz"),
             si(self.meas.vpp, "Vpp")
         ));
+        self.publish_readings(ctx);
+    }
+
+    /// `CH1 2.00 V/div · 1.00 ms/div · Trig'd` (Stop / Trig'd / Auto / Wait).
+    fn header(&self) -> String {
+        format!(
+            "CH{} {}/div · {}/div · {}",
+            self.trig_src + 1,
+            si(self.ch[self.trig_src].vdiv, "V"),
+            si(self.timebase, "s"),
+            if self.frozen {
+                "Stop"
+            } else if self.triggered {
+                "Trig'd"
+            } else if self.trig_mode == TrigMode::Auto {
+                "Auto"
+            } else {
+                "Wait"
+            }
+        )
+    }
+
+    fn publish_readings(&self, ctx: &Ctx) {
+        let m = self.meas;
         ctx.set_readings(&[
             ("triggered", self.triggered as u8 as f64),
             ("frequency", m.freq),

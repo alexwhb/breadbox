@@ -628,3 +628,376 @@ fn logic_analyzer_decodes_one_wire_to_a_ds18b20() {
         .collect();
     assert!(fw.iter().any(|l| l == "t=19.25"), "{fw:?}");
 }
+
+fn set(b: &mut Bench, part: &str, key: &str, value: f64) {
+    b.input(
+        part,
+        &UserInput::Value {
+            key: key.into(),
+            value,
+        },
+    )
+    .unwrap();
+}
+
+/// FG1 (1 kHz, 4 Vpp, +1 V offset) into a load resistor `load` Ω.
+fn fgen_bench(h: &PluginHost, load: f64) -> Bench {
+    let lib = h.library();
+    let mut bb = BenchBuilder::new(&lib, "fgen", Mode::Playground);
+    let fg = bb.offboard(
+        "function_generator",
+        "FG1",
+        0.0,
+        0.0,
+        &[
+            ("frequency", PropValue::Num(1000.0)),
+            ("amplitude", PropValue::Num(4.0)),
+            ("offset", PropValue::Num(1.0)),
+        ],
+    );
+    let r = bb.offboard(
+        "resistor",
+        "R1",
+        30.0,
+        0.0,
+        &[
+            ("resistance", PropValue::Num(load)),
+            ("power", PropValue::Num(10.0)),
+        ],
+    );
+    bb.wire((&fg, "OUT"), (&r, "1"), "red");
+    bb.wire((&r, "2"), (&fg, "COM"), "black");
+    Bench::new(bb.finish(), lib, h.bench_options()).unwrap()
+}
+
+/// Samples the load voltage every `dt` for `n` samples: (t, v).
+fn sample_load(b: &mut Bench, dt: SimTime, n: usize) -> Vec<(f64, f64)> {
+    (0..n)
+        .map(|_| {
+            b.run_for(dt).unwrap();
+            let v = b.pin_voltage("r1", "1").unwrap() - b.pin_voltage("r1", "2").unwrap();
+            (b.time().as_secs_f64(), v)
+        })
+        .collect()
+}
+
+struct Stats {
+    mean: f64,
+    max: f64,
+    min: f64,
+    rms_ac: f64,
+    /// Fraction of the samples above the middle of min…max.
+    high: f64,
+    /// From upward crossings of the middle (Hz).
+    freq: f64,
+}
+
+fn stats(s: &[(f64, f64)]) -> Stats {
+    let n = s.len() as f64;
+    let mean = s.iter().map(|x| x.1).sum::<f64>() / n;
+    let max = s.iter().map(|x| x.1).fold(f64::MIN, f64::max);
+    let min = s.iter().map(|x| x.1).fold(f64::MAX, f64::min);
+    let rms_ac = (s.iter().map(|x| (x.1 - mean).powi(2)).sum::<f64>() / n).sqrt();
+    let mid = 0.5 * (max + min);
+    let high = s.iter().filter(|x| x.1 > mid).count() as f64 / n;
+    let ups: Vec<f64> = s
+        .windows(2)
+        .filter(|w| w[0].1 <= mid && w[1].1 > mid)
+        .map(|w| w[0].0 + (w[1].0 - w[0].0) * (mid - w[0].1) / (w[1].1 - w[0].1))
+        .collect();
+    let freq = if ups.len() >= 2 {
+        (ups.len() - 1) as f64 / (ups[ups.len() - 1] - ups[0])
+    } else {
+        0.0
+    };
+    Stats {
+        mean,
+        max,
+        min,
+        rms_ac,
+        high,
+        freq,
+    }
+}
+
+fn near(a: f64, b: f64, tol: f64) -> bool {
+    (a - b).abs() <= tol
+}
+
+/// PLUG-5 function generator, every waveform into a 50 Ω load: amplitude, offset, frequency,
+/// shape (RMS / duty), the 50 Ω source (half the open-circuit voltage), output off.
+#[test]
+fn function_generator_every_waveform_into_a_50_ohm_load() {
+    let h = host(&["function-generator"]);
+    let us = SimTime::from_us;
+    // the 50 Ω source: 4 Vpp + 1 V into 1 MΩ is the open-circuit voltage, into 50 Ω half of it
+    let mut open = fgen_bench(&h, 1e6);
+    open.run_until(SimTime::from_ms(5)).unwrap();
+    let so = stats(&sample_load(&mut open, us(5), 1000));
+    assert!(
+        near(so.max, 3.0, 0.02) && near(so.min, -1.0, 0.02),
+        "open: {}..{}",
+        so.min,
+        so.max
+    );
+    let mut b = fgen_bench(&h, 50.0);
+    b.run_until(SimTime::from_ms(5)).unwrap();
+    // sine: 1 V amplitude, +0.5 V offset at the load, 1 kHz
+    let s = stats(&sample_load(&mut b, us(5), 1000));
+    let a = (s.max - s.min) / 2.0;
+    assert!(near(a, 1.0, 0.01), "sine amplitude {a}");
+    let r_src = 50.0 * ((so.max - so.min) / (s.max - s.min) - 1.0);
+    assert!(near(r_src, 50.0, 1.0), "source resistance {r_src} Ω");
+    assert!(near(s.mean, 0.5, 0.01), "offset {}", s.mean);
+    assert!(near(s.freq, 1000.0, 2.0), "f {}", s.freq);
+    assert!(
+        near(s.rms_ac, 1.0 / 2f64.sqrt(), 0.01),
+        "sine RMS {}",
+        s.rms_ac
+    );
+    // square: ±1 V around the offset, 50 % duty, RMS = amplitude
+    set(&mut b, "fg1", "shape", 1.0);
+    b.run_for(SimTime::from_ms(2)).unwrap();
+    let s = stats(&sample_load(&mut b, us(5), 1000));
+    assert!(
+        near(s.max, 1.5, 0.01) && near(s.min, -0.5, 0.01),
+        "square {}..{}",
+        s.min,
+        s.max
+    );
+    assert!(near(s.high, 0.5, 0.02), "square duty {}", s.high);
+    assert!(near(s.rms_ac, 1.0, 0.02), "square RMS {}", s.rms_ac);
+    assert!(near(s.freq, 1000.0, 2.0), "f {}", s.freq);
+    // triangle: same peaks, RMS = amplitude / √3
+    set(&mut b, "fg1", "shape", 2.0);
+    b.run_for(SimTime::from_ms(2)).unwrap();
+    let s = stats(&sample_load(&mut b, us(5), 1000));
+    // the vertices are sharp: the solver's 10 µs steps (no breakpoints in a behavioural
+    // source) round them by a few tens of mV
+    assert!(
+        near(s.max, 1.5, 0.03) && near(s.min, -0.5, 0.03),
+        "triangle {}..{}",
+        s.min,
+        s.max
+    );
+    assert!(
+        near(s.rms_ac, 1.0 / 3f64.sqrt(), 0.01),
+        "triangle RMS {}",
+        s.rms_ac
+    );
+    assert!(near(s.high, 0.5, 0.02));
+    // pulse, 20 % duty at 2.5 kHz
+    set(&mut b, "fg1", "shape", 3.0);
+    set(&mut b, "fg1", "duty", 0.2);
+    set(&mut b, "fg1", "frequency", 2500.0);
+    b.run_for(SimTime::from_ms(2)).unwrap();
+    let s = stats(&sample_load(&mut b, us(2), 2000));
+    assert!(
+        near(s.max, 1.5, 0.01) && near(s.min, -0.5, 0.01),
+        "pulse {}..{}",
+        s.min,
+        s.max
+    );
+    assert!(near(s.high, 0.2, 0.02), "pulse duty {}", s.high);
+    assert!(near(s.freq, 2500.0, 10.0), "f {}", s.freq);
+    // noise: around the offset, σ = amplitude / 3, never past ±amplitude, not periodic
+    set(&mut b, "fg1", "shape", 4.0);
+    set(&mut b, "fg1", "frequency", 1000.0);
+    b.run_for(SimTime::from_ms(2)).unwrap();
+    let samples = sample_load(&mut b, us(25), 4000);
+    let s = stats(&samples);
+    assert!(near(s.mean, 0.5, 0.03), "noise mean {}", s.mean);
+    assert!(near(s.rms_ac, 1.0 / 3.0, 0.05), "noise σ {}", s.rms_ac);
+    assert!(
+        s.max <= 1.5 + 1e-6 && s.min >= -0.5 - 1e-6,
+        "{}..{}",
+        s.min,
+        s.max
+    );
+    // arbitrary at 100 Hz: the built-in 16-point "heartbeat" (peak +1 at 1/4 of the period,
+    // dip -0.6 right after), then a point changed from the panel
+    set(&mut b, "fg1", "shape", 5.0);
+    set(&mut b, "fg1", "frequency", 100.0);
+    b.run_for(SimTime::from_ms(20)).unwrap();
+    let samples = sample_load(&mut b, us(25), 800);
+    let s = stats(&samples);
+    assert!(near(s.max, 1.5, 0.01), "arb peak {}", s.max);
+    assert!(near(s.min, 0.5 - 0.6, 0.01), "arb dip {}", s.min);
+    let t_peak = samples.iter().max_by(|a, b| a.1.total_cmp(&b.1)).unwrap().0;
+    let phase = (t_peak * 100.0).fract();
+    assert!(near(phase, 0.25, 0.005), "peak at phase {phase}");
+    set(&mut b, "fg1", "a4", -1.0);
+    b.run_for(SimTime::from_ms(10)).unwrap();
+    let s = stats(&sample_load(&mut b, us(25), 800));
+    assert!(near(s.min, -0.5, 0.01), "a4 = -1 → {}", s.min);
+    // output off: nothing on the load (the offset too)
+    set(&mut b, "fg1", "output", 0.0);
+    b.run_for(SimTime::from_ms(1)).unwrap();
+    let s = stats(&sample_load(&mut b, us(10), 200));
+    assert!(
+        s.max.abs() < 1e-3 && s.min.abs() < 1e-3,
+        "output off: {}..{}",
+        s.min,
+        s.max
+    );
+    assert_eq!(reading(&b, "fg1", "output"), 0.0);
+}
+
+/// The scope's CH1 trace value (V) at screen position `x` (divisions).
+fn trace_at(b: &mut Bench, scope: &str, x: f64) -> f64 {
+    let pnl = panel(b, scope);
+    let vdiv = pnl["controls"]["vdiv1"].as_f64().unwrap();
+    let pts = pnl["screens"]["screen"]["traces"][0]["points"]
+        .as_array()
+        .unwrap()
+        .clone();
+    let y = pts
+        .iter()
+        .filter_map(|p| Some((p[0].as_f64()?, p[1].as_f64()?)))
+        .take_while(|(px, _)| *px <= x)
+        .last()
+        .map(|p| p.1)
+        .unwrap();
+    y * vdiv
+}
+
+/// PLUG-5 4-channel scope on the function generator: DC / AC / GND coupling, the 10× probe's
+/// compensation trimmer (over- and under-compensated edges; 1× unaffected), and the
+/// pulse-width trigger picking the wide or the narrow pulse of an arbitrary waveform (normal
+/// mode: no matching pulse → not triggered).
+#[test]
+fn scope_coupling_probe_compensation_and_pulse_width_trigger() {
+    let h = host(&["scope-4ch", "function-generator"]);
+    let lib = h.library();
+    let mut bb = BenchBuilder::new(&lib, "scope", Mode::Playground);
+    let fg = bb.offboard(
+        "function_generator",
+        "FG1",
+        0.0,
+        0.0,
+        &[
+            ("shape", PropValue::Text("square".into())),
+            ("frequency", PropValue::Num(1000.0)),
+            ("amplitude", PropValue::Num(4.0)),
+            ("offset", PropValue::Num(1.0)),
+        ],
+    );
+    let sc = bb.offboard(
+        "scope_4ch",
+        "SCOPE1",
+        30.0,
+        0.0,
+        &[
+            ("timebase", PropValue::Num(1e-3)),
+            ("trigger_level", PropValue::Num(1.0)),
+        ],
+    );
+    bb.wire((&sc, "CH1"), (&fg, "OUT"), "yellow");
+    bb.wire((&sc, "GND"), (&fg, "COM"), "black");
+    let mut b = Bench::new(bb.finish(), lib, h.bench_options()).unwrap();
+    let r = |b: &Bench, k: &str| reading(b, "scope1", k);
+    let ms = SimTime::from_ms;
+    // DC: -1 … +3 V, average +1 V, 1 kHz (counted over the 10 periods of a 1 ms/div screen)
+    b.run_until(ms(100)).unwrap();
+    assert_eq!(r(&b, "triggered"), 1.0);
+    assert!(near(r(&b, "vmax"), 3.0, 0.05) && near(r(&b, "vmin"), -1.0, 0.05));
+    assert!(near(r(&b, "vavg"), 1.0, 0.05), "vavg {}", r(&b, "vavg"));
+    assert!(
+        near(r(&b, "frequency"), 1000.0, 2.0) && near(r(&b, "duty"), 0.5, 0.01),
+        "f {} duty {}",
+        r(&b, "frequency"),
+        r(&b, "duty")
+    );
+    set(&mut b, "scope1", "timebase", 200e-6);
+    // AC: the offset is gone, the swing stays
+    set(&mut b, "scope1", "trig_level", 0.0);
+    set(&mut b, "scope1", "coupling1", 1.0);
+    b.run_for(ms(100)).unwrap();
+    assert!(near(r(&b, "vavg"), 0.0, 0.1), "AC vavg {}", r(&b, "vavg"));
+    assert!(near(r(&b, "vpp"), 4.0, 0.2), "AC vpp {}", r(&b, "vpp"));
+    // GND: a flat line at 0 V
+    set(&mut b, "scope1", "coupling1", 2.0);
+    b.run_for(ms(100)).unwrap();
+    assert!(r(&b, "vpp").abs() < 1e-9 && r(&b, "vavg").abs() < 1e-9);
+    // 10× probe compensation (DC): adjusted → flat tops; over-compensated → overshoot at the
+    // edges; under-compensated → rounded leading edges; a 1× probe has no trimmer
+    set(&mut b, "scope1", "coupling1", 0.0);
+    set(&mut b, "scope1", "vdiv1", 1.0);
+    b.run_for(ms(100)).unwrap();
+    let flat = trace_at(&mut b, "scope1", 5.1);
+    assert!(near(flat, 3.0, 0.1), "20 µs after the edge: {flat}");
+    assert!(near(r(&b, "vmax"), 3.0, 0.05));
+    set(&mut b, "scope1", "comp1", 0.5);
+    b.run_for(ms(100)).unwrap();
+    assert!(r(&b, "vmax") > 4.5, "overshoot: vmax {}", r(&b, "vmax"));
+    set(&mut b, "scope1", "comp1", -0.5);
+    b.run_for(ms(100)).unwrap();
+    let rounded = trace_at(&mut b, "scope1", 5.1);
+    assert!(
+        rounded < 2.0,
+        "20 µs after the edge: {rounded} (adjusted: {flat})"
+    );
+    assert!(
+        near(r(&b, "vmax"), 3.0, 0.1),
+        "it settles: {}",
+        r(&b, "vmax")
+    );
+    set(&mut b, "scope1", "probe1", 0.0);
+    b.run_for(ms(100)).unwrap();
+    assert!(near(trace_at(&mut b, "scope1", 5.1), 3.0, 0.1), "1× probe");
+    set(&mut b, "scope1", "probe1", 1.0);
+    set(&mut b, "scope1", "comp1", 0.0);
+
+    // pulse-width trigger: a 100 Hz arbitrary waveform with a 2.5 ms and a 0.625 ms pulse
+    let arb = [
+        -1.0, 1.0, 1.0, 1.0, 1.0, -1.0, -1.0, -1.0, -1.0, 1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0,
+    ];
+    for (k, a) in arb.iter().enumerate() {
+        set(&mut b, "fg1", &format!("a{k}"), *a);
+    }
+    set(&mut b, "fg1", "offset", 0.0);
+    set(&mut b, "fg1", "frequency", 100.0);
+    set(&mut b, "fg1", "shape", 5.0);
+    set(&mut b, "scope1", "vdiv1", 2.0);
+    set(&mut b, "scope1", "timebase", 1e-3);
+    set(&mut b, "scope1", "trig_level", 0.0);
+    set(&mut b, "scope1", "trig_mode", 1.0); // normal
+    // wider than 1 ms: the trigger (x = 5) is the wide pulse's falling edge
+    set(&mut b, "scope1", "trig_pulse", 1e-3);
+    b.run_for(ms(150)).unwrap();
+    assert_eq!(r(&b, "triggered"), 1.0);
+    let (before, just_before) = (
+        trace_at(&mut b, "scope1", 3.5),
+        trace_at(&mut b, "scope1", 4.8),
+    );
+    assert!(
+        before > 1.0 && just_before > 0.3,
+        "wide pulse: {before} / {just_before}"
+    );
+    // narrower than 1 ms: the narrow pulse's falling edge, with the line low 1.5 ms earlier
+    set(&mut b, "scope1", "trig_pulse", -1e-3);
+    b.run_for(ms(150)).unwrap();
+    assert_eq!(r(&b, "triggered"), 1.0);
+    let (before, just_before) = (
+        trace_at(&mut b, "scope1", 3.5),
+        trace_at(&mut b, "scope1", 4.7),
+    );
+    assert!(
+        before < -1.0 && just_before > 1.0,
+        "narrow pulse: {before} / {just_before}"
+    );
+    // wider than 5 ms: nothing matches — normal mode keeps the last picture, not triggered
+    set(&mut b, "scope1", "trig_pulse", 5e-3);
+    b.run_for(ms(150)).unwrap();
+    assert_eq!(r(&b, "triggered"), 0.0, "stale trigger status");
+    let pnl = panel(&mut b, "scope1");
+    let header = pnl["screens"]["screen"]["header"].as_str().unwrap();
+    assert!(!header.contains("Trig'd"), "{header}");
+    assert!(
+        !pnl["screens"]["screen"]["traces"][0]["points"]
+            .as_array()
+            .unwrap()
+            .is_empty(),
+        "the last picture stays"
+    );
+}
