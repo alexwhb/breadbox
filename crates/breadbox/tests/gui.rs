@@ -281,12 +281,74 @@ fn pro_analysis_card_popover_disables_monte_carlo() {
             && !has_label(h, "mc histogram")),
         "the re-run should drop the histogram"
     );
+    // a card change round-trips into the project's analyses: the netlist stays synced
+    // from the schematic (it used to detach)
+    assert!(
+        wait_for(&mut h, 30.0, |h| h
+            .state()
+            .ctx
+            .circuit
+            .as_ref()
+            .is_some_and(|d| d
+                .project()
+                .spice
+                .directives
+                .contains("*off .mc"))),
+        "the disabled card is stored with the project"
+    );
+    h.run_steps(2);
+    assert!(has_label_containing(&h, "synced from schematic"));
+    assert!(!has_label_containing(&h, "detached"));
     // and back on
     h.get_by_label_contains("Monte Carlo (.mc) — off").click();
     h.run_steps(2);
     h.get_by_label("Enabled").click();
     h.get_by_label("Apply").click();
     assert!(wait_for(&mut h, 120.0, |h| has_label(h, "mc histogram")));
+    let ok = wait_for(&mut h, 30.0, |h| {
+        h.state()
+            .ctx
+            .circuit
+            .as_ref()
+            .is_some_and(|d| !d.project().spice.directives.contains("*off"))
+    });
+    assert!(
+        ok,
+        "directives {:?} detached {:?}",
+        h.state()
+            .ctx
+            .circuit
+            .as_ref()
+            .map(|d| d.project().spice.directives.clone()),
+        h.state()
+            .ctx
+            .circuit
+            .as_ref()
+            .map(|d| d.detached_netlist.is_some())
+    );
+    assert!(has_label_containing(&h, "synced from schematic"));
+}
+
+/// A circuit without analysis cards (night-light) still shows something in Pro → Analysis:
+/// the synced netlist gets an operating point.
+#[test]
+fn pro_analysis_of_a_circuit_without_cards_shows_the_operating_point() {
+    let mut h = harness();
+    open_example(&mut h, "night-light");
+    go(&mut h, "Pro");
+    assert!(
+        wait_for(&mut h, 120.0, |h| has_label_containing(h, "V(A0)")),
+        "no operating point table"
+    );
+    assert!(has_label_containing(&h, "synced from schematic"));
+    assert!(
+        wait_for(&mut h, 30.0, |h| has_label_containing(
+            h,
+            "convergence warning"
+        )),
+        "run summary"
+    );
+    assert!(has_label_containing(&h, "0 convergence warnings"));
 }
 
 #[test]

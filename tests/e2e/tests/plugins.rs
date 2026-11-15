@@ -138,7 +138,7 @@ fn bbplugin_package_installs_and_local_plugins_hot_reload() {
     reg.load_local(&local, &lm.permissions).unwrap();
     assert_eq!(status(&reg, "local.my-dmm"), CatalogStatus::Installed);
     assert!(reg.check_changes().is_empty(), "nothing changed yet");
-    std::thread::sleep(std::time::Duration::from_millis(20));
+    // (the change stamp includes the file size, so no wait for the mtime to tick)
     json["name"] = "My DMM (edited)".into();
     std::fs::write(&manifest_path, serde_json::to_string_pretty(&json).unwrap()).unwrap();
     let changed = reg.check_changes();

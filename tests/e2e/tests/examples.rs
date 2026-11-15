@@ -168,3 +168,68 @@ fn world_script_dries_the_pot() {
     assert!((m - vwc).abs() <= 3.0, "the sketch reads {m} % at {vwc} %");
     sim.shutdown();
 }
+
+/// 555-astable on the bench: the green LED blinks at the RC frequency of the classic
+/// astable, f = 1.44 / ((R1 + 2·R2)·C) ≈ 1.46 Hz (R1 1 k, R2 10 k, C 47 µF).
+#[test]
+fn astable_555_blinks_at_its_rc_frequency() {
+    let mut sim = Sim::example("555-astable").unwrap();
+    sim.run_secs(2.0); // first cycle charges C from 0 V
+    let mut lit = Vec::new();
+    for _ in 0..600 {
+        sim.run_for(ms(10));
+        let on = matches!(sim.part("d1").visual.look, bb_core::Look::Led { current, .. } if current > 1e-3);
+        lit.push((sim.time().as_secs_f64(), on));
+    }
+    let rises: Vec<f64> = lit
+        .windows(2)
+        .filter(|w| !w[0].1 && w[1].1)
+        .map(|w| w[1].0)
+        .collect();
+    assert!(rises.len() >= 6, "LED blinks: {} rising edges", rises.len());
+    let period = (rises[rises.len() - 1] - rises[0]) / (rises.len() - 1) as f64;
+    let f = 1.0 / period;
+    let expect = 1.44 / ((1e3 + 2.0 * 10e3) * 47e-6);
+    assert!(
+        (f - expect).abs() < expect * 0.1,
+        "555 at {f:.3} Hz, the formula says {expect:.3} Hz"
+    );
+    // the LED is on while the output is high: R1 + R2 charging time (duty ≈ 52 %)
+    let on = lit.iter().filter(|x| x.1).count() as f64 / lit.len() as f64;
+    assert!((on - 0.524).abs() < 0.08, "duty {on}");
+    sim.shutdown();
+}
+
+/// night-light: dark → the LED comes on (and brighter the darker it is), daylight → off.
+#[test]
+fn night_light_turns_on_in_the_dark() {
+    let mut sim = Sim::example("night-light").unwrap();
+    let led_level = |sim: &Sim| {
+        sim.data_lines("U1")
+            .iter()
+            .rev()
+            .find_map(|l| field(&l.text, "led"))
+            .expect("light=… led=… lines")
+    };
+    let mut seen = Vec::new();
+    for lux in [500.0, 20.0, 2.0] {
+        sim.send(Command::SetWorld {
+            key: "light.ambient_lux".into(),
+            value: lux,
+        });
+        sim.run_secs(1.0);
+        let current = match sim.part("d1").visual.look {
+            bb_core::Look::Led { current, .. } => current,
+            other => panic!("{other:?}"),
+        };
+        seen.push((lux, led_level(&sim), current));
+    }
+    assert_eq!(seen[0].1, 0.0, "daylight: off {seen:?}");
+    assert!(seen[0].2 < 1e-4, "{seen:?}");
+    assert!(
+        seen[1].1 > 0.0 && seen[2].1 > seen[1].1,
+        "darker → brighter {seen:?}"
+    );
+    assert!(seen[2].2 > 0.005, "LED current in the dark {seen:?}");
+    sim.shutdown();
+}

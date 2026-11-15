@@ -78,6 +78,28 @@ fn garden_node_runs_on_the_bench_with_serial_and_world_slider() {
         >= 2));
     h.run_steps(4);
     assert!(has_label_containing(&h, "soil_raw="));
+    // Pause: the status says so and the clock stops; Run resumes it
+    assert!(has_label(&h, "running"));
+    h.get_by_label("Pause").click();
+    assert!(
+        wait_for(&mut h, 30.0, |h| has_label(h, "paused")),
+        "status never showed paused"
+    );
+    let stopped = h.state().ctx.bench.sim_time;
+    for _ in 0..10 {
+        h.run_steps(1);
+        std::thread::sleep(std::time::Duration::from_millis(15));
+    }
+    assert_eq!(
+        h.state().ctx.bench.sim_time,
+        stopped,
+        "the clock keeps going"
+    );
+    h.get_by_label("Run").click();
+    assert!(
+        wait_for(&mut h, 30.0, |h| h.state().ctx.bench.sim_time > stopped),
+        "Run did not resume"
+    );
     // select the soil sensor: the inspector shows its datasheet values (design)
     let j1 = {
         let d = doc(&h);
