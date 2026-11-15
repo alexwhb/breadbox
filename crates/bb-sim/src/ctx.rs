@@ -11,7 +11,11 @@ pub struct DevCtx<'a> {
 
 impl DevCtx<'_> {
     fn element_name(&self, local: &str) -> Option<String> {
-        self.bench.devices[self.dev].spec.elements.get(local).cloned()
+        self.bench.devices[self.dev]
+            .spec
+            .elements
+            .get(local)
+            .cloned()
     }
     /// Fresh analog solution (pending drive changes applied) for reads inside a hook.
     fn fresh(&mut self) {
@@ -78,7 +82,10 @@ impl DeviceCtx for DevCtx<'_> {
         }
     }
     fn wake_at(&mut self, at: SimTime, token: u64) {
-        let generation = *self.bench.devices[self.dev].token_gen.entry(token).or_insert(0);
+        let generation = *self.bench.devices[self.dev]
+            .token_gen
+            .entry(token)
+            .or_insert(0);
         let at = at.max(self.now);
         self.bench.push_wake(
             at,
@@ -90,7 +97,10 @@ impl DeviceCtx for DevCtx<'_> {
         );
     }
     fn cancel_wake(&mut self, token: u64) {
-        *self.bench.devices[self.dev].token_gen.entry(token).or_insert(0) += 1;
+        *self.bench.devices[self.dev]
+            .token_gen
+            .entry(token)
+            .or_insert(0) += 1;
     }
     fn watch(&mut self, pin: usize, lo: f64, hi: f64) {
         if pin < self.bench.devices[self.dev].watches.len() {
@@ -105,7 +115,13 @@ impl DeviceCtx for DevCtx<'_> {
         let generation = d.tick_gen;
         if period > SimTime::ZERO {
             let t = self.now + period;
-            self.bench.push_wake(t, WakeKind::Tick { dev: self.dev, generation });
+            self.bench.push_wake(
+                t,
+                WakeKind::Tick {
+                    dev: self.dev,
+                    generation,
+                },
+            );
         }
     }
     fn world(&self) -> &dyn WorldView {
@@ -132,12 +148,12 @@ impl DeviceCtx for DevCtx<'_> {
                     },
                 );
             }
-            DeviceEvent::Stress { reason } => {
-                if self.bench.devices[self.dev].health == bb_core::Health::Ok {
-                    self.bench.devices[self.dev].health = bb_core::Health::Stressed {
-                        reason: reason.clone(),
-                    };
-                }
+            DeviceEvent::Stress { reason }
+                if self.bench.devices[self.dev].health == bb_core::Health::Ok =>
+            {
+                self.bench.devices[self.dev].health = bb_core::Health::Stressed {
+                    reason: reason.clone(),
+                };
             }
             _ => {}
         }

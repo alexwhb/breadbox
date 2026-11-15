@@ -104,7 +104,10 @@ impl Device for DcMotor {
         .into()
     }
     fn readings(&self) -> Vec<(String, f64)> {
-        vec![("rpm".into(), self.omega * 60.0 / (2.0 * std::f64::consts::PI))]
+        vec![(
+            "rpm".into(),
+            self.omega * 60.0 / (2.0 * std::f64::consts::PI),
+        )]
     }
 }
 
@@ -420,7 +423,11 @@ impl Device for Buzzer {
             let period = (now - self.last_edge).as_secs_f64();
             if period > 0.0 {
                 let f = 1.0 / period;
-                self.freq = if self.freq == 0.0 { f } else { 0.7 * self.freq + 0.3 * f };
+                self.freq = if self.freq == 0.0 {
+                    f
+                } else {
+                    0.7 * self.freq + 0.3 * f
+                };
             }
         }
         if high {
@@ -446,7 +453,11 @@ impl Device for Buzzer {
             for k in 0..n {
                 let t = start.as_secs_f64() + k as f64 / RATE as f64;
                 let s = if self.powered {
-                    if (t * 2300.0).fract() < 0.5 { 0.6 } else { -0.6 }
+                    if (t * 2300.0).fract() < 0.5 {
+                        0.6
+                    } else {
+                        -0.6
+                    }
                 } else {
                     0.0
                 };

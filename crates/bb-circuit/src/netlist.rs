@@ -46,6 +46,19 @@ pub enum DamageEffect {
     Short,
 }
 
+/// An extra load between two pins' nets (an instrument's input impedance, e.g. a DMM's
+/// 10 MΩ ‖ 100 pF).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Load {
+    pub id: String,
+    pub a: crate::project::Endpoint,
+    pub b: crate::project::Endpoint,
+    /// Ohms (`f64::INFINITY` = none).
+    pub r: f64,
+    /// Farads (0 = none).
+    pub c: f64,
+}
+
 /// Netlisting options.
 #[derive(Debug, Clone)]
 pub struct NetlistOptions<'a> {
@@ -58,6 +71,8 @@ pub struct NetlistOptions<'a> {
     pub shunts: bool,
     /// Pro: write `fw=… sync=…` on MCU `X` lines (display text; not runnable/ngspice-safe).
     pub mcu_params: bool,
+    /// Instrument loads injected into the circuit.
+    pub loads: Vec<Load>,
 }
 
 impl NetlistOptions<'_> {
@@ -68,6 +83,7 @@ impl NetlistOptions<'_> {
             world: None,
             shunts: true,
             mcu_params: false,
+            loads: Vec::new(),
         }
     }
     pub fn pro(world: Option<&bb_world::WorldConfig>) -> NetlistOptions<'_> {
@@ -77,6 +93,7 @@ impl NetlistOptions<'_> {
             world,
             shunts: false,
             mcu_params: false,
+            loads: Vec::new(),
         }
     }
 }
@@ -364,9 +381,20 @@ pub fn build(
     }
 
     // ---- classify nets
+    let endpoint_net = |e: &crate::project::Endpoint| match e {
+        crate::project::Endpoint::Pin { part, pin } => conn.net_of(part, pin),
+        crate::project::Endpoint::Free { .. } => None,
+    };
+    let load_nets: BTreeSet<usize> = opts
+        .loads
+        .iter()
+        .flat_map(|l| [endpoint_net(&l.a), endpoint_net(&l.b)])
+        .flatten()
+        .map(|n| n.0)
+        .collect();
     let mut net_kind = vec![NetKind::Isolated; conn.nets.len()];
     for net in &conn.nets {
-        let mut spice = net.name == "0";
+        let mut spice = net.name == "0" || load_nets.contains(&net.id.0);
         let mut cosim = 0;
         let mut device_pins = 0;
         for t in &net.pins {
@@ -722,6 +750,31 @@ pub fn build(
         if !lines.is_empty() {
             element_lines.push((p.reference.clone(), lines));
         }
+    }
+
+    // instrument loads
+    let mut load_lines = Vec::new();
+    for l in &opts.loads {
+        let node = |e: &crate::project::Endpoint| {
+            endpoint_net(e).and_then(|n| match &net_kind[n.0] {
+                NetKind::Analog(s) => Some(s.clone()),
+                _ => None,
+            })
+        };
+        let (Some(a), Some(b)) = (node(&l.a), node(&l.b)) else {
+            warnings.push(format!("load {}: endpoints not on the circuit", l.id));
+            continue;
+        };
+        let id = template::sanitize(&l.id).to_ascii_lowercase();
+        if l.r.is_finite() && l.r > 0.0 {
+            load_lines.push(format!("rinst_{id} {a} {b} {}", bb_spice::expr::fmt_g(l.r)));
+        }
+        if l.c > 0.0 {
+            load_lines.push(format!("cinst_{id} {a} {b} {}", bb_spice::expr::fmt_g(l.c)));
+        }
+    }
+    if !load_lines.is_empty() {
+        element_lines.push(("instruments".into(), load_lines));
     }
 
     // ---- assemble

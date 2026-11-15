@@ -10,7 +10,8 @@ use std::path::Path;
 /// Loads an Intel HEX or ELF file.
 pub fn load_image(path: impl AsRef<Path>) -> Result<FirmwareImage, SimError> {
     let p = path.as_ref();
-    let bytes = std::fs::read(p).map_err(|e| SimError::Firmware(format!("{}: {e}", p.display())))?;
+    let bytes =
+        std::fs::read(p).map_err(|e| SimError::Firmware(format!("{}: {e}", p.display())))?;
     if bytes.starts_with(b"\x7fELF") {
         FirmwareImage::from_elf(&bytes).map_err(|e| SimError::Firmware(e.to_string()))
     } else {
@@ -46,7 +47,9 @@ pub fn compile_project(
     let mut out = HashMap::new();
     for p in &project.parts {
         let Some(fw) = &p.firmware else { continue };
-        let Some(def) = lib.get(&p.part) else { continue };
+        let Some(def) = lib.get(&p.part) else {
+            continue;
+        };
         let Some(mcu) = &def.model.mcu else { continue };
         if mcu.core != "avr" {
             continue;
@@ -61,13 +64,14 @@ pub fn compile_project(
         if !build.success {
             return Err(SimError::Firmware(format!(
                 "{}: build failed\n{}",
-                p.reference,
-                build.log
+                p.reference, build.log
             )));
         }
         out.insert(
             p.id.clone(),
-            build.image().map_err(|e| SimError::Firmware(e.to_string()))?,
+            build
+                .image()
+                .map_err(|e| SimError::Firmware(e.to_string()))?,
         );
     }
     Ok(out)

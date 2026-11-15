@@ -10,11 +10,23 @@ fn blink_led_toggles_at_one_hertz() {
     let lib = lib();
     let (mut b, u1, bb) = uno_bench(&lib, "blink");
     b.wire((&u1, "D13"), (&bb, "a5"), "orange");
-    b.two_lead("resistor", "R1", &bb, "c5", "c9", &[("resistance", n(220.0))]);
+    b.two_lead(
+        "resistor",
+        "R1",
+        &bb,
+        "c5",
+        "c9",
+        &[("resistance", n(220.0))],
+    );
     let d1 = b.two_lead("led", "D1", &bb, "d9", "d10", &[]);
     b.wire((&bb, "a10"), (&bb, "t-8"), "black");
     b.probe("D13", (&u1, "D13"), Quantity::Frequency, None);
-    b.instrument("mini_scope", None, &[("ch1", (&u1, "D13"))], serde_json::json!({"timebase": 0.5, "vdiv": 2.0}));
+    b.instrument(
+        "mini_scope",
+        None,
+        &[("ch1", (&u1, "D13"))],
+        serde_json::json!({"timebase": 0.5, "vdiv": 2.0}),
+    );
     let project = b.finish();
     let mut bench = start(project, &[(&u1, "blink")]);
 

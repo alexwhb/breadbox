@@ -112,7 +112,10 @@ impl Device for Hc595 {
         .into()
     }
     fn readings(&self) -> Vec<(String, f64)> {
-        vec![("latch".into(), self.latch as f64), ("shift".into(), self.shift as f64)]
+        vec![
+            ("latch".into(), self.latch as f64),
+            ("shift".into(), self.shift as f64),
+        ]
     }
 }
 
@@ -240,7 +243,10 @@ impl Device for Uln2003 {
         }
     }
     fn visual(&self) -> VisualState {
-        Look::Switches { on: self.on.clone() }.into()
+        Look::Switches {
+            on: self.on.clone(),
+        }
+        .into()
     }
 }
 
@@ -256,8 +262,18 @@ impl L293d {
     fn new(s: &DeviceSpec) -> L293d {
         L293d {
             en: [pin_of(s, "EN12"), pin_of(s, "EN34")],
-            a: [pin_of(s, "1A"), pin_of(s, "2A"), pin_of(s, "3A"), pin_of(s, "4A")],
-            y: [pin_of(s, "1Y"), pin_of(s, "2Y"), pin_of(s, "3Y"), pin_of(s, "4Y")],
+            a: [
+                pin_of(s, "1A"),
+                pin_of(s, "2A"),
+                pin_of(s, "3A"),
+                pin_of(s, "4A"),
+            ],
+            y: [
+                pin_of(s, "1Y"),
+                pin_of(s, "2Y"),
+                pin_of(s, "3Y"),
+                pin_of(s, "4Y"),
+            ],
         }
     }
     fn eval(&self, ctx: &mut dyn DeviceCtx) {
@@ -440,6 +456,9 @@ impl Device for Ne555 {
         Look::Switch { on: self.q }.into()
     }
     fn readings(&self) -> Vec<(String, f64)> {
-        vec![("output".into(), self.q as u8 as f64), ("cycles".into(), self.cycles as f64)]
+        vec![
+            ("output".into(), self.q as u8 as f64),
+            ("cycles".into(), self.cycles as f64),
+        ]
     }
 }

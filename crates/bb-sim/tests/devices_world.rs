@@ -25,7 +25,11 @@ fn usb_bench<'a>(lib: &'a Library, name: &str) -> (BenchBuilder<'a>, String) {
 }
 
 fn reading(b: &Bench, part: &str, key: &str) -> f64 {
-    b.readings(part).iter().find(|r| r.0 == key).map(|r| r.1).unwrap_or(f64::NAN)
+    b.readings(part)
+        .iter()
+        .find(|r| r.0 == key)
+        .map(|r| r.1)
+        .unwrap_or(f64::NAN)
 }
 
 fn run(project: Project, t: SimTime) -> Bench {
@@ -42,7 +46,12 @@ fn astable_555_example_blinks_at_the_textbook_frequency() {
     b.instruments_mut().reset_probe_stats();
     b.run_until(SimTime::from_secs(5)).unwrap();
     let tel = b.telemetry();
-    let f = tel.probes.iter().find(|p| p.label == "555 out").unwrap().value;
+    let f = tel
+        .probes
+        .iter()
+        .find(|p| p.label == "555 out")
+        .unwrap()
+        .value;
     let expect = 1.0 / (std::f64::consts::LN_2 * (1e3 + 2.0 * 10e3) * 47e-6);
     assert!((f - expect).abs() < 0.05 * expect, "{f} vs {expect}");
     assert!(reading(&b, "u1", "cycles") >= 6.0);
@@ -73,7 +82,10 @@ fn dc_motor_spins_up_and_slows_under_load() {
     bench.run_until(ms(3000)).unwrap();
     let rpm2 = reading(&bench, &m, "rpm");
     let i_load = bench.element_current(&m, "V:emf").unwrap();
-    assert!(rpm2 < rpm * 0.9 && i_load > i_free * 1.5, "{rpm}→{rpm2}, {i_free}→{i_load}");
+    assert!(
+        rpm2 < rpm * 0.9 && i_load > i_free * 1.5,
+        "{rpm}→{rpm2}, {i_free}→{i_load}"
+    );
     match bench.visual(&m).unwrap().look {
         Look::Motor { rpm, .. } => assert!(rpm > 0.0),
         other => panic!("{other:?}"),
@@ -92,7 +104,14 @@ fn relay_module_clicks_and_switches_its_contacts() {
     b.wire((&k, "VCC"), (&bb, "t+20"), "red");
     b.wire((&k, "GND"), (&bb, "t-20"), "black");
     b.wire((&k, "COM"), (&bb, "t+22"), "red");
-    b.two_lead("resistor", "R1", &bb, "a30", "a34", &[("resistance", n(330.0))]);
+    b.two_lead(
+        "resistor",
+        "R1",
+        &bb,
+        "a30",
+        "a34",
+        &[("resistance", n(330.0))],
+    );
     let d1 = b.two_lead("led", "D1", &bb, "b34", "b35", &[]);
     b.wire((&k, "NO"), (&bb, "b30"), "orange");
     b.wire((&bb, "a35"), (&bb, "t-30"), "black");
@@ -101,13 +120,22 @@ fn relay_module_clicks_and_switches_its_contacts() {
     assert!(bench.element_current(&d1, "D").unwrap() < 1e-6);
     bench.input(&sw, &UserInput::Toggle { index: 0 }).unwrap();
     bench.run_until(ms(53)).unwrap();
-    assert!(bench.element_current(&d1, "D").unwrap() < 1e-6, "5 ms pull-in time");
+    assert!(
+        bench.element_current(&d1, "D").unwrap() < 1e-6,
+        "5 ms pull-in time"
+    );
     bench.run_until(ms(80)).unwrap();
     let i = bench.element_current(&d1, "D").unwrap();
     assert!(i > 0.005, "{i}");
-    assert!(matches!(bench.visual(&k).unwrap().look, Look::Relay { energized: true }));
+    assert!(matches!(
+        bench.visual(&k).unwrap().look,
+        Look::Relay { energized: true }
+    ));
     let ev = bench.take_events();
-    assert!(ev.iter().any(|e| e.event == DeviceEvent::Sound(Sound::Click)));
+    assert!(
+        ev.iter()
+            .any(|e| e.event == DeviceEvent::Sound(Sound::Click))
+    );
 }
 
 #[test]
@@ -125,7 +153,10 @@ fn potentiometer_knob_divides_the_supply() {
     bench.input(&rv, &UserInput::Position(0.25)).unwrap();
     bench.run_until(ms(20)).unwrap();
     assert!((v(&bench) - vcc * 0.75).abs() < 0.01, "{}", v(&bench));
-    assert_eq!(bench.visual(&rv).unwrap().look, Look::Knob { position: 0.25 });
+    assert_eq!(
+        bench.visual(&rv).unwrap().look,
+        Look::Knob { position: 0.25 }
+    );
 }
 
 #[test]
@@ -135,7 +166,14 @@ fn a_lamp_next_to_the_ldr_raises_the_divider_voltage() {
     b.project.world.light.ambient_lux = 50.0;
     let ldr = b.two_lead("ldr", "LDR1", &bb, "a10", "a13", &[]);
     b.wire((&bb, "b10"), (&bb, "t+10"), "red");
-    b.two_lead("resistor", "R1", &bb, "c13", "c17", &[("resistance", n(10e3))]);
+    b.two_lead(
+        "resistor",
+        "R1",
+        &bb,
+        "c13",
+        "c17",
+        &[("resistance", n(10e3))],
+    );
     b.wire((&bb, "b17"), (&bb, "t-17"), "black");
     // a desk lamp 10 cm away, on
     let lamp = b.offboard("lamp", "LAMP1", 20.0, 40.0, &[("candela", n(20.0))]);
@@ -158,14 +196,28 @@ fn resistors_heat_up_warm_a_tmp36_and_smoke_when_overloaded() {
     let (mut b, bb) = usb_bench(&lib, "heat");
     b.project.world.noise = false;
     // 100 Ω, ½ W across 5 V: 0.25 W → +19 K over the 21 °C air
-    let r = b.two_lead("resistor", "R1", &bb, "a10", "a14", &[("resistance", n(100.0)), ("power", n(0.5))]);
+    let r = b.two_lead(
+        "resistor",
+        "R1",
+        &bb,
+        "a10",
+        "a14",
+        &[("resistance", n(100.0)), ("power", n(0.5))],
+    );
     b.wire((&bb, "b10"), (&bb, "t+10"), "red");
     b.wire((&bb, "b14"), (&bb, "t-14"), "black");
     let tmp = b.rigid("tmp36", "U1", &bb, "VS", "j10", 0.0, &[]);
     b.wire((&bb, "f10"), (&bb, "b+10"), "red");
     b.wire((&bb, "f12"), (&bb, "b-12"), "black");
     // 22 Ω, ¼ W: 1.1 W — burns
-    let hot = b.two_lead("resistor", "R2", &bb, "a30", "a34", &[("resistance", n(22.0))]);
+    let hot = b.two_lead(
+        "resistor",
+        "R2",
+        &bb,
+        "a30",
+        "a34",
+        &[("resistance", n(22.0))],
+    );
     b.wire((&bb, "b30"), (&bb, "t+30"), "red");
     b.wire((&bb, "b34"), (&bb, "t-34"), "black");
     let mut bench = start(b.finish(), &[]);
@@ -176,21 +228,49 @@ fn resistors_heat_up_warm_a_tmp36_and_smoke_when_overloaded() {
     assert!(t_tmp > 22.0, "TMP36 near the hot resistor reads {t_tmp}");
     let v = bench.pin_voltage(&tmp, "VOUT").unwrap();
     assert!((v - (0.5 + 0.01 * t_tmp)).abs() < 0.01, "{v}");
-    assert!(matches!(bench.health(&hot), Health::Damaged { .. }), "{:?}", bench.health(&hot));
+    assert!(
+        matches!(bench.health(&hot), Health::Damaged { .. }),
+        "{:?}",
+        bench.health(&hot)
+    );
     let tel = bench.telemetry();
-    assert!(tel.parts.iter().any(|p| p.part == hot && p.visual.health.is_damaged()));
-    assert!(tel.power.dissipation.iter().any(|(r, w)| r == "R1" && (*w - 0.25).abs() < 0.02), "{:?}", tel.power.dissipation);
+    assert!(
+        tel.parts
+            .iter()
+            .any(|p| p.part == hot && p.visual.health.is_damaged())
+    );
+    assert!(
+        tel.power
+            .dissipation
+            .iter()
+            .any(|(r, w)| r == "R1" && (*w - 0.25).abs() < 0.02),
+        "{:?}",
+        tel.power.dissipation
+    );
 }
 
 #[test]
 fn battery_sags_under_load_and_discharges() {
     let lib = lib();
     let mut b = BenchBuilder::new(&lib, "batt", Mode::Playground);
-    let bt = b.offboard("battery_pack", "BT1", 0.0, 0.0, &[("kind", t("lipo1s")), ("charge", n(50.0))]);
+    let bt = b.offboard(
+        "battery_pack",
+        "BT1",
+        0.0,
+        0.0,
+        &[("kind", t("lipo1s")), ("charge", n(50.0))],
+    );
     let bb = b.breadboard("breadboard_400", 10.0, 0.0);
     b.wire((&bt, "plus"), (&bb, "t+1"), "red");
     b.wire((&bt, "minus"), (&bb, "t-1"), "black");
-    b.two_lead("resistor", "R1", &bb, "a5", "a9", &[("resistance", n(10.0)), ("power", n(5.0))]);
+    b.two_lead(
+        "resistor",
+        "R1",
+        &bb,
+        "a5",
+        "a9",
+        &[("resistance", n(10.0)), ("power", n(5.0))],
+    );
     b.wire((&bb, "b5"), (&bb, "t+5"), "red");
     b.wire((&bb, "b9"), (&bb, "t-9"), "black");
     let mut bench = start(b.finish(), &[]);
@@ -204,14 +284,24 @@ fn battery_sags_under_load_and_discharges() {
     let soc1 = reading(&bench, &bt, "soc");
     let drawn = (emf / 10.1) * 4.9; // A·s
     let expect = drawn / 3600.0 * 100.0;
-    assert!(((soc0 - soc1) - expect).abs() < 0.2 * expect, "{} vs {expect}", soc0 - soc1);
+    assert!(
+        ((soc0 - soc1) - expect).abs() < 0.2 * expect,
+        "{} vs {expect}",
+        soc0 - soc1
+    );
 }
 
 #[test]
 fn pir_sees_a_moving_hand_and_holds() {
     let lib = lib();
     let (mut b, bb) = usb_bench(&lib, "pir");
-    let pir = b.offboard("pir", "U1", 40.0, 30.0, &[("hold_s", n(1.0)), ("warmup_s", n(0.0))]);
+    let pir = b.offboard(
+        "pir",
+        "U1",
+        40.0,
+        30.0,
+        &[("hold_s", n(1.0)), ("warmup_s", n(0.0))],
+    );
     b.wire((&pir, "VCC"), (&bb, "t+10"), "red");
     b.wire((&pir, "GND"), (&bb, "t-10"), "black");
     b.project.world.objects = vec![bb_world::ObjectConfig {
@@ -237,7 +327,14 @@ fn hall_sensor_pulls_low_near_a_magnet() {
     let h = b.rigid("hall_sensor", "U1", &bb, "VCC", "e10", 0.0, &[]);
     b.wire((&bb, "a10"), (&bb, "t+10"), "red");
     b.wire((&bb, "a11"), (&bb, "t-11"), "black");
-    b.two_lead("resistor", "R1", &bb, "a12", "t+14", &[("resistance", n(10e3))]);
+    b.two_lead(
+        "resistor",
+        "R1",
+        &bb,
+        "a12",
+        "t+14",
+        &[("resistance", n(10e3))],
+    );
     b.project.world.objects = vec![bb_world::ObjectConfig {
         id: "mag".into(),
         kind: bb_world::ObjectKind::Magnet,
@@ -279,7 +376,11 @@ fn a_pump_waters_its_pot() {
     let lib = lib();
     let (mut b, _bb) = usb_bench(&lib, "pump");
     b.project.world = bb_world::WorldConfig {
-        pots: vec![bb_world::PotConfig { vwc: 20.0, evaporation: false, ..Default::default() }],
+        pots: vec![bb_world::PotConfig {
+            vwc: 20.0,
+            evaporation: false,
+            ..Default::default()
+        }],
         ..Default::default()
     };
     let p = b.offboard("water_pump", "M1", 40.0, 30.0, &[]);
@@ -296,13 +397,34 @@ fn rgb_seven_segment_and_bar_graph_visuals() {
     let (mut b, bb) = usb_bench(&lib, "lights");
     let rgb = b.rigid("rgb_led", "D1", &bb, "R", "e10", 0.0, &[]);
     b.wire((&bb, "a11"), (&bb, "t-11"), "black"); // COM (cathode)
-    b.two_lead("resistor", "R1", &bb, "a10", "t+8", &[("resistance", n(220.0))]); // red on
-    b.two_lead("resistor", "R2", &bb, "a13", "t+15", &[("resistance", n(220.0))]); // blue on
+    b.two_lead(
+        "resistor",
+        "R1",
+        &bb,
+        "a10",
+        "t+8",
+        &[("resistance", n(220.0))],
+    ); // red on
+    b.two_lead(
+        "resistor",
+        "R2",
+        &bb,
+        "a13",
+        "t+15",
+        &[("resistance", n(220.0))],
+    ); // blue on
     let seg = b.rigid("seven_segment", "DS1", &bb, "e", "f30", 0.0, &[]);
     b.wire((&bb, "j32"), (&bb, "b-32"), "black"); // COM
     for (hole, rail) in [("a34", "t+35"), ("a33", "t+33")] {
         // segments b and a
-        b.two_lead("resistor", &format!("R{hole}"), &bb, hole, rail, &[("resistance", n(470.0))]);
+        b.two_lead(
+            "resistor",
+            &format!("R{hole}"),
+            &bb,
+            hole,
+            rail,
+            &[("resistance", n(470.0))],
+        );
     }
     let mut bench = run(b.finish(), ms(100));
     match bench.visual(&rgb).unwrap().look {
@@ -356,16 +478,37 @@ fn regulators_and_optocoupler() {
     b.wire((&bb, "a10"), (&bb, "t+10"), "red");
     b.wire((&bb, "a11"), (&bb, "t-11"), "black");
     b.wire((&bb, "a12"), (&bb, "b+12"), "orange"); // 5 V out → bottom + rail
-    b.two_lead("resistor", "R1", &bb, "j20", "b+20", &[("resistance", n(100.0)), ("power", n(1.0))]);
+    b.two_lead(
+        "resistor",
+        "R1",
+        &bb,
+        "j20",
+        "b+20",
+        &[("resistance", n(100.0)), ("power", n(1.0))],
+    );
     b.wire((&bb, "i20"), (&bb, "b-20"), "black");
     let ams = b.rigid("ams1117_3v3", "U2", &bb, "GND", "e30", 0.0, &[]);
     b.wire((&bb, "a30"), (&bb, "b-30"), "black");
     b.wire((&bb, "a32"), (&bb, "b+32"), "orange");
     let opto = b.rigid("pc817", "U3", &bb, "A", "f40", 0.0, &[]);
-    b.two_lead("resistor", "R2", &bb, "j40", "b+40", &[("resistance", n(330.0))]);
+    b.two_lead(
+        "resistor",
+        "R2",
+        &bb,
+        "j40",
+        "b+40",
+        &[("resistance", n(330.0))],
+    );
     b.wire((&bb, "j41"), (&bb, "b-41"), "black"); // K
     b.wire((&bb, "a40"), (&bb, "b-42"), "black"); // E (pin 3 at e41? see below)
-    b.two_lead("resistor", "R3", &bb, "a45", "b+45", &[("resistance", n(10e3))]);
+    b.two_lead(
+        "resistor",
+        "R3",
+        &bb,
+        "a45",
+        "b+45",
+        &[("resistance", n(10e3))],
+    );
     let bench = run(b.finish(), ms(20));
     let v5 = bench.pin_voltage(&reg, "OUT").unwrap();
     assert!((v5 - 5.0).abs() < 0.02, "{v5}");

@@ -28,7 +28,10 @@ pub enum Speed {
 #[derive(Debug, Clone)]
 pub enum DebugCommand {
     /// Attach source-level debugging with the ELF of the running firmware.
-    Attach { part: String, elf: Vec<u8> },
+    Attach {
+        part: String,
+        elf: Vec<u8>,
+    },
     AddBreakpoint {
         part: String,
         file: String,
@@ -36,12 +39,25 @@ pub enum DebugCommand {
         /// Pause on the n-th hit (`HitCondition::Equals`), every hit when `None`.
         hits: Option<u64>,
     },
-    RemoveBreakpoint { part: String, id: u32 },
-    StepOver { part: String },
-    StepInto { part: String },
-    StepOut { part: String },
-    StepInstruction { part: String },
-    Pause { part: String },
+    RemoveBreakpoint {
+        part: String,
+        id: u32,
+    },
+    StepOver {
+        part: String,
+    },
+    StepInto {
+        part: String,
+    },
+    StepOut {
+        part: String,
+    },
+    StepInstruction {
+        part: String,
+    },
+    Pause {
+        part: String,
+    },
     Continue,
 }
 
@@ -58,11 +74,27 @@ pub enum Command {
     /// Reset one MCU only (analog, world and devices keep running).
     ResetMcu(String),
     /// Re-flash an MCU; the bench keeps its state (SIM-7).
-    Flash { part: String, image: Box<FirmwareImage> },
-    SetWorld { key: String, value: f64 },
-    Water { pot: String, ml: f64 },
-    SetPartParam { part: String, key: String, value: f64 },
-    Input { part: String, input: UserInput },
+    Flash {
+        part: String,
+        image: Box<FirmwareImage>,
+    },
+    SetWorld {
+        key: String,
+        value: f64,
+    },
+    Water {
+        pot: String,
+        ml: f64,
+    },
+    SetPartParam {
+        part: String,
+        key: String,
+        value: f64,
+    },
+    Input {
+        part: String,
+        input: UserInput,
+    },
     AddProbe(ProbeDef),
     RemoveProbe(String),
     Scope {
@@ -71,7 +103,11 @@ pub enum Command {
         vdiv: Option<[f64; 2]>,
         trigger: Option<crate::instruments::Trigger>,
     },
-    SerialSend { part: String, port: usize, bytes: Vec<u8> },
+    SerialSend {
+        part: String,
+        port: usize,
+        bytes: Vec<u8>,
+    },
     /// A circuit edit: rebuild/patch keeping MCU, world and device state.
     UpdateProject(Box<Project>),
     RepairAll,
@@ -93,7 +129,11 @@ const FRAME: Duration = Duration::from_millis(16);
 
 impl SimHandle {
     /// Starts the engine thread (paused).
-    pub fn spawn(project: Project, lib: Arc<Library>, opts: BenchOptions) -> Result<SimHandle, SimError> {
+    pub fn spawn(
+        project: Project,
+        lib: Arc<Library>,
+        opts: BenchOptions,
+    ) -> Result<SimHandle, SimError> {
         let bench = Bench::new(project.clone(), lib.clone(), opts.clone())?;
         let telemetry = Arc::new(ArcSwap::from_pointee(Telemetry::default()));
         let (tx, rx) = unbounded::<Command>();
@@ -290,14 +330,16 @@ impl Engine {
                 self.speed = s;
                 Ok(())
             }
-            Command::Reset => match Bench::new(self.project.clone(), self.lib.clone(), self.opts.clone()) {
-                Ok(b) => {
-                    self.bench = b;
-                    self.error = None;
-                    Ok(())
+            Command::Reset => {
+                match Bench::new(self.project.clone(), self.lib.clone(), self.opts.clone()) {
+                    Ok(b) => {
+                        self.bench = b;
+                        self.error = None;
+                        Ok(())
+                    }
+                    Err(e) => Err(e),
                 }
-                Err(e) => Err(e),
-            },
+            }
             Command::ResetMcu(part) => {
                 let t = self.bench.time();
                 if let Some(m) = self.bench.mcu(&part) {
@@ -322,7 +364,10 @@ impl Engine {
                         .map(|p| p.reference.clone())
                         .unwrap_or_default();
                     if let Some(s) = self.bench.serial_mut(&part) {
-                        s.system(t, &format!("Flashed virtual {reference} · core reset · bench state kept"));
+                        s.system(
+                            t,
+                            &format!("Flashed virtual {reference} · core reset · bench state kept"),
+                        );
                     }
                 }
                 r
@@ -337,7 +382,8 @@ impl Engine {
             }
             Command::SetPartParam { part, key, value } => {
                 if let Some(p) = self.project.part_mut(&part) {
-                    p.props.insert(key.clone(), bb_circuit::PropValue::Num(value));
+                    p.props
+                        .insert(key.clone(), bb_circuit::PropValue::Num(value));
                 }
                 self.bench.set_part_param(&part, &key, value)
             }
@@ -357,7 +403,9 @@ impl Engine {
                 vdiv,
                 trigger,
             } => {
-                self.bench.instruments_mut().set_scope(&id, timebase, vdiv, trigger);
+                self.bench
+                    .instruments_mut()
+                    .set_scope(&id, timebase, vdiv, trigger);
                 Ok(())
             }
             Command::SerialSend { part, port, bytes } => {
@@ -405,17 +453,22 @@ impl Engine {
             return Err(SimError::NotFound(part));
         };
         let Some((dbg, avr)) = m.avr_debug() else {
-            return Err(SimError::Firmware("this board has no source-level debugger yet".into()));
+            return Err(SimError::Firmware(
+                "this board has no source-level debugger yet".into(),
+            ));
         };
         match d {
             DebugCommand::Attach { elf, .. } => {
-                let info = DebugInfo::from_elf(&elf).map_err(|e| SimError::Firmware(e.to_string()))?;
+                let info =
+                    DebugInfo::from_elf(&elf).map_err(|e| SimError::Firmware(e.to_string()))?;
                 match dbg {
                     Some(existing) => existing.rebind(Arc::new(info), avr),
                     None => *dbg = Some(Debugger::new(Arc::new(info))),
                 }
             }
-            DebugCommand::AddBreakpoint { file, line, hits, .. } => {
+            DebugCommand::AddBreakpoint {
+                file, line, hits, ..
+            } => {
                 let Some(dbg) = dbg.as_mut() else {
                     return Err(SimError::Firmware("attach the debugger first".into()));
                 };
@@ -437,9 +490,6 @@ impl Engine {
             DebugCommand::StepInstruction { .. } => step(dbg, avr, |d, a| d.step_instruction(a)),
             DebugCommand::Pause { .. } => step(dbg, avr, |d, a| d.pause(a)),
             DebugCommand::Continue => {}
-        }
-        if !matches!(self.bench.paused(), None) {
-            // stepping continues from a pause
         }
         Ok(())
     }

@@ -126,7 +126,11 @@ impl Bench {
                 v.health = d.health.clone();
                 let age = (now - d.smoke_at).as_secs_f64();
                 v.smoke = if d.smoke > 0.0 {
-                    (d.smoke * (-age / 3.0).exp() as f32).max(if v.health.is_damaged() { 0.05 } else { 0.0 })
+                    (d.smoke * (-age / 3.0).exp() as f32).max(if v.health.is_damaged() {
+                        0.05
+                    } else {
+                        0.0
+                    })
                 } else {
                     0.0
                 };
@@ -190,7 +194,11 @@ impl Bench {
             .enumerate()
             .filter(|(_, n)| !matches!(n.kind, NetKind::Isolated))
             .map(|(i, n)| {
-                let name = if n.name == "0" { "GND".to_string() } else { n.name.clone() };
+                let name = if n.name == "0" {
+                    "GND".to_string()
+                } else {
+                    n.name.clone()
+                };
                 (name, self.net_voltage(bb_circuit::NetId(i)))
             })
             .collect();
@@ -219,9 +227,14 @@ impl Bench {
                 }
             })
             .collect();
-        let conn = &self.built.connectivity;
-        let erc_items = erc::erc(&self.project, &self.lib, conn);
-        let drc_items = erc::drc(&self.project, &self.lib, conn);
+        // ERC/DRC only change with the circuit: computed once per (re)build
+        if self.erc_cache.is_none() {
+            let conn = &self.built.connectivity;
+            let e = erc::erc(&self.project, &self.lib, conn);
+            let d = erc::drc(&self.project, &self.lib, conn);
+            self.erc_cache = Some((e, d));
+        }
+        let (erc_items, drc_items) = self.erc_cache.clone().unwrap_or_default();
         let erc_summary = format!(
             "{} · {}",
             erc::summary("ERC", &erc_items),
@@ -266,7 +279,9 @@ impl Bench {
                 .unwrap_or(0.0)
         };
         for p in &self.project.parts {
-            let Some(def) = self.lib.get(&p.part) else { continue };
+            let Some(def) = self.lib.get(&p.part) else {
+                continue;
+            };
             let supply_pins: Vec<&str> = match def.id.as_str() {
                 "uno" | "nano" | "mega" => vec!["5V"],
                 "esp32_devkit" => vec!["VIN"],

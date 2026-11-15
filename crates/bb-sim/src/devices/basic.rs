@@ -10,7 +10,9 @@ use bb_core::{
 pub(super) fn register(r: &mut DeviceRegistry) {
     r.register_fn("led", |s| Box::new(Led::new(s)));
     r.register_fn("rgb_led", |s| Box::new(MultiLed::new(s, MultiKind::Rgb)));
-    r.register_fn("seven_seg", |s| Box::new(MultiLed::new(s, MultiKind::SevenSeg)));
+    r.register_fn("seven_seg", |s| {
+        Box::new(MultiLed::new(s, MultiKind::SevenSeg))
+    });
     r.register_fn("led_bar", |s| Box::new(MultiLed::new(s, MultiKind::Bar)));
     r.register_fn("thermal", |s| Box::new(Thermal::new(s)));
     r.register_fn("ldr", |s| Box::new(Ldr::new(s)));
@@ -411,7 +413,11 @@ impl CapSoil {
     }
 
     fn output(&mut self, ctx: &mut dyn DeviceCtx) {
-        let supply = if ok(self.vcc) { ctx.pin_voltage(self.vcc) } else { 5.0 };
+        let supply = if ok(self.vcc) {
+            ctx.pin_voltage(self.vcc)
+        } else {
+            5.0
+        };
         let mut v = if supply < 3.0 {
             0.0
         } else {
@@ -542,8 +548,16 @@ impl Tmp36 {
         }
     }
     fn output(&mut self, ctx: &mut dyn DeviceCtx) {
-        let supply = if ok(self.vs) { ctx.pin_voltage(self.vs) } else { 5.0 };
-        let mut v = if supply < 2.7 { 0.0 } else { 0.5 + 0.01 * self.temp };
+        let supply = if ok(self.vs) {
+            ctx.pin_voltage(self.vs)
+        } else {
+            5.0
+        };
+        let mut v = if supply < 2.7 {
+            0.0
+        } else {
+            0.5 + 0.01 * self.temp
+        };
         if ctx.world().noise_enabled() {
             v += ctx.rng().gauss() * 0.0005;
         }
@@ -689,7 +703,10 @@ impl Switch {
         }
     }
     fn apply(&self, ctx: &mut dyn DeviceCtx, i: usize, closed: bool) {
-        ctx.set_ext(&Self::ext_name(i, self.kind), if closed { 1.0 } else { 0.0 });
+        ctx.set_ext(
+            &Self::ext_name(i, self.kind),
+            if closed { 1.0 } else { 0.0 },
+        );
     }
 }
 
@@ -721,7 +738,10 @@ impl Device for Switch {
                     for t in ts {
                         ctx.wake_at(ctx.now() + SimTime::from_secs_f64(t), TOKEN_BOUNCE);
                     }
-                    ctx.wake_at(ctx.now() + SimTime::from_secs_f64(span * 1.05), TOKEN_SETTLE);
+                    ctx.wake_at(
+                        ctx.now() + SimTime::from_secs_f64(span * 1.05),
+                        TOKEN_SETTLE,
+                    );
                 } else {
                     self.actual = *p;
                     self.apply(ctx, 0, *p);
@@ -773,7 +793,10 @@ impl Device for Switch {
     }
     fn visual(&self) -> VisualState {
         if self.kind == SwitchKind::Dip {
-            Look::Switches { on: self.on.clone() }.into()
+            Look::Switches {
+                on: self.on.clone(),
+            }
+            .into()
         } else {
             Look::Switch { on: self.on[0] }.into()
         }
@@ -1000,7 +1023,9 @@ impl Device for Polyfuse {
                     "USB polyfuse tripped ({}) — 5 V rail collapsed",
                     bb_core::si::format(i, "A")
                 );
-                ctx.emit(DeviceEvent::Stress { reason: msg.clone() });
+                ctx.emit(DeviceEvent::Stress {
+                    reason: msg.clone(),
+                });
                 ctx.emit(DeviceEvent::Log {
                     level: LogLevel::Warn,
                     text: msg,
@@ -1227,7 +1252,11 @@ impl Device for Microphone {
         ctx.tick_every(SimTime::from_us(250));
     }
     fn on_tick(&mut self, ctx: &mut dyn DeviceCtx) {
-        let vcc = if ok(self.vcc) { ctx.pin_voltage(self.vcc) } else { 5.0 };
+        let vcc = if ok(self.vcc) {
+            ctx.pin_voltage(self.vcc)
+        } else {
+            5.0
+        };
         let db = ctx.world().var("sound.db").unwrap_or(40.0);
         let amp = (self.gain * 1e-3 * 10f64.powf((db - 40.0) / 20.0)).min(vcc / 2.0);
         self.phase += 2.0 * std::f64::consts::PI * 440.0 * 250e-6;

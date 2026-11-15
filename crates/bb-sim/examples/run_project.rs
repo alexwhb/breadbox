@@ -9,14 +9,25 @@ use std::time::Instant;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let dir = args.get(1).cloned().unwrap_or_else(|| "examples/garden-node".into());
+    let dir = args
+        .get(1)
+        .cloned()
+        .unwrap_or_else(|| "examples/garden-node".into());
     let secs: f64 = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(5.0);
     let project = Project::load(&dir).expect("project");
-    let mut opts = BenchOptions::default();
-    opts.firmware = bb_sim::firmware::project_images(&project, &dir);
+    let mut opts = BenchOptions {
+        firmware: bb_sim::firmware::project_images(&project, &dir),
+        ..Default::default()
+    };
     if let Some(img) = args.get(3) {
-        let mcu = project.parts.iter().find(|p| p.firmware.is_some()).map(|p| p.id.clone()).unwrap_or_default();
-        opts.firmware.insert(mcu, bb_sim::firmware::load_image(img).expect("image"));
+        let mcu = project
+            .parts
+            .iter()
+            .find(|p| p.firmware.is_some())
+            .map(|p| p.id.clone())
+            .unwrap_or_default();
+        opts.firmware
+            .insert(mcu, bb_sim::firmware::load_image(img).expect("image"));
     }
     let mut bench = Bench::new(project, Library::builtin(), opts).expect("bench");
     let t0 = Instant::now();
@@ -34,12 +45,18 @@ fn main() {
     }
     let tel = bench.telemetry();
     for p in &tel.probes {
-        println!("probe {:<22} {:>10}  min {:.3} max {:.3} avg {:.3}", p.label, p.text, p.min, p.max, p.avg);
+        println!(
+            "probe {:<22} {:>10}  min {:.3} max {:.3} avg {:.3}",
+            p.label, p.text, p.min, p.max, p.avg
+        );
     }
     for m in &tel.meters {
         println!("meter {} {}", m.id, m.display);
     }
     println!("{}", tel.erc_summary);
     println!("{:?}", bench.stats);
-    println!("simulated {secs} s in {wall:.3} s wall → {:.1}× real time", secs / wall);
+    println!(
+        "simulated {secs} s in {wall:.3} s wall → {:.1}× real time",
+        secs / wall
+    );
 }

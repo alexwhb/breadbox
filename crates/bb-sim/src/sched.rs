@@ -12,9 +12,9 @@
 //! 4. answer ADC samples, run due device wake-ups / ticks, step the world, integrate element
 //!    currents (damage, power, LEDs), update probes/scope, check damage.
 
+use crate::SimError;
 use crate::bench::{Bench, EdgeTarget, WakeKind};
 use crate::mcu::McuStop;
-use crate::SimError;
 use bb_circuit::netlist::NetKind;
 use bb_core::{LogLevel, SimTime};
 
@@ -286,7 +286,9 @@ impl Bench {
             guard += 1;
             if guard > 100_000 {
                 self.in_edges = false;
-                return Err(SimError::Analog("edge storm: a circuit oscillates without delay".into()));
+                return Err(SimError::Analog(
+                    "edge storm: a circuit oscillates without delay".into(),
+                ));
             }
             self.stats.edges += 1;
             match target {
@@ -325,7 +327,9 @@ impl Bench {
                     self.mcus[mcu].core.set_reset_line(!rising);
                     if !rising {
                         let r = self.mcus[mcu].spec.reference.clone();
-                        self.mcus[mcu].serial.system(t, &format!("{r} reset (RESET pin pulled low)"));
+                        self.mcus[mcu]
+                            .serial
+                            .system(t, &format!("{r} reset (RESET pin pulled low)"));
                     }
                 }
             }
@@ -409,7 +413,10 @@ impl Bench {
         // device events → serial annotations / log
         self.route_events();
         // damage
-        if self.damage.check(t, &self.tracked, &mut self.events, &self.built) {
+        if self
+            .damage
+            .check(t, &self.tracked, &mut self.events, &self.built)
+        {
             self.apply_damage(t)?;
         }
         self.check_pin_damage(t);
@@ -481,7 +488,8 @@ impl Bench {
             _ => (None, None),
         };
         let i = s.current(element).unwrap_or(0.0);
-        self.tracked_index.insert(element.to_string(), self.tracked.len());
+        self.tracked_index
+            .insert(element.to_string(), self.tracked.len());
         self.tracked.push(crate::bench::Tracked {
             element: element.into(),
             a,
@@ -533,7 +541,9 @@ impl Bench {
                 self.events.push(crate::SimEvent {
                     time: t,
                     source: r.clone(),
-                    event: bb_core::DeviceEvent::Damage { reason: msg.clone() },
+                    event: bb_core::DeviceEvent::Damage {
+                        reason: msg.clone(),
+                    },
                 });
                 self.mcus[mi].serial.warn(t, &format!("{r}: {msg}"));
                 let _ = part;

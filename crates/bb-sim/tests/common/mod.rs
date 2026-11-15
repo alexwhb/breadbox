@@ -17,7 +17,8 @@ pub fn root() -> PathBuf {
 }
 
 pub fn fixture(name: &str) -> bb_avr::FirmwareImage {
-    let p = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures")).join(format!("{name}.uno.hex"));
+    let p = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures"))
+        .join(format!("{name}.uno.hex"));
     bb_sim::firmware::load_image(&p).unwrap_or_else(|e| panic!("{e}"))
 }
 

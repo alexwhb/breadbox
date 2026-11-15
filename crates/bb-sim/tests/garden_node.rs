@@ -58,21 +58,47 @@ fn prints_telemetry_publishes_and_probes_match_the_design() {
         .filter(|l| l.kind == LineKind::Net)
         .map(|l| l.text.as_str())
         .collect();
-    assert!(net.iter().any(|l| l.starts_with("wifi: AT+CWJAP=\"SIM-AP\" → OK")), "{net:?}");
-    assert!(net.iter().any(|l| l.starts_with("mqtt: PUB garden/pot1 {\"m\":")), "{net:?}");
-    assert!(mon.lines[0].text.starts_with("Breadbox sim · ATmega328P @ 16 MHz · reset cause: power-on"));
+    assert!(
+        net.iter()
+            .any(|l| l.starts_with("wifi: AT+CWJAP=\"SIM-AP\" → OK")),
+        "{net:?}"
+    );
+    assert!(
+        net.iter()
+            .any(|l| l.starts_with("mqtt: PUB garden/pot1 {\"m\":")),
+        "{net:?}"
+    );
+    assert!(
+        mon.lines[0]
+            .text
+            .starts_with("Breadbox sim · ATmega328P @ 16 MHz · reset cause: power-on")
+    );
     let tel = b.telemetry();
-    let probe = |label: &str| tel.probes.iter().find(|p| p.label == label).unwrap().clone();
+    let probe = |label: &str| {
+        tel.probes
+            .iter()
+            .find(|p| p.label == label)
+            .unwrap()
+            .clone()
+    };
     let a0 = probe("Soil sensor → A0");
     let model = 3.03 - 0.02737 * 42.0;
-    assert!((a0.avg - model).abs() < 0.01, "A0 avg {} vs model {model}", a0.avg);
+    assert!(
+        (a0.avg - model).abs() < 0.01,
+        "A0 avg {} vs model {model}",
+        a0.avg
+    );
     let a1 = probe("Light sensor → A1");
     assert!((a1.value - 2.60).abs() < 0.03, "A1 {}", a1.value);
     let d9 = probe("Night LED · D9");
     assert!((d9.value - 47.8).abs() < 1.5, "D9 duty {}", d9.value);
     assert_eq!(probe("Water LED · D8").text, "LOW");
     // the bench meter on A0 and the scope on D9 (490 Hz PWM)
-    assert!((tel.meters[0].value - model).abs() < 0.03, "meter {}", tel.meters[0].value);
+    assert!(
+        (tel.meters[0].value - model).abs() < 0.03,
+        "meter {}",
+        tel.meters[0].value
+    );
     let s = &tel.scopes[0];
     assert!((s.frequency - 490.2).abs() < 3.0, "scope f {}", s.frequency);
     assert!((s.duty - 0.478).abs() < 0.02, "scope duty {}", s.duty);
@@ -86,8 +112,17 @@ fn prints_telemetry_publishes_and_probes_match_the_design() {
     assert!(led("d2") < 1e-4, "D2 {}", led("d2"));
     // supply rails / USB budget
     let rails = &tel.power.rails;
-    assert!(rails.iter().any(|r| r.name == "VCC" && (r.voltage - 4.97).abs() < 0.05), "{rails:?}");
-    assert!(tel.power.usb_current > 0.04 && tel.power.usb_current < 0.2, "{}", tel.power.usb_current);
+    assert!(
+        rails
+            .iter()
+            .any(|r| r.name == "VCC" && (r.voltage - 4.97).abs() < 0.05),
+        "{rails:?}"
+    );
+    assert!(
+        tel.power.usb_current > 0.04 && tel.power.usb_current < 0.2,
+        "{}",
+        tel.power.usb_current
+    );
 }
 
 #[test]
@@ -98,16 +133,23 @@ fn soil_slider_moves_moisture_with_the_sensor_time_constant() {
     b.set_world("pot1.vwc", 20.0);
     b.run_until(SimTime::from_secs(9)).unwrap();
     let r = readings(&b);
-    let at = |t: f64| r.iter().filter(|x| x.0 <= t).next_back().unwrap().2;
+    let at = |t: f64| r.iter().rfind(|x| x.0 <= t).unwrap().2;
     // τ = 1.8 s: after ~2 s the reading has covered ~2/3 of the step, after 6 s all of it
     let two_s = at(5.1);
     let expected = before - (before - 20.0) * (1.0 - (-2.0f64 / 1.8).exp());
-    assert!((two_s - expected).abs() < 3.0, "{two_s} vs {expected} (before {before})");
+    assert!(
+        (two_s - expected).abs() < 3.0,
+        "{two_s} vs {expected} (before {before})"
+    );
     let end = r.last().unwrap().2;
     assert!((end - 20.0).abs() <= 1.5, "{end}");
     // below 30 % the sketch lights the water LED on D8
     let tel = b.telemetry();
-    let d8 = tel.probes.iter().find(|p| p.label == "Water LED · D8").unwrap();
+    let d8 = tel
+        .probes
+        .iter()
+        .find(|p| p.label == "Water LED · D8")
+        .unwrap();
     assert_eq!(d8.text, "HIGH");
 }
 
@@ -116,7 +158,11 @@ fn night_led_duty_tracks_ambient_light() {
     let mut b = garden(None);
     let duty = |b: &mut Bench| {
         let tel = b.telemetry();
-        tel.probes.iter().find(|p| p.label == "Night LED · D9").unwrap().value
+        tel.probes
+            .iter()
+            .find(|p| p.label == "Night LED · D9")
+            .unwrap()
+            .value
     };
     b.run_until(SimTime::from_secs(3)).unwrap();
     let living = duty(&mut b);
@@ -126,7 +172,10 @@ fn night_led_duty_tracks_ambient_light() {
     b.set_world("light.ambient_lux", 1000.0);
     b.run_until(SimTime::from_secs(5)).unwrap();
     let office = duty(&mut b);
-    assert!(night > living + 20.0 && living > office + 15.0, "{night} {living} {office}");
+    assert!(
+        night > living + 20.0 && living > office + 15.0,
+        "{night} {living} {office}"
+    );
     let pwm_last = readings(&b).last().unwrap().4;
     // 1000 lx: R_LDR = 350k·1000^-0.7 ≈ 2.78 kΩ → light_raw ≈ 800 → pwm ≈ 55
     assert!((pwm_last - 55.0).abs() < 4.0, "{pwm_last}");
@@ -150,7 +199,14 @@ fn replay_is_deterministic_and_seeds_matter() {
         let probes: Vec<(String, u64, u64, u64)> = tel
             .probes
             .iter()
-            .map(|p| (p.label.clone(), p.value.to_bits(), p.avg.to_bits(), p.max.to_bits()))
+            .map(|p| {
+                (
+                    p.label.clone(),
+                    p.value.to_bits(),
+                    p.avg.to_bits(),
+                    p.max.to_bits(),
+                )
+            })
             .collect();
         let scope: Vec<(u64, u64)> = tel.scopes[0].traces[0]
             .iter()

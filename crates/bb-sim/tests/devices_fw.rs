@@ -25,7 +25,14 @@ fn ds18b20_dallas_temperature_search_and_convert() {
     let s = b.rigid("ds18b20", "U2", &bb, "GND", "e10", 0.0, &[]);
     b.wire((&bb, "a10"), (&bb, "t-10"), "black");
     b.wire((&bb, "a12"), (&bb, "t+12"), "red");
-    b.two_lead("resistor", "R1", &bb, "c11", "c16", &[("resistance", n(4700.0))]);
+    b.two_lead(
+        "resistor",
+        "R1",
+        &bb,
+        "c11",
+        "c16",
+        &[("resistance", n(4700.0))],
+    );
     b.wire((&bb, "a16"), (&bb, "t+15"), "red");
     b.wire((&bb, "b11"), (&u1, "D4"), "yellow");
     let mut bench = start(b.finish(), &[(&u1, "ds18b20")]);
@@ -64,8 +71,16 @@ fn bme280_adafruit_library_reads_world_air() {
     bench.run_until(ms(1500)).unwrap();
     let l = lines(&bench, &u1);
     assert_eq!(l.first().map(String::as_str), Some("bme: ok"), "{l:?}");
-    let last = l.iter().rev().find(|x| x.starts_with("t=")).unwrap_or_else(|| panic!("{l:?}"));
-    let (t, pr, h) = (field(last, "t").unwrap(), field(last, "p").unwrap(), field(last, "h").unwrap());
+    let last = l
+        .iter()
+        .rev()
+        .find(|x| x.starts_with("t="))
+        .unwrap_or_else(|| panic!("{l:?}"));
+    let (t, pr, h) = (
+        field(last, "t").unwrap(),
+        field(last, "p").unwrap(),
+        field(last, "h").unwrap(),
+    );
     assert!((t - 22.5).abs() < 0.02, "{last}");
     assert!((pr - 987.65).abs() < 0.05, "{last}");
     assert!((h - 48.0).abs() < 0.05, "{last}");
@@ -76,9 +91,19 @@ fn ssd1306_adafruit_library_draws_pixels() {
     let (p, u1, d) = i2c_bench("oled", "ssd1306");
     let mut bench = start(p, &[(&u1, "oled")]);
     bench.run_until(ms(1500)).unwrap();
-    assert!(lines(&bench, &u1).contains(&"oled: done".to_string()), "{:?}", lines(&bench, &u1));
+    assert!(
+        lines(&bench, &u1).contains(&"oled: done".to_string()),
+        "{:?}",
+        lines(&bench, &u1)
+    );
     match bench.visual(&d).unwrap().look {
-        Look::Pixels { width, height, data, on, .. } => {
+        Look::Pixels {
+            width,
+            height,
+            data,
+            on,
+            ..
+        } => {
             assert_eq!((width, height), (128, 64));
             assert!(on);
             let px = |x: usize, y: usize| data[y * 128 + x];
@@ -91,7 +116,10 @@ fn ssd1306_adafruit_library_draws_pixels() {
             assert_eq!(px(99, 50), 0);
             assert_eq!(px(110, 39), 0);
             // "Hi!" at size 2 lights pixels in the top-left
-            let text: usize = (0..16).flat_map(|y| (0..36).map(move |x| (x, y))).map(|(x, y)| px(x, y) as usize).sum();
+            let text: usize = (0..16)
+                .flat_map(|y| (0..36).map(move |x| (x, y)))
+                .map(|(x, y)| px(x, y) as usize)
+                .sum();
             assert!(text > 40, "{text}");
         }
         other => panic!("{other:?}"),
@@ -104,7 +132,12 @@ fn lcd_i2c_backpack_shows_text() {
     let mut bench = start(p, &[(&u1, "lcd_i2c")]);
     bench.run_until(ms(1500)).unwrap();
     match bench.visual(&d).unwrap().look {
-        Look::TextLcd { text, backlight, display_on, .. } => {
+        Look::TextLcd {
+            text,
+            backlight,
+            display_on,
+            ..
+        } => {
             assert_eq!(text[0].trim_end(), "I2C backpack");
             assert_eq!(text[1].trim_end(), "works!");
             assert!(backlight && display_on);
@@ -156,13 +189,19 @@ fn hc_sr04_measures_the_distance_to_a_hand() {
     }];
     let mut bench = start(b.finish(), &[(&u1, "sonar")]);
     bench.run_until(ms(500)).unwrap();
-    let cms: Vec<f64> = lines(&bench, &u1).iter().filter_map(|l| field(l, "cm")).collect();
+    let cms: Vec<f64> = lines(&bench, &u1)
+        .iter()
+        .filter_map(|l| field(l, "cm"))
+        .collect();
     assert!(cms.len() >= 3, "{cms:?}");
     assert!((cms.last().unwrap() - 30.0).abs() < 1.0, "{cms:?}");
     // move the hand away: 1 m
     bench.set_world("hand.y", at.y - 1.02);
     bench.run_until(ms(900)).unwrap();
-    let cms: Vec<f64> = lines(&bench, &u1).iter().filter_map(|l| field(l, "cm")).collect();
+    let cms: Vec<f64> = lines(&bench, &u1)
+        .iter()
+        .filter_map(|l| field(l, "cm"))
+        .collect();
     assert!((cms.last().unwrap() - 100.0).abs() < 2.5, "{cms:?}");
 }
 
@@ -178,7 +217,8 @@ fn hc595_shift_register_latches_shifted_bytes() {
     let mut project = b.finish();
     // fix up the data/clock/latch wiring by pin name instead of holes
     project.wires.pop();
-    let mut b2 = bb_circuit::builder::BenchBuilder::new(&lib, "595", bb_circuit::project::Mode::Playground);
+    let mut b2 =
+        bb_circuit::builder::BenchBuilder::new(&lib, "595", bb_circuit::project::Mode::Playground);
     b2.project = project;
     b2.wire((&u, "DS"), (&u1, "D11"), "blue");
     b2.wire((&u, "SHCP"), (&u1, "D12"), "yellow");
@@ -222,7 +262,11 @@ fn tone_on_a_passive_buzzer_sounds_at_the_right_pitch() {
     let a = &audio[3];
     assert_eq!(a.sample_rate, 22_050);
     // a square wave: about f/22050·2 sign changes per sample
-    let flips = a.samples.windows(2).filter(|w| (w[0] > 0.0) != (w[1] > 0.0)).count();
+    let flips = a
+        .samples
+        .windows(2)
+        .filter(|w| (w[0] > 0.0) != (w[1] > 0.0))
+        .count();
     let expect = 2.0 * 440.0 * a.samples.len() as f64 / 22_050.0;
     assert!((flips as f64 - expect).abs() < 3.0, "{flips} vs {expect}");
 }
@@ -248,9 +292,10 @@ fn uln2003_drives_the_28byj48_stepper() {
     // 64 coil states = 63 full steps of 2 half-steps (the first energizing only aligns the rotor)
     assert_eq!(reading(&bench, &m, "half_steps"), 126.0);
     match bench.visual(&m).unwrap().look {
-        Look::Stepper { angle_deg, .. } => assert!((angle_deg - 126.0 * 360.0 / 4096.0).abs() < 1e-9, "{angle_deg}"),
+        Look::Stepper { angle_deg, .. } => assert!(
+            (angle_deg - 126.0 * 360.0 / 4096.0).abs() < 1e-9,
+            "{angle_deg}"
+        ),
         other => panic!("{other:?}"),
     }
 }
-
-

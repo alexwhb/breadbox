@@ -4,9 +4,9 @@
 //! electrolytics, and an event. MCU pins over 40 mA are stressed and die at 80 mA. Damaged
 //! parts stay damaged until "Repair all".
 
+use crate::SimEvent;
 use crate::bench::{McuRt, NetRt};
 use crate::mcu::LogicDrive;
-use crate::SimEvent;
 use bb_circuit::netlist::{BuiltNetlist, DamageEffect, NetKind, RatingSpec};
 use bb_circuit::part::RatingKind;
 use bb_core::{DeviceEvent, Health, SimTime, Sound};
@@ -141,13 +141,17 @@ impl Damage {
                 events.push(SimEvent {
                     time: t,
                     source: r.spec.reference.clone(),
-                    event: DeviceEvent::Damage { reason: msg.clone() },
+                    event: DeviceEvent::Damage {
+                        reason: msg.clone(),
+                    },
                 });
                 self.new_damage.push(NewDamage {
                     part: r.spec.part.clone(),
                     message: msg,
                     effect,
-                    smoke: r.spec.effect == "smoke" || r.spec.effect == "pop" || r.spec.effect == "open",
+                    smoke: r.spec.effect == "smoke"
+                        || r.spec.effect == "pop"
+                        || r.spec.effect == "open",
                 });
             } else if ratio > 1.0 && !r.stressed {
                 r.stressed = true;
@@ -203,7 +207,13 @@ impl Damage {
     }
 
     /// MCU pin currents (> 40 mA stress, > 80 mA destroyed).
-    pub(crate) fn pin_integrate(&mut self, t: SimTime, mcus: &[McuRt], s: &Session, nets: &[NetRt]) {
+    pub(crate) fn pin_integrate(
+        &mut self,
+        t: SimTime,
+        mcus: &[McuRt],
+        s: &Session,
+        nets: &[NetRt],
+    ) {
         let dt = (t - self.pin_last).as_secs_f64();
         if dt <= 0.0 {
             return;

@@ -3,9 +3,9 @@
 //! meter, and the hooks plugin instruments use (attach to nets, read V/I/f, inject a load).
 
 use crate::bench::NetRt;
+use bb_circuit::NetId;
 use bb_circuit::netlist::BuiltNetlist;
 use bb_circuit::project::{Endpoint, InstrumentDef, ProbeDef, Project, Quantity};
-use bb_circuit::NetId;
 use bb_core::SimTime;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
@@ -106,17 +106,17 @@ impl ProbeRt {
             let period = span / (self.rises.len() - 1) as f64;
             // a signal that stopped toggling has no frequency
             if span > 0.0 && (now - t1).as_secs_f64() < 2.0 * period + 0.05 {
-                return ((self.rises.len() - 1) as f64 / span, ((h1 - h0) / span).clamp(0.0, 1.0));
+                return (
+                    (self.rises.len() - 1) as f64 / span,
+                    ((h1 - h0) / span).clamp(0.0, 1.0),
+                );
             }
         }
         (0.0, if self.high { 1.0 } else { 0.0 })
     }
 
     fn reading(&self, now: SimTime, nets: &[NetRt]) -> ProbeReading {
-        let span = self
-            .started
-            .map(|s| (now - s).as_secs_f64())
-            .unwrap_or(0.0);
+        let span = self.started.map(|s| (now - s).as_secs_f64()).unwrap_or(0.0);
         let tail = (now - self.last_t).as_secs_f64().max(0.0);
         let avg = if span > 0.0 {
             (self.integral + self.last_v * tail) / span
@@ -130,16 +130,16 @@ impl ProbeRt {
                 "V".to_string(),
                 format!("{:.3} V", self.last_v),
             ),
-            Quantity::Duty => (
-                duty * 100.0,
-                "%".into(),
-                format!("{:.0} %", duty * 100.0),
-            ),
+            Quantity::Duty => (duty * 100.0, "%".into(), format!("{:.0} %", duty * 100.0)),
             Quantity::Frequency => (freq, "Hz".into(), bb_core::si::format(freq, "Hz")),
             Quantity::Logic => (
                 if self.high { 1.0 } else { 0.0 },
                 String::new(),
-                if self.high { "HIGH".into() } else { "LOW".into() },
+                if self.high {
+                    "HIGH".into()
+                } else {
+                    "LOW".into()
+                },
             ),
         };
         ProbeReading {
@@ -260,7 +260,11 @@ impl ScopeRt {
         let latest_start = now.saturating_sub(window);
         let mut start = latest_start;
         let mut triggered = false;
-        if let Some(src) = self.channels.get(self.trigger.source).and_then(|c| c.as_ref()) {
+        if let Some(src) = self
+            .channels
+            .get(self.trigger.source)
+            .and_then(|c| c.as_ref())
+        {
             let buf = &src.buf;
             let lvl = self.trigger.level;
             // search backwards for the last crossing that leaves a full window after it
@@ -309,8 +313,9 @@ impl ScopeRt {
                 let mut sum = 0.0;
                 let (mut vmin, mut vmax) = (f64::INFINITY, f64::NEG_INFINITY);
                 let mut rises = Vec::new();
-                let mid = 0.5 * (pts.iter().map(|p| p.1).fold(f64::NEG_INFINITY, f64::max)
-                    + pts.iter().map(|p| p.1).fold(f64::INFINITY, f64::min));
+                let mid = 0.5
+                    * (pts.iter().map(|p| p.1).fold(f64::NEG_INFINITY, f64::max)
+                        + pts.iter().map(|p| p.1).fold(f64::INFINITY, f64::min));
                 for w in pts.windows(2) {
                     let dt = w[1].0 - w[0].0;
                     sum += w[0].1 * dt;
@@ -447,7 +452,10 @@ impl Instruments {
                 self.scopes.push(ScopeRt {
                     channels: [ch("ch1"), ch("ch2")],
                     timebase: s.get("timebase").and_then(|v| v.as_f64()).unwrap_or(1e-3),
-                    vdiv: [vdiv, s.get("vdiv2").and_then(|v| v.as_f64()).unwrap_or(vdiv)],
+                    vdiv: [
+                        vdiv,
+                        s.get("vdiv2").and_then(|v| v.as_f64()).unwrap_or(vdiv),
+                    ],
                     trigger: trig,
                     armed: true,
                     frozen: None,
@@ -481,7 +489,11 @@ impl Instruments {
             }
         }
         for m in self.meters.iter_mut() {
-            m.plus = m.def.probes.get("plus").and_then(|e| endpoint_net(built, e));
+            m.plus = m
+                .def
+                .probes
+                .get("plus")
+                .and_then(|e| endpoint_net(built, e));
             m.com = m.def.probes.get("com").and_then(|e| endpoint_net(built, e));
         }
         watched.sort();
@@ -536,7 +548,13 @@ impl Instruments {
     }
 
     /// Scope controls.
-    pub fn set_scope(&mut self, id: &str, timebase: Option<f64>, vdiv: Option<[f64; 2]>, trigger: Option<Trigger>) {
+    pub fn set_scope(
+        &mut self,
+        id: &str,
+        timebase: Option<f64>,
+        vdiv: Option<[f64; 2]>,
+        trigger: Option<Trigger>,
+    ) {
         if let Some(s) = self.scopes.iter_mut().find(|s| s.def.id == id) {
             if let Some(t) = timebase {
                 s.timebase = t.max(1e-7);

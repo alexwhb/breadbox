@@ -164,7 +164,15 @@ impl AtStub {
             AtFlavor::Esp => ("RX", "TX"),
             _ => ("RXD", "TXD"),
         };
-        let baud = prop_f64(s, "baud", if flavor == AtFlavor::Esp { 115200.0 } else { 9600.0 }) as u32;
+        let baud = prop_f64(
+            s,
+            "baud",
+            if flavor == AtFlavor::Esp {
+                115200.0
+            } else {
+                9600.0
+            },
+        ) as u32;
         AtStub {
             flavor,
             port: UartPort::new(baud, pin_of(s, rx), pin_of(s, tx), 1),
@@ -203,7 +211,11 @@ impl AtStub {
             self.reply_after(ctx, ms(5), r.as_bytes());
             return;
         }
-        if up == "AT" || up.starts_with("AT+CWMODE") || up.starts_with("AT+CIPMUX") || up.starts_with("AT+UART") {
+        if up == "AT"
+            || up.starts_with("AT+CWMODE")
+            || up.starts_with("AT+CIPMUX")
+            || up.starts_with("AT+UART")
+        {
             self.reply_after(ctx, ms(2), b"\r\nOK\r\n");
         } else if up == "ATE0" {
             self.echo = false;
@@ -212,11 +224,7 @@ impl AtStub {
             self.echo = true;
             self.reply_after(ctx, ms(2), b"\r\nOK\r\n");
         } else if up.starts_with("AT+CWJAP=") {
-            let ssid = cmd
-                .split('"')
-                .nth(1)
-                .unwrap_or("")
-                .to_string();
+            let ssid = cmd.split('"').nth(1).unwrap_or("").to_string();
             if ssid == "SIM-AP" {
                 self.joined = true;
                 self.reply_after(ctx, ms(900), b"WIFI CONNECTED\r\n");
@@ -286,8 +294,10 @@ impl AtStub {
                 }
                 if i + 2 <= p.len() {
                     let tl = ((p[i] as usize) << 8) | p[i + 1] as usize;
-                    let topic = String::from_utf8_lossy(p.get(i + 2..i + 2 + tl).unwrap_or(&[])).to_string();
-                    let body = String::from_utf8_lossy(p.get(i + 2 + tl..).unwrap_or(&[])).to_string();
+                    let topic = String::from_utf8_lossy(p.get(i + 2..i + 2 + tl).unwrap_or(&[]))
+                        .to_string();
+                    let body =
+                        String::from_utf8_lossy(p.get(i + 2 + tl..).unwrap_or(&[])).to_string();
                     ctx.emit(DeviceEvent::Annotation {
                         channel: "mqtt".into(),
                         text: format!("PUB {topic} {body}  ({n} B)"),
@@ -308,7 +318,11 @@ impl Device for AtStub {
         if ok(self.vcc) {
             ctx.set_drive(self.vcc, PinDrive::Current { i: -0.07 });
         }
-        let boot = if self.flavor == AtFlavor::Esp { 360 } else { 50 };
+        let boot = if self.flavor == AtFlavor::Esp {
+            360
+        } else {
+            50
+        };
         ctx.wake_at(ctx.now() + SimTime::from_ms(boot), T_BOOT);
     }
     fn on_edge(&mut self, ctx: &mut dyn DeviceCtx, pin: usize, high: bool) {

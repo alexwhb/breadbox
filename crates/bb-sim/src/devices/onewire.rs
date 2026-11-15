@@ -103,7 +103,10 @@ impl Dht {
             b[2] = t.floor() as u8;
             b[3] = ((t - t.floor()) * 10.0).floor() as u8;
         }
-        b[4] = b[0].wrapping_add(b[1]).wrapping_add(b[2]).wrapping_add(b[3]);
+        b[4] = b[0]
+            .wrapping_add(b[1])
+            .wrapping_add(b[2])
+            .wrapping_add(b[3]);
         b
     }
 
@@ -440,7 +443,11 @@ impl Device for Ds18b20 {
                 None => {
                     if matches!(
                         self.st,
-                        Ow::RomCmd | Ow::Match | Ow::FuncCmd | Ow::WriteScratch | Ow::Search { phase: 2, .. }
+                        Ow::RomCmd
+                            | Ow::Match
+                            | Ow::FuncCmd
+                            | Ow::WriteScratch
+                            | Ow::Search { phase: 2, .. }
                     ) {
                         ctx.wake_at(now + SimTime::from_us(30), T_SAMPLE);
                     }
@@ -490,7 +497,10 @@ impl Device for Ds18b20 {
         .into()
     }
     fn readings(&self) -> Vec<(String, f64)> {
-        vec![("temp_c".into(), self.temp), ("conversions".into(), self.conversions as f64)]
+        vec![
+            ("temp_c".into(), self.temp),
+            ("conversions".into(), self.conversions as f64),
+        ]
     }
 }
 
@@ -525,7 +535,11 @@ impl HcSr04 {
     }
     fn echo(&self, ctx: &mut dyn DeviceCtx, high: bool) {
         if ok(self.echo) {
-            let vcc = if ok(self.vcc) { ctx.pin_voltage(self.vcc) } else { 5.0 };
+            let vcc = if ok(self.vcc) {
+                ctx.pin_voltage(self.vcc)
+            } else {
+                5.0
+            };
             ctx.set_drive(
                 self.echo,
                 PinDrive::Thevenin {

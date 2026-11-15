@@ -74,12 +74,11 @@ impl Hd44780 {
     /// A read cycle: the byte the controller puts on the bus (busy flag + AC, or data).
     pub fn read(&mut self, now: SimTime, rs: bool) -> u8 {
         let full = if rs {
-            let v = if self.cg {
+            if self.cg {
                 self.cgram[(self.ac & 63) as usize]
             } else {
                 self.ddram[(self.ac & 127) as usize]
-            };
-            v
+            }
         } else {
             ((now < self.busy_until) as u8) << 7 | (self.ac & 0x7F)
         };
@@ -227,8 +226,16 @@ pub fn rom_char(c: u8) -> char {
 
 fn lcd_look(hd: &Hd44780, backlight: bool, powered: bool) -> VisualState {
     let rows = 2;
-    let codes = if powered { hd.visible_codes(rows) } else { vec![vec![0x20; 16]; rows] };
-    let text = if powered { hd.text(rows) } else { vec![" ".repeat(16); rows] };
+    let codes = if powered {
+        hd.visible_codes(rows)
+    } else {
+        vec![vec![0x20; 16]; rows]
+    };
+    let text = if powered {
+        hd.text(rows)
+    } else {
+        vec![" ".repeat(16); rows]
+    };
     Look::TextLcd {
         cols: hd.cols,
         rows: rows as u8,
@@ -278,7 +285,11 @@ impl ParallelLcd {
         }
     }
     fn level(&self, ctx: &dyn DeviceCtx, pin: usize) -> bool {
-        let vdd = if ok(self.vdd) { ctx.pin_voltage(self.vdd) } else { 5.0 };
+        let vdd = if ok(self.vdd) {
+            ctx.pin_voltage(self.vdd)
+        } else {
+            5.0
+        };
         ok(pin) && ctx.pin_voltage(pin) > 0.5 * vdd.max(2.0)
     }
 }
@@ -306,7 +317,11 @@ impl Device for ParallelLcd {
             if rw {
                 let rs = self.level(ctx, self.rs);
                 let b = self.hd.read(now, rs);
-                let vdd = if ok(self.vdd) { ctx.pin_voltage(self.vdd) } else { 5.0 };
+                let vdd = if ok(self.vdd) {
+                    ctx.pin_voltage(self.vdd)
+                } else {
+                    5.0
+                };
                 for (i, &p) in self.d.iter().enumerate() {
                     if ok(p) {
                         let bit = b >> i & 1 == 1;
@@ -395,7 +410,8 @@ struct I2cLcd {
 impl I2cLcd {
     fn new(s: &DeviceSpec) -> I2cLcd {
         let a = prop_text(s, "address", "0x27");
-        let addr = u8::from_str_radix(a.trim_start_matches("0x").trim_start_matches("0X"), 16).unwrap_or(0x27);
+        let addr = u8::from_str_radix(a.trim_start_matches("0x").trim_start_matches("0X"), 16)
+            .unwrap_or(0x27);
         I2cLcd {
             i2c: I2cSlave::new(
                 Pcf8574Lcd {
@@ -418,7 +434,11 @@ impl Device for I2cLcd {
         "hd44780_i2c"
     }
     fn on_start(&mut self, ctx: &mut dyn DeviceCtx) {
-        let vcc = if ok(self.vcc) { ctx.pin_voltage(self.vcc) } else { 5.0 };
+        let vcc = if ok(self.vcc) {
+            ctx.pin_voltage(self.vcc)
+        } else {
+            5.0
+        };
         self.i2c.start(ctx, vcc.max(3.0));
         ctx.tick_every(SimTime::from_ms(50));
     }

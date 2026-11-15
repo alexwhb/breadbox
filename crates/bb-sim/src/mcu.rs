@@ -41,7 +41,10 @@ pub enum McuStop {
     Reached,
     PinChange,
     /// The ADC samples `pin` at `time` and needs the voltage (see [`McuCore::supply_adc`]).
-    AdcSample { pin: usize, time: SimTime },
+    AdcSample {
+        pin: usize,
+        time: SimTime,
+    },
     /// The debugger paused the core (breakpoint, step done, pause request).
     Paused(String),
     /// Firmware fault (stack overflow, invalid opcode) — the core keeps running if resumed.
@@ -170,9 +173,18 @@ impl PinModel {
                     v: 0.0,
                     r: self.pullup,
                 },
-                PinDrive::Pull { v: 0.0, r: self.leak },
+                PinDrive::Pull {
+                    v: 0.0,
+                    r: self.leak,
+                },
             ),
-            LogicDrive::Input { pullup: false } => (PinDrive::HighZ, PinDrive::Pull { v: 0.0, r: self.leak }),
+            LogicDrive::Input { pullup: false } => (
+                PinDrive::HighZ,
+                PinDrive::Pull {
+                    v: 0.0,
+                    r: self.leak,
+                },
+            ),
         }
     }
 
@@ -191,7 +203,10 @@ impl PinModel {
                 v: vcc,
                 r: self.pullup,
             },
-            LogicDrive::Input { pullup: false } => PinDrive::Pull { v: 0.0, r: self.leak },
+            LogicDrive::Input { pullup: false } => PinDrive::Pull {
+                v: 0.0,
+                r: self.leak,
+            },
         }
     }
 }
@@ -331,8 +346,12 @@ impl McuCore for AvrMcu {
                         time: SimTime::from_cycles(cycle, self.f_cpu),
                     }
                 }
-                StopReason::Breakpoint { pc } => McuStop::Paused(format!("breakpoint at 0x{pc:04x}")),
-                StopReason::Watchpoint { addr, .. } => McuStop::Paused(format!("watchpoint 0x{addr:04x}")),
+                StopReason::Breakpoint { pc } => {
+                    McuStop::Paused(format!("breakpoint at 0x{pc:04x}"))
+                }
+                StopReason::Watchpoint { addr, .. } => {
+                    McuStop::Paused(format!("watchpoint 0x{addr:04x}"))
+                }
                 StopReason::Break { pc } => McuStop::Paused(format!("BREAK at 0x{pc:04x}")),
                 StopReason::StepDone => McuStop::Paused("step".into()),
                 StopReason::Paused => McuStop::Paused("paused".into()),
@@ -420,7 +439,11 @@ impl McuCore for AvrMcu {
         let mut out = Vec::new();
         for port in 0..self.board.serial.len() {
             for b in self.avr.take_usart_tx(port) {
-                out.push((port, SimTime::from_cycles(b.cycle, self.f_cpu), b.data as u8));
+                out.push((
+                    port,
+                    SimTime::from_cycles(b.cycle, self.f_cpu),
+                    b.data as u8,
+                ));
             }
         }
         out

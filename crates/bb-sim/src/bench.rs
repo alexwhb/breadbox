@@ -153,8 +153,15 @@ pub(crate) struct DevRt {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum WakeKind {
-    Device { dev: usize, token: u64, generation: u64 },
-    Tick { dev: usize, generation: u64 },
+    Device {
+        dev: usize,
+        token: u64,
+        generation: u64,
+    },
+    Tick {
+        dev: usize,
+        generation: u64,
+    },
     World,
 }
 
@@ -184,7 +191,6 @@ pub(crate) struct Analog {
     /// Bench time at session time 0.
     pub t0: SimTime,
     pub watch_targets: Vec<EdgeTarget>,
-    pub quiet_hint: bool,
 }
 
 /// Counters for the status line and performance tests.
@@ -229,7 +235,8 @@ pub struct Bench {
     pub(crate) registry: Arc<DeviceRegistry>,
     pub(crate) ext_values: BTreeMap<String, f64>,
     pub(crate) damaged: BTreeMap<String, DamageEffect>,
-    pub(crate) pending_rebuild: bool,
+    pub(crate) loads: Vec<bb_circuit::netlist::Load>,
+    pub(crate) erc_cache: Option<(Vec<bb_circuit::ErcItem>, Vec<bb_circuit::ErcItem>)>,
     pub(crate) paused: Option<String>,
     pub stats: BenchStats,
 }
@@ -245,10 +252,10 @@ impl Bench {
         let quantum = opts.quantum.unwrap_or_else(|| {
             SimTime::from_secs_f64(project.settings.sync_quantum_us.max(0.01) * 1e-6)
         });
-        let world = World::new(project.world.clone()).map_err(|e| SimError::Build(e.to_string()))?;
+        let world =
+            World::new(project.world.clone()).map_err(|e| SimError::Build(e.to_string()))?;
         let built = netlist::build(&project, &lib, &NetlistOptions::bench())
             .map_err(|e| SimError::Build(e.to_string()))?;
-        let noise = project.world.noise;
         let mut bench = Bench {
             lib,
             built,
@@ -256,7 +263,6 @@ impl Bench {
                 session: None,
                 t0: SimTime::ZERO,
                 watch_targets: Vec::new(),
-                quiet_hint: false,
             },
             nets: Vec::new(),
             mcus: Vec::new(),
@@ -281,7 +287,8 @@ impl Bench {
             registry: opts.registry.clone(),
             ext_values: BTreeMap::new(),
             damaged: BTreeMap::new(),
-            pending_rebuild: false,
+            loads: Vec::new(),
+            erc_cache: None,
             paused: None,
             stats: BenchStats::default(),
             project,
@@ -292,69 +299,8 @@ impl Bench {
         // MCUs
         let specs = bench.built.mcus.clone();
         for (i, spec) in specs.iter().enumerate() {
-            let core: Box<dyn McuCore> = if spec.core == "avr" {
-                let mut m = AvrMcu::new(
-                    &spec.board,
-                    seed.wrapping_add(i as u64 * 7919),
-                    if noise { 0.5 } else { 0.0 },
-                )
-                .map_err(SimError::Build)?;
-                if let Some(img) = opts.firmware.get(&spec.part) {
-                    m.flash(img).map_err(SimError::Build)?;
-                }
-                Box::new(m)
-            } else {
-                let names = spec.pins.iter().map(|p| p.mcu.clone()).collect();
-                Box::new(IdleMcu::new(
-                    &spec.label,
-                    names,
-                    &format!(
-                        "{} · {} emulation lands with the host-core glue; pins stay inputs",
-                        spec.reference, spec.label
-                    ),
-                ))
-            };
-            let model = if spec.core == "avr" {
-                PinModel::AVR
-            } else {
-                PinModel::ESP32
-            };
-            let label = core.label();
-            let mut serial = SerialMonitor::new(&spec.reference);
-            serial.seen_resets = core.reset_count();
-            serial.system(
-                SimTime::ZERO,
-                &format!("Breadbox sim · {label} · reset cause: power-on"),
-            );
-            let led_pin = if spec.core == "avr" {
-                core.pin_index("D13")
-            } else {
-                None
-            };
-            bench.mcus.push(McuRt {
-                spec: spec.clone(),
-                core,
-                model,
-                pins: Vec::new(),
-                vcc_node: None,
-                vcc: if spec.core == "avr" { 5.0 } else { 3.3 },
-                pending: VecDeque::new(),
-                adc_request: None,
-                reset_watch: false,
-                serial,
-                paused: None,
-                led_pin,
-                led_on_since: None,
-                led_accum: 0.0,
-                led_window_start: SimTime::ZERO,
-                led_level: 0.0,
-                tx_until: SimTime::ZERO,
-                rx_until: SimTime::ZERO,
-                firmware_name: spec
-                    .firmware
-                    .as_ref()
-                    .map(|f| f.sketch.rsplit('/').next().unwrap_or("").to_string()),
-            });
+            let m = bench.make_mcu(spec, i, opts.firmware.get(&spec.part))?;
+            bench.mcus.push(m);
         }
         // devices
         let dspecs = bench.built.devices.clone();
@@ -378,6 +324,90 @@ impl Bench {
         bench.settle(SimTime::ZERO)?;
         bench.push_wake(bench.world_dt, WakeKind::World);
         Ok(bench)
+    }
+
+    fn make_mcu(
+        &self,
+        spec: &McuSpec,
+        i: usize,
+        image: Option<&bb_avr::FirmwareImage>,
+    ) -> Result<McuRt, SimError> {
+        let noise = self.world.config().noise;
+        let core: Box<dyn McuCore> = if spec.core == "avr" {
+            let mut m = AvrMcu::new(
+                &spec.board,
+                self.seed.wrapping_add(i as u64 * 7919),
+                if noise { 0.5 } else { 0.0 },
+            )
+            .map_err(SimError::Build)?;
+            if let Some(img) = image {
+                m.flash(img).map_err(SimError::Build)?;
+            }
+            Box::new(m)
+        } else {
+            let names = spec.pins.iter().map(|p| p.mcu.clone()).collect();
+            Box::new(IdleMcu::new(
+                &spec.label,
+                names,
+                &format!(
+                    "{} · {} emulation lands with the host-core glue; pins stay inputs",
+                    spec.reference, spec.label
+                ),
+            ))
+        };
+        let model = if spec.core == "avr" {
+            PinModel::AVR
+        } else {
+            PinModel::ESP32
+        };
+        let label = core.label();
+        let mut serial = SerialMonitor::new(&spec.reference);
+        serial.seen_resets = core.reset_count();
+        serial.system(
+            self.time,
+            &format!("Breadbox sim · {label} · reset cause: power-on"),
+        );
+        let led_pin = if spec.core == "avr" {
+            core.pin_index("D13")
+        } else {
+            None
+        };
+        Ok(McuRt {
+            spec: spec.clone(),
+            core,
+            model,
+            pins: Vec::new(),
+            vcc_node: None,
+            vcc: if spec.core == "avr" { 5.0 } else { 3.3 },
+            pending: VecDeque::new(),
+            adc_request: None,
+            reset_watch: false,
+            serial,
+            paused: None,
+            led_pin,
+            led_on_since: None,
+            led_accum: 0.0,
+            led_window_start: self.time,
+            led_level: 0.0,
+            tx_until: SimTime::ZERO,
+            rx_until: SimTime::ZERO,
+            firmware_name: spec
+                .firmware
+                .as_ref()
+                .map(|f| f.sketch.rsplit('/').next().unwrap_or("").to_string()),
+        })
+    }
+
+    /// Injects a load between two pins' nets (instrument input impedance); rebuilds.
+    pub fn add_load(&mut self, load: bb_circuit::netlist::Load) -> Result<(), SimError> {
+        self.loads.retain(|l| l.id != load.id);
+        self.loads.push(load);
+        self.rebuild()
+    }
+
+    pub fn remove_load(&mut self, id: &str) -> Result<(), SimError> {
+        self.loads.retain(|l| l.id != id);
+        self.rebuild()
     }
 
     fn make_device(&mut self, spec: &DeviceSpec) -> DevRt {
@@ -421,23 +451,36 @@ impl Bench {
             let mut nl = built.netlist.clone();
             if let Some(ic) = &ic {
                 for (node, v) in ic {
-                    if built.net_kind.iter().any(|k| matches!(k, NetKind::Analog(n) if n.eq_ignore_ascii_case(node))) {
-                        nl.nodesets.push((node.to_ascii_lowercase(), bb_spice::expr::Expr::Num(*v), Default::default()));
+                    if built
+                        .net_kind
+                        .iter()
+                        .any(|k| matches!(k, NetKind::Analog(n) if n.eq_ignore_ascii_case(node)))
+                    {
+                        nl.nodesets.push((
+                            node.to_ascii_lowercase(),
+                            bb_spice::expr::Expr::Num(*v),
+                            Default::default(),
+                        ));
                     }
                 }
             }
-            let ext: Vec<(String, f64)> = self.ext_values.iter().map(|(k, v)| (k.clone(), *v)).collect();
+            let ext: Vec<(String, f64)> = self
+                .ext_values
+                .iter()
+                .map(|(k, v)| (k.clone(), *v))
+                .collect();
             let opts = SessionOptions {
                 max_step: (self.quantum.as_secs_f64() * 50.0).clamp(1e-6, 1e-4),
                 ..SessionOptions::default()
             };
-            session = Some(Session::with_ext(&nl, opts, &ext).map_err(|e| SimError::Analog(e.to_string()))?);
+            session = Some(
+                Session::with_ext(&nl, opts, &ext).map_err(|e| SimError::Analog(e.to_string()))?,
+            );
         }
         self.analog = Analog {
             session,
             t0: self.time,
             watch_targets: Vec::new(),
-            quiet_hint: false,
         };
         // nets
         self.nets = built
@@ -472,7 +515,11 @@ impl Bench {
                 .iter()
                 .enumerate()
                 .map(|(i, name)| {
-                    let ps = m.spec.pins.iter().find(|p| p.mcu.eq_ignore_ascii_case(name));
+                    let ps = m
+                        .spec
+                        .pins
+                        .iter()
+                        .find(|p| p.mcu.eq_ignore_ascii_case(name));
                     let port = |n: &Option<String>| {
                         n.as_ref()
                             .and_then(|n| self.analog.session.as_ref().and_then(|s| s.port(n)))
@@ -557,9 +604,10 @@ impl Bench {
         for mi in 0..self.mcus.len() {
             // TX waveform only when something listens on the TX pin
             let tx = self.mcus[mi].core.serial_tx_pin(0);
-            let wired = tx.and_then(|p| self.mcus[mi].pins.get(p)).and_then(|p| p.net).is_some_and(|n| {
-                !matches!(self.nets[n.0].kind, NetKind::Isolated)
-            });
+            let wired = tx
+                .and_then(|p| self.mcus[mi].pins.get(p))
+                .and_then(|p| p.net)
+                .is_some_and(|n| !matches!(self.nets[n.0].kind, NetKind::Isolated));
             self.mcus[mi].core.set_serial_waveform(0, wired);
         }
         Ok(())
@@ -625,7 +673,9 @@ impl Bench {
                 if !self.mcus[mi].pins[pi].watched {
                     continue;
                 }
-                let Some(net) = self.mcus[mi].pins[pi].net else { continue };
+                let Some(net) = self.mcus[mi].pins[pi].net else {
+                    continue;
+                };
                 let v = self.net_voltage(net);
                 let m = &self.mcus[mi];
                 let level = v > 0.45 * m.vcc;
@@ -751,7 +801,10 @@ impl Bench {
 
     /// Serial monitor of an MCU part.
     pub fn serial(&self, part: &str) -> Option<&SerialMonitor> {
-        self.mcus.iter().find(|m| m.spec.part == part).map(|m| &m.serial)
+        self.mcus
+            .iter()
+            .find(|m| m.spec.part == part)
+            .map(|m| &m.serial)
     }
     pub fn serial_mut(&mut self, part: &str) -> Option<&mut SerialMonitor> {
         self.mcus
@@ -814,7 +867,11 @@ impl Bench {
     pub(crate) fn next_wake_time(&mut self) -> Option<SimTime> {
         while let Some(Reverse(w)) = self.heap.peek() {
             let stale = match w.kind {
-                WakeKind::Device { dev, token, generation } => self
+                WakeKind::Device {
+                    dev,
+                    token,
+                    generation,
+                } => self
                     .devices
                     .get(dev)
                     .is_none_or(|d| d.token_gen.get(&token).copied().unwrap_or(0) != generation),
@@ -958,7 +1015,9 @@ impl Bench {
     pub(crate) fn device_pin_voltage(&self, di: usize, pi: usize) -> f64 {
         let d = &self.devices[di];
         match d.nets.get(pi).copied().flatten() {
-            Some(net) if !matches!(self.nets[net.0].kind, NetKind::Isolated) => self.net_voltage(net),
+            Some(net) if !matches!(self.nets[net.0].kind, NetKind::Isolated) => {
+                self.net_voltage(net)
+            }
             _ => match d.drives.get(pi) {
                 Some(PinDrive::Thevenin { v, .. }) | Some(PinDrive::Pull { v, .. }) => *v,
                 _ => 0.0,
@@ -987,10 +1046,7 @@ impl Bench {
             _ => return,
         };
         let m = &mut self.mcus[mi];
-        if (m.vcc - v).abs() > 0.02 {
-            m.vcc = v;
-            m.core.set_vcc(v);
-        } else if (m.vcc - v).abs() > 1e-4 {
+        if (m.vcc - v).abs() > 1e-4 {
             m.vcc = v;
             m.core.set_vcc(v);
         }
@@ -1084,8 +1140,10 @@ impl Bench {
     /// keep their state; capacitor voltages carry over as node sets).
     pub fn rebuild(&mut self) -> Result<(), SimError> {
         self.stats.rebuilds += 1;
+        self.erc_cache = None;
         let mut opts = NetlistOptions::bench();
         opts.damaged = self.damaged.clone();
+        opts.loads = self.loads.clone();
         let built = netlist::build(&self.project, &self.lib, &opts)
             .map_err(|e| SimError::Build(e.to_string()))?;
         // node voltages by net name
@@ -1107,7 +1165,10 @@ impl Bench {
         let mut new_devs = Vec::new();
         let mut fresh = Vec::new();
         for spec in &built.devices {
-            match old.iter().position(|d| d.spec.part == spec.part && d.spec.behaviour == spec.behaviour) {
+            match old
+                .iter()
+                .position(|d| d.spec.part == spec.part && d.spec.behaviour == spec.behaviour)
+            {
                 Some(i) => {
                     let mut d = old.remove(i);
                     d.spec = spec.clone();
@@ -1151,12 +1212,22 @@ impl Bench {
             }
         }
         self.devices = new_devs;
-        // MCUs: keep matching by part id
+        // MCUs: keep matching by part id, add new ones (fresh cores, erased flash)
         let specs = built.mcus.clone();
-        self.mcus.retain(|m| specs.iter().any(|s| s.part == m.spec.part));
+        self.mcus
+            .retain(|m| specs.iter().any(|s| s.part == m.spec.part));
+        for (i, spec) in specs.iter().enumerate() {
+            if !self.mcus.iter().any(|m| m.spec.part == spec.part) {
+                let m = self.make_mcu(spec, i, None)?;
+                self.mcus.push(m);
+            }
+        }
         self.built = built;
         // wakes refer to device indices: rebuild the heap
-        let wakes: Vec<Wake> = std::mem::take(&mut self.heap).into_iter().map(|r| r.0).collect();
+        let wakes: Vec<Wake> = std::mem::take(&mut self.heap)
+            .into_iter()
+            .map(|r| r.0)
+            .collect();
         self.wire_up(Some(ic))?;
         self.heap.clear();
         self.push_wake(self.time + self.world_dt, WakeKind::World);
@@ -1164,7 +1235,13 @@ impl Bench {
             if self.devices[d].tick > SimTime::ZERO {
                 self.devices[d].tick_gen += 1;
                 let (t, g) = (self.time + self.devices[d].tick, self.devices[d].tick_gen);
-                self.push_wake(t, WakeKind::Tick { dev: d, generation: g });
+                self.push_wake(
+                    t,
+                    WakeKind::Tick {
+                        dev: d,
+                        generation: g,
+                    },
+                );
             }
         }
         let _ = wakes; // device wakes (protocol timers) restart from the devices' own state

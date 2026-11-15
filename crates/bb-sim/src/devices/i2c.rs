@@ -27,7 +27,9 @@ pub trait I2cRegs {
 enum Ph {
     Idle,
     Addr,
-    AckAddr { read: bool },
+    AckAddr {
+        read: bool,
+    },
     Write,
     AckWrite,
     Read,
@@ -257,7 +259,9 @@ fn comp_p(adc: i32, t_fine: i32) -> i64 {
 
 /// Humidity in %RH × 1024.
 fn comp_h(adc: i32, t_fine: i32) -> i32 {
-    let (h1, h2, h3, h4, h5, h6) = (H1 as i32, H2 as i32, H3 as i32, H4 as i32, H5 as i32, H6 as i32);
+    let (h1, h2, h3, h4, h5, h6) = (
+        H1 as i32, H2 as i32, H3 as i32, H4 as i32, H5 as i32, H6 as i32,
+    );
     let mut v = t_fine - 76800;
     v = ((((adc << 14) - (h4 << 20) - (h5 * v)) + 16384) >> 15)
         * (((((((v * h6) >> 10) * (((v * h3) >> 11) + 32768)) >> 10) + 2097152) * h2 + 8192) >> 14);
@@ -277,7 +281,11 @@ fn search(lo: i32, hi: i32, increasing: bool, want: f64, f: impl Fn(i32) -> f64)
             b = m;
         }
     }
-    if (f(a) - want).abs() <= (f(b) - want).abs() { a } else { b }
+    if (f(a) - want).abs() <= (f(b) - want).abs() {
+        a
+    } else {
+        b
+    }
 }
 
 impl Bme280 {
@@ -351,7 +359,7 @@ impl I2cRegs for Bme280 {
         self.addr
     }
     fn write(&mut self, byte: u8, index: usize, ctx: &mut dyn DeviceCtx) {
-        if index % 2 == 0 {
+        if index.is_multiple_of(2) {
             self.ptr = byte;
         } else {
             match self.ptr {
@@ -377,7 +385,11 @@ impl I2cRegs for Bme280 {
             // normal mode: fresh values for every burst read
             self.sample(ctx);
         }
-        let v = if self.ptr == 0xF3 { 0 } else { self.regs[self.ptr as usize] };
+        let v = if self.ptr == 0xF3 {
+            0
+        } else {
+            self.regs[self.ptr as usize]
+        };
         self.ptr = self.ptr.wrapping_add(1);
         v
     }
@@ -391,7 +403,11 @@ impl Bme280Dev {
     fn new(s: &DeviceSpec) -> Bme280Dev {
         let addr = parse_addr(&prop_text(s, "address", "0x76"), 0x76);
         Bme280Dev {
-            i2c: I2cSlave::new(Bme280::new(addr, s.pos.unwrap_or_default()), pin_of(s, "SDA"), pin_of(s, "SCL")),
+            i2c: I2cSlave::new(
+                Bme280::new(addr, s.pos.unwrap_or_default()),
+                pin_of(s, "SDA"),
+                pin_of(s, "SCL"),
+            ),
         }
     }
 }
@@ -419,7 +435,10 @@ impl Device for Bme280Dev {
         .into()
     }
     fn readings(&self) -> Vec<(String, f64)> {
-        vec![("temp_c".into(), self.i2c.regs.temp), ("transactions".into(), self.i2c.transactions as f64)]
+        vec![
+            ("temp_c".into(), self.i2c.regs.temp),
+            ("transactions".into(), self.i2c.transactions as f64),
+        ]
     }
 }
 
@@ -525,7 +544,11 @@ impl Ssd1306 {
             0 => {
                 if self.c >= self.col.1 {
                     self.c = self.col.0;
-                    self.p = if self.p >= self.page.1 { self.page.0 } else { self.p + 1 };
+                    self.p = if self.p >= self.page.1 {
+                        self.page.0
+                    } else {
+                        self.p + 1
+                    };
                 } else {
                     self.c += 1;
                 }
@@ -533,7 +556,11 @@ impl Ssd1306 {
             1 => {
                 if self.p >= self.page.1 {
                     self.p = self.page.0;
-                    self.c = if self.c >= self.col.1 { self.col.0 } else { self.c + 1 };
+                    self.c = if self.c >= self.col.1 {
+                        self.col.0
+                    } else {
+                        self.c + 1
+                    };
                 } else {
                     self.p += 1;
                 }
@@ -559,7 +586,11 @@ impl Ssd1306 {
 
     /// Number of lit pixels (tests).
     pub fn lit(&self) -> usize {
-        self.ram.iter().flatten().map(|b| b.count_ones() as usize).sum()
+        self.ram
+            .iter()
+            .flatten()
+            .map(|b| b.count_ones() as usize)
+            .sum()
     }
 }
 

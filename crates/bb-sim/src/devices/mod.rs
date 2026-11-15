@@ -15,8 +15,8 @@ pub use i2c::{I2cRegs, I2cSlave};
 pub use lcd::Hd44780;
 pub use uart::{AtStub, UartPort};
 
-use bb_circuit::netlist::DeviceSpec;
 use bb_circuit::PropValue;
+use bb_circuit::netlist::DeviceSpec;
 use bb_core::{Device, DeviceCtx, Look, VisualState};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -88,7 +88,10 @@ pub fn pin_of(spec: &DeviceSpec, id: &str) -> usize {
 }
 
 pub fn prop_f64(spec: &DeviceSpec, key: &str, default: f64) -> f64 {
-    spec.props.get(key).and_then(|v| v.as_f64()).unwrap_or(default)
+    spec.props
+        .get(key)
+        .and_then(|v| v.as_f64())
+        .unwrap_or(default)
 }
 
 pub fn prop_text(spec: &DeviceSpec, key: &str, default: &str) -> String {

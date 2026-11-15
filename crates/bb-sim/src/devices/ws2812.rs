@@ -69,7 +69,12 @@ impl Device for Ws2812 {
             ctx.watch(self.din, 1.5, 3.0);
         }
         if ok(self.vdd) {
-            ctx.set_drive(self.vdd, PinDrive::Current { i: -0.001 * self.n as f64 });
+            ctx.set_drive(
+                self.vdd,
+                PinDrive::Current {
+                    i: -0.001 * self.n as f64,
+                },
+            );
         }
     }
     fn on_edge(&mut self, ctx: &mut dyn DeviceCtx, _pin: usize, high: bool) {
@@ -98,7 +103,11 @@ impl Device for Ws2812 {
     }
     fn visual(&self) -> VisualState {
         Look::LedArray {
-            leds: self.leds.iter().map(|c| Rgb::new(c[0], c[1], c[2])).collect(),
+            leds: self
+                .leds
+                .iter()
+                .map(|c| Rgb::new(c[0], c[1], c[2]))
+                .collect(),
         }
         .into()
     }
