@@ -408,8 +408,9 @@ Notes / deviations:
 Phase 4 — the Workbench, breadboard + schematic canvases, `SimBench`, Pro → Schematic, Pro
 netlist sync + bench probes, Share/export. Module map + contracts: ARCHITECTURE §8.
 Screenshots (1440×900, rendered by `tests/workbench.rs`): `docs/screenshots/{workbench,
-workbench-schematic,workbench-edit,workbench-smoke,pro-schematic,pro-analysis-synced,
-firmware-phone}.png`.
+workbench-schematic,workbench-edit,workbench-smoke,workbench-power,workbench-parts,
+pro-schematic,pro-analysis-synced,firmware-phone}.png` (`workbench-parts` = every library part
+on one bench; the test also writes zoomed QA tiles to `target/…/tmp/parts-qa/`).
 
 - `SimBench` **done** — the app's default `BenchLink` over `bb_sim::SimHandle`: prebuilt
   firmware at start (Run works without the toolchain), Upload → `Flash` (AVR) / `FlashHost`
@@ -427,7 +428,7 @@ firmware-phone}.png`.
   part numbers, filter chips), search, hover descriptions, drag tiles onto the bench (egui DnD,
   ghost preview with the holes it lands in) or click-then-place.
 - `WB-3` **done** — 2.5D bench art for every `Library::builtin()` art id (UNO/Nano/Mega/ESP32/
-  Pico with labelled headers and live ON/L/TX/RX LEDs, 830/400 breadboards with rails + numbers,
+  Pico with vertical silkscreen header labels and live ON/L/TX/RX LEDs, 830/400 breadboards with rails + numbers,
   resistors with live colour bands, LEDs/RGB with bloom ∝ current, caps, DIP ICs, ESP-01,
   HM-10/HC-05, sensors, LCD + OLED framebuffers, 7-seg, bar graph, NeoPixels, buzzer waves,
   motor/servo/stepper angles, relay, draggable pot knob, pressable buttons, batteries, USB, pot
@@ -446,8 +447,9 @@ firmware-phone}.png`.
 - `WB-7` **done** — schematic view + Pro → Schematic: ANSI / IEC symbols for every symbol id,
   designators + values, bench wiring mirrored as orthogonal routes, power / ground flags, net
   labels for long nets, junction dots, live value chips, ERC line + title block; editing (move,
-  rotate, draw orthogonal wires, delete) through the shared model; auto-placement of new parts;
-  ratsnest both ways. garden-node's sheet laid out like the design.
+  rotate, draw orthogonal wires, delete, **Net label** tool: name it, click a pin or wire —
+  same name joins nets on the bench netlist too; select + ⌫, undo) through the shared model;
+  auto-placement of new parts; ratsnest both ways. garden-node's sheet laid out like the design.
 - `WB-8…12` **done** — right rail + collapsible panels (World with stop sliders, evaporation
   rate, day/night + location picker, noise, water, humidity + time-warp under "More settings";
   Instruments with add/remove + "Clip CH1/+/COM" probe clipping; Probes with min/max/avg;
@@ -471,8 +473,9 @@ firmware-phone}.png`.
   (mini scope + DMM go through it); `BenchCanvas` / `SchematicCanvas` are embeddable widgets;
   `SimBench::factory_with(library, options_hook)` + `CircuitDoc::set_library` take plugin parts
   and device factories.
-- `TEST-5` — `cargo test -p breadbox`: 67 unit, 12 GUI (`tests/gui.rs`), 8 widget, 10 + 1
-  workbench (`tests/workbench.rs`: garden-node run + serial + J1 inspector + Probes & power +
+- `TEST-5` — `cargo test -p breadbox`: 67 unit, 12 GUI (`tests/gui.rs`), 8 widget, 12 + 1
+  workbench (`tests/workbench.rs`: every library part rendered on one bench (art QA);
+  schematic net labels join D9 + D8, delete + undo; garden-node run + serial + J1 inspector + Probes & power +
   Advanced palette; probe tool + R / ⌘D / ⌫ + per-MCU serial tabs; schematic toggle +
   Pro schematic; palette drag + jumper wire + ratsnest + undo/redo + inspector 4k7 + colour
   bands; soil slider → `moisture=0%`; LED on the rail burns out with smoke; Firmware upload on

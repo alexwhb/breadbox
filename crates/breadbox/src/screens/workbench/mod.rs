@@ -123,6 +123,8 @@ pub struct WorkbenchScreen {
     erc_open: bool,
     /// Project generation the screen last set up for.
     seen_project: u64,
+    /// Name typed into the schematic's net-label popup.
+    label_name: String,
 }
 
 impl Default for WorkbenchScreen {
@@ -137,6 +139,7 @@ impl Default for WorkbenchScreen {
             share: share::ShareState::default(),
             erc_open: false,
             seen_project: u64::MAX,
+            label_name: String::new(),
         }
     }
 }
@@ -203,6 +206,12 @@ impl WorkbenchScreen {
                 if self.state.view == BenchView::Schematic
                     && let Some(doc) = app.circuit.as_mut()
                 {
+                    crate::screens::pro::schematic::net_label_control(
+                        ui,
+                        &mut self.schematic,
+                        doc,
+                        &mut self.label_name,
+                    );
                     let mut iec = doc.project().schematic.iec;
                     if widgets::mini_segmented(
                         ui,

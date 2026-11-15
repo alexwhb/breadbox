@@ -840,3 +840,82 @@ fn every_part_has_bench_art() {
     }
     let _ = std::fs::remove_dir_all(&tmp);
 }
+
+fn sch_anchor(h: &H, part: &str, pin: &str) -> egui::Pos2 {
+    let (v, sheet) = h.state().ctx.egui.data(|d| {
+        (
+            d.get_temp::<View>(egui::Id::unique("schematic-view"))
+                .expect("schematic view"),
+            d.get_temp::<std::sync::Arc<breadbox::canvas::schematic::Sheet>>(egui::Id::unique(
+                "schematic-sheet",
+            ))
+            .expect("sheet"),
+        )
+    });
+    let a = sheet
+        .anchors
+        .iter()
+        .find(|a| a.0 == part && a.1 == pin)
+        .unwrap_or_else(|| panic!("anchor {part}.{pin}"));
+    v.to_screen(a.2, a.3)
+}
+
+/// Places a net label named `name` on a pin through the toolbar popup.
+fn place_label(h: &mut H, name: &str, part: &str, pin: &str) {
+    h.get_by_label("Net label").click();
+    h.run_steps(3);
+    h.get_by_label("Net label name").focus();
+    h.run_steps(1);
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+    h.get_by_label("Net label name").type_text(name);
+    h.run_steps(1);
+    h.get_by_label("Place on a pin or wire").click();
+    h.run_steps(3);
+    assert!(has_label_containing(h, &format!("drop {name}")));
+    let at = sch_anchor(h, part, pin);
+    click_at(h, at);
+}
+
+/// Schematic net labels (`WB-7`): two labels with one name join their nets on the bench
+/// netlist too; a label selects, deletes and comes back with undo.
+#[test]
+fn schematic_net_labels_join_nets() {
+    let mut h = harness();
+    open_example(&mut h, "garden-node");
+    h.state_mut().ctx.navigate(breadbox::router::Route::Pro(
+        breadbox::router::ProTab::Schematic,
+    ));
+    h.run_steps(5);
+    let net = |h: &mut H, pin: &str| {
+        let d = h.state_mut().ctx.circuit.as_mut().unwrap();
+        let c = d.connectivity();
+        c.net_of("u1", pin).map(|n| c.net(n).name.clone())
+    };
+    assert_ne!(net(&mut h, "D9"), net(&mut h, "D8"));
+    place_label(&mut h, "LEDS", "u1", "D9");
+    assert_eq!(doc(&h).project().schematic.labels.len(), 1);
+    place_label(&mut h, "LEDS", "u1", "D8");
+    let labels = &doc(&h).project().schematic.labels;
+    assert_eq!(labels.len(), 2);
+    assert!(labels.iter().all(|l| l.name == "LEDS"));
+    assert_eq!(net(&mut h, "D9"), net(&mut h, "D8"), "same label, same net");
+    if let Ok(img) = h.render() {
+        let _ = img.save(std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("labels.png"));
+    }
+    // select the second label by its name and delete it; undo brings it back
+    let at = sch_anchor(&h, "u1", "D8");
+    let v = h
+        .state()
+        .ctx
+        .egui
+        .data(|d| d.get_temp::<View>(egui::Id::unique("schematic-view")))
+        .unwrap();
+    click_at(&mut h, at + egui::vec2(v.len(1.0), -v.len(0.6)));
+    h.key_press(egui::Key::Delete);
+    h.run_steps(3);
+    assert_eq!(doc(&h).project().schematic.labels.len(), 1);
+    assert_ne!(net(&mut h, "D9"), net(&mut h, "D8"));
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Z);
+    h.run_steps(3);
+    assert_eq!(doc(&h).project().schematic.labels.len(), 2);
+}

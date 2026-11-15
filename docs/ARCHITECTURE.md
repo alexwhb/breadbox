@@ -718,13 +718,14 @@ circuit.rs           CircuitDoc: the open project's bb_circuit Editor + library 
                      connectivity / ERC-DRC, autosave; shared by Workbench, schematic, Pro
 export.rs            Share/export: .breadbox.zip bundle + import, .cir, BOM CSV, SVG → PNG
 canvas/pen.rs        View (pan/zoom, 100 % = 8 pt per 0.1"), Pen: world-unit drawing (shadows,
-                     gradients, deferred glows, beziers, scaled text)
+                     gradients, deferred glows, beziers, scaled text, text_up silkscreen)
 canvas/art/          procedural 2.5D art for every library bench art id (boards, breadboard,
                      passives, modules, world objects, instruments); bounds; magic smoke
 canvas/scene.rs      Scene: parts in draw order, world leads/bounds, pin + hole spatial index
 canvas/bench.rs      BenchCanvas: the breadboard view (draw + every bench interaction)
 canvas/schematic.rs  Sheet (symbols, mirrored bench wiring, flags, junctions), SchDraw (egui +
-                     SVG backends), SchematicCanvas (Workbench + Pro → Schematic)
+                     SVG backends), SchematicCanvas (Workbench + Pro → Schematic; net-label
+                     tool: label_tool / label_snap onto pin anchors or schematic wires)
 canvas/instruments.rs  BenchInstrument trait + InstrumentRegistry (mini scope, DMM; plugins)
 widgets/             the kit (below)
 screens/mod.rs       default_registry() — the ONE place screens are registered
@@ -857,7 +858,11 @@ a front panel, `lead_pin`, `lead_color`, `tip_label`) registered in
 placeholder use it. Plugin panels (`PartTelemetry::panel`, `bb_plugin::panel`) plug in there.
 **Embedding the bench** (lesson canvas): a screen owns a `BenchCanvas` and calls
 `show(ui, rect, app.circuit, telemetry, app.project_generation)`, forwarding `BenchOutput::sim`
-to `app.sim()`; `SchematicCanvas::show` works the same way.
+to `app.sim()`; `SchematicCanvas::show` works the same way (its view + `Arc<Sheet>` are in temp
+data under `schematic-view` / `schematic-sheet`; `screens::pro::schematic::net_label_control`
+is the reusable "Net label" toolbar button). Bench art text must stay inside the bundled fonts
+(JetBrains Mono / Inter / Hack / Ubuntu): `egui_kittest` panics on a missing glyph, so symbols
+like ⏚ / ⎓ are drawn as shapes or spelled out.
 
 `AvrBench` (kept for tests and boards-only use): one AVR target (UNO/Nano/Mega), fixed ADC voltages
 (soil 42 % → 1.88 V on A0, 180 lux → 2.60 V on A1), and — if the project has an `esp01` part —
@@ -891,8 +896,9 @@ driven by AccessKit labels through `egui_kittest` + wgpu; saves `docs/screenshot
 snapshot; `UPDATE_SNAPSHOTS=1` to refresh), `tests/workbench.rs` (the Workbench on the real
 co-simulation: run + serial, World slider, palette drag-and-drop, wire drawing + ratsnest,
 inspector edits, undo/redo, LED burnout, upload on the live bench, ESP32 host board, virtual
-phone, Pro synced netlist + bench probes, Share + reopen; `--ignored perf` measures frame time
-with garden-node running). `BREADBOX_EXPORT_DIR` / `BREADBOX_PROJECTS_DIR` redirect Share and
+phone, Pro synced netlist + bench probes, Share + reopen, schematic net labels, every library
+part on one bench (art QA, zoomed tiles in `target/…/tmp/parts-qa/`); `--ignored perf`
+measures frame time with garden-node running). `BREADBOX_EXPORT_DIR` / `BREADBOX_PROJECTS_DIR` redirect Share and
 bundle imports in tests. GUI tests use `AppOptions::test()` (no persistence,
 no native menu, bench at max speed); compile tests skip gracefully without a toolchain.
 
