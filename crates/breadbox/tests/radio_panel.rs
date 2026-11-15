@@ -327,6 +327,15 @@ fn engine(h: &H) -> Option<(breadbox::bench::NetConditionsView, (f64, f64))> {
     Some((r.conditions.clone(), r.placement.as_ref()?.bench))
 }
 
+/// Clicks a widget by its label after scrolling it into view and letting the scroll settle
+/// (kittest clicks at the on-screen position).
+fn click(h: &mut H, label: &str) {
+    h.get_by_label(label).scroll_to_me();
+    h.run_steps(12);
+    h.get_by_label(label).click();
+    h.run_steps(3);
+}
+
 fn nudge(h: &mut H, slider: &str, key: egui::Key, n: usize) {
     let s = h.get_by_label_contains(slider);
     s.scroll_to_me();
@@ -387,14 +396,12 @@ fn radio_settings_are_saved_with_the_project_and_undoable() {
     // conditions: latency 3 → 7 ms, loss 0 → 2 %, drop the AP at 45 s
     nudge(&mut h, "Latency ", egui::Key::ArrowRight, 4);
     nudge(&mut h, "Packet loss ", egui::Key::ArrowRight, 2);
-    h.get_by_label("Drop the AP at (s)").click();
-    h.run_steps(1);
+    click(&mut h, "Drop the AP at (s)");
     h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
     h.get_by_label("Drop the AP at (s)").type_text("45");
     h.key_press(egui::Key::Enter);
     h.run_steps(2);
-    h.get_by_label("Drop the AP at t =").click();
-    h.run_steps(2);
+    click(&mut h, "Drop the AP at t =");
     let c = saved(&h).settings.conditions;
     assert_eq!(
         (c.latency_ms, c.jitter_ms, c.loss_pct, c.drop_ap_at_s),
@@ -404,13 +411,8 @@ fn radio_settings_are_saved_with_the_project_and_undoable() {
     // LAN bridge: on, then pointed at the dummy broker
     let bridge = format!("127.0.0.1:{broker_port}");
     if default_port.is_some() {
-        let cb = h.get_by_label("Bridge to my real LAN broker");
-        cb.scroll_to_me();
-        h.run_steps(2);
-        h.get_by_label("Bridge to my real LAN broker").click();
-        h.run_steps(2);
-        h.get_by_label("LAN broker address").click();
-        h.run_steps(1);
+        click(&mut h, "Bridge to my real LAN broker");
+        click(&mut h, "LAN broker address");
         h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
         h.get_by_label("LAN broker address").type_text(&bridge);
         h.key_press(egui::Key::Enter);
@@ -601,12 +603,7 @@ fn floor_plan_walls_are_editable_undoable_and_saved() {
     assert_eq!(w0, 1, "the default interior wall");
     let walls = |h: &H| saved(h).settings.walls;
     // Add wall: a second interior wall across the link → ~15 dB weaker
-    let add = h.get_by_label("Add wall");
-    add.scroll_to_me();
-    // let the scroll animation settle before clicking by position
-    h.run_steps(12);
-    h.get_by_label("Add wall").click();
-    h.run_steps(3);
+    click(&mut h, "Add wall");
     assert_eq!(walls(&h).len(), 2);
     assert!(
         wait_for(&mut h, 30.0, |h| link(h)
@@ -627,8 +624,7 @@ fn floor_plan_walls_are_editable_undoable_and_saved() {
     // the new wall made concrete: another ~10 dB
     assert!(wait_for(&mut h, 30.0, |h| link(h).is_some_and(|(w, _)| w == 2)));
     let (_, rssi2) = link(&h).unwrap();
-    h.get_by_label("Wall 2: interior").click();
-    h.run_steps(3);
+    click(&mut h, "Wall 2: interior");
     assert!(walls(&h)[1].loss_db >= 25.0, "{:?}", walls(&h));
     assert!(
         wait_for(&mut h, 30.0, |h| link(h)
@@ -637,8 +633,7 @@ fn floor_plan_walls_are_editable_undoable_and_saved() {
         link(&h)
     );
     // remove the default wall: the concrete one is left
-    h.get_by_label("Remove wall 1").click();
-    h.run_steps(3);
+    click(&mut h, "Remove wall 1");
     let w = walls(&h);
     assert_eq!(w.len(), 1);
     assert!(w[0].loss_db >= 25.0);
