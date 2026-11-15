@@ -106,6 +106,8 @@ pub struct AppCtx {
     pub plugins: crate::plugins::PluginService,
     /// Lesson progress file.
     pub progress_path: PathBuf,
+    /// The Help window's document, when open.
+    pub help: Option<crate::widgets::help::HelpTopic>,
     /// Bumped whenever the open project changes.
     pub project_generation: u64,
     /// Circuit electrical generation the bench last saw.
@@ -267,7 +269,7 @@ pub struct BreadboxApp {
     /// Project generation each screen last saw.
     seen: HashMap<ScreenSlot, u64>,
     entered: Option<Route>,
-    /// Key events to inject next frame (menu Undo/Redo → text editors).
+    /// Key events for the next frame (menu Undo / Redo / Select All → the focused text field).
     inject: Vec<egui::Event>,
     first_frame: bool,
 }
@@ -329,6 +331,7 @@ impl BreadboxApp {
                 .unwrap_or_else(bb_lessons::Progress::default_path),
             project_generation: 0,
             bench_generation: 0,
+            help: None,
             circuit: None,
             pending: Vec::new(),
             nav: None,
@@ -392,6 +395,11 @@ impl BreadboxApp {
         {
             log::info!("first frame {} ms after start", t0.elapsed().as_millis());
         }
+        // key events a menu item handed to the focused text field (Undo, Redo, Select All)
+        if !self.inject.is_empty() {
+            let events = std::mem::take(&mut self.inject);
+            ctx.input_mut(|i| i.events.extend(events));
+        }
         self.ctx.toolchain.poll();
         self.ctx.apply_plugins();
         self.ctx.bench.poll();
@@ -453,8 +461,9 @@ impl BreadboxApp {
                 s.ui(ui, &mut self.ctx);
             }
         });
-        // floating radio tools (virtual phone, MQTT explorer)
+        // floating radio tools (virtual phone, MQTT explorer), Help
         widgets::radio_tools::show(&ctx, &mut self.ctx);
+        widgets::help::show(&ctx, &mut self.ctx);
         self.process_commands();
         self.ctx.sync_circuit();
         self.route_changes();
@@ -739,14 +748,34 @@ impl BreadboxApp {
                 "Breadbox {} — a circuit playground and SPICE workbench.",
                 env!("CARGO_PKG_VERSION")
             )),
-            Command::OpenDocs => {
-                if let Some(root) = &self.ctx.resources.root {
-                    let doc = root.join("docs");
-                    if doc.is_dir() {
-                        self.ctx
-                            .egui
-                            .open_url(egui::OpenUrl::new_tab(format!("file://{}", doc.display())));
-                    }
+            Command::OpenDocs => self.ctx.help = Some(Default::default()),
+            Command::Help(topic) => self.ctx.help = Some(topic),
+            Command::ImportBundle => {
+                if let Some(zip) = platform::open_file(
+                    "Import a Breadbox project bundle",
+                    "Breadbox project bundle",
+                    &["zip"],
+                ) {
+                    self.open_path(&zip);
+                }
+            }
+            // the clipboard goes through egui-winit (text fields get Event::Cut/Copy/Paste,
+            // the bench copies parts); Select All is ⌘A for the focused text field
+            Command::Cut => self
+                .ctx
+                .egui
+                .send_viewport_cmd(egui::ViewportCommand::RequestCut),
+            Command::Copy => self
+                .ctx
+                .egui
+                .send_viewport_cmd(egui::ViewportCommand::RequestCopy),
+            Command::Paste => self
+                .ctx
+                .egui
+                .send_viewport_cmd(egui::ViewportCommand::RequestPaste),
+            Command::SelectAll => {
+                if self.ctx.text_has_focus() {
+                    self.inject_key(Key::A, Modifiers::COMMAND);
                 }
             }
             Command::Save | Command::SaveAs => {
@@ -890,10 +919,6 @@ impl eframe::App for BreadboxApp {
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, STORAGE_KEY, &self.persisted());
-    }
-
-    fn raw_input_hook(&mut self, _ctx: &egui::Context, raw_input: &mut egui::RawInput) {
-        raw_input.events.append(&mut self.inject);
     }
 
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {

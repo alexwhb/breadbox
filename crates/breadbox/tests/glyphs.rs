@@ -298,7 +298,10 @@ fn scan() -> Seen {
     data.extend(files("lessons", &["toml", "json", "ino", "h", "cpp"]));
     data.extend(files("plugins", &["json", "svg", "toml"]));
     data.extend(files("examples", &["json", "ino", "h", "cpp", "cir"]));
-    data.push(repo().join("docs/PLUGIN-SDK.md"));
+    // the docs the app renders (Plugins → SDK docs, Help)
+    for d in ["docs/PLUGIN-SDK.md", "docs/LESSON-FORMAT.md", "README.md"] {
+        data.push(repo().join(d));
+    }
     data.retain(|p| !p.to_string_lossy().contains("/target/"));
     assert!(data.len() > 50, "found only {} data files", data.len());
     for f in &data {

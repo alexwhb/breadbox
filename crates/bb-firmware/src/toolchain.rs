@@ -785,8 +785,12 @@ fn find_native_gcc_in(native: &Path, prefixes: &[PathBuf]) -> Option<PathBuf> {
     None
 }
 
-/// arduino-cli release archive for this machine.
+/// arduino-cli release archive for this machine (`$BREADBOX_ARDUINO_CLI_URL` overrides it).
 pub fn download_url() -> String {
+    // a mirror, or a local archive (`file://…`) for offline installs and tests
+    if let Ok(u) = std::env::var("BREADBOX_ARDUINO_CLI_URL") {
+        return u;
+    }
     let asset = match (std::env::consts::OS, std::env::consts::ARCH) {
         ("macos", "aarch64") => "macOS_ARM64.tar.gz",
         ("macos", _) => "macOS_64bit.tar.gz",

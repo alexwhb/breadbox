@@ -854,13 +854,32 @@ impl BenchCanvas {
                     arrows = d;
                 }
             }
+            // the real app gets ⌘C / ⌘X / ⌘V as clipboard events (egui-winit, Edit menu),
+            // tests as key presses
+            let mut clip = (false, false, false); // (copy, cut, paste)
+            i.events.retain(|e| match e {
+                egui::Event::Copy => {
+                    clip.0 = true;
+                    false
+                }
+                egui::Event::Cut => {
+                    clip.1 = true;
+                    false
+                }
+                egui::Event::Paste(_) => {
+                    clip.2 = true;
+                    false
+                }
+                _ => true,
+            });
+            let cut = clip.1 || k(i, cmd, Key::X);
             (
                 k(i, none, Key::R),
                 k(i, none, Key::F),
-                k(i, none, Key::Delete) || k(i, none, Key::Backspace),
+                k(i, none, Key::Delete) || k(i, none, Key::Backspace) || cut,
                 k(i, cmd, Key::D),
-                k(i, cmd, Key::C),
-                k(i, cmd, Key::V),
+                k(i, cmd, Key::C) || clip.0 || cut,
+                k(i, cmd, Key::V) || clip.2,
                 k(i, none, Key::Escape),
                 arrows,
             )
@@ -879,6 +898,10 @@ impl BenchCanvas {
             }
             doc.touched();
         }
+        // copy first: Cut is copy + delete
+        if copy && !parts.is_empty() {
+            doc.clipboard = doc.editor.copy(&parts);
+        }
         if del && !self.selection.is_empty() {
             doc.editor.delete(&parts, &wires);
             doc.touched();
@@ -891,9 +914,6 @@ impl BenchCanvas {
             self.selection.clear();
             self.selection.parts.extend(new);
             out.selection_changed = true;
-        }
-        if copy && !parts.is_empty() {
-            doc.clipboard = doc.editor.copy(&parts);
         }
         if paste && !doc.clipboard.parts.is_empty() {
             let clip = doc.clipboard.clone();

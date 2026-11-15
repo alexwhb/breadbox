@@ -1014,6 +1014,7 @@ impl PluginsScreen {
             .auto_shrink([false, false])
             .show(&mut c, |ui| {
                 ui.set_max_width(820.0);
+                let text = markdown::displayable(ui.ctx(), &text);
                 markdown::show(ui, &text);
             });
     }

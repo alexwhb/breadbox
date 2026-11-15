@@ -229,6 +229,25 @@ pub fn inline(
     job
 }
 
+/// A document made safe for the bundled fonts: instrument symbols spelled out
+/// (`instrument::glyph_safe`, `V⎓` → `V DC`) and any other character the text or code font
+/// can't draw written as `\u{…}` instead of a tofu box.
+pub fn displayable(ctx: &egui::Context, text: &str) -> String {
+    let text = crate::widgets::instrument::glyph_safe(text);
+    let (ui_font, code) = (font::ui(13.0), font::mono(12.0));
+    ctx.fonts_mut(|f| {
+        text.chars()
+            .map(|c| {
+                if c.is_ascii() || (f.has_glyph(&ui_font, c) && f.has_glyph(&code, c)) {
+                    c.to_string()
+                } else {
+                    format!("\\u{{{:04x}}}", c as u32)
+                }
+            })
+            .collect()
+    })
+}
+
 /// Renders a Markdown document into `ui` (inside a scroll area of the caller).
 pub fn show(ui: &mut Ui, text: &str) {
     let p = pal(ui);

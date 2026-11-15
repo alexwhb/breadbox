@@ -140,7 +140,17 @@ pub enum Command {
     RunAnalyses,
     ExportCir,
     About,
+    /// Help → the guide (the Help window on its first topic).
     OpenDocs,
+    /// Help → a document in the Help window.
+    Help(crate::widgets::help::HelpTopic),
+    /// File → Import Project Bundle (`.breadbox.zip`, `PRJ-5`).
+    ImportBundle,
+    /// Edit → Cut / Copy / Paste / Select All (text fields, the bench's parts).
+    Cut,
+    Copy,
+    Paste,
+    SelectAll,
 }
 
 /// A screen. All methods but `ui` are optional.
