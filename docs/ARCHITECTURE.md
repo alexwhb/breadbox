@@ -568,6 +568,12 @@ thread; nothing reads the wall clock). One `bb_radio::RadioSpace` per bench hold
    `lan_bridge_status()`, the phone API on `ble`.
 6. Persistence: `settings() / apply_settings(&RadioSettings)` (serde) for `project.json`
    `radios`; module flash state (`EspAt::config.flash`) for per-part settings.
+7. BLE timing: phone → peripheral packets (CCCD writes, writes, reads) go out in the master's
+   slot of the next 30 ms connection event, peripheral notifications in the slave slot after it;
+   `notify()` honours a CCCD write already queued for that event, so a notification sent right
+   after the phone subscribes is delivered. `PhoneEvent::Subscribed` → phone log row
+   "notifications on · FFE1"; `subscribe_pending(handle)` → `CharView::notify_pending` (the
+   UI's "Turning on…").
 
 Example sketches live in `examples/<project>/firmware/<MCU ref>/<sketch>/` with a `sketch.yaml`
 (`default_fqbn`); `scripts/build-test-firmware.sh` compiles the AVR ones into
@@ -736,6 +742,8 @@ canvas/schematic.rs  Sheet (symbols, mirrored bench wiring, flags, junctions), S
                      SVG backends), SchematicCanvas (Workbench + Pro → Schematic; net-label
                      tool: label_tool / label_snap onto pin anchors or schematic wires)
 canvas/instruments.rs  BenchInstrument trait + InstrumentRegistry (mini scope, DMM; plugins)
+canvas/world_objects.rs  world objects on the bench (WORLD-4): hand / person / wall / magnet drawn
+                     at metres / 0.00254, hit-test, dragged live (SetWorld <id>.x/.y), new_object
 canvas/plugin_parts.rs  plugin parts on the bench: instrument front panels with live controls,
                      SVG art (resvg → texture), probe leads (wires plugged into jacks) with
                      draggable tips, display masking (lesson meters)
@@ -755,9 +763,11 @@ screens/pro/         mod.rs (Analysis tab), cards.rs (dot-card editing), model.r
                      data), demo.rs (design netlist + stand-in subcircuits), sync.rs (netlist
                      synced from the circuit), schematic.rs (Pro → Schematic tab), pcb/ (Pro →
                      PCB, PRO-7), plugin_analyses.rs (analysis plugins' cards)
-screens/workbench/   mod.rs (screen: header, layout, status strip, rail), palette.rs, panels.rs
-                     (World / Instruments / Probes / Waveforms), inspector.rs, dock.rs (Serial
-                     monitor, Probes & power), share.rs (Share menu)
+screens/workbench/   mod.rs (screen: header + simulation menu, layout, status strip, rail),
+                     palette.rs, panels.rs (World / Instruments / Probes / Waveforms),
+                     world_program.rs (World panel: Objects, Program the world — scripts +
+                     keyframe timelines), inspector.rs, dock.rs (Serial monitor, Probes &
+                     power), share.rs (Share menu)
 ```
 
 **Router.** `Route::{Home, Workbench, Firmware, Pro(ProTab::{Schematic, Analysis, Pcb}),
@@ -782,9 +792,33 @@ Save copies the project), ⌘⇧S save as, ⌘Z/⌘⇧Z undo/redo (text fields g
 `Command`s; its items with key equivalents consume the keys, so egui shortcut handling only runs
 without the menu (tests, other OSes).
 
+**Simulation menu** (`SIM-1`, `SIM-3`): the header's speed label opens speed, Step one quantum /
+1 ms (`AppCtx::step_sim` → pause + `bb_sim::Command::Step`), Reset bench, Reset MCU only · Ux
+(`AppCtx::reset_mcu` → `ResetScope::Mcu`), Seed and Sync quantum (`AppCtx::apply_sim_settings`:
+undoable `Editor::set_settings` (`Op::Settings`) → `UpdateProject` + `Reset`, so the same seed
+replays the same run). The native Simulate menu sends `Command::StepSim(StepSize)` /
+`Command::ResetMcu`; File → Import .cir and Home → Import .cir… send `Command::ImportCir`, and
+`open_path` on a `.cir/.net/.sp/.spice/.ckt` file imports it as a new Pro project
+(`export::import_cir_project`, original kept as `imported/<name>.cir`).
+
+**Alerts** (`PLUG-2`): `BenchService::poll` collects device / plugin error-level logs (a sandbox
+"permission denied" trap) and bench errors (not damage) into `alerts`; the app turns each into
+an error toast once, on any screen. `events` (for the Firmware output) is bounded at 500.
+
+**World programs** (`WORLD-4/5`): objects, scripts and timelines are edited in
+`project.world` (undoable `set_world`); `AppCtx::sync_world_program` (each frame) pushes a
+changed set into the running bench (`World::set_objects` / `set_scripts` / `set_timelines` via
+`Command::With`), so panel edits, canvas drags and undo / redo all reach the sensors. The
+palette's Hand tile adds a world hand object instead of a part. Scheduled watering is
+`PotConfig::schedule` (live keys `<pot>.water_every_h`, `<pot>.water_ml`).
+
 **Persistence** (`APP-5`): eframe storage key `breadbox-app` → `PersistedState { route, theme,
 recent, last_project, screens: {slot key → JSON} }`; window geometry by eframe. Projects
 autosave edited sketch files 1.2 s after the last keystroke (bundled examples stay read-only).
+`Screen::flush` + `BreadboxApp::flush` (called from eframe's `save`, i.e. on quit) write what the
+debounce has not yet saved (Firmware tabs, a Pro file netlist, the circuit); `set_project`
+saves the outgoing circuit and Firmware / Pro flush the previous project's edits in
+`project_changed`.
 Idle cost: nothing repaints unless input, a job, a toast or the running bench asks.
 
 **Widget kit** (`widgets/`, all with AccessKit names): `Btn` (ghost / amber / mini / plain /
@@ -899,7 +933,9 @@ like the garden-node example. Upload without a toolchain falls back to the proje
 image / `examples/fixtures/<sketch>.<board>.elf`.
 
 **Firmware screen** (design screen 2): Verify stages the editor buffers into
-`~/Library/Caches/Breadbox/staging/<hash>/<sketch>/` and runs `Toolchain::compile` (AVR) or
+`~/Library/Caches/Breadbox/staging/<hash>-<release|debug>/<sketch>/` under an exclusive
+`StagingLock` (`staging/<hash>-<kind>/.lock`, held for stage + compile, so another build of the
+same sketch — a debug build, a second app instance — never rewrites the sources mid-compile) and runs `Toolchain::compile` (AVR) or
 `host::compile_host` (ESP32/Pico) on a job; `BuildOutput::output_lines()` fill the Output tab;
 `Diagnostic`s become editor squiggles. "Step · breakpoints" builds `-Og` and arms the gutter's
 breakpoints via `BenchLink::set_breakpoints`; pauses follow the executing line across tabs.
@@ -929,7 +965,12 @@ from the schematic** (`screens/pro/sync.rs`: bb-circuit's Pro netlist with world
 gets a `.op`); edits that change an R / C / L value round-trip into the circuit, analysis-card
 edits from the sidebar or the editor (`.tran …`, `*off .mc …`) round-trip into
 `project.spice.directives` (`Editor::set_directives`, undoable), anything else detaches it
-(`project.spice.detached`, Re-sync button); the `.op` table's bench-probe column reads `SimBench`'s probe keys. The
+(`project.spice.detached`, Re-sync button); the `.op` table's bench-probe column reads `SimBench`'s probe keys.
+A project with an empty circuit edits its own file netlist `analyses/<name>.cir`
+(`project::starter_netlist`, created with new Pro projects) instead of the built-in demo. All
+seven analysis cards are in the (scrollable) sidebar; `.meas` and `.tf` results fill a
+measurements table (`model::MeasRow`), and the Bode card reads / marks the −3 dB corner
+(`model::corner_frequency`). The
 netlist editor (SPICE highlighting, parse errors as
 diagnostics, autosave for `analyses/*.cir`) feeds `model::run` on a job (`run_with` + cancel +
 progress). Breadbox-only parts the analog solver can't elaborate (`CAPSOIL`, `ATMEGA328P`) get
@@ -1018,7 +1059,11 @@ explorer `garden/pot1`), `tests/debug_memory.rs` (blink: SRAM / I/O / EEPROM / f
 across two pauses, PORTB bit 5, Go to address; API-level empty state;
 `docs/screenshots/firmware-memory.png`), `tests/radio_panel.rs` (garden-node bench drag →
 lower RSSI + stored position, jitter / drop-AP, pcap-ng + CSV export; Add BLE hat → HMSoft;
-`docs/screenshots/radios-placement.png`), `tests/pcb.rs` (blink: auto-place, route, DRC, Gerbers parse back). `BREADBOX_EXPORT_DIR` / `BREADBOX_PROJECTS_DIR` redirect Share and
+`docs/screenshots/radios-placement.png`), `tests/pcb.rs` (blink: auto-place, route, DRC, Gerbers parse back), `tests/audit.rs` (spec
+items closed by the audit: simulation menu, `.cir` import, plugin-violation toasts, flush on
+quit / switch, Pro cards + measurements, world objects / scripts / timelines on a sonar sketch,
+scheduled watering, radio annotations), `tests/session.rs` (a scripted first session: Playground
+LED blink from a typed sketch, Pro RC low-pass corner, Track 1 lesson 1; `session-*.png`). `BREADBOX_EXPORT_DIR` / `BREADBOX_PROJECTS_DIR` redirect Share and
 bundle imports in tests. GUI tests use `AppOptions::test()` (no persistence,
 no native menu, bench at max speed); compile tests skip gracefully without a toolchain.
 

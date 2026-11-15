@@ -947,7 +947,9 @@ mod tests {
         )
         .unwrap();
         let ac = v.ac.clone().unwrap();
-        assert_eq!(ac.title, ".ac — Bode of V(OUT)");
+        // fc = 1 / (2π · 1k · 100n) = 1.59 kHz
+        assert_eq!(ac.title, ".ac — Bode of V(OUT) · −3 dB at 1.59 kHz");
+        assert!((ac.corner_hz.unwrap() - 1591.5).abs() < 20.0, "{:?}", ac.corner_hz);
         let mag = &ac.mag[0].points;
         assert!(mag.first().unwrap()[1].abs() < 0.1);
         assert!(mag.last().unwrap()[1] < -20.0);
