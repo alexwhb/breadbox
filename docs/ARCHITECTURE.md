@@ -45,9 +45,9 @@ Dependency direction (no cycles):
 bb-core ← bb-spice
 bb-core ← bb-avr
 bb-core ← bb-firmware (← bb-avr for ELF→debug glue only if needed)
-bb-core ← bb-world
+bb-core, bb-spice ← bb-world            (expressions for timelines/scripts)
 bb-core ← bb-radio
-bb-core, bb-spice ← bb-circuit
+bb-core, bb-spice, bb-world, bb-firmware ← bb-circuit   (board pin maps, world config)
 bb-core, bb-spice, bb-avr, bb-firmware, bb-circuit, bb-world, bb-radio ← bb-sim
 bb-core, bb-sim, bb-circuit ← bb-plugin
 bb-core, bb-circuit, bb-sim ← bb-lessons
@@ -71,48 +71,132 @@ everything ← breadbox (app)
 
 ## 3. Device contract (`bb-core`)
 
-Every simulated thing that is not a plain SPICE element — sensors, LEDs-with-visuals, radios,
-displays, instruments, plugin parts — is a `Device`. MCUs are wrapped by `bb-sim` as devices too.
+Every simulated thing that is not a plain SPICE element — sensors, LEDs-with-visuals, radio
+modules, displays, motors, instruments, plugin parts — is a `bb_core::Device`. A part's
+electrical behaviour stays in SPICE (its `model.spice` template, §3b); the device adds what
+SPICE cannot: protocols, world coupling, visuals, damage, user input. MCUs are *not* devices:
+`bb-sim` drives them through its own `McuCore` trait (§6).
 
 ```rust
-/// How a device drives one of its pins into the analog circuit.
-pub enum PinDrive {
-    HighZ,                          // input / floating (leakage modelled by the engine)
+pub enum PinDrive {                 // how a device drives one of its pins
+    HighZ,                          // input / floating
     Thevenin { v: f64, r: f64 },    // push-pull output: source v behind r ohms
-    Pull { v: f64, r: f64 },        // weak pull (e.g. internal pull-up 35 kΩ to Vcc)
-    Current { i: f64 },             // ideal current source into the node
+    Pull { v: f64, r: f64 },        // weak pull (internal pull-up, open-drain release)
+    Current { i: f64 },             // current source into the node (supply draw: negative)
 }
 
 pub trait DeviceCtx {
     fn now(&self) -> SimTime;
-    fn pin_voltage(&self, pin: usize) -> f64;          // vs ground, at `now`
-    fn pin_current(&self, pin: usize) -> f64;          // into the device through `pin`
+    fn pin_voltage(&self, pin: usize) -> f64;               // vs ground at `now`
+    fn pin_current(&self, pin: usize) -> f64;               // into the device via its drive
+    fn element_current(&self, element: &str) -> Option<f64>;  // own SPICE element ("D", "R")
+    fn element_charge(&self, element: &str) -> Option<f64>;   // ∫i dt since start (exact avg)
+    fn track_element(&mut self, element: &str);             // start integrating (on_start)
+    fn element_energy(&self, element: &str) -> Option<f64>; // ∫v·i dt (self-heating)
     fn set_drive(&mut self, pin: usize, drive: PinDrive);
-    fn set_ext(&mut self, name: &str, value: f64);     // analog external variable, see §4
-    fn wake_at(&mut self, at: SimTime, token: u64);    // schedule on_wake
-    fn watch(&mut self, pin: usize, lo: f64, hi: f64); // Schmitt-trigger edge notifications
-    fn world(&self) -> &dyn WorldView;                 // read-only world access
-    fn world_mut(&mut self) -> Option<&mut dyn WorldMut>; // only if permitted (plugins)
-    fn emit(&mut self, ev: DeviceEvent);               // log line, visual change, damage, sound
+    fn set_ext(&mut self, name: &str, value: f64);          // ext("<REF>.<name>") in its model
+    fn wake_at(&mut self, at: SimTime, token: u64);         // → on_wake(token)
+    fn cancel_wake(&mut self, token: u64);
+    fn watch(&mut self, pin: usize, lo: f64, hi: f64);      // Schmitt edges → on_edge
+    fn tick_every(&mut self, period: SimTime);              // → on_tick (ZERO stops)
+    fn world(&self) -> &dyn WorldView;
+    fn world_mut(&mut self) -> Option<&mut dyn WorldMut>;   // pumps, heaters, lamps, LEDs
+    fn rng(&mut self) -> &mut Rng;                          // seeded per bench + part
+    fn emit(&mut self, ev: DeviceEvent);
 }
 
 pub trait Device: Send {
-    fn kind(&self) -> &str;
-    fn on_start(&mut self, ctx: &mut dyn DeviceCtx) {}
+    fn kind(&self) -> &str;                                  // behaviour id ("dht22")
+    fn on_start(&mut self, ctx: &mut dyn DeviceCtx) {}       // operating point already solved
     fn on_wake(&mut self, ctx: &mut dyn DeviceCtx, token: u64) {}
     fn on_edge(&mut self, ctx: &mut dyn DeviceCtx, pin: usize, high: bool) {}
-    /// Called after each accepted analog step / sync quantum if the device asked for it.
     fn on_tick(&mut self, ctx: &mut dyn DeviceCtx) {}
-    fn visual(&self) -> VisualState;                   // LED brightness, LCD buffer, angle, …
-    fn save_state(&self) -> serde_json::Value { serde_json::Value::Null }
-    fn load_state(&mut self, _s: &serde_json::Value) {}
+    fn on_input(&mut self, ctx: &mut dyn DeviceCtx, input: &UserInput) {} // press, knob, switch
+    fn set_param(&mut self, ctx: &mut dyn DeviceCtx, key: &str, value: f64) -> bool { false }
+    fn visual(&self) -> VisualState;                          // Look + health + smoke
+    fn readings(&self) -> Vec<(String, f64)> { vec![] }       // inspector live values
+    fn save_state(&self) -> serde_json::Value;                // kept across bench rebuilds
+    fn load_state(&mut self, s: &serde_json::Value);
 }
 ```
 
-UART-speaking devices (ESP-01, HM-10, HC-05, LoRa RYLR896) use a shared `UartPins` helper in
-`bb-sim` that decodes bit-banged/USART waveforms from edge timestamps and schedules TX bits, and
-hands bytes to the pure `bb-radio` state machines (`feed(byte, now)` / `poll(now) -> Vec<(SimTime,
-u8)>`). `bb-radio` never depends on `bb-sim`.
+- `UserInput`: `Press(bool)`, `Toggle{index}`, `SetSwitch{index,on}`, `Position(0…1)`,
+  `Value{key,value}`.
+- `DeviceEvent`: `Log{level,text}`, `Annotation{channel,text}` (shown inline in serial monitors,
+  e.g. `[ESP-01] MQTT PUB garden/soil 41`), `Stress{reason}`, `Damage{reason}`, `Sound(Click |
+  Pop | Beep)`, `Audio(AudioChunk)` (buzzers/speakers, 1 kHz…), `Erc{…}`.
+- `VisualState { look: Look, health: Health, smoke: f32 }`; `Look` is a closed enum the
+  renderers draw: `Led{color,brightness,current}`, `RgbLed`, `LedArray`, `SevenSeg`, `Motor`,
+  `Servo`, `Stepper`, `TextLcd{cols,rows,text,codes,cgram,cursor,blink,display_on,backlight}`,
+  `Pixels` (OLED), `Relay`, `Buzzer`, `Switch`, `Switches`, `Knob`, `Board{power,l,tx,rx}`,
+  `Readout{text}`.
+- `WorldView` (read): `time`, `world_secs`, `var(key)`, `soil_vwc(pot)`, `lux_at(pos)`,
+  `temperature_at(pos)`, `humidity`, `pressure`, `distance(pos,dir,half_angle,max)` (sonar),
+  `motion(pos,range,window)` (PIR), `magnetic_field(pos)` (hall), `noise_enabled`.
+  `WorldMut`: `set_var`, `water(pot, ml)`, `set_heat_source`, `set_light_source`.
+- Built-in behaviours live in `bb_sim::devices` behind a `DeviceRegistry` (behaviour id →
+  factory); plugins and the radio glue register or replace factories (e.g. `esp01`, `hm10`,
+  `hc05`, which default to a small AT responder in `bb_sim::devices::AtStub`).
+- UART devices use `bb_sim::devices::UartPort`: it decodes the MCU's TX waveform from edge
+  timestamps (`bb_radio::uart` decoder) and drives RX with exact bit timing.
+
+## 3b. Parts library schema (`bb-circuit`, PART-1…9)
+
+Parts are declarative JSON (`crates/bb-circuit/parts/*.json`, embedded at build time). Plugins
+add parts with the *same* schema through `Library::add_json` (PART-9), so one loader, validator
+and renderer path serves both. One file = `{"parts": [PartDef…]}` or a bare list.
+
+```jsonc
+{
+  "id": "resistor", "name": "Resistor", "category": "building_blocks",   // boards, building_blocks,
+  "simple": true, "simple_name": "Resistor", "icon": "res",               // light_sound, sensors,
+  "ref_prefix": "R", "description": "…", "part_number": "",               // power, radios, displays,
+  "props": [                                                              // motors_actuators, …
+    {"key": "resistance", "label": "Resistance", "unit": "Ω", "type": "number",
+     "default": 10000, "min": 0.01, "max": 1e9, "series": "E24", "live": true},
+    {"key": "tolerance", "type": "choice", "default": "5",
+     "options": [{"value": "1"}, {"value": "5", "sets": {"tempco": 100}}]}   // choices may set props
+  ],                                                                    // types: number | choice | bool | text
+  "pins": ["1", "2"],                     // short form "id:role:Name" (roles: io, input, output,
+                                          // power_in, power_out, ground, nc, passive…)
+  "bonds": [["GND", "GND.2"]],            // internally connected pins
+  "model": {
+    "spice":   ["$(el:R) $(1) $(2) {$(ext:r)*(1+$(tempco)*1e-6*($(ext:temp)-25))}"],
+    "pro":     ["$(el:R) $(1) $(2) $(resistance)"],   // Pro-mode card (exported .cir)
+    "library": [".model …"],                          // shared .model/.subckt cards (deduped)
+    "damaged": {"open": […], "short": […]},           // cards after destruction
+    "behaviour": "thermal",                           // bb_sim device factory id
+    "device_pins": ["…"],                             // pins the device drives/watches
+    "ext": [{"name": "r", "default": "$(resistance)"}, {"name": "temp", "default": 25}],
+    "mcu": {"board": "uno", "core": "avr", "vcc_pin": "5V", "label": "ATmega328P"}  // boards
+  },
+  "inspector": [{"label": "Resistance", "value": "$(resistance|Ω) ±$(tolerance) %"}],
+  "ratings": [{"element": "R", "kind": "power", "limit": "$(power)", "tau": 3.0,
+               "destroy_at": 3.0, "message": "resistor overheated", "effect": "smoke"}],
+  "bench":     {"art": "resistor_axial", "layout": {"axial": 4}, "flexible": true,
+                "sockets": false, "off_board": false, "hidden": false, "leads": [], "size": [w, h]},
+  "schematic": {"symbol": "resistor"},           // pins/geometry generated per symbol kind
+  "pcb":       {"footprint": "Resistor_THT:…", "smd": "Resistor_SMD:R_0805_2012Metric"},
+  "tags": ["spice"]
+}
+```
+
+- **Templates** (expanded by the netlister): `$(pin)` → the pin's node; `$(prop)` /
+  `$(prop:key)` → property value (SI-formatted); `$(el:R)` / `$(el:R:suffix)` → unique element
+  name (`R_R1`, local name `R` for `element_current`); `$(n:local)` → a private node;
+  `$(ext:name)` → `ext("REF.name")` (set live by devices / UI, default from `model.ext`);
+  `$(world:key)` → the world variable (Pro export); `?key=value:` prefix → conditional line.
+- **Layouts**: `axial: span` (2-lead, bendable), `row` (inline header), `dip: n` (straddles the
+  channel), `rows` (explicit), `board` (MCU boards — header holes from `bb_firmware::Board`),
+  `breadboard` (830 / 400 hole maps: `a1…j63`, rails `t+N t-N b+N b-N`). Coordinates are in
+  0.1" grid units; `Placement` (at, rotation, flip) maps leads into holes (snap 0.26 grid).
+- **Ratings** watch a filtered quantity (`power`, `current`, `voltage`, `reverse_voltage`) of a
+  SPICE element; > 1× limit → `Stress`, > `destroy_at`× → `Damage` and the part's `damaged`
+  cards (open / short) replace its model in a rebuild.
+- `Library::builtin()` validates every part (unique ids, pins referenced by templates exist,
+  ext defaults refer to props, layouts consistent) — `cargo test -p bb-circuit` fails on a bad
+  part file. Queries: `get(id)`, `simple()` (Simple-mode palette order), `categories()`,
+  `search(text)`, `to_json()`.
 
 ## 4. Analog engine boundary (`bb-spice`)
 
@@ -328,25 +412,78 @@ and run as a **child process in lock-step with simulated time**.
 
 ## 6. Co-simulation scheduler (`bb-sim`)
 
+`Bench::new(project, library, BenchOptions)` builds a runnable bench: `bb_circuit::netlist::build`
+(nets, ports for every MCU/device pin, ratings, ext defaults) → `bb_spice::Session` (only if
+the circuit has non-ground analog content) → one `McuCore` per board (`AvrMcu` for AVR boards,
+`HostMcu` for ESP32/Pico when an executable is supplied, `IdleMcu` placeholder otherwise) → one
+`Device` per behavioural part (registry) → world (`bb_world::World`) → instruments → services
+(radio space, plugin hosts). The operating point is solved before devices' `on_start` so they
+see real supply voltages.
+
+**Net kinds.** `Analog(node)` nets live in the SPICE session. Nets that join only MCU pins and
+device outputs with no analog element are `Digital` (closed-form Norton resolution of all
+drives, no solver). Unconnected pins are `Isolated`. MCU pins on analog nets are two ports
+(high side to the board's Vcc node, low side to ground) driven by `PinModel` (AVR: 25 Ω / 22 Ω,
+35 kΩ pull-up, VIL 0.3·Vcc / VIH 0.6·Vcc, 40 mA abs-max; ESP32: 30 Ω, 45 kΩ, 0.25/0.75).
+
 ```
-loop (on sim thread):
-  t_target = min(next scheduled wake, next MCU event estimate, t + quantum)
-  for each MCU: run until t_target or an early stop (pin change / ADC / breakpoint)
-  t_evt = earliest stop time
-  analog.advance_to(t_evt)          // adaptive internal steps, threshold watches
-  apply MCU/device drive changes → analog.op_at_discontinuity()
-  deliver threshold crossings (in time order) → MCU input pins / device on_edge
-  run due device wakeups; world.step(dt); radios.step(now)
-  publish telemetry (≤ 60 Hz), pace against wall clock at chosen speed
+step(limit):                         // MCUs lead, the analog circuit lags
+  q = adaptive quantum               // 1 µs…1 ms: max when the analog solver is quiescent
+                                     // or no MCU; slope-based time-to-threshold for watched
+                                     // MCU inputs; 1 µs with several MCUs
+  target = min(t + q, limit, next device wake, next service wake)
+  for each MCU: run_until(target) → stops early on a pin change, an ADC sample the bench
+                cannot answer inline, a debugger pause, or a fault
+  t_sync = earliest stop
+  advance analog to t_sync, applying MCU pin events at their exact times; threshold crossings
+    (advance_until_crossing) are delivered in time order → MCU inputs (set_input /
+    schedule_input) and device on_edge; a device's drive change re-solves at that instant
+  answer a pending ADC sample at its sample-and-hold time
+  run due device wakes / ticks; world.step every 10 ms; services due (radio space)
+  after_sync: serial bytes → monitors, reset causes, annotations, damage + pin damage,
+    instruments (probe/scope/meter), telemetry counters
 ```
 
-- Commands in (crossbeam channel): play, pause, step, set_speed, reset, flash(mcu, image),
-  set_world(var, value), set_part_param, probe add/remove, instrument controls, radio
-  conditions, debugger ops.
-- Telemetry out: an `Arc<ArcSwap<Telemetry>>` snapshot (or triple buffer) + bounded channels
-  for serial/radio/log streams. UI never blocks on the sim.
-- Bench rebuild on circuit edits: incremental where possible (param edits), otherwise rebuild
-  the analog session and keep MCU/world/radio state.
+- **Inline answers.** When the circuit is quiescent and a single MCU runs, ADC samples are
+  answered from the current solution without stopping (garden-node: 26 k MCU stops in 30 s
+  instead of ~200 k). API-level boards always get inline answers.
+- **Exactness.** Edges are delivered at the solver's interpolated crossing time; an MCU sees an
+  input change at most one instruction late (it already ran past it when the circuit lags by a
+  quantum — counted in `BenchStats::late_edges`). Multi-MCU benches sync every 1 µs.
+- **Damage & supply.** Ratings are first-order filtered (τ per rating); destruction rebuilds
+  the bench with the damaged cards. MCU pins track current through their ports (> 80 mA →
+  pin damaged → high-Z). USB supply has a polyfuse I²t model (hold 0.5 A, trip → 50 Ω, resets
+  1 s after the load drops below 60 mA).
+- **Rebuild keeping state** (`Bench::update_project`): re-netlists, re-creates the session with
+  node-voltage nodesets from the old solution, keeps MCUs (matched by part id), devices
+  (`save_state` / `load_state`), world, instruments and services; live property edits use
+  `Device::set_param` or `Session::set_param` / `set_ext` without a rebuild.
+- **MCU trait.** `McuCore`: `label`, `engine`, `now`, `pin_names`, `pin_index`, `run_until(t,
+  &mut dyn McuIo)`, `take_pin_events`, `pin_drive`, `set_input`, `schedule_input`,
+  `set_analog`, `supply_adc`, `set_vcc` (brown-out), `set_aref`, `set_reset_line` (RESET / EN /
+  RUN nets), `reset`, `reset_count`, `last_reset`, `in_reset`, `set_temperature`, `flash`
+  (AVR image), `flash_exe` (host build), `take_serial`, `take_log`, `serial_inject`,
+  `serial_tx_pin`, `set_serial_waveform`, `serial_baud`, `as_avr` / `avr_debug` (debugger).
+  `McuIo` gives a core `adc_sample(pin, t)` and `service(channel, request, t)` (radio).
+- **Host boards** (`bb_sim::host::HostMcu` over `bb_firmware::host::HostBoard`, §5b): pins by
+  catalogue name (`D4`, `GP26`, `LED_BUILTIN`), `stop_on_output` so bit-banged protocols (DHT22)
+  are answered at the right time, PWM reported as duty/frequency turned into real edges, EN /
+  RUN low or Vcc < 2.3 V freezes the board (time offset tracked), release restarts the sketch.
+  Radio requests go to `Service::host_service`; `bb_sim::RadioService` wraps a
+  `bb_radio::RadioSpace` and serves them.
+- **Thread + streams.** `SimHandle::spawn(project, library, options)` runs the bench on its own
+  thread. Commands (bounded crossbeam channel): `Play`, `Pause`, `Step(dt)`, `SetSpeed`,
+  `Reset`, `ResetMcu`, `Flash{part,image}`, `FlashHost{part,exe}`, `SetWorld`, `Water`,
+  `SetPartParam`, `Input{part,input}`, `UpdateProject` (rebuild keeping state), `AddProbe` /
+  `RemoveProbe`, `Scope{id,timebase,vdiv,trigger}`, `SerialSend`, `Debug(DebugCommand)`,
+  `RepairAll`, `Shutdown` (`SimHandle::send`; streams via `serial_lines()`, `events()`,
+  `audio()`).
+  Out: `telemetry()` → `Arc<Telemetry>` via `ArcSwap` (≤ 60 Hz: time, run status, speed
+  achieved, parts' visuals + readings, MCU states, rails / power report, probes, instruments,
+  ERC/DRC summary, stats); bounded channels for serial lines, events and audio. The UI never
+  blocks on the sim; slow consumers drop the oldest stream items.
+- Services survive a full reset because `BenchOptions::services` holds factories
+  (`Arc<dyn Fn(&Project) -> Box<dyn Service>>`), not instances.
 
 ## 6b. Radios (`bb-radio`)
 

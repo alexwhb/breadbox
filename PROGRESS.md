@@ -21,6 +21,9 @@ reviews and integrates between phases. Agents update **only their own section** 
 
 - (lead) Toolchain installer must work on Apple Silicon without Rosetta (avr-gcc 7.3.0 + ctags are x86_64-only) → assigned to `radio` in phase 2.
 
+- (sim → plugins/radio glue) Replace the `esp01` / `hm10` / `hc05` factories in `bb_sim::DeviceRegistry` with devices that bridge `UartPort` to `bb_radio::RadioSpace` modules (`UartWire`), and register a `BenchOptions::services` factory that builds `bb_sim::RadioService` from the project's `radios` settings (host boards get `add_host`). Today those parts run `bb_sim::devices::AtStub` (enough for garden-node / ble-button AT flows, no real network).
+- (sim → plugins) Wasm parts plug in as `DeviceRegistry::register(id, factory)` + `Library::add_json(part file)`; plugin instruments can use `Bench::add_load` / `remove_load` (R‖C between two nets) and `Bench::readings`.
+
 ## Status
 
 ### lead
@@ -238,3 +241,84 @@ Deviations / notes:
   Content-Length or connection close; I²C master only; FreeRTOS tasks not emulated.
 - §3 of ARCHITECTURE mentions a `UartPins` helper in bb-sim — `bb_radio::UartWire` provides it
   (documented in §6b).
+
+### sim
+Phase 2 — `bb-core` (device contract), `bb-circuit`, `bb-world`, `bb-sim`, parts library,
+example projects. All MCU scenarios run real arduino-cli-compiled firmware (fixtures under
+`crates/bb-sim/tests/fixtures`, sources in `tests/firmware/uno/*`; examples use
+`examples/fixtures/*.uno.hex` from `radio`); ESP32/Pico sketches are compiled by
+`bb_firmware::host` in the tests.
+
+- `PART-1…8` **done** — 82 part definitions (variants as properties: LED colours, diode/BJT/MOSFET types, battery kinds) in `crates/bb-circuit/parts/*.json` (boards UNO/Nano/Mega
+  with header maps from `bb_firmware::Board`, ESP32 DevKit + Pico with `mcu.core = "host"`;
+  building blocks, light & sound, sensors, semiconductors, ICs, displays, motors, radios,
+  instruments). Simple library = the 25 design parts in `SIMPLE_ORDER`.
+- `PART-9` **done** — one JSON schema for built-in and plugin parts (`Library::add_json`),
+  validated on load; geometry for bench (layouts axial/row/dip/rows/board/breadboard), schematic
+  (generated symbol pins) and PCB (KiCad footprint names); ratings + inspector fields. Documented
+  in `docs/ARCHITECTURE.md` §3b.
+- `PRJ-1` **done** — `Project` (`breadbox/1`, migration from `breadbox/0`, `TooNew` error),
+  atomic save, firmware refs (`sketch`, `fqbn`, `image`), probes, instruments, world, settings.
+  Editing via `edit::Editor` (transactions, undo/redo, copy/paste/duplicate, auto wire colours).
+- `PRJ-2/3` **done** — 11 examples written by `cargo run -p bb-circuit --example
+  write_examples` (garden-node exactly as designed; blink, night-light (UNO + LDR + 2N2222),
+  thermometer, ble-button, servo-sweep, esp32-weather, pico-blink, 555-astable, rc-filter-bode,
+  op-amp-amplifier). Every example: empty bench ratsnest, no ERC errors, DRC clean (test).
+- `PRJ-4` **done** — `.cir` export (Pro cards + `* breadbox mcu` notes) and import with
+  auto-placed schematic (clearance packing).
+- `WB-7` **done** (model) — physical / schematic / logical connectivity (union-find), net
+  naming (labels, MCU pins, power symbols), ratsnest for bench and schematic (Prim MST).
+- `WB-12` **done** (model) — ERC (missing ground, unconnected pin, floating input, output
+  conflict, supply short, overvoltage e.g. "U2.RX is 3.3 V tolerant, driven by 5 V D2 — add a
+  divider", LED without resistor) + DRC (not plugged, loose lead, leads shorted by a strip, two
+  leads in one hole) + `summary()` → `ERC 1 warning · DRC clean`.
+- `WORLD-1…6` **done** — soil pots (evaporation 1.4 %/h at 21 °C calibrated, drainage above
+  field capacity, watering), light (manual / solar elevation at a location, LED + lamp light
+  sources, inverse square), air temperature + humidity with diurnal cycle, objects (hand,
+  person, wall, magnet), keyframe timelines + expression scripts (`moisture = 45 -
+  0.8*t_hours`), time-warp, global noise toggle.
+- `SIM-1` **done** — event-driven co-sim (MCUs lead, analog lags; crossings at interpolated
+  times; adaptive quantum 1 µs…1 ms; inline ADC answers when quiescent). Blink 1 Hz within
+  ±0.1 % on the real sketch.
+- `SIM-2` **done** — `PinModel` (Thevenin 25/22 Ω, 35 kΩ pull-up, Schmitt 0.3/0.6 Vcc,
+  leakage), ADC S/H at the exact sample time, quantization + optional noise; analogWrite → RC
+  matches a pure SPICE run within 1 %.
+- `SIM-3` **done** — `SimHandle` pacing 0.1×–10× / Max, pause, step, reset, reset-MCU,
+  deterministic replay (same seed → identical serial + events).
+- `SIM-4` **done** — garden-node at **16.9× real time** (release, M3 Max; 16.7× with 60 Hz
+  telemetry). `cargo test -p bb-sim --release --test perf -- --ignored --nocapture`.
+- `SIM-5` **done** — `Telemetry` via `ArcSwap` (parts' visuals + readings, MCUs, rails / power
+  report, probes, scopes, meters, ERC/DRC), bounded serial / event / audio streams.
+- `SIM-6` **done** — ratings with stress/destroy (LED burnout test), MCU pin damage > 80 mA,
+  USB polyfuse I²t trip + recovery, AVR brown-out via `set_vcc`, battery sag.
+- `SIM-7` **done** — re-flash (`Command::Flash` / `FlashHost`) keeps bench + world; MCU-only
+  reset; `Bench::update_project` rebuilds keeping MCU/device/world state (nodesets from the old
+  solution).
+- Host boards (`MCU-6` glue) **done** — `bb_sim::HostMcu` runs ESP32/Pico sketches behind
+  `McuCore`; `RadioService` serves their Wi-Fi/BLE from `bb_radio::RadioSpace`.
+  esp32-weather on the bench: DHT22 *device* answers the bit protocol, MQTT publishes reach the
+  broker every 2 s, a dashboard command switches GPIO2.
+
+Tests (debug): bb-core 7, bb-world 13, bb-circuit 40, bb-sim 50 (+3 perf, ignored): blink,
+button + INPUT_PULLUP + RC debounce, PWM → RC vs SPICE, garden-node (serial, soil τ, D9 duty vs
+lux, A0 probe vs DMM), LED burnout, polyfuse trip, DHT22 (Adafruit lib), DS18B20, BME280,
+SSD1306, LCD (LiquidCrystal + I²C backpack), servo sweep, stepper, 74HC595, tone, WS2812,
+HC-SR04, every UNO example on its fixture, pico-blink, esp32-weather, deterministic replay,
+SimHandle threading, 555/motor/relay/regulators/gates/L293D without firmware. clippy
+`-D warnings` + fmt clean.
+
+Deviations / open issues:
+- `esp01` / `hm10` / `hc05` run a small AT responder (`AtStub`) until the radio glue replaces the
+  factories (Requests above). Host boards' I²C/SPI (`HostIo::i2c_*`) and Serial1/2 on pins are
+  not bridged to bench devices yet (DHT-style bit-banged GPIO works); host PWM at duty 0 < d < 1
+  with 0 Hz (DC) is treated as on/off.
+- Inputs reach an AVR at most one instruction late when the circuit lags a quantum
+  (`BenchStats::late_edges`); benches with several MCUs sync every 1 µs.
+- WS2812 DOUT is not forwarded (chained strips = one long strip); the Pro-mode 555 has no
+  oscillating SPICE macro-model (the Simple/bench 555 is behavioural and exact).
+- Bench rebuilds restart the analog session from nodesets of the old solution, not a full state
+  copy (capacitor charge on renamed nodes is re-derived from the operating point).
+- The board L LED level in telemetry is averaged over the frame interval (≥ 50 ms).
+- Small additive changes outside my crates: `bb-spice` `CircuitBuilder::cards`,
+  `Session::is_quiescent`, `Session::with_ext` (tests green); `scripts/build-test-firmware.sh`
+  builds `bb-sim` sketches too.
