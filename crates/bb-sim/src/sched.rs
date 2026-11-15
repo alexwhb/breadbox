@@ -95,12 +95,16 @@ impl Bench {
             if m.core.now() >= target {
                 continue;
             }
+            // API-level boards cannot stop for a sample: answer from the current solution
+            let api_level = m.core.engine() == "API-level";
             let mut io = AdcIoBorrow {
-                inline: inline_ok && m.pending.is_empty(),
+                inline: (inline_ok && m.pending.is_empty()) || api_level,
                 nets: &self.nets,
                 session: self.analog.session.as_ref(),
                 pins: &m.pins,
                 answered: 0,
+                services: &mut self.services,
+                part: &m.spec.part,
             };
             let stop = m.core.run_until(target, &mut io);
             self.stats.adc_answered_inline += io.answered;
@@ -400,6 +404,9 @@ impl Bench {
                     self.mcus[mi].serial.byte(at, b);
                 }
             }
+            for (at, text) in self.mcus[mi].core.take_log() {
+                self.mcus[mi].serial.system(at.min(t), &text);
+            }
             let resets = self.mcus[mi].core.reset_count();
             if self.mcus[mi].serial.seen_resets < resets {
                 self.mcus[mi].serial.seen_resets = resets;
@@ -558,6 +565,8 @@ struct AdcIoBorrow<'a> {
     session: Option<&'a bb_spice::Session>,
     pins: &'a [crate::bench::McuPinRt],
     answered: u64,
+    services: &'a mut [Box<dyn crate::bench::Service>],
+    part: &'a str,
 }
 
 impl crate::mcu::McuIo for AdcIoBorrow<'_> {
@@ -575,5 +584,10 @@ impl crate::mcu::McuIo for AdcIoBorrow<'_> {
         };
         self.answered += 1;
         Some(v)
+    }
+    fn service(&mut self, channel: u8, request: &[u8], at: SimTime) -> Option<Vec<u8>> {
+        self.services
+            .iter_mut()
+            .find_map(|s| s.host_service(self.part, channel, request, at))
     }
 }

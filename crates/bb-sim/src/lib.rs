@@ -1,8 +1,8 @@
 //! # bb-sim — Breadbox's mixed-signal co-simulation engine
 //!
 //! Builds a runnable [`Bench`] from a `bb-circuit` project — analog `bb_spice::Session`,
-//! cycle-accurate AVRs running real firmware (and, next phase, API-level host boards behind the
-//! same [`mcu::McuCore`] trait), behavioural devices, the `bb-world` world, instruments — and
+//! cycle-accurate AVRs running real firmware and API-level host boards (ESP32 / Pico, see
+//! [`host`]) behind one [`mcu::McuCore`] trait, behavioural devices, the `bb-world` world, instruments — and
 //! advances them together (SIM-1…SIM-7). [`SimHandle`] runs a bench on its own thread for the
 //! app: commands in, a lock-free telemetry snapshot (≤ 60 Hz) and bounded serial/log/audio
 //! streams out.
@@ -29,6 +29,7 @@ pub mod damage;
 pub mod devices;
 pub mod firmware;
 pub mod handle;
+pub mod host;
 pub mod instruments;
 pub mod mcu;
 mod sched;
@@ -38,6 +39,7 @@ pub mod telemetry;
 pub use bench::{Bench, BenchOptions, BenchStats, Service};
 pub use devices::{DeviceRegistry, Factory};
 pub use handle::{Command, DebugCommand, SimHandle, Speed};
+pub use host::{HostMcu, RadioService};
 pub use instruments::{MeterReading, ProbeReading, ScopeFrame, Trigger};
 pub use serial::{LineKind, SerialLine};
 pub use telemetry::{McuTelemetry, PartTelemetry, PowerReport, RunStatus, Telemetry};

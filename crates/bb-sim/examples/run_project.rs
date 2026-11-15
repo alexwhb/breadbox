@@ -54,6 +54,9 @@ fn main() {
         println!("meter {} {}", m.id, m.display);
     }
     println!("{}", tel.erc_summary);
+    for i in tel.erc.iter().chain(tel.drc.iter()) {
+        println!("  {:?} {}: {}", i.severity, i.code, i.message);
+    }
     println!("{:?}", bench.stats);
     println!(
         "simulated {secs} s in {wall:.3} s wall → {:.1}× real time",

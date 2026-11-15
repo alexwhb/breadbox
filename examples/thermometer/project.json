@@ -17,7 +17,8 @@
         "y": 21.5
       },
       "firmware": {
-        "sketch": "firmware/U1/thermometer"
+        "sketch": "firmware/U1/thermometer",
+        "image": "../fixtures/thermometer.uno.hex"
       }
     },
     {

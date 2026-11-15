@@ -1,0 +1,171 @@
+{
+  "format": "breadbox/1",
+  "name": "pico-blink",
+  "mode": "playground",
+  "description": "Raspberry Pi Pico (API-level): the on-board LED blinks at 2 Hz and A0 (GP26) reads a potentiometer.",
+  "parts": [
+    {
+      "id": "u1",
+      "ref": "U1",
+      "part": "pico",
+      "bench": {
+        "x": 0.0,
+        "y": 4.0
+      },
+      "schematic": {
+        "x": 19.5,
+        "y": 23.0
+      },
+      "firmware": {
+        "sketch": "firmware/U1/pico-blink",
+        "fqbn": "breadbox:host:pico"
+      }
+    },
+    {
+      "id": "bb1",
+      "ref": "BB1",
+      "part": "breadboard_400",
+      "bench": {
+        "x": 32.0,
+        "y": 2.0
+      }
+    },
+    {
+      "id": "rv1",
+      "ref": "RV1",
+      "part": "potentiometer",
+      "bench": {
+        "x": 42.0,
+        "y": 10.0
+      },
+      "schematic": {
+        "x": 35.0,
+        "y": 14.5
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "a": {
+        "part": "u1",
+        "pin": "3V3"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "t+1"
+      },
+      "color": "red"
+    },
+    {
+      "id": "w2",
+      "a": {
+        "part": "u1",
+        "pin": "GND"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "t-1"
+      },
+      "color": "black"
+    },
+    {
+      "id": "w3",
+      "a": {
+        "part": "bb1",
+        "pin": "a10"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "t-8"
+      },
+      "color": "black"
+    },
+    {
+      "id": "w4",
+      "a": {
+        "part": "bb1",
+        "pin": "a12"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "t+10"
+      },
+      "color": "red"
+    },
+    {
+      "id": "w5",
+      "a": {
+        "part": "bb1",
+        "pin": "a11"
+      },
+      "b": {
+        "part": "u1",
+        "pin": "GP26"
+      },
+      "color": "yellow"
+    }
+  ],
+  "schematic": {},
+  "pcb": {},
+  "world": {
+    "seed": 1,
+    "time_warp": 1.0,
+    "noise": true,
+    "air": {
+      "temp_c": 21.0,
+      "rh": 45.0,
+      "pressure_pa": 101325.0,
+      "diurnal": false,
+      "temp_swing_c": 5.0,
+      "rh_swing": 15.0
+    },
+    "light": {
+      "mode": "manual",
+      "ambient_lux": 180.0,
+      "location": {
+        "name": "Ashland, OR",
+        "lat": 42.1946,
+        "lon": -122.7095,
+        "utc_offset_h": -8.0
+      },
+      "start": {
+        "year": 2026,
+        "month": 6,
+        "day": 21,
+        "hour": 8.0
+      },
+      "cloud_cover": 0.2,
+      "indoor_fraction": 0.01,
+      "indoor": true
+    },
+    "pots": [],
+    "objects": [],
+    "timelines": [],
+    "scripts": [],
+    "vars": {}
+  },
+  "probes": [
+    {
+      "id": "probe1",
+      "label": "Knob → A0 (GP26)",
+      "target": {
+        "part": "u1",
+        "pin": "GP26"
+      },
+      "quantity": "voltage",
+      "pinned": [
+        36.0,
+        0.0
+      ]
+    }
+  ],
+  "instruments": [],
+  "spice": {},
+  "settings": {
+    "seed": 1,
+    "sync_quantum_us": 1.0,
+    "speed": 1.0,
+    "stop_after_s": 0.0
+  }
+}

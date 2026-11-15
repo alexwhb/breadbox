@@ -32,7 +32,24 @@ pub trait Service: Send {
     fn next_wake(&self) -> Option<SimTime>;
     fn step(&mut self, now: SimTime);
     fn as_any(&mut self) -> &mut dyn Any;
+    /// Serves a radio request from the API-level board `part` (see [`crate::host`]); `None` =
+    /// not this service's board.
+    fn host_service(
+        &mut self,
+        part: &str,
+        channel: u8,
+        request: &[u8],
+        at: SimTime,
+    ) -> Option<Vec<u8>> {
+        let _ = (part, channel, request, at);
+        None
+    }
 }
+
+/// Creates a service for a new bench (called by [`Bench::new`], so services survive a full
+/// reset of a [`crate::SimHandle`]). Radio glue registers one that builds a
+/// [`crate::RadioService`] from the project's radio settings.
+pub type ServiceFactory = Arc<dyn Fn(&Project) -> Box<dyn Service> + Send + Sync>;
 
 /// Bench options.
 #[derive(Clone)]
@@ -48,6 +65,11 @@ pub struct BenchOptions {
     pub registry: Arc<DeviceRegistry>,
     /// Firmware images by part id (`None` → the MCU runs erased flash until flashed).
     pub firmware: HashMap<String, bb_avr::FirmwareImage>,
+    /// Host-compiled sketch executables for API-level boards (ESP32 / Pico) by part id
+    /// (see [`crate::firmware::compile_host_project`]).
+    pub host_firmware: HashMap<String, std::path::PathBuf>,
+    /// Services created with every bench (radio space, plugin hosts).
+    pub services: Vec<ServiceFactory>,
 }
 
 impl Default for BenchOptions {
@@ -59,6 +81,8 @@ impl Default for BenchOptions {
             world_dt: SimTime::from_ms(10),
             registry: Arc::new(DeviceRegistry::builtin()),
             firmware: HashMap::new(),
+            host_firmware: HashMap::new(),
+            services: Vec::new(),
         }
     }
 }
@@ -223,6 +247,8 @@ pub struct Bench {
     pub(crate) max_quantum: SimTime,
     pub(crate) world_dt: SimTime,
     pub(crate) seed: u64,
+    /// Sketch executables of API-level boards by part id.
+    pub(crate) host_firmware: HashMap<String, std::path::PathBuf>,
     pub(crate) edges: VecDeque<(SimTime, EdgeTarget, bool)>,
     pub(crate) in_edges: bool,
     pub(crate) tracked: Vec<Tracked>,
@@ -289,12 +315,17 @@ impl Bench {
             damaged: BTreeMap::new(),
             loads: Vec::new(),
             erc_cache: None,
+            host_firmware: opts.host_firmware.clone(),
             paused: None,
             stats: BenchStats::default(),
             project,
         };
         for (k, v) in &bench.built.ext {
             bench.ext_values.insert(k.clone(), *v);
+        }
+        for f in &opts.services {
+            let svc = f(&bench.project);
+            bench.services.push(svc);
         }
         // MCUs
         let specs = bench.built.mcus.clone();
@@ -345,15 +376,24 @@ impl Bench {
             }
             Box::new(m)
         } else {
-            let names = spec.pins.iter().map(|p| p.mcu.clone()).collect();
-            Box::new(IdleMcu::new(
-                &spec.label,
-                names,
-                &format!(
-                    "{} · {} emulation lands with the host-core glue; pins stay inputs",
+            let names: Vec<String> = spec.pins.iter().map(|p| p.mcu.clone()).collect();
+            let idle = |why: String| -> Box<dyn McuCore> {
+                Box::new(IdleMcu::new(&spec.label, names.clone(), &why))
+            };
+            match self.host_firmware.get(&spec.part) {
+                Some(exe) => match crate::host::HostMcu::spawn(
+                    &spec.board,
+                    exe,
+                    self.seed.wrapping_add(i as u64 * 7919),
+                ) {
+                    Ok(h) => Box::new(h),
+                    Err(e) => idle(format!("{} · cannot start the sketch: {e}", spec.reference)),
+                },
+                None => idle(format!(
+                    "{} · {} · no sketch build yet — compile to run it",
                     spec.reference, spec.label
-                ),
-            ))
+                )),
+            }
         };
         let model = if spec.core == "avr" {
             PinModel::AVR
@@ -370,7 +410,7 @@ impl Bench {
         let led_pin = if spec.core == "avr" {
             core.pin_index("D13")
         } else {
-            None
+            core.pin_index("LED_BUILTIN")
         };
         Ok(McuRt {
             spec: spec.clone(),

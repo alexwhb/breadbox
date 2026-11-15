@@ -194,6 +194,7 @@ fn bench_examples_have_no_schematic_only_connections() {
         "ble-button",
         "servo-sweep",
         "esp32-weather",
+        "pico-blink",
         "555-astable",
     ] {
         let p = Project::load(format!(
@@ -207,5 +208,14 @@ fn bench_examples_have_no_schematic_only_connections() {
             "{name}: {:?}",
             c.ratsnest_bench
         );
+        // every example is built cleanly: no ERC errors, no DRC findings
+        let erc = crate::erc::erc(&p, &lib, &c);
+        assert!(
+            erc.iter()
+                .all(|i| i.severity != crate::erc::ErcSeverity::Error),
+            "{name}: {erc:?}"
+        );
+        let drc = crate::erc::drc(&p, &lib, &c);
+        assert!(drc.is_empty(), "{name}: {drc:?}");
     }
 }

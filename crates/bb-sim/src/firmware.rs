@@ -76,3 +76,41 @@ pub fn compile_project(
     }
     Ok(out)
 }
+
+/// Builds every API-level board's sketch (ESP32 / Pico) with the host C++ compiler (cached per
+/// sketch; the first build of the host core takes a few seconds). Returns executables by part
+/// id for [`crate::BenchOptions::host_firmware`].
+pub fn compile_host_project(
+    project: &Project,
+    dir: impl AsRef<Path>,
+    lib: &bb_circuit::Library,
+) -> Result<HashMap<String, std::path::PathBuf>, SimError> {
+    use bb_firmware::host::{HostKind, compile_host};
+    let mut out = HashMap::new();
+    for p in &project.parts {
+        let Some(fw) = &p.firmware else { continue };
+        let Some(mcu) = lib.get(&p.part).and_then(|d| d.model.mcu.as_ref()) else {
+            continue;
+        };
+        if mcu.core != "host" {
+            continue;
+        }
+        let kind = HostKind::by_id(fw.fqbn.as_deref().unwrap_or(&mcu.board))
+            .or_else(|| HostKind::by_id(&mcu.board))
+            .ok_or_else(|| SimError::Firmware(format!("unknown host board {}", mcu.board)))?;
+        let build = compile_host(&dir.as_ref().join(&fw.sketch), kind, None)
+            .map_err(|e| SimError::Firmware(e.to_string()))?;
+        match build.exe {
+            Some(exe) if build.success => {
+                out.insert(p.id.clone(), exe);
+            }
+            _ => {
+                return Err(SimError::Firmware(format!(
+                    "{}: build failed\n{}",
+                    p.reference, build.log
+                )));
+            }
+        }
+    }
+    Ok(out)
+}

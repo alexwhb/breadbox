@@ -26,7 +26,8 @@
         "y": 22.0
       },
       "firmware": {
-        "sketch": "firmware/U1/esp32-weather"
+        "sketch": "firmware/U1/esp32-weather",
+        "fqbn": "breadbox:host:esp32"
       }
     },
     {

@@ -78,6 +78,11 @@ pub enum Command {
         part: String,
         image: Box<FirmwareImage>,
     },
+    /// Load a new host-compiled sketch into an API-level board (ESP32 / Pico).
+    FlashHost {
+        part: String,
+        exe: std::path::PathBuf,
+    },
     SetWorld {
         key: String,
         value: f64,
@@ -367,6 +372,28 @@ impl Engine {
                         s.system(
                             t,
                             &format!("Flashed virtual {reference} · core reset · bench state kept"),
+                        );
+                    }
+                }
+                r
+            }
+            Command::FlashHost { part, exe } => {
+                let t = self.bench.time();
+                let r = match self.bench.mcu(&part) {
+                    Some(m) => m.flash_exe(&exe).map_err(SimError::Firmware),
+                    None => Err(SimError::NotFound(part.clone())),
+                };
+                if r.is_ok() {
+                    self.opts.host_firmware.insert(part.clone(), exe);
+                    let reference = self
+                        .project
+                        .part(&part)
+                        .map(|p| p.reference.clone())
+                        .unwrap_or_default();
+                    if let Some(s) = self.bench.serial_mut(&part) {
+                        s.system(
+                            t,
+                            &format!("Loaded new sketch into {reference} · board restarted"),
                         );
                     }
                 }

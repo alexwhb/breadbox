@@ -379,10 +379,31 @@ pub fn drc(project: &Project, lib: &Library, conn: &Connectivity) -> Vec<ErcItem
     let mut out = Vec::new();
     let mut inserted: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
     let mut hole_use: BTreeMap<&TermRef, Vec<&TermRef>> = BTreeMap::new();
+    let mut socket_of: BTreeMap<(&str, &str), &TermRef> = BTreeMap::new();
     for (lead, socket) in &conn.insertions {
         inserted.entry(&lead.part).or_default().insert(&lead.pin);
         hole_use.entry(socket).or_default().push(lead);
+        socket_of.insert((&lead.part, &lead.pin), socket);
     }
+    // two leads in the same internal strip of the same breadboard (wires don't count)
+    let same_strip = |part: &str, a: &str, b: &str| -> bool {
+        let (Some(sa), Some(sb)) = (socket_of.get(&(part, a)), socket_of.get(&(part, b))) else {
+            return false;
+        };
+        if sa.part != sb.part {
+            return false;
+        }
+        match (
+            crate::breadboard::parse_hole(&sa.pin),
+            crate::breadboard::parse_hole(&sb.pin),
+        ) {
+            (Some(ha), Some(hb)) => {
+                crate::breadboard::strip_key(&ha, 1000, false)
+                    == crate::breadboard::strip_key(&hb, 1000, false)
+            }
+            _ => sa.pin == sb.pin,
+        }
+    };
     let wired: BTreeSet<(String, String)> = project
         .wires
         .iter()
@@ -412,7 +433,12 @@ pub fn drc(project: &Project, lib: &Library, conn: &Connectivity) -> Vec<ErcItem
             .map(|x| x.id.as_str())
             .collect();
         let n = d.pins.iter().filter(|x| x.role != PinRole::Nc).count();
-        if loose.len() == n {
+        // a module hooked up with jumper wires only (nothing in a hole): unused header pins
+        // are normal (LCD D0–D3, sensor NC pins)
+        let jumpered_only = ins.is_none_or(|s| s.is_empty()) && loose.len() < n;
+        if jumpered_only {
+            // fall through to the strip checks (nothing inserted → nothing to check)
+        } else if loose.len() == n {
             out.push(item(
                 Warning,
                 "not_plugged",
@@ -442,10 +468,7 @@ pub fn drc(project: &Project, lib: &Library, conn: &Connectivity) -> Vec<ErcItem
                     .bonds
                     .iter()
                     .any(|b| b.iter().any(|x| x == pins[i]) && b.iter().any(|x| x == pins[j]));
-                if !bonded
-                    && ins.is_some_and(|s| s.contains(pins[i]) && s.contains(pins[j]))
-                    && conn.connected_on_bench((&p.id, pins[i]), (&p.id, pins[j]))
-                {
+                if !bonded && same_strip(&p.id, pins[i], pins[j]) {
                     out.push(item(
                         Warning,
                         "shorted_leads",

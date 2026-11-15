@@ -17,7 +17,8 @@
         "y": 21.5
       },
       "firmware": {
-        "sketch": "firmware/U1/blink"
+        "sketch": "firmware/U1/blink",
+        "image": "../fixtures/blink.uno.hex"
       }
     },
     {

@@ -1,6 +1,6 @@
-//! Microcontrollers on the bench, behind one trait so cycle-accurate AVRs and (next phase)
-//! API-level host boards (ESP32 / Pico via `bb_firmware::HostBoard`) plug into the same
-//! scheduler.
+//! Microcontrollers on the bench, behind one trait so cycle-accurate AVRs and API-level host
+//! boards (ESP32 / Pico via `bb_firmware::host::HostBoard`, see [`crate::host`]) plug into the
+//! same scheduler.
 //!
 //! The electrical pin model (SIM-2) lives in [`PinModel`]: push-pull outputs are Thevenin
 //! sources (≈ 25 Ω high side, 22 Ω low side → the datasheet's VOH ≈ 4.5 V at 20 mA), internal
@@ -55,6 +55,12 @@ pub enum McuStop {
 pub trait McuIo {
     /// Voltage on `pin` at `time` if the caller can answer without advancing the circuit.
     fn adc_sample(&mut self, pin: usize, time: SimTime) -> Option<f64>;
+    /// Radio service request from an API-level board (Wi-Fi/sockets on channel 1, BLE on 2);
+    /// `None` = nobody serves it.
+    fn service(&mut self, channel: u8, request: &[u8], at: SimTime) -> Option<Vec<u8>> {
+        let _ = (channel, request, at);
+        None
+    }
 }
 
 /// One MCU (cycle-accurate or API-level).
@@ -91,8 +97,17 @@ pub trait McuCore: Send {
     fn set_temperature(&mut self, celsius: f64);
     /// Programs firmware and resets the core (EEPROM is kept).
     fn flash(&mut self, image: &FirmwareImage) -> Result<(), String>;
+    /// Loads a host-compiled sketch executable (API-level boards) and restarts the board.
+    fn flash_exe(&mut self, exe: &std::path::Path) -> Result<(), String> {
+        let _ = exe;
+        Err("this board runs AVR firmware images".into())
+    }
     /// Serial bytes sent since the last call: (port, end time, byte).
     fn take_serial(&mut self) -> Vec<(usize, SimTime, u8)>;
+    /// Core diagnostics since the last call (crashes, restarts), shown as system lines.
+    fn take_log(&mut self) -> Vec<(SimTime, String)> {
+        Vec::new()
+    }
     /// Types bytes into a serial port's receiver (serial monitor send box).
     fn serial_inject(&mut self, port: usize, bytes: &[u8]);
     /// The pin a serial port transmits on, if its waveform matters (wired TX pin).
@@ -393,6 +408,11 @@ impl McuCore for AvrMcu {
         }
     }
     fn set_analog(&mut self, pin: usize, volts: f64) {
+        // ADC channels are always sampled from the bench (inline answer or a stop): a pushed
+        // value would be used as a stale fallback for every later conversion
+        if self.analog_pins.get(pin).copied().flatten().is_some() {
+            return;
+        }
         if let Some(p) = self.pins.get(pin) {
             self.avr.set_pin_voltage(*p, volts);
         }
@@ -547,13 +567,17 @@ impl McuCore for IdleMcu {
     }
     fn set_temperature(&mut self, _c: f64) {}
     fn flash(&mut self, _image: &FirmwareImage) -> Result<(), String> {
-        Err("this board's emulation is not available yet".into())
+        Err("this board runs host-compiled sketches (flash_exe)".into())
     }
     fn take_serial(&mut self) -> Vec<(usize, SimTime, u8)> {
-        match self.notice.take() {
-            Some(n) => n.bytes().chain(*b"\n").map(|b| (0, self.now, b)).collect(),
-            None => Vec::new(),
-        }
+        Vec::new()
+    }
+    fn take_log(&mut self) -> Vec<(SimTime, String)> {
+        self.notice
+            .take()
+            .map(|n| (self.now, n))
+            .into_iter()
+            .collect()
     }
     fn serial_inject(&mut self, _port: usize, _bytes: &[u8]) {}
     fn serial_tx_pin(&self, _port: usize) -> Option<usize> {

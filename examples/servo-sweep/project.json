@@ -17,7 +17,8 @@
         "y": 21.5
       },
       "firmware": {
-        "sketch": "firmware/U1/servo-sweep"
+        "sketch": "firmware/U1/servo-sweep",
+        "image": "../fixtures/servo-sweep.uno.hex"
       }
     },
     {

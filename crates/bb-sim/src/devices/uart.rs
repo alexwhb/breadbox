@@ -157,6 +157,8 @@ pub struct AtStub {
 
 const T_BOOT: u64 = 10;
 const T_REPLY: u64 = 11;
+/// HM-10 commands have no line ending: a pause after the last byte ends one.
+const T_GAP: u64 = 12;
 
 impl AtStub {
     pub fn new(s: &DeviceSpec, flavor: AtFlavor) -> AtStub {
@@ -206,6 +208,14 @@ impl AtStub {
                 "AT" => "OK".to_string(),
                 "AT+NAME?" => "OK+NAME:HMSoft".into(),
                 "AT+ADDR?" => "OK+ADDR:A4C138F0B0B5".into(),
+                _ if self.flavor == AtFlavor::Hm10 && up.starts_with("AT+") => {
+                    // HM-10 set commands echo the value: AT+NAMEfoo → OK+Set:foo
+                    let rest = &cmd[3..];
+                    let split = rest
+                        .find(|c: char| !c.is_ascii_uppercase())
+                        .unwrap_or(rest.len());
+                    format!("OK+Set:{}", &rest[split..])
+                }
                 _ => "OK".into(),
             };
             self.reply_after(ctx, ms(5), r.as_bytes());
@@ -342,6 +352,13 @@ impl Device for AtStub {
                     ctx.wake_at(ctx.now() + SimTime::from_ms(100), T_BOOT);
                 }
             }
+            T_GAP => {
+                let l = String::from_utf8_lossy(&self.line).trim().to_string();
+                self.line.clear();
+                if !l.is_empty() {
+                    self.command(ctx, &l);
+                }
+            }
             T_REPLY => {
                 let now = ctx.now();
                 while let Some((t, _)) = self.queue.front() {
@@ -384,6 +401,10 @@ impl Device for AtStub {
                             _ => {
                                 if self.line.len() < 256 {
                                     self.line.push(b);
+                                }
+                                if self.flavor == AtFlavor::Hm10 {
+                                    ctx.cancel_wake(T_GAP);
+                                    ctx.wake_at(ctx.now() + SimTime::from_ms(10), T_GAP);
                                 }
                             }
                         }

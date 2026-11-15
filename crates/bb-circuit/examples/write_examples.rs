@@ -22,10 +22,20 @@ fn t(v: &str) -> PropValue {
 }
 
 fn firmware(b: &mut BenchBuilder, part: &str, sketch: &str, image: Option<&str>) {
+    firmware_for(b, part, sketch, None, image);
+}
+
+fn firmware_for(
+    b: &mut BenchBuilder,
+    part: &str,
+    sketch: &str,
+    fqbn: Option<&str>,
+    image: Option<&str>,
+) {
     let p = b.project.part_mut(part).expect("mcu part");
     p.firmware = Some(FirmwareRef {
         sketch: sketch.into(),
-        fqbn: None,
+        fqbn: fqbn.map(String::from),
         image: image.map(String::from),
     });
 }
@@ -172,59 +182,109 @@ pub fn blink(lib: &Library) -> Project {
         Quantity::Logic,
         Some((36.0, 0.0)),
     );
-    firmware(&mut b, &u1, "firmware/U1/blink", None);
+    firmware(
+        &mut b,
+        &u1,
+        "firmware/U1/blink",
+        Some("../fixtures/blink.uno.hex"),
+    );
     b.finish()
 }
 
 pub fn night_light(lib: &Library) -> Project {
     let mut b = BenchBuilder::new(lib, "night-light", Mode::Playground);
-    b.project.description =
-        "An LDR and a transistor switch an LED on when it gets dark — no code at all.".into();
-    let ps = b.offboard("usb_power", "PS1", 0.0, 4.0, &[]);
-    let bb = b.breadboard("breadboard_400", 10.0, 2.0);
-    b.wire((&ps, "VBUS"), (&bb, "t+1"), "red");
-    b.wire((&ps, "GND"), (&bb, "t-1"), "black");
-    // divider: +5 — R1 10k — base node — LDR — GND (dark → LDR high → node high)
+    b.project.description = "An LDR on A0 measures the room; after dark the UNO dims an LED up \
+         through a 2N2222 on D9 — the darker, the brighter."
+        .into();
+    let u1 = b.offboard("uno", "U1", 0.0, 4.0, &[]);
+    let bb = b.breadboard("breadboard_830", 32.0, 2.0);
+    b.wire((&u1, "5V"), (&bb, "t+1"), "red");
+    b.wire((&u1, "GND"), (&bb, "t-1"), "black");
+    // 5V — LDR1 — A0 — R1 10k — GND
+    b.two_lead("ldr", "LDR1", &bb, "b3", "b6", &[]);
+    b.wire((&bb, "a3"), (&bb, "t+3"), "red");
     b.two_lead(
         "resistor",
         "R1",
         &bb,
-        "b3",
-        "b7",
+        "c6",
+        "c10",
         &[("resistance", n(10e3))],
     );
-    b.wire((&bb, "a3"), (&bb, "t+3"), "red");
-    b.two_lead("ldr", "LDR1", &bb, "c7", "c10", &[]);
     b.wire((&bb, "a10"), (&bb, "t-8"), "black");
-    // R2 1k from the node into the base; NPN at columns 13–15 (E B C)
+    b.wire((&bb, "d6"), (&u1, "A0"), "yellow");
+    // D9 — R2 1k — Q1 base; NPN at columns 53–55 (E B C), emitter to ground. The LED stage
+    // sits at the far end of the board so its light does not reach the LDR.
+    b.rigid("npn", "Q1", &bb, "E", "e53", 0.0, &[]);
+    b.wire((&bb, "a53"), (&bb, "t-42"), "black");
     b.two_lead(
         "resistor",
         "R2",
         &bb,
-        "d7",
-        "d14",
+        "b54",
+        "b59",
         &[("resistance", n(1e3))],
     );
-    b.rigid("npn", "Q1", &bb, "E", "e13", 0.0, &[]);
-    b.wire((&bb, "a13"), (&bb, "t-11"), "black");
-    // collector ← LED ← R3 ← +5
-    b.two_lead("led", "D1", &bb, "c18", "c15", &[("color", t("white"))]);
+    b.wire((&u1, "D9"), (&bb, "a59"), "orange");
+    // 5V — R3 220 — LED — collector
+    b.two_lead("led", "D1", &bb, "d58", "d55", &[("color", t("white"))]);
     b.two_lead(
         "resistor",
         "R3",
         &bb,
-        "a22",
-        "a18",
-        &[("resistance", n(150.0))],
+        "a58",
+        "a63",
+        &[("resistance", n(220.0))],
     );
-    b.wire((&bb, "b22"), (&bb, "t+18"), "red");
+    b.wire((&bb, "b63"), (&bb, "t+49"), "red");
     b.probe(
-        "Light node",
-        (&bb, "e7"),
+        "Light sensor → A0",
+        (&u1, "A0"),
         Quantity::Voltage,
-        Some((14.0, 0.0)),
+        Some((36.0, 0.0)),
     );
-    b.project.world.light.ambient_lux = 180.0;
+    b.probe(
+        "LED drive · D9",
+        (&u1, "D9"),
+        Quantity::Duty,
+        Some((36.0, 6.0)),
+    );
+    b.project.world.light.ambient_lux = 300.0;
+    firmware(
+        &mut b,
+        &u1,
+        "firmware/U1/night-light",
+        Some("../fixtures/night-light.uno.hex"),
+    );
+    b.finish()
+}
+
+pub fn pico_blink(lib: &Library) -> Project {
+    let mut b = BenchBuilder::new(lib, "pico-blink", Mode::Playground);
+    b.project.description = "Raspberry Pi Pico (API-level): the on-board LED blinks at 2 Hz and \
+         A0 (GP26) reads a potentiometer."
+        .into();
+    let u1 = b.offboard("pico", "U1", 0.0, 4.0, &[]);
+    let bb = b.breadboard("breadboard_400", 32.0, 2.0);
+    b.wire((&u1, "3V3"), (&bb, "t+1"), "red");
+    b.wire((&u1, "GND"), (&bb, "t-1"), "black");
+    b.rigid("potentiometer", "RV1", &bb, "1", "e10", 0.0, &[]);
+    b.wire((&bb, "a10"), (&bb, "t-8"), "black");
+    b.wire((&bb, "a12"), (&bb, "t+10"), "red");
+    b.wire((&bb, "a11"), (&u1, "GP26"), "yellow");
+    b.probe(
+        "Knob → A0 (GP26)",
+        (&u1, "GP26"),
+        Quantity::Voltage,
+        Some((36.0, 0.0)),
+    );
+    firmware_for(
+        &mut b,
+        &u1,
+        "firmware/U1/pico-blink",
+        Some("breadbox:host:pico"),
+        None,
+    );
     b.finish()
 }
 
@@ -282,35 +342,64 @@ pub fn thermometer(lib: &Library) -> Project {
         Quantity::Voltage,
         Some((36.0, 0.0)),
     );
-    firmware(&mut b, &u1, "firmware/U1/thermometer", None);
+    firmware(
+        &mut b,
+        &u1,
+        "firmware/U1/thermometer",
+        Some("../fixtures/thermometer.uno.hex"),
+    );
     b.finish()
 }
 
 pub fn ble_button(lib: &Library) -> Project {
     let mut b = BenchBuilder::new(lib, "ble-button", Mode::Playground);
     b.project.description =
-        "A push button reported over Bluetooth LE (HM-10) to a virtual phone.".into();
+        "A push button reported over Bluetooth LE (HM-10) to a virtual phone; the phone switches the LED on D13.".into();
     let u1 = b.offboard("uno", "U1", 0.0, 4.0, &[]);
     let bb = b.breadboard("breadboard_400", 32.0, 2.0);
     b.wire((&u1, "5V"), (&bb, "t+1"), "red");
     b.wire((&u1, "GND"), (&bb, "t-1"), "black");
     // tactile switch straddling the channel: pins 1/2 in the top half, 3/4 below
     b.rigid("push_button", "SW1", &bb, "1", "e5", 90.0, &[]);
-    b.wire((&bb, "a5"), (&u1, "D7"), "green");
+    b.wire((&bb, "a5"), (&u1, "D4"), "green");
     b.wire((&bb, "j5"), (&bb, "b-4"), "black");
     b.wire((&bb, "b-2"), (&bb, "t-2"), "black");
-    let ble = b.offboard("hm10", "U2", 60.0, 4.0, &[]);
+    let ble = b.offboard("hm10", "U2", 72.0, 4.0, &[]);
     b.wire((&ble, "VCC"), (&bb, "t+20"), "red");
     b.wire((&ble, "GND"), (&bb, "t-20"), "black");
     b.wire((&ble, "TXD"), (&u1, "D10"), "blue");
-    b.wire((&u1, "D11"), (&ble, "RXD"), "yellow");
+    // D11 → 1k / 2k divider → RXD (the HM-10's input is 3.3 V)
+    b.wire((&u1, "D11"), (&bb, "a14"), "yellow");
+    b.two_lead(
+        "resistor",
+        "R1",
+        &bb,
+        "b14",
+        "b18",
+        &[("resistance", n(1e3))],
+    );
+    b.two_lead(
+        "resistor",
+        "R2",
+        &bb,
+        "c18",
+        "c22",
+        &[("resistance", n(2e3))],
+    );
+    b.wire((&bb, "a22"), (&bb, "t-18"), "black");
+    b.wire((&bb, "d18"), (&ble, "RXD"), "yellow");
     b.probe(
-        "Button · D7",
-        (&u1, "D7"),
+        "Button · D4",
+        (&u1, "D4"),
         Quantity::Logic,
         Some((36.0, 0.0)),
     );
-    firmware(&mut b, &u1, "firmware/U1/ble-button", None);
+    firmware(
+        &mut b,
+        &u1,
+        "firmware/U1/ble-button",
+        Some("../fixtures/ble-button.uno.hex"),
+    );
     b.finish()
 }
 
@@ -323,7 +412,12 @@ pub fn servo_sweep(lib: &Library) -> Project {
     b.wire((&m1, "VCC"), (&u1, "5V"), "red");
     b.wire((&m1, "SIG"), (&u1, "D9"), "orange");
     b.probe("Servo · D9", (&u1, "D9"), Quantity::Duty, Some((30.0, 0.0)));
-    firmware(&mut b, &u1, "firmware/U1/servo-sweep", None);
+    firmware(
+        &mut b,
+        &u1,
+        "firmware/U1/servo-sweep",
+        Some("../fixtures/servo-sweep.uno.hex"),
+    );
     b.finish()
 }
 
@@ -350,7 +444,13 @@ pub fn esp32_weather(lib: &Library) -> Project {
     b.wire((&bb, "f34"), (&bb, "b+34"), "red");
     b.wire((&dht, "DATA"), (&bb, "f38"), "yellow");
     b.wire((&bb, "h38"), (&bb, "j14"), "yellow"); // to D4 (third column of the right row)
-    firmware(&mut b, "u1", "firmware/U1/esp32-weather", None);
+    firmware_for(
+        &mut b,
+        "u1",
+        "firmware/U1/esp32-weather",
+        Some("breadbox:host:esp32"),
+        None,
+    );
     b.finish()
 }
 
@@ -563,6 +663,7 @@ fn main() {
         ("ble-button", ble_button(&lib)),
         ("servo-sweep", servo_sweep(&lib)),
         ("esp32-weather", esp32_weather(&lib)),
+        ("pico-blink", pico_blink(&lib)),
         ("555-astable", astable_555(&lib)),
         ("rc-filter-bode", rc_filter_bode(&lib)),
         ("op-amp-amplifier", op_amp_amplifier(&lib)),
