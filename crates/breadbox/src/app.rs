@@ -569,8 +569,19 @@ impl BreadboxApp {
                 self.ctx.theme = t;
                 t.apply(&self.ctx.egui);
             }
-            Command::Undo => self.inject_key(Key::Z, Modifiers::COMMAND),
-            Command::Redo => self.inject_key(Key::Z, Modifiers::COMMAND | Modifiers::SHIFT),
+            // Undo/Redo nobody handled: hand them to a focused text field as key events (the
+            // menu's key equivalent swallowed the real keypress). Never without focus — the
+            // shortcut handler would turn the key back into this command.
+            Command::Undo => {
+                if self.ctx.text_has_focus() {
+                    self.inject_key(Key::Z, Modifiers::COMMAND);
+                }
+            }
+            Command::Redo => {
+                if self.ctx.text_has_focus() {
+                    self.inject_key(Key::Z, Modifiers::COMMAND | Modifiers::SHIFT);
+                }
+            }
             Command::Find => self.inject_key(Key::F, Modifiers::COMMAND),
             Command::About => self.ctx.toasts.info(format!(
                 "Breadbox {} — a circuit playground and SPICE workbench.",
@@ -757,6 +768,19 @@ mod tests {
             saved.contains("\"firmware\""),
             "screen state saved: {saved}"
         );
+    }
+
+    #[test]
+    fn undo_without_a_focused_text_field_does_not_loop() {
+        let ctx = egui::Context::default();
+        let mut app = BreadboxApp::with_context(&ctx, opts(), PersistedState::default());
+        app.ctx.command(Command::Undo);
+        for _ in 0..4 {
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| app.frame(ui));
+            out.textures_delta.clear();
+            assert!(app.inject.is_empty());
+            assert!(app.ctx.pending.is_empty());
+        }
     }
 
     #[test]
