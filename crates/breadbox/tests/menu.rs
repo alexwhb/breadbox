@@ -176,6 +176,40 @@ fn every_menu_item_does_what_it_says() {
         "reset kept the clock at {before}"
     );
 
+    // Simulate → Step One Quantum / Step 1 ms advance the paused bench; Reset MCU Only
+    // restarts the firmware without resetting the bench clock
+    let t0 = sim_time(&mut h);
+    menu(&mut h, &mut done, "step-ms");
+    assert!(
+        wait_for(&mut h, 10.0, |h| sim_time(h) >= t0 + 0.000_999),
+        "Step 1 ms left the clock at {t0}"
+    );
+    assert!(!h.state_mut().ctx.bench_link().is_running());
+    let t1 = sim_time(&mut h);
+    menu(&mut h, &mut done, "step-quantum");
+    assert!(
+        wait_for(&mut h, 10.0, |h| sim_time(h) > t1),
+        "Step One Quantum left the clock at {t1}"
+    );
+    assert!(
+        sim_time(&mut h) - t1 < 0.001,
+        "a quantum is shorter than 1 ms"
+    );
+    let t2 = sim_time(&mut h);
+    menu(&mut h, &mut done, "reset-mcu");
+    menu(&mut h, &mut done, "step-ms");
+    assert!(
+        wait_for(&mut h, 10.0, |h| h
+            .state()
+            .ctx
+            .bench
+            .serial
+            .iter()
+            .any(|l| l.text.contains("MCU reset"))),
+        "Reset MCU Only logs the reset"
+    );
+    assert!(sim_time(&mut h) >= t2, "the bench clock keeps running");
+
     // Edit → Cut / Copy / Paste on the bench's parts; Undo / Redo
     let n0 = parts(&h).len();
     let r1 = parts(&h)
@@ -276,6 +310,19 @@ fn every_menu_item_does_what_it_says() {
     assert!(p.dir.starts_with(&projects), "{}", p.dir.display());
     assert_eq!(p.mode, ProjectMode::Playground);
     assert_eq!(route(&h), Route::Workbench);
+
+    // File → Import .cir Netlist… opens a SPICE netlist as a new Pro project
+    let cir_in = scratch.join("lowpass.cir");
+    std::fs::write(
+        &cir_in,
+        "* RC low-pass\nV1 in 0 DC 0 AC 1\nR1 in out 1k\nC1 out 0 159n\n.ac dec 20 10 100k\n.end\n",
+    )
+    .unwrap();
+    pick(&cir_in);
+    menu(&mut h, &mut done, "import-cir");
+    assert_eq!(route(&h), Route::Pro(ProTab::Analysis));
+    let p = h.state().ctx.project.clone().expect("the netlist opened");
+    assert_eq!(p.mode, ProjectMode::Pro);
 
     // every Breadbox menu item was exercised
     let all: BTreeSet<&str> = MENUS
