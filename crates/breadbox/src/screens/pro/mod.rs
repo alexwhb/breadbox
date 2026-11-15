@@ -697,7 +697,10 @@ impl Screen for AnalysisScreen {
                     ],
                     Stroke::new(1.0, p.border),
                 );
-                self.sidebar(ui, app);
+                egui::ScrollArea::vertical()
+                    .id_salt("pro-sidebar")
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| self.sidebar(ui, app));
             });
         egui::CentralPanel::no_frame().show(ui, |ui| {
             egui::ScrollArea::vertical()
@@ -797,10 +800,6 @@ impl AnalysisScreen {
         let w = ui.available_width();
         for kind in AnalysisKind::ALL {
             let card = found.iter().find(|c| c.kind == kind).cloned();
-            // the sidebar shows .noise / .op only when present, like the design
-            if matches!(kind, AnalysisKind::Noise | AnalysisKind::Op) && card.is_none() {
-                continue;
-            }
             let on = card.as_ref().is_some_and(|c| c.enabled);
             let summary = cards::summary(card.as_ref());
             let resp = inner_card_frame(p, on)
@@ -1257,6 +1256,10 @@ impl AnalysisScreen {
         if !v.op.is_empty() {
             self.op_table(ui, app, &v);
         }
+        // ---- .meas / .tf
+        if !v.measures.is_empty() {
+            measures_table(ui, &v.measures);
+        }
     }
 
     fn op_table(&mut self, ui: &mut Ui, app: &mut AppCtx, v: &ViewData) {
@@ -1332,6 +1335,57 @@ impl AnalysisScreen {
                 );
             });
     }
+}
+
+/// `.meas` results and `.tf` values (`SPICE-3`), one row per measurement (and `.step` run).
+fn measures_table(ui: &mut Ui, rows: &[model::MeasRow]) {
+    let p = pal(ui);
+    let stepped = rows.iter().any(|r| !r.run.is_empty());
+    egui::Frame::new()
+        .fill(p.bg_header)
+        .stroke(Stroke::new(1.0, p.border))
+        .corner_radius(10)
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.spacing_mut().item_spacing.y = 0.0;
+            ui.horizontal(|ui| {
+                ui.add_space(12.0);
+                ui.vertical(|ui| {
+                    ui.add_space(12.0);
+                    ui.label(
+                        egui::RichText::new(".meas / .tf — measurements")
+                            .font(font::heading(15.0))
+                            .color(p.text),
+                    );
+                    ui.add_space(12.0);
+                });
+            });
+            let table: Vec<Row> = rows
+                .iter()
+                .map(|r| {
+                    let mut cells = vec![Cell::new(&r.name)];
+                    if stepped {
+                        cells.push(Cell::new(&r.run).color(p.text_muted));
+                    }
+                    cells.push(if r.ok {
+                        Cell::new(&r.value)
+                    } else {
+                        Cell::new(&r.value).color(p.danger)
+                    });
+                    Row::new(cells)
+                })
+                .collect();
+            let cols: Vec<Col> = if stepped {
+                vec![
+                    Col::Fr("measurement", 1.4),
+                    Col::Fr("run", 1.0),
+                    Col::Fr("value", 1.0),
+                ]
+            } else {
+                vec![Col::Fr("measurement", 1.4), Col::Fr("value", 1.0)]
+            };
+            data_table(ui, "meas", &cols, &table, &TableStyle::default());
+        });
 }
 
 fn unit_of(q: &str) -> &'static str {

@@ -69,6 +69,18 @@ pub struct NoiseView {
     pub total: Option<String>,
 }
 
+/// One `.meas` / `.tf` result row.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MeasRow {
+    /// `.meas` name or `.tf` quantity (`transfer_function`, `output_impedance_at_v(out)`).
+    pub name: String,
+    /// `.step` run label (empty without `.step`).
+    pub run: String,
+    /// Formatted value, or why the measurement failed.
+    pub value: String,
+    pub ok: bool,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct OpRow {
     /// `V(VCC)`, `I(D1) avg`, `P(R2)`.
@@ -94,6 +106,8 @@ pub struct ViewData {
     pub ac: Option<AcView>,
     pub noise: Option<NoiseView>,
     pub op: Vec<OpRow>,
+    /// `.meas` results (per `.step` run when stepped) and `.tf` values (`SPICE-3`).
+    pub measures: Vec<MeasRow>,
     pub warnings: Vec<String>,
     pub dc_family: Vec<(String, Plot)>,
 }
@@ -635,6 +649,49 @@ pub fn build_view(
         op.sort_by_key(|r| rank(&r.quantity));
     }
 
+    // ---- .meas + .tf
+    let mut measures = Vec::new();
+    let stepped = results.runs.len() > 1;
+    for r in &results.runs {
+        let run = if stepped {
+            r.label.clone()
+        } else {
+            String::new()
+        };
+        for m in &r.measures {
+            let (value, ok) = match &m.value {
+                Ok(v) => (fmt_measure(*v), true),
+                Err(e) => (e.clone(), false),
+            };
+            measures.push(MeasRow {
+                name: m.name.clone(),
+                run: run.clone(),
+                value,
+                ok,
+            });
+        }
+        if let Some(tf) = r.plot(PlotKind::Tf) {
+            for n in tf.names().map(str::to_string).collect::<Vec<_>>() {
+                if let Some(v) = tf.value(&n) {
+                    let unit = if n.contains("impedance") { "Ω" } else { "" };
+                    measures.push(MeasRow {
+                        name: format!(".tf {n}"),
+                        run: run.clone(),
+                        value: if unit.is_empty() {
+                            fmt_measure(v)
+                        } else {
+                            fmt_readout(v, unit, 3)
+                        },
+                        ok: true,
+                    });
+                }
+            }
+        }
+        if !stepped {
+            break;
+        }
+    }
+
     ViewData {
         summary: results.summary(),
         tran,
@@ -643,11 +700,26 @@ pub fn build_view(
         ac,
         noise,
         op,
+        measures,
         warnings,
         dc_family: family
             .iter()
             .map(|(r, p)| (r.label.clone(), (*p).clone()))
             .collect(),
+    }
+}
+
+/// A unitless measurement value (`.meas` results carry no unit): 4 significant digits.
+fn fmt_measure(v: f64) -> String {
+    if v == 0.0 || !v.is_finite() {
+        return format!("{v}");
+    }
+    let mag = v.abs().log10();
+    if (-3.0..6.0).contains(&mag) {
+        let decimals = (3 - mag.floor() as i32).clamp(0, 6) as usize;
+        format!("{v:.decimals$}")
+    } else {
+        format!("{v:.3e}")
     }
 }
 

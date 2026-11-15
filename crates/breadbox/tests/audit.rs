@@ -404,3 +404,58 @@ fn quick_edits_survive_a_project_switch_and_quit() {
     let text = std::fs::read_to_string(&ino).unwrap();
     assert!(text.contains("// quick note"), "{text}");
 }
+
+/// PRO-3 / SPICE-3: every analysis card is in the sidebar (Noise and Op point too, "off" until
+/// added), and `.meas` / `.tf` results from the netlist show up in a measurements table.
+#[test]
+fn pro_shows_every_analysis_card_and_meas_tf_results() {
+    let dir = scratch();
+    let mut h = harness();
+    let proj = breadbox::project::Project::create(
+        &dir.join("projects"),
+        "meas-tf",
+        breadbox::project::ProjectMode::Pro,
+    )
+    .unwrap();
+    std::fs::write(
+        proj.dir.join("analyses/divider.cir"),
+        "* divider with a filter cap\nV1 in 0 PULSE(0 5 0 1u 1u 1m 2m) AC 1\nR1 in out 1k\nR2 out 0 1k\nC1 out 0 100n\n.tran 10u 4m\n.meas tran vmax MAX v(out)\n.meas tran vavg AVG v(out) FROM=1m TO=3m\n.tf v(out) V1\n.end\n",
+    )
+    .unwrap();
+    h.state_mut().open_path(&proj.dir);
+    h.run_steps(4);
+    assert_eq!(h.state().ctx.route, Route::Pro(ProTab::Analysis));
+    for card in [
+        "Transient (.tran)",
+        "DC sweep",
+        "AC",
+        "Monte Carlo",
+        "Temperature",
+        "Noise (.noise) — off",
+        "Op point",
+    ] {
+        assert!(has_label_containing(&h, card), "card {card}");
+    }
+    h.state_mut()
+        .ctx
+        .command(breadbox::router::Command::RunAnalyses);
+    assert!(
+        wait_for(&mut h, 60.0, |h| has_label_containing(
+            h,
+            ".meas / .tf — measurements"
+        )),
+        "no measurements table"
+    );
+    // rows read "<name> <value>"
+    assert!(has_label_containing(&h, "vmax "), "vmax row");
+    assert!(has_label_containing(&h, "vavg "), "vavg row");
+    assert!(
+        has_label_containing(&h, ".tf transfer_function 0.5000"),
+        "tf gain 0.5"
+    );
+    screenshot(&mut h, "pro-measurements");
+    assert!(
+        has_label_containing(&h, "output_impedance_at_v(out) 500"),
+        "output impedance R1 ‖ R2"
+    );
+}
