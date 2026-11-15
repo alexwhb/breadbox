@@ -149,3 +149,100 @@ fn esp32_weather_reads_the_dht22_device_and_publishes_over_mqtt() {
         "{l:#?}"
     );
 }
+
+/// MCU-6 host-core features the examples don't use, on an ESP32 on the bench: LEDC PWM
+/// (`ledcAttach` / `ledcWrite`, 25 %) and `analogWrite` (75 %) measured by duty probes on the
+/// pins, and `micros()` across `delayMicroseconds(1500)`. (Serial2 on its pins is covered by
+/// `host_bridges`, ESP32 ↔ HC-05.)
+#[test]
+fn esp32_ledc_analog_write_and_micros() {
+    use bb_circuit::builder::BenchBuilder;
+    use bb_circuit::project::{Endpoint, Mode, ProbeDef, Quantity};
+    if bb_firmware::host::cxx().is_none() {
+        eprintln!("no C++ compiler; skipping");
+        return;
+    }
+    let dir = std::env::temp_dir().join(format!("bb-host-features-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let sketch = dir.join("firmware/U1/features");
+    std::fs::create_dir_all(&sketch).unwrap();
+    std::fs::write(
+        sketch.join("features.ino"),
+        r#"
+const int LED = 2;
+void setup() {
+  Serial.begin(115200);
+  ledcAttach(LED, 1000, 8);
+  ledcWrite(LED, 64);
+  analogWrite(4, 191);
+  unsigned long t0 = micros();
+  delayMicroseconds(1500);
+  unsigned long dt = micros() - t0;
+  Serial.print("dt_us=");
+  Serial.println(dt);
+}
+void loop() {
+  delay(10);
+}
+"#,
+    )
+    .unwrap();
+    let lib = lib();
+    let mut b = BenchBuilder::new(&lib, "features", Mode::Playground);
+    let u1 = b.offboard("esp32_devkit", "U1", 0.0, 0.0, &[]);
+    // an LED + 220 Ω on each PWM pin
+    for (k, pin) in ["D2", "D4"].iter().enumerate() {
+        let x = 40.0 + 12.0 * k as f64;
+        let r = b.offboard(
+            "resistor",
+            &format!("R{}", k + 1),
+            x,
+            0.0,
+            &[("resistance", bb_circuit::PropValue::Num(220.0))],
+        );
+        let d = b.offboard("led", &format!("D{}", k + 1), x, 8.0, &[]);
+        b.wire((&u1, pin), (&r, "1"), "orange");
+        b.wire((&r, "2"), (&d, "a"), "orange");
+        b.wire((&d, "k"), (&u1, "GND"), "black");
+    }
+    let mut project = b.finish();
+    project.part_mut(&u1).unwrap().firmware = Some(bb_circuit::project::FirmwareRef {
+        sketch: "firmware/U1/features".into(),
+        fqbn: None,
+        image: None,
+    });
+    for (id, pin) in [("d2", "D2"), ("d4", "D4")] {
+        project.probes.push(ProbeDef {
+            id: id.into(),
+            label: id.into(),
+            target: Endpoint::pin(&u1, pin),
+            quantity: Quantity::Duty,
+            pinned: None,
+        });
+    }
+    project.save(&dir).unwrap();
+    let exes = bb_sim::firmware::compile_host_project(&project, &dir, &lib).unwrap();
+    let mut bench = Bench::new(
+        project,
+        lib.clone(),
+        BenchOptions {
+            host_firmware: exes,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    bench.run_until(SimTime::from_ms(300)).unwrap();
+    let out = lines(&bench, &u1);
+    let dt: f64 = out
+        .iter()
+        .find_map(|l| l.strip_prefix("dt_us="))
+        .and_then(|v| v.trim().parse().ok())
+        .unwrap_or_else(|| panic!("{out:?}"));
+    assert!((1500.0..1520.0).contains(&dt), "micros across 1500 µs: {dt}");
+    let tel = bench.telemetry();
+    let duty = |id: &str| tel.probes.iter().find(|p| p.id == id).map(|p| p.value);
+    let (d2, d4) = (duty("d2").unwrap(), duty("d4").unwrap());
+    assert!((d2 - 25.0).abs() < 1.0, "ledcWrite 64/255 → {d2} %");
+    assert!((d4 - 74.9).abs() < 1.0, "analogWrite 191/255 → {d4} %");
+    let _ = std::fs::remove_dir_all(&dir);
+}
