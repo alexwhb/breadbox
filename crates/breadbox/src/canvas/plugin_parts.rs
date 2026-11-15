@@ -118,7 +118,9 @@ fn svg_texture(
     path: &std::path::Path,
     size: egui::Vec2,
 ) -> Option<egui::TextureHandle> {
-    let bucket = ((size.x.max(size.y) * ctx.pixels_per_point()) / 64.0).ceil().clamp(1.0, 24.0) as u32;
+    let bucket = ((size.x.max(size.y) * ctx.pixels_per_point()) / 64.0)
+        .ceil()
+        .clamp(1.0, 24.0) as u32;
     let key = (url.to_string(), bucket);
     let mut g = TEXTURES.lock().ok()?;
     let cache = g.get_or_insert_with(HashMap::new);
@@ -140,7 +142,11 @@ fn svg_texture(
         &mut pix.as_mut(),
     );
     let img = egui::ColorImage::from_rgba_premultiplied([w as usize, h as usize], pix.data());
-    let tex = ctx.load_texture(format!("plugin-art {url} {bucket}"), img, egui::TextureOptions::LINEAR);
+    let tex = ctx.load_texture(
+        format!("plugin-art {url} {bucket}"),
+        img,
+        egui::TextureOptions::LINEAR,
+    );
     cache.insert(key, tex.clone());
     Some(tex)
 }
@@ -171,9 +177,7 @@ pub fn lead_of(doc: &CircuitDoc, w: &Wire) -> Option<(String, String, bool)> {
 fn jack_color(def_id: &str, pin: &str) -> Color32 {
     let c = panel_for(def_id).and_then(|p| {
         p.elements.iter().find_map(|e| match e {
-            Element::Jack {
-                pin: jp, color, ..
-            } if jp == pin => color.clone(),
+            Element::Jack { pin: jp, color, .. } if jp == pin => color.clone(),
             _ => None,
         })
     });
@@ -308,7 +312,11 @@ pub fn interact(
         };
         let s = view.to_screen(pos.0, pos.1);
         let r = Rect::from_center_size(s, vec2(16.0, 16.0));
-        let resp = ui.interact(r, egui::Id::unique(("lead-tip", w.id.as_str())), Sense::drag());
+        let resp = ui.interact(
+            r,
+            egui::Id::unique(("lead-tip", w.id.as_str())),
+            Sense::drag(),
+        );
         let reference = doc
             .project()
             .part(&part)
@@ -341,9 +349,7 @@ fn jack_label(doc: &CircuitDoc, part: &str, pin: &str) -> String {
         .and_then(|p| panel_for(&p.part))
         .and_then(|panel| {
             panel.elements.iter().find_map(|e| match e {
-                Element::Jack {
-                    pin: jp, label, ..
-                } if jp == pin => Some(label.clone()),
+                Element::Jack { pin: jp, label, .. } if jp == pin => Some(label.clone()),
                 _ => None,
             })
         })

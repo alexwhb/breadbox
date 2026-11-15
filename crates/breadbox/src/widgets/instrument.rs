@@ -30,6 +30,69 @@ fn rgb(h: u32) -> Color32 {
     Color32::from_rgb((h >> 16) as u8, (h >> 8) as u8, h as u8)
 }
 
+/// Paints text that may contain `⎓` (no bundled font has the DC sign): it is drawn as the
+/// symbol itself (a solid line over a dashed one). Other text goes straight to the painter.
+pub fn ptext(
+    painter: &egui::Painter,
+    pos: Pos2,
+    align: Align2,
+    text: impl ToString,
+    font: FontId,
+    color: Color32,
+) -> Rect {
+    let text = text.to_string();
+    if !text.contains('⎓') {
+        return painter.text(pos, align, text, font, color);
+    }
+    let parts: Vec<&str> = text.split('⎓').collect();
+    let galleys: Vec<_> = parts
+        .iter()
+        .map(|t| painter.layout_no_wrap(t.to_string(), font.clone(), color))
+        .collect();
+    let sym_w = font.size * 0.62;
+    let h = galleys.iter().map(|g| g.size().y).fold(font.size, f32::max);
+    let w: f32 = galleys.iter().map(|g| g.size().x).sum::<f32>() + sym_w * (parts.len() - 1) as f32;
+    let rect = align.anchor_size(pos, vec2(w, h));
+    let mut x = rect.left();
+    for (i, g) in galleys.into_iter().enumerate() {
+        let gw = g.size().x;
+        painter.galley(pos2(x, rect.top()), g, color);
+        x += gw;
+        if i + 1 < parts.len() {
+            let cy = rect.center().y;
+            let l = x + sym_w * 0.1;
+            let r = x + sym_w * 0.9;
+            let sw = (font.size * 0.09).max(1.0);
+            painter.line_segment(
+                [
+                    pos2(l, cy - font.size * 0.12),
+                    pos2(r, cy - font.size * 0.12),
+                ],
+                Stroke::new(sw, color),
+            );
+            let dash = (r - l) / 5.0;
+            for k in [0.0, 2.0, 4.0] {
+                let a = l + dash * k;
+                painter.line_segment(
+                    [
+                        pos2(a, cy + font.size * 0.12),
+                        pos2(a + dash, cy + font.size * 0.12),
+                    ],
+                    Stroke::new(sw, color),
+                );
+            }
+            x += sym_w;
+        }
+    }
+    rect
+}
+
+/// Text from plugin data shown in the UI fonts: `⎓` (missing from every bundled font)
+/// becomes `DC`.
+pub fn glyph_safe(s: &str) -> String {
+    s.replace("V⎓", "V DC").replace('⎓', "DC")
+}
+
 /// A panel placed on screen.
 #[derive(Debug, Clone, Copy)]
 pub struct Face {
@@ -58,10 +121,16 @@ impl Face {
         }
     }
     pub fn p(&self, x: f32, y: f32) -> Pos2 {
-        pos2(self.rect.left() + x * self.scale, self.rect.top() + y * self.scale)
+        pos2(
+            self.rect.left() + x * self.scale,
+            self.rect.top() + y * self.scale,
+        )
     }
     pub fn r(&self, r: [f32; 4]) -> Rect {
-        Rect::from_min_size(self.p(r[0], r[1]), vec2(r[2] * self.scale, r[3] * self.scale))
+        Rect::from_min_size(
+            self.p(r[0], r[1]),
+            vec2(r[2] * self.scale, r[3] * self.scale),
+        )
     }
     pub fn mm(&self, v: f32) -> f32 {
         v * self.scale
@@ -164,7 +233,10 @@ fn paint_element(painter: &egui::Painter, face: &Face, el: &Element, state: Opti
         } => {
             let r = face.r(*rect);
             let on = control_value(state, id, 0.0) > 0.5;
-            let fill = color.as_deref().map(|c| hex(c, rgb(0x2A313B))).unwrap_or(rgb(0x2A313B));
+            let fill = color
+                .as_deref()
+                .map(|c| hex(c, rgb(0x2A313B)))
+                .unwrap_or(rgb(0x2A313B));
             painter.rect(
                 r,
                 CornerRadius::same((r.height() * 0.23) as u8),
@@ -172,7 +244,8 @@ fn paint_element(painter: &egui::Painter, face: &Face, el: &Element, state: Opti
                 Stroke::new(1.0, if on { rgb(0xF2A33A) } else { rgb(0x454545) }),
                 StrokeKind::Inside,
             );
-            painter.text(
+            ptext(
+                &painter,
                 r.center(),
                 Align2::CENTER_CENTER,
                 label,
@@ -189,7 +262,7 @@ fn paint_element(painter: &egui::Painter, face: &Face, el: &Element, state: Opti
             let r = face.r(*rect);
             let c = r.center();
             let outer = r.width().min(r.height()) / 2.0;
-            let knob = outer * 0.62;
+            let knob = outer * 0.58;
             painter.circle(c, outer, rgb(0x141414), Stroke::new(1.5, rgb(0x2E2E2E)));
             // knob with a soft highlight
             painter.circle_filled(c + vec2(0.0, outer * 0.04), knob, rgb(0x262626));
@@ -199,13 +272,13 @@ fn paint_element(painter: &egui::Painter, face: &Face, el: &Element, state: Opti
             let fs = (outer * 0.17).clamp(4.0, 12.0);
             for (i, p) in positions.iter().enumerate() {
                 let a = position_angle(positions, i);
-                let at = c + dir(a) * (outer * 0.82);
+                let at = c + dir(a) * (outer * 0.84);
                 let col = if i == cur {
                     rgb(0xF2A33A)
                 } else {
                     rgb(0xD9D9D9)
                 };
-                painter.text(at, Align2::CENTER_CENTER, &p.label, mono(fs), col);
+                ptext(&painter, at, Align2::CENTER_CENTER, &p.label, mono(fs), col);
             }
             // pointer bar
             let a = position_angle(positions, cur);
@@ -251,7 +324,8 @@ fn paint_element(painter: &egui::Painter, face: &Face, el: &Element, state: Opti
                 Stroke::new((rad * 0.14).max(1.0), rgb(0xEAEAEA)),
             );
             let fs = (rad * 0.42).clamp(4.0, 11.0);
-            painter.text(
+            ptext(
+                &painter,
                 pos2(c.x, r.bottom()),
                 Align2::CENTER_BOTTOM,
                 format!("{label} {}", fmt_value(v, unit)),
@@ -290,7 +364,8 @@ fn paint_element(painter: &egui::Painter, face: &Face, el: &Element, state: Opti
                         rgb(0x2A1F0E),
                     );
                 }
-                painter.text(
+                ptext(
+                    &painter,
                     s.center(),
                     Align2::CENTER_CENTER,
                     o,
@@ -302,7 +377,8 @@ fn paint_element(painter: &egui::Painter, face: &Face, el: &Element, state: Opti
                     },
                 );
             }
-            painter.text(
+            ptext(
+                &painter,
                 pos2(r.left(), r.top()),
                 Align2::LEFT_TOP,
                 label,
@@ -316,19 +392,28 @@ fn paint_element(painter: &egui::Painter, face: &Face, el: &Element, state: Opti
             let r = face.r(*rect);
             let c = r.center();
             let rad = r.width().min(r.height()) / 2.0;
-            let ring = color.as_deref().map(|c| hex(c, rgb(0x5C5C5C))).unwrap_or(rgb(0x5C5C5C));
+            let ring = color
+                .as_deref()
+                .map(|c| hex(c, rgb(0x5C5C5C)))
+                .unwrap_or(rgb(0x5C5C5C));
             let ring = if ring.r() < 40 && ring.g() < 40 && ring.b() < 40 {
                 rgb(0x5C5C5C)
             } else {
                 ring
             };
-            painter.circle(c, rad, rgb(0x070707), Stroke::new((rad * 0.16).max(1.2), ring));
+            painter.circle(
+                c,
+                rad,
+                rgb(0x070707),
+                Stroke::new((rad * 0.16).max(1.2), ring),
+            );
             painter.circle_filled(c, rad * 0.35, rgb(0x1A1A1A));
-            painter.text(
-                pos2(c.x, r.bottom() + face.mm(1.2)),
+            ptext(
+                &painter,
+                pos2(c.x, r.bottom() + face.mm(0.3)),
                 Align2::CENTER_TOP,
                 label,
-                mono((rad * 0.75).clamp(4.0, 10.0)),
+                mono((rad * 0.6).clamp(4.0, 10.0)),
                 rgb(0xA3A3A3),
             );
         }
@@ -345,7 +430,11 @@ fn paint_element(painter: &egui::Painter, face: &Face, el: &Element, state: Opti
             let col = hex(color, rgb(0x6FD48F));
             if b > 0.02 {
                 for k in 1..4 {
-                    painter.circle_filled(c, rad * (1.0 + k as f32 * 0.8), col.gamma_multiply(0.12 * b));
+                    painter.circle_filled(
+                        c,
+                        rad * (1.0 + k as f32 * 0.8),
+                        col.gamma_multiply(0.12 * b),
+                    );
                 }
             }
             painter.circle(
@@ -355,7 +444,8 @@ fn paint_element(painter: &egui::Painter, face: &Face, el: &Element, state: Opti
                 Stroke::new(1.0, rgb(0x111111)),
             );
             if !label.is_empty() {
-                painter.text(
+                ptext(
+                    &painter,
                     pos2(r.right() + face.mm(1.0), c.y),
                     Align2::LEFT_CENTER,
                     label,
@@ -377,12 +467,16 @@ fn paint_element(painter: &egui::Painter, face: &Face, el: &Element, state: Opti
         }
         Element::Label { rect, text, color } => {
             let r = face.r(*rect);
-            painter.text(
+            ptext(
+                &painter,
                 r.left_center(),
                 Align2::LEFT_CENTER,
                 text,
                 font::ui((r.height() * 0.7).clamp(4.0, 12.0)),
-                color.as_deref().map(|c| hex(c, rgb(0xA3A3A3))).unwrap_or(rgb(0xA3A3A3)),
+                color
+                    .as_deref()
+                    .map(|c| hex(c, rgb(0xA3A3A3)))
+                    .unwrap_or(rgb(0xA3A3A3)),
             );
         }
     }
@@ -432,7 +526,13 @@ fn paint_display(
         _ => (rgb(0xAEB9A0), rgb(0x18200F), rgb(0x0F1310)),
     };
     let rad = CornerRadius::same((r.height() * 0.08) as u8);
-    painter.rect(r, rad, bg, Stroke::new((face.mm(0.8)).clamp(1.0, 3.0), frame), StrokeKind::Inside);
+    painter.rect(
+        r,
+        rad,
+        bg,
+        Stroke::new((face.mm(0.8)).clamp(1.0, 3.0), frame),
+        StrokeKind::Inside,
+    );
     if style == "lcd" {
         // a subtle top-to-bottom shade like a real LCD
         let lower = Rect::from_min_max(pos2(r.left(), r.center().y), r.max).shrink(1.5);
@@ -458,24 +558,47 @@ fn paint_display(
     let (left, right): (Vec<&String>, Vec<&String>) = anns
         .iter()
         .partition(|a| matches!(a.as_str(), "AUTO" | "MANU" | "HOLD"));
-    painter.text(
+    ptext(
+        &painter,
         pos2(r.left() + pad, r.top() + pad * 0.8),
         Align2::LEFT_TOP,
-        left.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(" "),
+        left.iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<_>>()
+            .join(" "),
         mono(ann_fs),
         faint,
     );
-    painter.text(
+    ptext(
+        &painter,
         pos2(r.right() - pad, r.top() + pad * 0.8),
         Align2::RIGHT_TOP,
-        right.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(" "),
+        right
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<_>>()
+            .join(" "),
         mono(ann_fs),
         faint,
     );
     // digits right-aligned, unit after them
-    let unit_w = if unit.is_empty() { 0.0 } else { r.height() * 0.32 };
-    let digits_fs = (r.height() * 0.5).clamp(6.0, 64.0);
-    painter.text(
+    let unit_w = if unit.is_empty() {
+        0.0
+    } else {
+        r.height() * 0.32
+    };
+    // as large as fits: ~50 % of the display height, narrower for long readings
+    let mut digits_fs = (r.height() * 0.5).clamp(6.0, 64.0);
+    let room = (r.width() - pad * 2.0 - unit_w).max(10.0);
+    let gw = painter
+        .layout_no_wrap(text.clone(), font::mono_medium(digits_fs), ink)
+        .size()
+        .x;
+    if gw > room {
+        digits_fs = (digits_fs * room / gw).max(5.0);
+    }
+    ptext(
+        &painter,
         pos2(r.right() - pad - unit_w, r.top() + r.height() * 0.62),
         Align2::RIGHT_CENTER,
         &text,
@@ -483,7 +606,8 @@ fn paint_display(
         ink,
     );
     if !unit.is_empty() {
-        painter.text(
+        ptext(
+            &painter,
             pos2(r.right() - pad * 0.7, r.top() + r.height() * 0.78),
             Align2::RIGHT_CENTER,
             &unit,
@@ -525,18 +649,30 @@ fn paint_screen(
     let gcol = rgb(0x1C3328);
     for i in 1..grid[0] {
         let x = r.left() + r.width() * i as f32 / gx;
-        painter.line_segment([pos2(x, r.top()), pos2(x, r.bottom())], Stroke::new(0.6, gcol));
+        painter.line_segment(
+            [pos2(x, r.top()), pos2(x, r.bottom())],
+            Stroke::new(0.6, gcol),
+        );
     }
     for j in 1..grid[1] {
         let y = r.top() + r.height() * j as f32 / gy;
-        painter.line_segment([pos2(r.left(), y), pos2(r.right(), y)], Stroke::new(0.6, gcol));
+        painter.line_segment(
+            [pos2(r.left(), y), pos2(r.right(), y)],
+            Stroke::new(0.6, gcol),
+        );
     }
     // centre axes a little brighter
     let cx = r.center().x;
     let cy = r.center().y;
     let acol = rgb(0x2A4A3B);
-    painter.line_segment([pos2(cx, r.top()), pos2(cx, r.bottom())], Stroke::new(0.8, acol));
-    painter.line_segment([pos2(r.left(), cy), pos2(r.right(), cy)], Stroke::new(0.8, acol));
+    painter.line_segment(
+        [pos2(cx, r.top()), pos2(cx, r.bottom())],
+        Stroke::new(0.8, acol),
+    );
+    painter.line_segment(
+        [pos2(r.left(), cy), pos2(r.right(), cy)],
+        Stroke::new(0.8, acol),
+    );
     let Some(ss) = ss else {
         return;
     };
@@ -585,10 +721,18 @@ fn paint_screen(
     let fs = (r.height() * 0.06).clamp(5.0, 11.0);
     for m in &ss.markers {
         let p = to_screen([m.x, m.y]);
-        clip.text(p, Align2::LEFT_BOTTOM, &m.text, mono(fs), rgb(0xEAEAEA));
+        ptext(
+            &clip,
+            p,
+            Align2::LEFT_BOTTOM,
+            &m.text,
+            mono(fs),
+            rgb(0xEAEAEA),
+        );
     }
     if !ss.header.is_empty() {
-        clip.text(
+        ptext(
+            &clip,
             r.left_top() + vec2(4.0, 3.0),
             Align2::LEFT_TOP,
             &ss.header,
@@ -661,15 +805,20 @@ pub fn controls(
                 let text = format!("{name} {label}");
                 resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &text));
                 if *momentary {
-                    if resp.is_pointer_button_down_on() && !ui.data(|d| d.get_temp::<bool>(resp.id).unwrap_or(false)) {
+                    if resp.is_pointer_button_down_on()
+                        && !ui.data(|d| d.get_temp::<bool>(resp.id).unwrap_or(false))
+                    {
                         ui.data_mut(|d| d.insert_temp(resp.id, true));
                         out.push((id.clone(), 1.0));
                     }
-                    if !resp.is_pointer_button_down_on() && ui.data(|d| d.get_temp::<bool>(resp.id).unwrap_or(false)) {
+                    if !resp.is_pointer_button_down_on()
+                        && ui.data(|d| d.get_temp::<bool>(resp.id).unwrap_or(false))
+                    {
                         ui.data_mut(|d| d.insert_temp(resp.id, false));
                         out.push((id.clone(), 0.0));
                     }
-                    if resp.clicked() && !ui.data(|d| d.get_temp::<bool>(resp.id).unwrap_or(false)) {
+                    if resp.clicked() && !ui.data(|d| d.get_temp::<bool>(resp.id).unwrap_or(false))
+                    {
                         // keyboard / AccessKit click: press + release
                         out.push((id.clone(), 1.0));
                         out.push((id.clone(), 0.0));
@@ -694,7 +843,7 @@ pub fn controls(
                 // position labels: click to turn there
                 let fs = (outer * 0.17).clamp(4.0, 12.0);
                 for (i, p) in positions.iter().enumerate() {
-                    let at = c + dir(position_angle(positions, i)) * (outer * 0.82);
+                    let at = c + dir(position_angle(positions, i)) * (outer * 0.84);
                     let lr = Rect::from_center_size(at, vec2(fs * 2.2, fs * 1.6));
                     let resp = ui.interact(lr, base.with(("pos", k, i)), Sense::click());
                     let text = format!("{name} dial {}", p.label);
@@ -711,7 +860,10 @@ pub fn controls(
                 // the knob: click = next position, drag = turn
                 let kr = Rect::from_center_size(c, vec2(outer * 1.3, outer * 1.3));
                 let resp = ui.interact(kr, base.with(("dial", k)), Sense::click_and_drag());
-                let cur_label = positions.get(cur).map(|p| p.label.clone()).unwrap_or_default();
+                let cur_label = positions
+                    .get(cur)
+                    .map(|p| p.label.clone())
+                    .unwrap_or_default();
                 let text = format!("{name} dial: {cur_label}");
                 resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Slider, true, &text));
                 let n = positions.len();
@@ -812,7 +964,14 @@ pub fn instrument_widget(
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
     let face = Face::fit(panel, rect);
     paint(ui.painter(), &face, panel, state);
-    controls(ui, &face, panel, state, name, egui::Id::unique(("instrument", name)))
+    controls(
+        ui,
+        &face,
+        panel,
+        state,
+        name,
+        egui::Id::unique(("instrument", name)),
+    )
 }
 
 #[cfg(test)]
@@ -848,7 +1007,11 @@ mod tests {
         assert_eq!(display_text(&p, Some(&st)).unwrap(), "1.882 V AUTO DC");
         assert_eq!(dial_label(&p, Some(&st)).unwrap(), "Ω");
         assert_eq!(dial_label(&p, None).unwrap(), "V⎓");
-        assert!((knob_value(knob_fraction(1000.0, 1.0, 1e6, true), 1.0, 1e6, true, None) - 1000.0).abs() < 1e-6);
+        assert!(
+            (knob_value(knob_fraction(1000.0, 1.0, 1e6, true), 1.0, 1e6, true, None) - 1000.0)
+                .abs()
+                < 1e-6
+        );
         let f = Face::fit(&p, Rect::from_min_size(pos2(0.0, 0.0), vec2(200.0, 200.0)));
         assert!((f.rect.height() - 200.0).abs() < 0.01 && (f.rect.width() - 100.0).abs() < 0.01);
     }

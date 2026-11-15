@@ -5,6 +5,7 @@ pub mod controls;
 pub mod highlight;
 pub mod icons;
 pub mod instrument;
+pub mod markdown;
 pub mod overlay;
 pub mod plot;
 pub mod table;

@@ -4,6 +4,7 @@
 pub mod firmware;
 pub mod home;
 pub mod placeholder;
+pub mod plugins;
 pub mod pro;
 pub mod workbench;
 
@@ -44,13 +45,7 @@ pub fn default_registry() -> ScreenRegistry {
     );
     r.register(
         ScreenSlot::Plugins,
-        Box::new(Placeholder::new(
-            ScreenSlot::Plugins,
-            "Plugins",
-            Icon::Plug,
-            "Installed instruments, parts, radios and world models; the catalog; plugin.json and the SDK docs.",
-            "ui-plug-les (phase 4)",
-        )),
+        Box::new(plugins::PluginsScreen::default()),
     );
     r.register(
         ScreenSlot::Lessons,

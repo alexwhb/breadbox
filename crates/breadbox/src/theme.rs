@@ -264,7 +264,9 @@ pub fn set_plugin_palette(ctx: &egui::Context, palette: Option<Palette>) {
         *g = leaked;
     }
     for (theme, base) in [(Theme::Dark, &DARK), (Theme::Light, &LIGHT)] {
-        let p = leaked.filter(|p| p.dark == (theme == Theme::Dark)).unwrap_or(base);
+        let p = leaked
+            .filter(|p| p.dark == (theme == Theme::Dark))
+            .unwrap_or(base);
         let style = ctx.style_of(theme);
         ctx.set_style_of(theme, style_for(p, &style));
     }
