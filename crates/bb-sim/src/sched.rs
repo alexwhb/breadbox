@@ -83,10 +83,36 @@ impl Bench {
         if target <= t0 {
             // something is due right now
             self.process_due(t0)?;
+            // services due now step before the MCUs run ahead: what they produce (radio frames
+            // to send, device wakes) must start at its real time, not in an MCU's past (the
+            // first bits of a UART frame would collapse into one late edge)
+            let mut stepped = false;
+            for i in 0..self.services.len() {
+                if self.services[i].next_wake().is_some_and(|w| w <= t0) {
+                    self.services[i].step(t0);
+                    stepped = true;
+                }
+            }
+            if stepped {
+                self.service_outputs();
+            }
             if self.next_wake_time().is_some_and(|w| w <= t0) {
                 return Ok(());
             }
             target = (t0 + q).min(limit);
+            // what was just processed may have scheduled wakes inside this quantum (a module's
+            // first UART edge 0.8 ms from now): the MCUs must stop there, not run past it
+            if let Some(w) = self.next_wake_time().filter(|w| *w > t0) {
+                target = target.min(w);
+            }
+            for s in &self.services {
+                if let Some(w) = s.next_wake().filter(|w| *w > t0) {
+                    target = target.min(w);
+                }
+            }
+            if let Some(c) = self.next_capture() {
+                target = target.min(c.max(t0 + SimTime::from_ns(10)));
+            }
             if target <= t0 {
                 return Ok(());
             }
