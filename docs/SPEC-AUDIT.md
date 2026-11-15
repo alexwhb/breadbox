@@ -13,10 +13,15 @@ is listed under *Notes* rather than downgrading the row.
 |---|---|---|---|
 | **before the audit** | 73 | 26 | 1 |
 | **after** | 97 | 2 | 1 |
+| **after closeout-a** | 100 | 0 | 0 |
 
-Remaining: `PLAT-1` (OS-specific code in `bb-firmware::toolchain`, by design — see note),
-`WORLD-6` (ADC quantization is not switchable — see note), `PLAT-3` (`Breadbox.app` bundle:
-built by the concurrent `bundle` agent on branch `ui-plug-les`, not on `master` yet).
+Remaining after the audit: `PLAT-1` (OS-specific code in `bb-firmware::toolchain`), `WORLD-6`
+(ADC quantization not switchable), `PLAT-3` (`Breadbox.app` bundle on the `bundle` agent's
+branch). **Closed by `closeout-a`** (see the rows and PROGRESS `### closeout-a`): `PLAT-1` —
+`bb_firmware::platform` + a workspace grep test; `WORLD-6` — realistic / ideal measurement
+(sensor noise + AVR ADC transfer function); `PLAT-3` — merged bundle, `.breadbox` as a document
+package, `bundle` stage in `scripts/test-all.sh`. Also fixed: toolchain detection could hang
+forever (`MCU-4`).
 
 Paths are relative to the repo root; `bb/` = `crates/breadbox/`. GUI tests live in
 `bb/tests/`, headless e2e in `tests/e2e/tests/`.
@@ -25,9 +30,9 @@ Paths are relative to the repo root; `bb/` = `crates/breadbox/`. GUI tests live 
 
 | ID | before → after | Evidence | Tests | Notes |
 |---|---|---|---|---|
-| PLAT-1 | partial → partial | `rust-toolchain.toml`; app OS code in `bb/src/platform.rs` | build | `cfg!(target_os)` / Homebrew paths also live in `crates/bb-firmware/src/toolchain.rs:142,731,784,865`, `compile.rs:293` (the toolchain installer is OS-specific by nature and the library crate cannot depend on the app's `platform` module). Left; portable elsewhere. |
+| PLAT-1 | partial → partial → **done** (closeout-a) | `rust-toolchain.toml`; OS code only in `bb/src/platform.rs`, `crates/bb-firmware/src/platform.rs` (Homebrew prefixes, Arduino data folder, macOS privacy folders, arduino-cli asset, permissions, symlinks, process groups), `crates/bb-core/src/paths.rs` | `bb-firmware/tests/platform.rs` (greps every `.rs` in `crates/`, `tests/`, `plugins/` for `target_os`, and bb-firmware for `cfg(unix)` / Homebrew paths / `std::os::unix`, outside the three modules), `platform::tests` | SPEC wording: "OS-specific code lives only in `platform` modules". |
 | PLAT-2 | done | eframe/egui 0.37 wgpu; fonts `assets/fonts/` + OFL texts, embedded in `bb/src/theme.rs:334` | `gui.rs` renders every screen; `widgets.rs` gallery snapshot | Shipping the licence files inside the `.app` is PLAT-3. |
-| PLAT-3 | missing → missing | — | — | `scripts/bundle-macos.sh` is the `bundle` agent's work on `ui-plug-les` (with the runtime resource resolver); not merged to `master` during this audit. |
+| PLAT-3 | missing → missing → **done** (bundle, merged; closeout-a) | `scripts/bundle-macos.sh` (Info.plist, icon, fonts, plugins, lessons, examples in `Contents/Resources`); `.breadbox` = document package (UTI `app.breadbox.project` → `com.apple.package`, owner + editor, `LSTypeIsPackage`); Open accepts packages (`platform::pick_project`) | `scripts/check-bundle.sh` (static + sandboxed smoke runs + `open` + `open -a` + Finder package / default app / double-click), run by `scripts/test-all.sh` stage `bundle` | Ad-hoc signed (no notarization). |
 | PLAT-4 | done | `bb/src/smoke.rs`, `STARTED` in `bb/src/lib.rs` | `test-all.sh` perf gate (first frame < 2 s) | |
 | PLAT-5 | done | `bb/src/widgets/icons.rs` | `icons::tests::no_sparkle_icons`; grep for ✨✦✧ = none | New icons used by the audit: Pir, Sonar, Inductor, Trash, Close, Plus, ChevronRight/Down. |
 
@@ -93,7 +98,7 @@ Paths are relative to the repo root; `bb/` = `crates/breadbox/`. GUI tests live 
 | MCU-1 | done | `bb-avr/src/exec.rs`, `decode.rs` | `bb-avr/tests/instructions.rs` (35), real firmware | |
 | MCU-2 | done | `bb-avr/src/{gpio,timer,usart,adc,spi,twi,misc}.rs` | `bb-avr/tests/*` | Mega Timer4 / USART2 not exercised. |
 | MCU-3 | done | — | `bb-avr/tests/perf.rs` (gated) | |
-| MCU-4 | partial → done | `bb-firmware/src/toolchain.rs`, `compile.rs`; Firmware screen + `StagingLock` `bb/src/screens/firmware/build.rs:105` | `toolchain.rs` tests, `gui.rs::verify_blink_*`, `build::tests::concurrent_builds_of_one_sketch_compile_their_own_sources` (new), `session.rs` (Verify + Upload of a typed sketch) | **Fixed**: all builds of a sketch shared one staging folder, so a concurrent debug build or a second app instance compiled the wrong sources (the flaky Verify GUI test, `95f43c0`). |
+| MCU-4 | partial → done | `bb-firmware/src/toolchain.rs`, `compile.rs`, `process.rs`; Firmware screen + `StagingLock` `bb/src/screens/firmware/build.rs:105` | `toolchain.rs` tests, `gui.rs::verify_blink_*`, `build::tests::concurrent_builds_of_one_sketch_compile_their_own_sources` (new), `session.rs` (Verify + Upload of a typed sketch); closeout-a: `cli_timeouts.rs` (fake arduino-cli hanging on version / core list / lib / compile, cancel, private settings on every call), `process::tests`, `toolchain_first_run.rs::a_stuck_arduino_cli_shows_a_message_instead_of_detecting_forever` | **Fixed**: all builds of a sketch shared one staging folder, so a concurrent debug build or a second app instance compiled the wrong sources (the flaky Verify GUI test, `95f43c0`). **Fixed (closeout-a)**: detection could hang forever — arduino-cli's default sketchbook `~/Documents/Arduino` raised a macOS privacy prompt for the Finder-launched app and `core list` blocked in `open()`; now a private config (sketchbook in the toolchain folder) + time limits on every subprocess + an "arduino-cli: no answer" state with Retry. |
 | MCU-5 | partial → done | debugger backend `bb-firmware/src/debugger.rs`; Debug tab Memory (SRAM / Flash / EEPROM hex, pointers, changed bytes, Go to) + I/O registers `bb/src/screens/firmware/debug_panel.rs` | `gui.rs` breakpoint/step, e2e `firmware`, `debug_memory.rs` (new, helper) | **Closed**: hex views and the I/O register view were missing in the UI (`ca6e46d`). |
 | MCU-6 | partial → done | `bb-firmware/hostcore/`, `host/` | `host.rs`, `esp32.rs`, `host_boards::esp32_ledc_analog_write_and_micros` (new), `host_bridges` (Serial2 ↔ HC-05, Wire, SPI) | `WiFiServer` untested; Serial2 looped back to the same board's RX2 does not echo (open, see PROGRESS). |
 | MCU-7 | done | per-MCU firmware, serial tabs, debugger targets | `workbench.rs` per-MCU tabs, bb-avr multi-MCU | |
@@ -132,7 +137,7 @@ Paths are relative to the repo root; `bb/` = `crates/breadbox/`. GUI tests live 
 | WORLD-3 | done | air config, heat sources | `heat_sources_warm_nearby_sensors`, `resistors_heat_up_*`, `thermistor_follows_the_air_temperature` (new) | Tempco shift from self-heating and humidity diurnal swing not asserted. |
 | WORLD-4 | partial → done | objects in `bb-world`; on the bench `bb/src/canvas/world_objects.rs:70` (hand / person / wall / magnet, drag, fit); World panel Objects | `tests::objects_*` (+ `objects_can_be_added_moved_and_removed_at_run_time`, new), `world_objects::tests`, `bench::tests::dropping_the_hand_tile_adds_a_world_object`, `audit.rs::hand_object_scripts_and_timelines_drive_the_world` (sonar sketch: 26 → 16 cm) | **Fixed + closed**: no object could be placed or dragged in the app; the palette's Hand tile dropped an inert picture the sensors never saw (`8024f00`). |
 | WORLD-5 | partial → done | timelines + scripts in `bb-world`; World panel "Program the world" `bb/src/screens/workbench/world_program.rs:260` (scripts with validation, keyframe timelines with interpolation / repeat / preview) | `tests::scripts_and_timelines_drive_variables`, `scripts_are_checked_without_a_world` (new), `audit.rs::hand_object_scripts_and_timelines_drive_the_world` | **Closed**: engine-only before. |
-| WORLD-6 | partial → partial | global toggle (noise) + per-sensor noise params | e2e `replay_is_deterministic_*` | The toggle switches sensor noise; the AVR ADC always returns 10-bit integers, so "quantization off" has no faithful meaning for real firmware. Not changed — needs a product decision (e.g. continuous probe readings). |
+| WORLD-6 | partial → partial → **done** (closeout-a) | Lead's decision: on = realistic (sensor noise + AVR ADC with per-chip offset / gain error, INL / DNL ≈ ±0.5 LSB, ±1 LSB noise, seeded — `bb_avr::AdcModel::Realistic`, `AdcChip`), off = ideal (noise-free sensors, exact `floor(V/Vref·1024)`); `bb_sim::bench::adc_model_for` + `sync_adc_models` (live); World panel text + Inspector "ADC" / "Noise" rows | `bb-avr/tests/adc.rs` (ideal ramp exact, realistic bounded + seeded, steady input ±1 code, INL / DNL of 24 chips, live switch), `bb-sim/tests/garden_node.rs::soil_raw_jitters_only_with_realistic_measurement`, `audit.rs::world_noise_switch_picks_realistic_or_ideal_measurement`, `inspector::tests::measurement_rows_follow_the_world_switch` | Ideal still follows the circuit: on the full garden node the PWM night LED sags AVcc (the ADC reference) by a few mV, so `soil_raw` may toggle between two neighbouring codes — identically for every seed. Firmware always reads integer codes; probes show continuous volts. |
 
 ## 9. Pro
 

@@ -16,7 +16,8 @@ the five screens). Architecture: `docs/ARCHITECTURE.md`. Visual tokens: `docs/DE
 ## 0. Platform
 
 - `PLAT-1` Written in Rust (stable). Native macOS app (Apple Silicon first, macOS 14+). Code stays
-  portable: OS-specific code only behind `breadbox::platform`.
+  portable: OS-specific code lives only in `platform` modules (`breadbox::platform`,
+  `bb_firmware::platform`, `bb_core::paths`).
 - `PLAT-2` GUI: `eframe`/`egui` (wgpu backend). Bundled fonts: Inter (UI), JetBrains Mono
   (numbers, code, console), Space Grotesk (brand + large headings). All OFL; license files shipped.
 - `PLAT-3` Ships as `Breadbox.app` via `scripts/bundle-macos.sh` (Info.plist, icon, fonts,
@@ -186,7 +187,10 @@ Each part = pins + electrical model + breadboard art + schematic symbol + inspec
   ArduinoJson 7). Output panel reproduces arduino-cli's size report ("Sketch uses 9,842 bytes
   (30%) of program storage space…"). Compiler errors map to editor diagnostics (file, line, col).
   Build cache for fast re-verify. If no toolchain is present the app offers a one-click install
-  with progress.
+  with progress. arduino-cli always runs with Breadbox's own settings (sketchbook / libraries in
+  the toolchain folder, never `~/Documents/Arduino`), and every toolchain call has a time limit
+  (compiles also a Cancel): a stuck arduino-cli ends in a message with Retry, never in an endless
+  "detecting…".
 - `MCU-5` **Debugger**: breakpoints by source line (DWARF line table from the ELF), conditional
   hit counts ("breakpoint armed on U1 (hits: 24)"), pause / continue / step over / step into /
   step out (by source line), current line highlight in the editor, call stack (frame-pointer +
@@ -270,7 +274,15 @@ Each part = pins + electrical model + breadboard art + schematic symbol + inspec
 - `WORLD-5` Programmable world: per-variable keyframe timeline and expression scripts
   (`moisture = 45 - 0.8*t_hours` style) and world-model plugins; world time-warp independent of
   circuit speed.
-- `WORLD-6` Sensor noise + ADC quantization toggle (global) and per-sensor noise parameters.
+- `WORLD-6` Sensor noise + ADC quantization toggle (global) and per-sensor noise parameters. The
+  toggle switches between *realistic* and *ideal* measurement. **On** (default): sensor noise
+  (per-sensor parameters) plus a realistic AVR ADC transfer function — datasheet-style offset
+  and gain error (up to ±2 LSB each, per chip), integral / differential non-linearity of about
+  ±0.5 LSB, and ±1 LSB conversion noise, all seeded and deterministic. **Off**: noise-free
+  sensors and an ideal ADC, exactly `floor(V / Vref · 1024)` clamped to 0…1023 (Vref = the
+  actual AVcc / AREF at the sample instant). Firmware always receives integer codes; probes and
+  meters keep showing continuous voltages. The World panel and the Inspector (board "ADC",
+  sensor "Noise") show which one is active.
 
 ## 9. Pro mode (design screen 3)
 

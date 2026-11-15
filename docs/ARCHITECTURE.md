@@ -70,6 +70,11 @@ everything ← breadbox (app)
   sim runs replay bit-identically.
 - **Serialisation**: `serde` + JSON for project files and plugin manifests (pretty-printed,
   stable key order), TOML for lessons, RON allowed for built-in part definitions.
+- **Portability** (`PLAT-1`): OS-specific code (`target_os`, Homebrew paths, privacy-protected
+  folders, process groups, file permissions, AppKit) lives only in the `platform` modules:
+  `breadbox::platform` (menus, documents, dialogs), `bb_firmware::platform` (toolchain paths,
+  arduino-cli asset, process groups) and `bb_core::paths` (resources, user data).
+  `bb-firmware/tests/platform.rs` greps the workspace and fails on `target_os` anywhere else.
 
 ## 3. Device contract (`bb-core`)
 
@@ -283,7 +288,11 @@ is a snapshot). Time is counted in oscillator cycles (`cycle()`); `time()` conve
 `SimTime` exactly at 16 MHz.
 
 - Construction / firmware: `Avr::new(AvrConfig::new(Mcu::Atmega328p))` (`f_cpu`, `stop_on`,
-  `bootloader` hand-off emulation, `vcc` + `bod_level`, start-up delays, `adc_noise_lsb` +
+  `bootloader` hand-off emulation, `vcc` + `bod_level`, start-up delays, `adc_model`
+  (`AdcModel::Ideal` = exactly `floor(V/Vref·1024)` clamped; `AdcModel::Realistic(AdcErrors)` =
+  per-chip offset / gain error + INL / DNL from the seed (`AdcChip`) and clipped Gaussian
+  conversion noise from the seeded RNG; `AdcErrors::DATASHEET`; live via `set_adc_model`,
+  `WORLD-6`), extra Gaussian `adc_noise_lsb` +
   `seed`, `shadow_stack`), `Avr::with_mcu(mcu)`. `flash(&FirmwareImage)`, `load_hex(&str)`,
   `load_elf(&[u8])` program flash (+ `.eeprom`) and reset; EEPROM contents are kept.
   `reset(ResetCause)`, `set_reset_pin(low)`, `set_vcc(v)` (brown-out / power-on reset),
@@ -329,8 +338,24 @@ is a snapshot). Time is counted in oscillator cycles (`cycle()`); `time()` conve
 **Toolchain + debugging (`bb-firmware`).**
 
 - `Toolchain::detect()` (env `BREADBOX_ARDUINO_CLI` — when set, `PATH` and Homebrew are not
-  searched, so a missing path simulates a first run — `PATH`, Homebrew, app-support dir) →
-  `{ arduino_cli, cli_version, source, avr_core_version, avr_gcc_version, overrides }`;
+  searched, so a missing path simulates a first run — `PATH`, the package-manager folders of
+  `bb_firmware::platform`, app-support dir; duplicates skipped; a candidate that fails or times
+  out does not stop the search, and the first failure is returned when none works) →
+  `{ arduino_cli, cli_version, source, config_file, data_dir, user_dir, downloads_dir,
+  avr_core_version, avr_gcc_version, overrides, timeouts }`. **Private settings**: every call
+  (`Toolchain::command`) passes Breadbox's `--config-file` (`toolchain/arduino-cli.yaml` for its
+  own install, `toolchain/arduino-cli-system.yaml` for one from PATH / Homebrew) and the same
+  directories as `ARDUINO_DIRECTORIES_*` (they beat inherited ones; `ARDUINO_CONFIG_FILE` is
+  removed): sketchbook = `toolchain/sketchbook` (libraries), downloads = `toolchain/staging`,
+  updater off; data = `toolchain/data`, except that an external arduino-cli reuses the user's
+  Arduino data folder (`user_arduino_data_dirs`: `$ARDUINO_DIRECTORIES_DATA`, their config's
+  `directories.data`, `~/Library/Arduino15`) when it holds arduino:avr and is not
+  privacy-protected. Never `~/Documents/Arduino`: a Finder-launched app's subprocess touching it
+  blocks on the macOS privacy prompt (this hung detection). **Time budgets**: every subprocess
+  runs through `bb_firmware::process::run(cmd, limit, cancel, on_line)` (own process group,
+  killed with its children on timeout / cancel → `FirmwareError::Timeout { what, limit }` /
+  `Cancelled`); `Timeouts { query 20 s ($BREADBOX_CLI_TIMEOUT_MS), search 90 s, install 10 min,
+  long_install 30 min, probe 10 s }`, downloads have connect / response / body limits.
   `ready()`, `compiler_label()` ("avr-gcc 7.3.0"). `Toolchain::install(dir, progress)` =
   `install_cli` (download + extract + private `arduino-cli.yaml`; `$BREADBOX_ARDUINO_CLI_URL`
   overrides the archive URL, `file://` works) + `install_core` (+ native avr-gcc / ctags on
@@ -346,7 +371,8 @@ is a snapshot). Time is counted in oscillator cycles (`cycle()`); `time()` conve
   `FirmwareError::NativeTools` explaining the Rosetta / Homebrew options. With Rosetta nothing
   changes.
 - `Toolchain::compile(sketch_dir, &CompileOptions { fqbn, debug, build_dir, warnings,
-  properties }) -> BuildOutput { success, elf, hex, size: Option<SizeReport>, diagnostics,
+  properties, timeout (5 min), cancel: Option<CancelToken> }) -> BuildOutput { success, elf, hex,
+  size: Option<SizeReport>, diagnostics,
   log, build_dir, duration, banner }`. Per-sketch cache dir under
   `~/Library/Caches/Breadbox/builds` (fast re-verify). `debug: true` builds `-Og -fno-lto` for
   source-level debugging. `Diagnostic { file, tab, line, column, severity, message, excerpt,
@@ -728,11 +754,14 @@ router.rs            Route, ProTab, ScreenSlot, Screen trait, ScreenRegistry, Co
 platform.rs          resources() / app_support() / caches() (over bb_core::paths), MENUS (the
                      menu table) + NativeMenu (muda), open-documents Apple Event (`odoc`) +
                      command-line paths → queue_open/take_opened, file dialogs (rfd;
-                     `BREADBOX_TEST_PICK` answers them in tests)
+                     `pick_project`: an NSOpenPanel taking folders, `.breadbox` packages and
+                     files; `BREADBOX_TEST_PICK` answers them in tests)
 theme.rs             Palette DARK/LIGHT (DESIGN.md tokens), font helpers, style_for(), paper/dots grids
 project.rs           Project (project.json as plain JSON: name, mode, MCUs + sketch dirs, radios),
                      examples scan, Resources (examples/fixtures location), recents
-toolchain.rs         ToolchainService: background detect, one-click install job, library list
+toolchain.rs         ToolchainService: background detect ("detecting toolchain… N s"; a timeout →
+                     ToolchainState::Unresponsive with Retry / Install), one-click install job,
+                     library list
 jobs.rs              Job<T> (thread + progress + cancel + repaint on change)
 bench/mod.rs         BenchLink trait + view models (the UI ↔ simulator contract, below)
 bench/sim.rs         SimBench: the default BenchLink over bb_sim::SimHandle (+ Workbench API)
@@ -812,7 +841,9 @@ the selected parts on those events). About uses the standard macOS About panel.
 `$BREADBOX_RESOURCES`, else `Breadbox.app/Contents/Resources` when the executable sits in an app
 bundle (never the checkout), else the repository (development builds; compiled out when built
 with `BREADBOX_BUNDLE=1`). User data: `app_support()` = `~/Library/Application Support/Breadbox`
-(`$BREADBOX_APP_SUPPORT`: plugins, `lessons/progress.json`, `toolchain/`, `app-state.ron`),
+(`$BREADBOX_APP_SUPPORT`: plugins, `lessons/progress.json`, `toolchain/` — Breadbox's own
+arduino-cli + `data/`, the private `sketchbook/` (libraries) and `staging/`, the arduino-cli
+configs, `native/` avr-gcc + ctags — and `app-state.ron`),
 `caches()` = `~/Library/Caches/Breadbox` (`$BREADBOX_CACHES`: `builds/`, `staging/`).
 `bb_lessons::{examples_dir, lessons_dir}`, `Registry::default_bundled_dir/default_user_dir`,
 `Toolchain::app_dir`, `build_cache_root`, `Progress::default_path` and the app's `Resources`
@@ -840,6 +871,15 @@ changed set into the running bench (`World::set_objects` / `set_scripts` / `set_
 `Command::With`), so panel edits, canvas drags and undo / redo all reach the sensors. The
 palette's Hand tile adds a world hand object instead of a part. Scheduled watering is
 `PotConfig::schedule` (live keys `<pot>.water_every_h`, `<pot>.water_ml`).
+
+**Measurement** (`WORLD-6`): `WorldConfig::noise` ("Sensor noise & ADC quantization") picks
+realistic or ideal measurement. Sensors read their noise through `WorldView::noise_enabled`;
+`bb_sim::bench::adc_model_for(noise)` gives every AVR `AdcModel::realistic()` or
+`AdcModel::Ideal` when it is built, on `set_world("world.noise", …)` and on every world step
+(`Bench::sync_adc_models`), so scripts, timelines and undo reach the ADC too. Probes and meters
+always show the continuous voltage; firmware reads codes. The World panel words it with
+`panels::measurement_text`, the Inspector with `inspector::measurement_row` ("ADC" on AVR
+boards, "Noise" on sensors).
 
 **Persistence** (`APP-5`): eframe storage key `breadbox-app` → `PersistedState { route, theme,
 recent, last_project, screens: {slot key → JSON} }`; window geometry by eframe; the file is
@@ -1130,8 +1170,10 @@ garden-node.breadbox/
   files rebuild byte-identically — builds remap `$HOME`/the plugins folder so modules carry no
   machine paths), and the release perf gates (TEST-6: `cargo test --release --workspace --test
   perf -- --ignored` for MCU-3 / SIM-4 / SPICE-5, the Workbench frame-time test, and
-  `breadbox --smoke`). `--quick` skips the perf gates; `SKIP=perf,plugins` skips steps; logs land
-  in `$CARGO_TARGET_DIR/test-all-logs/`.
+  `breadbox --smoke`), and on macOS the `bundle` stage (`scripts/bundle-macos.sh --check`:
+  `dist/Breadbox.app` + `scripts/check-bundle.sh`, ~3–6 min). `--quick` skips the perf gates
+  and the bundle; `SKIP=perf,plugins,bundle` skips steps; logs land in
+  `$CARGO_TARGET_DIR/test-all-logs/`.
 - **Smoke mode** (`breadbox --smoke <project | example> [--seconds N] [--speed max|<x>]
   [--headless] [--warmup S]`, `crates/breadbox/src/smoke.rs`): the real app opens the project on
   the Workbench and runs its bench with the GUI drawing at 60 Hz (window, or egui frames without
@@ -1156,8 +1198,12 @@ garden-node.breadbox/
 - `scripts/bundle-macos.sh [--dmg] [--check]` → `dist/Breadbox.app` (+ `dist/Breadbox.dmg`):
   release build with `BREADBOX_BUNDLE=1` and remapped paths in its own target dir
   (`target/bundle-macos`), `Info.plist` (`app.breadbox.Breadbox`, version from the workspace,
-  macOS 14+, high-DPI, dark-mode friendly, document types `.breadbox` folders /
-  `.breadbox.zip` / folders), `Breadbox.icns` from `assets/icon/breadbox-icon.svg` (the
+  `CFBundleVersion` = build number `git rev-list --count HEAD` so a newer build's declarations
+  win in LaunchServices,
+  macOS 14+, high-DPI, dark-mode friendly; document types: `.breadbox` project folders are a
+  **document package** — exported UTI `app.breadbox.project` conforming to `com.apple.package`,
+  Breadbox owner + editor with `LSTypeIsPackage`, so Finder shows one document and a
+  double-click opens it — `.breadbox.zip` bundles (import) and any folder as Alternate), `Breadbox.icns` from `assets/icon/breadbox-icon.svg` (the
   `app_icon` example + `iconutil`), `Contents/Resources` = `examples/`, `lessons/`, `plugins/`
   (+ `crates/bb-plugin-sdk` so the plugin sources build), `docs/` (README, PLUGIN-SDK,
   LESSON-FORMAT, schema), `fonts/` + OFL, `hostcore/` (reference copy; the app compiles the
@@ -1165,5 +1211,7 @@ garden-node.breadbox/
 - `scripts/check-bundle.sh [app] [--no-window]`: signature / plist / resources / no `$HOME`
   path in the binary or bundled files, then smoke runs of the copied app under `sandbox-exec`
   with the checkout denied (garden-node, a lesson bench, the DMM plugin placed on a bench, an
-  ESP32 host build, a real window), the real app via `open` (first frame < 2 s) and a project
-  folder handed over with `open -a`.
+  ESP32 host build, a real window), the real app via `open` (first frame < 2 s), a project
+  folder handed over with `open -a`, and — with the copy registered in LaunchServices — a
+  `.breadbox` folder is a package (`NSWorkspace.isFilePackageAtPath`) whose default app is
+  Breadbox and which a plain `open` (a double-click) opens.

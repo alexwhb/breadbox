@@ -15,7 +15,9 @@
 #      garden-node in a real window                  wgpu, first frame
 #    Any output line mentioning the checkout fails the check.
 # 3. The real app: `open` on the copied bundle (scratch user data), time to first frame
-#    (< 2 s, PLAT-4), then quit it.
+#    (< 2 s, PLAT-4), then quit it; a project folder handed over with `open -a`; and, with
+#    the copy registered in LaunchServices, a `.breadbox` folder is a package (one document
+#    in Finder) whose default app is Breadbox and which `open` (a double-click) opens.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 repo="$(pwd -P)"
@@ -53,6 +55,23 @@ for kv in "CFBundleIdentifier=app.breadbox.Breadbox" "CFBundleExecutable=breadbo
   got=$(plutil -extract "$k" raw "$plist" 2>/dev/null || echo missing)
   if [ "$got" = "$v" ]; then ok "$k = $v"; else bad "$k = $got (want $v)"; fi
 done
+build=$(plutil -extract CFBundleVersion raw "$plist" 2>/dev/null || echo missing)
+if [[ "$build" =~ ^[0-9]+$ ]]; then ok "CFBundleVersion = $build (build number)"; else bad "CFBundleVersion = $build (want a build number)"; fi
+# .breadbox project folders are a document package owned by Breadbox; .breadbox.zip imports
+conforms=$(plutil -extract UTExportedTypeDeclarations.0.UTTypeConformsTo json -o - "$plist" 2>/dev/null || echo "")
+uti=$(plutil -extract UTExportedTypeDeclarations.0.UTTypeIdentifier raw "$plist" 2>/dev/null || echo "")
+ext=$(plutil -extract UTExportedTypeDeclarations.0.UTTypeTagSpecification json -o - "$plist" 2>/dev/null || echo "")
+pkg=$(plutil -extract CFBundleDocumentTypes.0.LSTypeIsPackage raw "$plist" 2>/dev/null || echo "")
+role=$(plutil -extract CFBundleDocumentTypes.0.CFBundleTypeRole raw "$plist" 2>/dev/null || echo "")
+rank=$(plutil -extract CFBundleDocumentTypes.0.LSHandlerRank raw "$plist" 2>/dev/null || echo "")
+if [ "$uti" = app.breadbox.project ] && [[ "$ext" == *'["breadbox"]'* ]] && [[ "$conforms" == *'"com.apple.package"'* ]] \
+   && [ "$pkg" = true ] && [ "$role" = Editor ] && [ "$rank" = Owner ]; then
+  ok ".breadbox = document package (app.breadbox.project → com.apple.package), Breadbox owner + editor"
+else
+  bad ".breadbox package declaration: uti=$uti ext=$ext conforms=$conforms package=$pkg role=$role rank=$rank"
+fi
+zipext=$(plutil -extract UTExportedTypeDeclarations.1.UTTypeTagSpecification json -o - "$plist" 2>/dev/null || echo "")
+if [[ "$zipext" == *'["breadbox.zip"]'* ]]; then ok ".breadbox.zip bundles still open (import)"; else bad ".breadbox.zip declaration: $zipext"; fi
 for f in Breadbox.icns examples/garden-node/project.json examples/esp32-weather/project.json \
          examples/fixtures/garden-node.uno.hex lessons/1-electricity/track.toml \
          lessons/1-electricity/03-ohms-law-led.toml lessons/1-electricity/firmware/blink.uno.hex \
@@ -202,6 +221,37 @@ if [ $window -eq 1 ]; then
     bad "the app did not open the project it was handed (log: $(tail -3 "$log2" | tr '\n' ' '))"
   fi
   quit_app "$(pgrep -f "$copy/Contents/MacOS/breadbox" | head -1 || true)"
+
+  # Finder: the copy registered with LaunchServices makes a .breadbox folder one document
+  # (a package) that opens in Breadbox on a double-click (`open <package>`, no -a)
+  lsregister=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+  "$lsregister" -f "$copy" >/dev/null 2>&1 || true
+  is_pkg=""
+  for _ in $(seq 1 50); do
+    is_pkg=$(osascript -l JavaScript -e 'ObjC.import("AppKit"); function run(argv) { return $.NSWorkspace.sharedWorkspace.isFilePackageAtPath(argv[0]) }' "$project" 2>/dev/null || true)
+    [ "$is_pkg" = true ] && break
+    sleep 0.1
+  done
+  if [ "$is_pkg" = true ]; then ok "Finder treats My Garden.breadbox as a package (one document)"; else bad "a .breadbox folder is not a package for Finder (isFilePackageAtPath=$is_pkg)"; fi
+  handler=$(osascript -l JavaScript -e 'ObjC.import("AppKit"); function run(argv) { var u = $.NSWorkspace.sharedWorkspace.URLForApplicationToOpenURL($.NSURL.fileURLWithPath(argv[0])); return (u && !u.isNil()) ? ObjC.unwrap($.NSBundle.bundleWithURL(u).bundleIdentifier) : "" }' "$project" 2>/dev/null || true)
+  if [ "$handler" = app.breadbox.Breadbox ]; then ok "its default app is Breadbox"; else bad "the default app for a .breadbox package is '${handler:-none}'"; fi
+  log3="$scratch/open-package.log"
+  : > "$log3"
+  open -n --env BREADBOX_APP_SUPPORT="$scratch/support" --env BREADBOX_CACHES="$scratch/caches" \
+    --env RUST_LOG=info --stdout "$log3" --stderr "$log3" "$project"
+  opened=""
+  for _ in $(seq 1 150); do
+    opened=$(grep -F "opened project" "$log3" | grep -F "$project" | head -1 || true)
+    [ -n "$opened" ] && break
+    sleep 0.1
+  done
+  if [ -n "$opened" ]; then
+    ok "double-click (open My Garden.breadbox) opens the project in Breadbox"
+  else
+    bad "open <package> did not open it in Breadbox (log: $(tail -3 "$log3" | tr '\n' ' '))"
+  fi
+  quit_app "$(pgrep -nf 'Breadbox.app/Contents/MacOS/breadbox' || true)"
+  "$lsregister" -u "$copy" >/dev/null 2>&1 || true
 fi
 
 echo

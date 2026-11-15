@@ -12,14 +12,18 @@
 #   perf       release perf gates (TEST-6): MCU-3 ≥ 3× real time, SIM-4 garden-node ≥ 1×
 #              (engine, and in the app with the GUI drawing), SPICE-5 1 000-node .op < 50 ms,
 #              Workbench frame time, PLAT-4 start-up (first frame) < 2 s
+#   bundle     macOS only: scripts/bundle-macos.sh --check — builds dist/Breadbox.app (PLAT-3)
+#              and runs scripts/check-bundle.sh: signature, Info.plist (incl. the .breadbox
+#              document package), resources, no machine paths, sandboxed smoke runs with the
+#              checkout denied, start-up via `open`, documents handed over by Finder
 #
 # Graceful without optional tools: ngspice (golden regeneration / .cir checks), arduino-cli
 # (fresh compiles; prebuilt fixtures are used), a C++ compiler (ESP32 / Pico host boards), a
 # display (the smoke run falls back to drawing without a window; BREADBOX_HEADLESS=1 forces it).
 #
 #   scripts/test-all.sh              everything
-#   scripts/test-all.sh --quick      skip the release perf gates
-#   SKIP=perf,plugins scripts/test-all.sh
+#   scripts/test-all.sh --quick      skip the release perf gates and the bundle
+#   SKIP=perf,plugins,bundle scripts/test-all.sh
 set -uo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
@@ -29,7 +33,7 @@ case "$CARGO_TARGET_DIR" in /*) ;; *) CARGO_TARGET_DIR="$ROOT/$CARGO_TARGET_DIR"
 LOGS="$CARGO_TARGET_DIR/test-all-logs"
 mkdir -p "$LOGS"
 SKIP="${SKIP:-}"
-[ "${1:-}" = "--quick" ] && SKIP="$SKIP,perf"
+[ "${1:-}" = "--quick" ] && SKIP="$SKIP,perf,bundle"
 
 if [ -t 1 ]; then G=$'\e[32m'; R=$'\e[31m'; Y=$'\e[33m'; B=$'\e[1m'; N=$'\e[0m'; else G= R= Y= B= N=; fi
 
@@ -75,7 +79,7 @@ echo "${B}Breadbox test-all${N}  ($(date '+%Y-%m-%d %H:%M'), target dir $CARGO_T
 echo "  rustc        $(rustc --version 2>/dev/null)"
 NGSPICE="$(command -v ngspice || true)"
 echo "  ngspice      ${NGSPICE:-absent (golden data is checked in; .cir checks run bb-spice only)}"
-CLI="$(command -v arduino-cli || ls "$HOME/Library/Application Support/Breadbox/toolchain/arduino-cli" 2>/dev/null || true)"
+CLI="$(command -v arduino-cli || ls "$HOME/Library/Application Support/Breadbox/toolchain/bin/arduino-cli" 2>/dev/null || true)"
 echo "  arduino-cli  ${CLI:-absent (prebuilt firmware fixtures are used)}"
 CXX="${BREADBOX_CXX:-$(command -v clang++ || command -v c++ || true)}"
 echo "  C++          ${CXX:-absent (ESP32 / Pico host-board tests skip)}"
@@ -153,6 +157,15 @@ if skipped perf; then skip_step "perf (release)" "SKIP / --quick"; else
       "$BIN" --smoke esp32-weather --seconds 5 --speed max
     grep '^SMOKE' "$LOGS/smoke-esp32.log" | tail -1 | sed 's/^/   /'
   fi
+fi
+
+# ------------------------------------------------------------------ bundle (macOS app)
+if skipped bundle; then skip_step "bundle" "SKIP / --quick"
+elif [ "$(uname)" != Darwin ]; then skip_step "bundle" "not macOS"
+else
+  run_step "bundle: dist/Breadbox.app + check-bundle (sandboxed smoke runs, Finder package)" bundle \
+    scripts/bundle-macos.sh --check
+  grep -E '^  (ok|FAIL) ' "$LOGS/bundle.log" | grep -E 'FAIL|first frame|package|double-click' | sed 's/^/  /'
 fi
 
 # ------------------------------------------------------------------ summary

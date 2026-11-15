@@ -857,7 +857,9 @@ impl BreadboxApp {
                 }
             }
             Command::OpenProject => {
-                if let Some(dir) = platform::pick_folder("Open a Breadbox project") {
+                if let Some(dir) = platform::pick_project(
+                    "Open a Breadbox project: a project (.breadbox), a shared .breadbox.zip or a SPICE netlist",
+                ) {
                     self.open_path(&dir);
                 }
             }

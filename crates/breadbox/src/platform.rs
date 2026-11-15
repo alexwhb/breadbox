@@ -163,6 +163,57 @@ pub fn pick_folder(title: &str) -> Option<PathBuf> {
     rfd::FileDialog::new().set_title(title).pick_folder()
 }
 
+/// Open project: a project folder, a `.breadbox` project (a package — Finder shows it as one
+/// document, so a plain folder picker cannot select it), a `.breadbox.zip` bundle or a SPICE
+/// netlist. `open_path` sorts out which.
+pub fn pick_project(title: &str) -> Option<PathBuf> {
+    if let Some(p) = test_pick() {
+        return Some(p);
+    }
+    #[cfg(target_os = "macos")]
+    {
+        open_panel::pick(title)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        rfd::FileDialog::new().set_title(title).pick_folder()
+    }
+}
+
+/// An `NSOpenPanel` that accepts folders, packages and files alike (rfd offers either a
+/// folder picker or a file picker).
+#[cfg(target_os = "macos")]
+mod open_panel {
+    use objc2::rc::Retained;
+    use objc2::runtime::AnyObject;
+    use objc2::{class, msg_send};
+    use objc2_foundation::{NSString, NSURL};
+    use std::path::PathBuf;
+
+    pub fn pick(title: &str) -> Option<PathBuf> {
+        let message = NSString::from_str(title);
+        let prompt = NSString::from_str("Open");
+        // SAFETY: AppKit is loaded (winit); NSOpenPanel's documented selectors, called on the
+        // main thread (the app's command handler), like rfd's own modal dialogs
+        unsafe {
+            let panel: Option<Retained<AnyObject>> = msg_send![class!(NSOpenPanel), openPanel];
+            let panel = panel?;
+            let _: () = msg_send![&*panel, setCanChooseFiles: true];
+            let _: () = msg_send![&*panel, setCanChooseDirectories: true];
+            let _: () = msg_send![&*panel, setAllowsMultipleSelection: false];
+            let _: () = msg_send![&*panel, setResolvesAliases: true];
+            let _: () = msg_send![&*panel, setMessage: &*message];
+            let _: () = msg_send![&*panel, setPrompt: &*prompt];
+            let response: isize = msg_send![&*panel, runModal];
+            if response != 1 {
+                return None; // NSModalResponseCancel
+            }
+            let url: Option<Retained<NSURL>> = msg_send![&*panel, URL];
+            url?.to_file_path()
+        }
+    }
+}
+
 /// "Save as" for a project folder: returns the destination folder path.
 pub fn save_folder(title: &str, suggested: &str) -> Option<PathBuf> {
     if let Some(p) = test_pick() {

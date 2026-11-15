@@ -23,6 +23,10 @@
 #                        embedded copy; this is the readable reference)
 #   licenses/            third-party notices (Rust crates, fonts)
 #   build-info.json      version, commit, build date
+#
+# Info.plist declares `.breadbox` project folders as a document package (UTI
+# app.breadbox.project, conforming to com.apple.package; Breadbox is its owner and editor), so
+# Finder shows one document and a double-click opens it here; `.breadbox.zip` bundles import.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 repo="$PWD"
@@ -48,6 +52,9 @@ app="$dist/Breadbox.app"
 version=$(cargo metadata --no-deps --format-version 1 \
   | python3 -c 'import json,sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"]=="breadbox"))')
 commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
+# CFBundleVersion = build number (commits on this branch): newer builds compare higher, so
+# LaunchServices takes their document-type declarations over an older copy's
+build=$(git rev-list --count HEAD 2>/dev/null || echo 1)
 git diff --quiet HEAD 2>/dev/null || commit="$commit-dirty"
 bundle_id="app.breadbox.Breadbox"
 
@@ -119,7 +126,7 @@ for r in rows:
 ' > "$res/licenses/THIRD-PARTY.md"
 
 cat > "$res/build-info.json" <<JSON
-{ "version": "$version", "commit": "$commit", "built": "$(date -u +%Y-%m-%dT%H:%M:%SZ)" }
+{ "version": "$version", "build": "$build", "commit": "$commit", "built": "$(date -u +%Y-%m-%dT%H:%M:%SZ)" }
 JSON
 
 cat > "$contents/Info.plist" <<PLIST
@@ -136,7 +143,7 @@ cat > "$contents/Info.plist" <<PLIST
   <key>CFBundleSignature</key><string>????</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
   <key>CFBundleShortVersionString</key><string>$version</string>
-  <key>CFBundleVersion</key><string>$version</string>
+  <key>CFBundleVersion</key><string>$build</string>
   <key>CFBundleDevelopmentRegion</key><string>en</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>LSArchitecturePriority</key><array><string>arm64</string></array>
@@ -148,9 +155,11 @@ cat > "$contents/Info.plist" <<PLIST
   <key>UTExportedTypeDeclarations</key>
   <array>
     <dict>
+      <!-- a .breadbox project folder is a document package: Finder shows one document and a
+           double-click opens it in Breadbox -->
       <key>UTTypeIdentifier</key><string>app.breadbox.project</string>
       <key>UTTypeDescription</key><string>Breadbox Project</string>
-      <key>UTTypeConformsTo</key><array><string>public.folder</string></array>
+      <key>UTTypeConformsTo</key><array><string>com.apple.package</string><string>public.composite-content</string></array>
       <key>UTTypeIconFile</key><string>Breadbox</string>
       <key>UTTypeTagSpecification</key>
       <dict><key>public.filename-extension</key><array><string>breadbox</string></array></dict>
@@ -170,6 +179,7 @@ cat > "$contents/Info.plist" <<PLIST
       <key>CFBundleTypeName</key><string>Breadbox Project</string>
       <key>CFBundleTypeRole</key><string>Editor</string>
       <key>LSHandlerRank</key><string>Owner</string>
+      <key>LSTypeIsPackage</key><true/>
       <key>LSItemContentTypes</key><array><string>app.breadbox.project</string></array>
     </dict>
     <dict>

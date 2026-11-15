@@ -24,11 +24,14 @@ reviews and integrates between phases. Agents update **only their own section** 
 - ~~(sim → plugins/radio glue) Replace the `esp01` / `hm10` / `hc05` factories …~~ **done** (plugins): `bb_sim::devices::RadioModule` bridges ESP-01 / HM-10 / HC-05 / RYLR896 pins to the real modems; `BenchOptions::default().services` holds `bb_sim::radio::service_factory()` (RadioService from `project.radios`); host boards get a radio on first use. See `### plugins`.
 - ~~(sim → plugins) Wasm parts plug in as `DeviceRegistry::register` + `Library::add_json` …~~ **done** (plugins): `bb_plugin::PluginHost` does exactly that; plugin instruments load the circuit through their part's SPICE template (ext-controlled elements, `inject:load`), `Bench::add_load` stays for non-part probe leads.
 
-- (audit → bundle) Toolchain detection runs `arduino-cli core list` with no timeout. An
+- ~~(audit → bundle) Toolchain detection runs `arduino-cli core list` with no timeout. An
   `arduino-cli` started from a `Breadbox.app` launch was found hung for 15+ min in `open()` (most
   likely a macOS privacy prompt for `~/Documents/Arduino`, which arduino-cli touches as its
   sketchbook), so detection never settles. The first-run toolchain flow should time out these
-  calls (and/or point arduino-cli's `directories.user` away from `~/Documents`).
+  calls (and/or point arduino-cli's `directories.user` away from `~/Documents`).~~ **done**
+  (closeout-a, `bbce247`): both — every arduino-cli call runs with Breadbox's private settings
+  (sketchbook in `toolchain/sketchbook`) and every subprocess has a time limit; a stuck
+  arduino-cli shows "arduino-cli: no answer" + Retry. See `### closeout-a`.
 
 ## Status
 
@@ -954,3 +957,79 @@ Open issues / notes:
 - The menu bar could not be inspected from outside here (no Accessibility permission for
   scripted UI); `tests/menu.rs` covers each item's behaviour through its command.
 - `Help` shows docs as text (images in the README are skipped).
+
+### closeout-a
+Close-out (2026-11-14): toolchain hang (`MCU-4`), `PLAT-1`, `WORLD-6`, bundle polish (`PLAT-3`).
+`docs/SPEC-AUDIT.md` rows updated: **100 / 0 / 0** done / partial / missing.
+
+- **Toolchain detection can never hang** (`bbce247`). Root cause: arduino-cli's default
+  sketchbook is `~/Documents/Arduino`; started from `Breadbox.app` (Finder), its `core list`
+  touched that folder, macOS raised a Documents privacy (TCC) prompt on the app's behalf and the
+  subprocess blocked in `open()` until someone answered — and detection had no timeout, so the
+  Firmware screen said "detecting…" forever. Fix at both ends:
+  - every arduino-cli call runs with Breadbox's private `--config-file` **and** the matching
+    `ARDUINO_DIRECTORIES_*` (they beat inherited env; `ARDUINO_CONFIG_FILE` removed):
+    sketchbook / libraries `toolchain/sketchbook`, downloads `toolchain/staging`, updater off.
+    Data folder: Breadbox's own install uses `toolchain/data`; an arduino-cli from PATH /
+    Homebrew **reuses the user's Arduino data folder** (`$ARDUINO_DIRECTORIES_DATA`, their
+    config's `directories.data`, `~/Library/Arduino15`) when it already holds arduino:avr and is
+    not privacy-protected — no 150 MB re-download, the native-override detection keeps working,
+    and `~/Library` raises no prompt; Breadbox never installs / removes cores there
+    (`install_core` leaves an installed core alone). Otherwise `toolchain/data`.
+  - `bb_firmware::process::run`: every subprocess (arduino-cli, avr-gcc / ctags probes, brew,
+    ctags build, host clang++) has a budget and a cancel switch, runs in its own process group
+    and is killed with its children → `FirmwareError::Timeout { what, limit }` / `Cancelled`.
+    `Timeouts`: query 20 s (`$BREADBOX_CLI_TIMEOUT_MS`), lib search 90 s, installs 10 / 30 min,
+    probes 10 s; `CompileOptions { timeout: 5 min, cancel }`; downloads get connect / response /
+    body limits. Detection dedupes candidates and keeps going after a stuck one.
+  - App: `ToolchainState::Unresponsive` ("arduino-cli: no answer" + why + **Retry** / Install
+    toolchain, on the Firmware screen and Home), "detecting toolchain… N s" after 3 s, the reason
+    line for Missing / Failed in the Firmware toolchain box, **Cancel** next to "compiling…".
+  - Tests: `bb-firmware/tests/cli_timeouts.rs` (fake arduino-cli that sleeps forever on
+    `version` / `core list` / `lib search|install` / `compile`; a stuck candidate falls back to
+    Breadbox's own install; every call carries the private config + env, never `Documents`;
+    the shared-data-folder rule; compile cancel), `process::tests` (`sh` + `sleep`
+    grandchildren killed, background grandchild does not hold the caller),
+    `toolchain_first_run.rs::a_stuck_arduino_cli_shows_a_message_instead_of_detecting_forever`
+    (GUI: counts, settles in 4.5 s, message, Retry with a fixed arduino-cli).
+  - **Machine note**: libraries previously installed into `~/Documents/Arduino/libraries`
+    are no longer seen (by design); on this Mac they were copied once into
+    `~/Library/Application Support/Breadbox/toolchain/sketchbook/libraries` (Servo,
+    LiquidCrystal, DHT, ArduinoJson, …) so the library-using tests and e2e compiles keep
+    working. `scripts/build-test-firmware.sh` / `lessons/build-firmware.sh` use the same
+    private sketchbook. Users install libraries with Manage libraries….
+- **`PLAT-1`** (`bbce247`): `bb_firmware::platform` holds the OS-specific parts (Homebrew
+  prefixes / `brew`, Arduino's default data folder, macOS privacy-protected folders, the
+  arduino-cli release asset + exe name, permissions, symlinks, process groups + kill).
+  SPEC wording updated ("OS-specific code lives only in `platform` modules (`breadbox::platform`,
+  `bb_firmware::platform`, `bb_core::paths`)"). `bb-firmware/tests/platform.rs` greps every
+  `.rs` under `crates/`, `tests/`, `plugins/` for `target_os` (and bb-firmware's sources for
+  `cfg(unix)`, `std::os::unix`, `consts::OS`, Homebrew paths) outside those three modules.
+- **`WORLD-6`** (`99132fc`), the lead's decision: "Sensor noise & ADC quantization" **on**
+  (default) = realistic — sensor noise as before + `bb_avr::AdcModel::Realistic`
+  (`AdcErrors::DATASHEET`: per-chip offset and gain error up to ±2 LSB, INL within ±0.5 LSB
+  against the end-point line (bow + per-code ripple), DNL ≈ ±0.25 LSB, monotonic, no missing
+  codes; conversion noise σ 0.4 clipped to ±1 LSB; chip errors from the seed alone, noise from
+  the seeded RNG); **off** = ideal — noise-free sensors, `floor(V/Vref·1024)` clamped. bb-sim
+  applies it per AVR at build, on `set_world("world.noise")` and every world step. World panel
+  explains the switch; Inspector rows "ADC" (AVR boards) and "Noise" (sensors). Firmware reads
+  codes; probes show volts. Tests in bb-avr (`adc.rs`: ideal ramp exact for any seed, realistic
+  bounded / seeded / per chip, steady input ±1 code, INL / DNL of 24 chips from a sweep, live
+  switch), bb-sim `garden_node.rs::soil_raw_jitters_only_with_realistic_measurement`, GUI
+  `audit.rs::world_noise_switch_picks_realistic_or_ideal_measurement`, `inspector::tests`.
+  Finding: on the full garden node, *ideal* `soil_raw` can still toggle 388 ↔ 389 — the PWM
+  night LED sags the 5 V rail, i.e. AVcc, the ADC's reference, by a few mV at some sample
+  instants. That is circuit physics (identical for every seed), not noise: with the LED removed
+  ideal reads a constant 388; realistic jitters either way. e2e `sim_control` reflash moisture
+  band ±1.5 → ±2.5 % (a realistic chip reads up to ~5 codes off).
+- **Bundle polish** (`PLAT-3`): `.breadbox` project folders are a **document package**
+  (exported UTI `app.breadbox.project` → `com.apple.package` + `public.composite-content`;
+  Breadbox owner + editor, `LSTypeIsPackage`), `.breadbox.zip` import kept. File → Open uses
+  `platform::pick_project` (an NSOpenPanel that takes folders, packages and files — rfd's folder
+  picker cannot select a package). `CFBundleVersion` = build number (`git rev-list --count`):
+  with several Breadbox.app copies registered (old worktree builds declared `.breadbox` a plain
+  folder), LaunchServices only honoured the new package declaration reliably once the newest
+  build compared higher. `scripts/check-bundle.sh` checks the plist declaration, then with the
+  copy registered: `isFilePackageAtPath` = true, default app = Breadbox, a plain `open <pkg>`
+  (double-click) opens the project. `scripts/test-all.sh` has a **`bundle`** stage
+  (`scripts/bundle-macos.sh --check`; `SKIP=bundle`, skipped by `--quick` and off macOS).
