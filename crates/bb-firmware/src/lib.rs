@@ -11,12 +11,16 @@
 //! * [`Board`] — UNO R3 / Nano / Mega 2560 pin mapping.
 //! * [`host`] — ESP32 DevKit / Raspberry Pi Pico API-level emulation (`MCU-6`): host-compiled
 //!   sketches running in lock-step with simulated time ([`host::HostBoard`]).
+//! * [`process`] — every subprocess runs with a time budget and a cancel switch.
+//! * [`platform`] — the only OS-specific module (`PLAT-1`).
 
 pub mod boards;
 pub mod compile;
 pub mod debugger;
 pub mod debuginfo;
 pub mod host;
+pub mod platform;
+pub mod process;
 pub mod toolchain;
 
 pub use boards::{Board, BoardPin, Header, Pwm};
@@ -30,9 +34,10 @@ pub use debugger::{
 pub use debuginfo::{
     DebugInfo, FrameRegs, Function, SourceLocation, TypeInfo, Value, VarValue, Variable,
 };
+pub use process::CancelToken;
 pub use toolchain::{
     CTAGS_SOURCE_URL, DetectOptions, InstallProgress, InstalledLibrary, LibraryInfo,
-    NativeInstallOptions, NativeOverrides, Toolchain, ToolchainSource, build_ctags,
+    NativeInstallOptions, NativeOverrides, Timeouts, Toolchain, ToolchainSource, build_ctags,
 };
 
 use thiserror::Error;
@@ -59,4 +64,14 @@ pub enum FirmwareError {
     NoCode(String),
     #[error("{0}")]
     NativeTools(String),
+    /// A subprocess did not finish in its time budget and was stopped (`what` is e.g.
+    /// `arduino-cli core list`).
+    #[error("`{what}` did not finish within {}", process::fmt_limit(.limit))]
+    Timeout {
+        what: String,
+        limit: std::time::Duration,
+    },
+    /// Stopped on request (the user cancelled a build).
+    #[error("`{0}` was cancelled")]
+    Cancelled(String),
 }

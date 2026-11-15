@@ -395,10 +395,15 @@ impl HomeScreen {
             });
             let (text, tone) = match &app.toolchain.state {
                 ToolchainState::Ready(_) => (app.toolchain.compiler_label(), Tone::Ok),
-                ToolchainState::Detecting => ("detecting…".to_string(), Tone::Neutral),
+                ToolchainState::Detecting => {
+                    ui.ctx()
+                        .request_repaint_after(std::time::Duration::from_millis(500));
+                    (app.toolchain.detecting_label(), Tone::Neutral)
+                }
                 ToolchainState::Installing => ("installing…".to_string(), Tone::Warn),
                 ToolchainState::Missing { reason, .. } => (reason.clone(), Tone::Warn),
                 ToolchainState::Failed(e) => (e.clone(), Tone::Danger),
+                ToolchainState::Unresponsive(e) => (e.clone(), Tone::Danger),
                 ToolchainState::Disabled => ("off".to_string(), Tone::Neutral),
             };
             ui.add(
@@ -419,16 +424,25 @@ impl HomeScreen {
                         .color(p.text_muted),
                 );
             }
-            if matches!(
-                app.toolchain.state,
-                ToolchainState::Missing { .. } | ToolchainState::Failed(_)
-            ) && Btn::amber("Install toolchain")
-                .icon(Icon::Download)
-                .show(ui)
-                .clicked()
-            {
-                app.toolchain.start_install();
-            }
+            ui.horizontal(|ui| {
+                if matches!(
+                    app.toolchain.state,
+                    ToolchainState::Missing { .. }
+                        | ToolchainState::Failed(_)
+                        | ToolchainState::Unresponsive(_)
+                ) && Btn::amber("Install toolchain")
+                    .icon(Icon::Download)
+                    .show(ui)
+                    .clicked()
+                {
+                    app.toolchain.start_install();
+                }
+                if matches!(app.toolchain.state, ToolchainState::Unresponsive(_))
+                    && Btn::ghost("Retry").icon(Icon::Refresh).show(ui).clicked()
+                {
+                    app.toolchain.redetect();
+                }
+            });
             if let Some(pr) = app.toolchain.install_progress() {
                 widgets::progress(ui, pr.fraction, &pr.step);
             }

@@ -6,6 +6,7 @@
 use super::catalog::HostKind;
 use crate::FirmwareError;
 use crate::compile::{Diagnostic, Severity, build_cache_root, parse_gcc_diagnostics};
+use crate::process;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -135,12 +136,20 @@ pub fn cxx() -> Option<PathBuf> {
         .into_iter()
         .chain(["clang++", "c++", "g++"].iter().map(PathBuf::from))
         .collect();
+    let probe = crate::Timeouts::default().probe;
     candidates.into_iter().find(|c| {
-        Command::new(c)
-            .arg("--version")
-            .output()
-            .is_ok_and(|o| o.status.success())
+        let mut cmd = Command::new(c);
+        cmd.arg("--version");
+        process::stdout_if_ok(cmd, probe).is_some()
     })
+}
+
+/// Budget for one host compiler / linker run.
+const HOST_CXX_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+
+/// Runs one compiler / linker command with [`HOST_CXX_TIMEOUT`].
+fn run_cxx(cmd: Command) -> Result<std::process::Output, FirmwareError> {
+    process::run(cmd, HOST_CXX_TIMEOUT, None, &mut |_| {})
 }
 
 /// Writes the embedded host core into the cache (once per content hash) and returns its dir.
@@ -196,20 +205,15 @@ fn hostcore_objects(
     }
     std::fs::create_dir_all(&obj_dir).map_err(|e| FirmwareError::Io(e.to_string()))?;
     let flags = base_flags(kind, &core);
-    let mut children = vec![];
+    let mut ok = true;
     for (src, obj) in sources.iter().zip(&objs) {
-        let child = Command::new(cxx)
-            .args(&flags)
+        let mut cmd = Command::new(cxx);
+        cmd.args(&flags)
             .arg("-c")
             .arg(core.join(src))
             .arg("-o")
-            .arg(obj)
-            .output();
-        children.push(child);
-    }
-    let mut ok = true;
-    for c in children {
-        let o = c.map_err(|e| FirmwareError::Io(e.to_string()))?;
+            .arg(obj);
+        let o = run_cxx(cmd)?;
         log.push_str(&String::from_utf8_lossy(&o.stderr));
         ok &= o.status.success();
     }
@@ -529,26 +533,17 @@ pub fn compile_host(
     let mut ok = true;
     for (i, src) in std::iter::once(main_cpp.clone()).chain(extra).enumerate() {
         let obj = dir.join(format!("sketch{i}.o"));
-        let o = Command::new(&cxx)
-            .args(&flags)
-            .arg("-c")
-            .arg(&src)
-            .arg("-o")
-            .arg(&obj)
-            .output()
-            .map_err(|e| FirmwareError::Io(e.to_string()))?;
+        let mut cmd = Command::new(&cxx);
+        cmd.args(&flags).arg("-c").arg(&src).arg("-o").arg(&obj);
+        let o = run_cxx(cmd)?;
         log.push_str(&String::from_utf8_lossy(&o.stderr));
         ok &= o.status.success();
         sketch_objs.push(obj);
     }
     if ok {
-        let o = Command::new(&cxx)
-            .args(&sketch_objs)
-            .args(&objs)
-            .arg("-o")
-            .arg(&exe)
-            .output()
-            .map_err(|e| FirmwareError::Io(e.to_string()))?;
+        let mut cmd = Command::new(&cxx);
+        cmd.args(&sketch_objs).args(&objs).arg("-o").arg(&exe);
+        let o = run_cxx(cmd)?;
         log.push_str(&String::from_utf8_lossy(&o.stderr));
         ok = o.status.success();
     }

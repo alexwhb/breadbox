@@ -4,7 +4,7 @@
 //! download + build runs with `--ignored`.
 
 use bb_firmware::{
-    FirmwareError, InstallProgress, NativeInstallOptions, NativeOverrides, Toolchain,
+    FirmwareError, InstallProgress, NativeInstallOptions, NativeOverrides, Timeouts, Toolchain,
     ToolchainSource, build_ctags,
 };
 use std::io::Write;
@@ -32,9 +32,12 @@ fn broken_toolchain(dir: &Path) -> Toolchain {
         source: ToolchainSource::AppSupport,
         config_file: None,
         data_dir: dir.join("data"),
+        user_dir: dir.join("sketchbook"),
+        downloads_dir: dir.join("staging"),
         avr_core_version: Some("1.8.8".into()),
         avr_gcc_version: None,
         overrides: NativeOverrides::default(),
+        timeouts: Timeouts::default(),
     }
 }
 

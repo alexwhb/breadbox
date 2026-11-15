@@ -218,6 +218,7 @@ impl InstallDialog {
                     ),
                     ToolchainState::Installing => "Installing…".into(),
                     ToolchainState::Detecting => "Looking for an existing install…".into(),
+                    ToolchainState::Unresponsive(e) => e.clone(),
                     ToolchainState::Disabled => "Toolchain detection is off.".into(),
                 };
                 ui.add(

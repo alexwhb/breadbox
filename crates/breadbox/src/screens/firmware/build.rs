@@ -4,7 +4,9 @@
 
 use crate::widgets::{CodeDoc, DiagSeverity, EditorDiagnostic};
 use bb_firmware::host::{HostKind, compile_host};
-use bb_firmware::{BuildOutput, CompileOptions, OutputKind, Severity, Toolchain};
+use bb_firmware::{
+    BuildOutput, CancelToken, CompileOptions, FirmwareError, OutputKind, Severity, Toolchain,
+};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -118,6 +120,15 @@ impl StagingLock {
 /// Runs the build (blocking; call from a job thread). Release and debug builds stage into
 /// separate folders (they also have separate arduino-cli build caches).
 pub fn run_build(key: &str, req: &BuildRequest) -> BuildResult {
+    run_build_cancellable(key, req, None)
+}
+
+/// [`run_build`] that stops the compiler when `cancel` fires (the output's Cancel button).
+pub fn run_build_cancellable(
+    key: &str,
+    req: &BuildRequest,
+    cancel: Option<CancelToken>,
+) -> BuildResult {
     let t0 = std::time::Instant::now();
     let kind = if req.debug { "debug" } else { "release" };
     let dir = staging_dir(&format!("{key}-{kind}"), &req.sketch_name);
@@ -138,7 +149,8 @@ pub fn run_build(key: &str, req: &BuildRequest) -> BuildResult {
     }
     match &req.target {
         BuildTarget::Avr { toolchain, fqbn } => {
-            let opts = CompileOptions::new(fqbn).debug(req.debug);
+            let mut opts = CompileOptions::new(fqbn).debug(req.debug);
+            opts.cancel = cancel;
             match toolchain.compile(&dir, &opts) {
                 Ok(out) => {
                     let lines = out
@@ -167,6 +179,7 @@ pub fn run_build(key: &str, req: &BuildRequest) -> BuildResult {
                         host_exe: None,
                     }
                 }
+                Err(FirmwareError::Cancelled(_)) => failed("Build cancelled.".into(), req.debug),
                 Err(e) => failed(e.to_string(), req.debug),
             }
         }

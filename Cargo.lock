@@ -564,6 +564,7 @@ dependencies = [
  "bb-core",
  "flate2",
  "gimli 0.34.0",
+ "libc",
  "log",
  "object 0.41.0",
  "serde",

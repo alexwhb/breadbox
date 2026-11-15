@@ -4,6 +4,7 @@
 
 use crate::FirmwareError;
 use crate::boards::Board;
+use crate::process::{self, CancelToken};
 use crate::toolchain::Toolchain;
 use serde::Serialize;
 use serde_json::Value;
@@ -31,6 +32,10 @@ impl Warnings {
     }
 }
 
+/// Default budget for one `arduino-cli compile` (a cold build of a big sketch with libraries
+/// takes well under a minute).
+pub const COMPILE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct CompileOptions {
     pub fqbn: String,
@@ -41,6 +46,13 @@ pub struct CompileOptions {
     pub warnings: Warnings,
     /// Extra `--build-property` values.
     pub properties: Vec<String>,
+    /// Time budget ([`COMPILE_TIMEOUT`]); over it the compile is stopped and
+    /// [`FirmwareError::Timeout`] returned.
+    pub timeout: Duration,
+    /// Stops the compile (and every compiler process it started) when cancelled:
+    /// [`FirmwareError::Cancelled`].
+    #[serde(skip)]
+    pub cancel: Option<CancelToken>,
 }
 
 impl CompileOptions {
@@ -51,10 +63,20 @@ impl CompileOptions {
             build_dir: None,
             warnings: Warnings::Default,
             properties: Vec::new(),
+            timeout: COMPILE_TIMEOUT,
+            cancel: None,
         }
     }
     pub fn debug(mut self, on: bool) -> Self {
         self.debug = on;
+        self
+    }
+    pub fn timeout(mut self, d: Duration) -> Self {
+        self.timeout = d;
+        self
+    }
+    pub fn cancel(mut self, token: CancelToken) -> Self {
+        self.cancel = Some(token);
         self
     }
 }
@@ -360,7 +382,7 @@ impl Toolchain {
             cmd.arg("--build-property").arg(p);
         }
         cmd.arg(&sketch_dir);
-        let out = cmd.output().map_err(|e| FirmwareError::Io(e.to_string()))?;
+        let out = process::run(cmd, opts.timeout, opts.cancel.as_ref(), &mut |_| {})?;
         let stdout = String::from_utf8_lossy(&out.stdout);
         let json: Value = serde_json::from_str(&stdout).unwrap_or(Value::Null);
         let compiler_out = json["compiler_out"].as_str().unwrap_or("").to_string();

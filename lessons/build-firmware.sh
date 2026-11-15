@@ -14,6 +14,11 @@ if ! command -v arduino-cli >/dev/null 2>&1; then
     exit 1
 fi
 
+# Same arduino-cli settings as the app: libraries from Breadbox's own sketchbook, never
+# ~/Documents/Arduino (see scripts/build-test-firmware.sh).
+APP_SUPPORT="${BREADBOX_APP_SUPPORT:-$HOME/Library/Application Support/Breadbox}"
+export ARDUINO_DIRECTORIES_USER="${BREADBOX_TOOLCHAIN_DIR:-$APP_SUPPORT/toolchain}/sketchbook"
+export ARDUINO_UPDATER_ENABLE_NOTIFICATION=false
 DATA_DIR="$(arduino-cli config get directories.data 2>/dev/null || echo "$HOME/Library/Arduino15")"
 BUNDLED_GCC="$(ls -d "$DATA_DIR"/packages/arduino/tools/avr-gcc/*/bin 2>/dev/null | tail -1 || true)"
 APP_TC="$HOME/Library/Application Support/Breadbox/toolchain/native"

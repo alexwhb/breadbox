@@ -1,10 +1,18 @@
 //! App-wide firmware toolchain state (`MCU-4`): background detection at start-up, the
 //! one-click install flow with progress, and the library list.
+//!
+//! Detection always settles: every arduino-cli call has a time budget
+//! (`bb_firmware::Timeouts`), so a stuck arduino-cli ends in [`ToolchainState::Unresponsive`]
+//! with a message and a Retry, never an endless "detecting…".
 
 use crate::bench::Repaint;
 use crate::jobs::{Job, ProgressState};
 use bb_firmware::{FirmwareError, InstallProgress, InstalledLibrary, Toolchain};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+/// After this long, "detecting…" says how long it has been waiting.
+const SLOW_DETECT: Duration = Duration::from_secs(3);
 
 #[derive(Clone)]
 pub enum ToolchainState {
@@ -17,6 +25,9 @@ pub enum ToolchainState {
     },
     Installing,
     Failed(String),
+    /// arduino-cli did not answer in its time budget (it was stopped): the message says what
+    /// timed out and what to do.
+    Unresponsive(String),
     /// Detection switched off (tests that must not depend on the machine).
     Disabled,
 }
@@ -28,6 +39,7 @@ pub struct ToolchainService {
     libs: Option<Job<Result<Vec<InstalledLibrary>, FirmwareError>>>,
     pub libraries: Vec<InstalledLibrary>,
     repaint: Repaint,
+    detect_started: Option<Instant>,
 }
 
 impl ToolchainService {
@@ -43,6 +55,7 @@ impl ToolchainService {
             libs: None,
             libraries: Vec::new(),
             repaint,
+            detect_started: None,
         };
         if detect {
             s.redetect();
@@ -52,9 +65,27 @@ impl ToolchainService {
 
     pub fn redetect(&mut self) {
         self.state = ToolchainState::Detecting;
+        self.detect_started = Some(Instant::now());
         self.detect = Some(Job::spawn("toolchain-detect", self.repaint.clone(), |_| {
             Toolchain::detect()
         }));
+    }
+
+    /// How long the running detection has taken (`None` when not detecting).
+    pub fn detecting_for(&self) -> Option<Duration> {
+        match self.state {
+            ToolchainState::Detecting => self.detect_started.map(|t| t.elapsed()),
+            _ => None,
+        }
+    }
+
+    /// One line for "detecting": plain at first, then with the seconds waited so far
+    /// (`detecting toolchain… 7 s`).
+    pub fn detecting_label(&self) -> String {
+        match self.detecting_for() {
+            Some(d) if d >= SLOW_DETECT => format!("detecting toolchain… {} s", d.as_secs()),
+            _ => "detecting toolchain…".into(),
+        }
     }
 
     /// Advances background jobs; call once per frame.
@@ -63,6 +94,7 @@ impl ToolchainService {
             && let Some(r) = j.poll()
         {
             self.detect = None;
+            self.detect_started = None;
             self.state = classify(r);
             self.refresh_libraries();
         }
@@ -109,11 +141,12 @@ impl ToolchainService {
     /// Toolchain box label (`avr-gcc 7.3.0`).
     pub fn compiler_label(&self) -> String {
         match &self.state {
-            ToolchainState::Detecting => "detecting toolchain…".into(),
+            ToolchainState::Detecting => self.detecting_label(),
             ToolchainState::Ready(t) => t.compiler_label(),
             ToolchainState::Missing { .. } => "toolchain not installed".into(),
             ToolchainState::Installing => "installing toolchain…".into(),
             ToolchainState::Failed(_) => "toolchain install failed".into(),
+            ToolchainState::Unresponsive(_) => "arduino-cli: no answer".into(),
             ToolchainState::Disabled => "toolchain off".into(),
         }
     }
@@ -209,6 +242,11 @@ fn classify(r: Result<Toolchain, FirmwareError>) -> ToolchainState {
             found: None,
             reason: "arduino-cli is not installed".into(),
         },
+        Err(e @ FirmwareError::Timeout { .. }) => ToolchainState::Unresponsive(format!(
+            "{e} and was stopped. Breadbox gives arduino-cli its own settings folder \
+             (never ~/Documents), so it is probably stuck or very slow. Retry, or install \
+             Breadbox's own copy."
+        )),
         Err(e) => ToolchainState::Missing {
             found: None,
             reason: e.to_string(),

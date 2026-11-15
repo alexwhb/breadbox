@@ -278,6 +278,9 @@ impl FirmwareScreen {
                             LineTone::Warning,
                             "Toolchain detection is off.",
                         )),
+                        ToolchainState::Unresponsive(e) => self
+                            .output
+                            .push(OutputLine::new(LineTone::Error, e.clone())),
                         _ => {
                             self.output.push(OutputLine::new(
                                 LineTone::Warning,
@@ -324,8 +327,9 @@ impl FirmwareScreen {
         let tid = sk.target.clone();
         self.build = Some((
             tid,
-            Job::spawn("verify", app.repaint.clone(), move |_| {
-                build::run_build(&key, &req)
+            Job::spawn("verify", app.repaint.clone(), move |p| {
+                let cancel = bb_firmware::CancelToken::from_flag(p.cancel_flag());
+                build::run_build_cancellable(&key, &req, Some(cancel))
             }),
             upload_after,
         ));
@@ -996,6 +1000,11 @@ impl FirmwareScreen {
         if let Some(cli) = app.toolchain.cli_label() {
             lines.push(cli);
         }
+        if app.toolchain.detecting_for().is_some() {
+            // "still looking… N s" counts up while detection runs
+            ui.ctx()
+                .request_repaint_after(std::time::Duration::from_millis(500));
+        }
         ui.horizontal(|ui| {
             ui.add_space(8.0);
             ui.label(
@@ -1005,9 +1014,50 @@ impl FirmwareScreen {
                     .color(p.text_muted),
             );
         });
+        // why it is not usable, in words (a stuck arduino-cli, a missing core, …)
+        let detail = match &app.toolchain.state {
+            ToolchainState::Missing { reason, .. } => Some((reason.clone(), p.accent)),
+            ToolchainState::Failed(e) | ToolchainState::Unresponsive(e) => {
+                Some((e.clone(), p.danger_soft))
+            }
+            _ => None,
+        };
+        if let Some((text, color)) = detail {
+            ui.add_space(4.0);
+            let w = ui.available_width() - 20.0;
+            ui.horizontal(|ui| {
+                ui.add_space(8.0);
+                ui.vertical(|ui| {
+                    ui.set_max_width(w);
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(text).font(font::ui(11.5)).color(color),
+                        )
+                        .wrap(),
+                    );
+                });
+            });
+        }
+        if matches!(app.toolchain.state, ToolchainState::Unresponsive(_)) {
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                ui.add_space(8.0);
+                if Btn::ghost("Retry")
+                    .icon(Icon::Refresh)
+                    .small()
+                    .show(ui)
+                    .clicked()
+                {
+                    app.toolchain.redetect();
+                }
+            });
+        }
         let installable = matches!(
             app.toolchain.state,
-            ToolchainState::Missing { .. } | ToolchainState::Failed(_) | ToolchainState::Installing
+            ToolchainState::Missing { .. }
+                | ToolchainState::Failed(_)
+                | ToolchainState::Installing
+                | ToolchainState::Unresponsive(_)
         );
         if installable {
             ui.add_space(6.0);
@@ -1183,7 +1233,10 @@ impl FirmwareScreen {
                 }
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if self.build.is_some() {
+                if let Some((_, job, _)) = &self.build {
+                    if Btn::mini("Cancel").show(ui).clicked() {
+                        job.cancel();
+                    }
                     widgets::spinner(ui, 14.0);
                     ui.label(
                         egui::RichText::new("compiling…")

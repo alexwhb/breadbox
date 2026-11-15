@@ -43,7 +43,12 @@ themes and lesson packs.
   Install toolchain on the Firmware screen): Breadbox downloads `arduino-cli` and the
   `arduino:avr` core into `~/Library/Application Support/Breadbox/toolchain` (about 150 MB)
   with its own config, so your Arduino IDE setup is never touched. An existing `arduino-cli`
-  on `PATH` or from Homebrew is used if it works.
+  on `PATH` or from Homebrew is used if it works (reusing its installed `arduino:avr` core).
+  Either way arduino-cli runs with Breadbox's own settings: libraries go to
+  `…/Breadbox/toolchain/sketchbook` (install them with Manage libraries…), never
+  `~/Documents/Arduino`, so Breadbox never triggers a Documents-folder privacy prompt. Every
+  toolchain call has a time limit: a stuck `arduino-cli` shows a message with Retry instead of
+  "detecting…" forever.
 
 **No Rosetta? No problem.** The `arduino:avr` core ships an Intel-only avr-gcc 7.3.0 and ctags,
 which cannot run on an Apple Silicon Mac without Rosetta. Breadbox detects that and installs
