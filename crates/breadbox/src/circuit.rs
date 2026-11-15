@@ -154,6 +154,15 @@ impl CircuitDoc {
         Ok(())
     }
 
+    /// Saves a user project with unsaved edits right away (quit / project switch); `None`
+    /// when there was nothing to save.
+    pub fn flush(&mut self) -> Option<Result<()>> {
+        if self.read_only || !self.dirty() {
+            return None;
+        }
+        Some(self.save())
+    }
+
     /// Saves user projects 1.2 s after the last edit. Returns `Some` when it saved.
     pub fn autosave(&mut self) -> Option<Result<()>> {
         if self.read_only || !self.dirty() {

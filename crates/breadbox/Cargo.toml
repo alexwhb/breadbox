@@ -50,3 +50,4 @@ muda = "0.21.2"
 
 [dev-dependencies]
 egui_kittest = { version = "0.37.0", features = ["wgpu", "snapshot", "eframe"] }
+wat = "1"

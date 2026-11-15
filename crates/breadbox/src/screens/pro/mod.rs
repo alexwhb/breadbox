@@ -525,7 +525,18 @@ impl Screen for AnalysisScreen {
         Some("Analysis".into())
     }
 
+    fn flush(&mut self, _app: &mut AppCtx) {
+        if let NetlistSource::File(p) = &self.source
+            && self.doc.dirty
+            && std::fs::write(p, &self.doc.text).is_ok()
+        {
+            self.doc.dirty = false;
+        }
+    }
+
     fn project_changed(&mut self, app: &mut AppCtx) {
+        // the previous project's file netlist keeps its last edits
+        self.flush(app);
         // a project's own netlist (analyses/*.cir) wins over the demo
         let file = app.project.as_ref().and_then(|p| {
             let dir = p.dir.join("analyses");

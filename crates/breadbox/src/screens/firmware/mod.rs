@@ -553,6 +553,17 @@ impl FirmwareScreen {
                 .request_repaint_after(wait - t.elapsed() + Duration::from_millis(20));
             return;
         }
+        self.write_dirty(app);
+    }
+
+    /// Writes edited tabs of a user sketch to disk now (autosave, quit, project switch).
+    fn write_dirty(&mut self, app: &mut AppCtx) {
+        let Some(sk) = self.sketch.as_mut() else {
+            return;
+        };
+        if sk.read_only {
+            return;
+        }
         for d in sk.docs.iter_mut().filter(|d| d.dirty) {
             if let Some(p) = &d.path {
                 match std::fs::write(p, &d.text) {
@@ -611,7 +622,13 @@ impl Screen for FirmwareScreen {
         })
     }
 
+    fn flush(&mut self, app: &mut AppCtx) {
+        self.write_dirty(app);
+    }
+
     fn project_changed(&mut self, app: &mut AppCtx) {
+        // the previous project's unsaved tabs (the debounce may not have fired yet)
+        self.write_dirty(app);
         self.targets = app
             .project
             .as_ref()

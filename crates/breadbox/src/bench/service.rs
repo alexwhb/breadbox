@@ -22,13 +22,19 @@ pub struct BenchService {
     pub pins: HashMap<String, Vec<PinView>>,
     /// Live probe values (`V(A0)` → volts) for the Pro `.op` table's bench column.
     pub probes: HashMap<String, f64>,
-    /// Unconsumed events (screens take them).
+    /// Unconsumed events (screens take them; bounded).
     pub events: Vec<BenchEvent>,
+    /// Problems every screen must show (the app turns them into error toasts): a device or
+    /// plugin error such as a sandbox permission violation (`PLUG-2`), the simulation stopping.
+    pub alerts: Vec<String>,
+    alerted: std::collections::HashSet<String>,
     pub running: bool,
     pub sim_time: SimTime,
 }
 
 const SERIAL_HISTORY: usize = 20_000;
+/// Events kept for a screen that has not taken them yet (the Firmware output).
+const EVENT_HISTORY: usize = 500;
 
 impl BenchService {
     pub fn new(factory: BenchFactory, speed: SimSpeed) -> BenchService {
@@ -45,6 +51,8 @@ impl BenchService {
             pins: HashMap::new(),
             probes: HashMap::new(),
             events: Vec::new(),
+            alerts: Vec::new(),
+            alerted: Default::default(),
             running: false,
             sim_time: SimTime::ZERO,
         }
@@ -112,6 +120,8 @@ impl BenchService {
         self.pins.clear();
         self.probes.clear();
         self.events.clear();
+        self.alerts.clear();
+        self.alerted.clear();
         self.running = false;
         self.sim_time = SimTime::ZERO;
     }
@@ -145,7 +155,35 @@ impl BenchService {
         for (k, v) in u.probes {
             self.probes.insert(k, v);
         }
+        for e in &u.events {
+            if let BenchEvent::Error(t) = e
+                && !t.contains(" damaged: ")
+                && self.alerted.insert(t.clone())
+            {
+                self.alerts.push(t.clone());
+            }
+        }
+        // device / plugin errors (a wasm plugin touching the circuit without the permission
+        // it declared traps and logs once at error level)
+        if let Some(sim) = link.as_sim() {
+            for ev in sim.recent_events() {
+                if let bb_core::DeviceEvent::Log {
+                    level: bb_core::LogLevel::Error,
+                    text,
+                } = &ev.event
+                {
+                    let t = format!("{}: {text}", ev.source);
+                    if self.alerted.insert(t.clone()) {
+                        self.alerts.push(t);
+                    }
+                }
+            }
+        }
         self.events.extend(u.events);
+        if self.events.len() > EVENT_HISTORY {
+            let n = self.events.len() - EVENT_HISTORY;
+            self.events.drain(..n);
+        }
         changed
     }
 

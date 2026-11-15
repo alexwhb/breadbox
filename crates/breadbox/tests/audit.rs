@@ -1,6 +1,7 @@
 //! GUI tests for spec items the audit found unreachable from the app (`docs/SPEC-AUDIT.md`):
 //! the Workbench simulation menu (`SIM-1` / `SIM-3`: single steps, reset MCU only, seed, sync
-//! quantum) and `.cir` import (`PRJ-4`).
+//! quantum), `.cir` import (`PRJ-4`) and plugin permission violations surfacing as errors
+//! (`PLUG-2`).
 
 mod common;
 
@@ -232,7 +233,7 @@ fn cir_netlist_imports_as_a_pro_project_and_runs() {
         "{}",
         p.dir.display()
     );
-    assert!(p.dir.join("analyses/lowpass.original.cir").exists());
+    assert!(p.dir.join("imported/lowpass.cir").exists());
     let parts = h
         .state()
         .ctx
@@ -244,7 +245,14 @@ fn cir_netlist_imports_as_a_pro_project_and_runs() {
         .clone();
     assert!(parts.len() >= 3, "{parts:#?}");
     assert!(parts.iter().all(|x| x.schematic.is_some()));
-    // the AC analysis runs → a Bode plot
+    // Pro → Analysis shows the netlist synced from the imported schematic; .ac runs → Bode
+    assert!(
+        wait_for(&mut h, 30.0, |h| has_label_containing(
+            h,
+            "synced from schematic"
+        )),
+        "imported projects sync the netlist from their schematic"
+    );
     h.state_mut()
         .ctx
         .command(breadbox::router::Command::RunAnalyses);
@@ -258,4 +266,141 @@ fn cir_netlist_imports_as_a_pro_project_and_runs() {
     h.state_mut().open_path(&bad);
     h.run_steps(2);
     assert_eq!(h.state().ctx.route, Route::Pro(ProTab::Analysis));
+}
+
+/// PLUG-2: a local plugin part whose wasm changes its own load without declaring
+/// `inject:load` is stopped by the sandbox — and the user sees it as an error on the
+/// Workbench (not only in the Firmware output), while the bench keeps running.
+#[test]
+fn a_plugin_violating_its_permissions_shows_an_error_on_the_workbench() {
+    let dir = scratch().join("sneaky");
+    std::fs::create_dir_all(&dir).unwrap();
+    let wat = r#"(module
+  (import "bb" "bb_set_ext" (func $set_ext (param i32 i32 f64)))
+  (memory (export "memory") 1)
+  (data (i32.const 16) "r")
+  (global $heap (mut i32) (i32.const 4096))
+  (func (export "bb_abi_version") (result i32) i32.const 1)
+  (func (export "bb_alloc") (param $n i32) (result i32) (local $p i32)
+    global.get $heap local.set $p
+    global.get $heap local.get $n i32.add global.set $heap
+    local.get $p)
+  (func (export "bb_on_start") i32.const 16 i32.const 1 f64.const 10 call $set_ext))"#;
+    std::fs::write(dir.join("model.wasm"), wat::parse_str(wat).unwrap()).unwrap();
+    std::fs::write(
+        dir.join("parts.json"),
+        r#"[{
+  "id": "sneakyres", "name": "Sneaky resistor", "category": "building_blocks",
+  "ref_prefix": "R", "description": "test", "pins": ["1:passive", "2:passive"],
+  "model": {"spice": ["$(el:R) $(1) $(2) {$(ext:r)}"], "ext": [{"name": "r", "default": 1000}],
+            "behaviour": "wasm"},
+  "bench": {"layout": "row", "off_board": true, "size": [4, 2]}
+}]"#,
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("plugin.json"),
+        r#"{"id": "test.sneaky", "name": "Sneaky resistor", "version": "1.0.0", "kind": ["part"],
+            "summary": "changes its resistance without asking",
+            "provides": {"parts": "parts.json", "model": "model.wasm"}, "permissions": []}"#,
+    )
+    .unwrap();
+    let mut h = harness();
+    open_example(&mut h, "blink");
+    h.state_mut().ctx.navigate(Route::Plugins);
+    h.run_steps(3);
+    // SAFETY: the only test in this binary that answers file dialogs
+    unsafe { std::env::set_var("BREADBOX_TEST_PICK", &dir) };
+    h.get_by_label("Load local plugin…").click();
+    h.run_steps(2);
+    h.get_by_label("Plugin folder…").click();
+    h.run_steps(3);
+    if has_label(&h, "Allow and load") {
+        h.get_by_label("Allow and load").click();
+    }
+    h.run_steps(4);
+    // the part is in the open circuit's library: place it across the UNO's 5 V / GND
+    h.state_mut().ctx.navigate(Route::Workbench);
+    h.run_steps(4);
+    {
+        let doc = h.state_mut().ctx.circuit.as_mut().unwrap();
+        let lib = doc.lib.clone();
+        assert!(lib.get("sneakyres").is_some(), "plugin part in the library");
+        let r = doc.editor.add_part(&lib, "sneakyres", 40.0, 0.0).unwrap();
+        use bb_circuit::project::Endpoint;
+        doc.editor
+            .add_wire(&lib, Endpoint::pin("u1", "5V"), Endpoint::pin(&r, "1"));
+        doc.editor
+            .add_wire(&lib, Endpoint::pin("u1", "GND"), Endpoint::pin(&r, "2"));
+        doc.touched();
+    }
+    h.run_steps(3);
+    h.get_by_label("Run").click();
+    let found = wait_for(&mut h, 60.0, |h| {
+        h.state()
+            .ctx
+            .toasts
+            .items()
+            .iter()
+            .any(|t| t.text.contains("permission denied") && t.text.contains("inject:load"))
+    });
+    assert!(
+        found,
+        "no error toast: {:?}",
+        h.state()
+            .ctx
+            .toasts
+            .items()
+            .iter()
+            .map(|t| t.text.clone())
+            .collect::<Vec<_>>()
+    );
+    assert!(h.state().ctx.bench.running, "the bench keeps running");
+}
+
+/// APP-5: edits younger than the autosave debounce are not lost — switching projects saves the
+/// circuit, and quitting (eframe calls `save` → `BreadboxApp::flush`) writes sketch tabs too.
+#[test]
+fn quick_edits_survive_a_project_switch_and_quit() {
+    let dir = scratch();
+    let mut h = harness();
+    let proj = breadbox::project::Project::create(
+        &dir.join("projects"),
+        "quick-edits",
+        breadbox::project::ProjectMode::Playground,
+    )
+    .unwrap();
+    h.state_mut().open_path(&proj.dir);
+    h.run_steps(3);
+    // a circuit edit, then straight to another project (no time for the 1.2 s autosave)
+    {
+        let doc = h.state_mut().ctx.circuit.as_mut().unwrap();
+        let lib = doc.lib.clone();
+        doc.editor.add_part(&lib, "led", 30.0, 10.0).unwrap();
+        doc.touched();
+    }
+    h.run_steps(1);
+    h.state_mut().open_path(&repo().join("examples/blink"));
+    h.run_steps(2);
+    let saved = bb_circuit::Project::load(&proj.dir).unwrap();
+    assert!(
+        saved.parts.iter().any(|p| p.part == "led"),
+        "the LED was saved on the switch: {:?}",
+        saved.parts.iter().map(|p| &p.part).collect::<Vec<_>>()
+    );
+    // a sketch edit, then quit
+    h.state_mut().open_path(&proj.dir);
+    h.run_steps(2);
+    h.state_mut().ctx.navigate(Route::Firmware);
+    h.run_steps(4);
+    let editor = h.get_by_role(eframe::egui::Role::MultilineTextInput);
+    editor.focus();
+    h.run_steps(1);
+    h.get_by_role(eframe::egui::Role::MultilineTextInput)
+        .type_text("// quick note\n");
+    h.run_steps(1);
+    h.state_mut().flush();
+    let ino = proj.dir.join("firmware/U1/quick-edits/quick-edits.ino");
+    let text = std::fs::read_to_string(&ino).unwrap();
+    assert!(text.contains("// quick note"), "{text}");
 }

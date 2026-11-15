@@ -178,6 +178,9 @@ pub trait Screen {
     fn project_changed(&mut self, _app: &mut AppCtx) {}
     /// Called when the screen becomes visible.
     fn on_enter(&mut self, _app: &mut AppCtx) {}
+    /// Write pending edits now (the app is quitting, `APP-5`): debounced autosaves must not
+    /// lose the last keystrokes.
+    fn flush(&mut self, _app: &mut AppCtx) {}
     /// Per-screen state persisted with the app (window/screen restore, `APP-5`).
     fn save_state(&self) -> Option<serde_json::Value> {
         None

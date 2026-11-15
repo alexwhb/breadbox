@@ -75,7 +75,8 @@ pub const CIR_EXTENSIONS: [&str; 5] = ["cir", "net", "sp", "spice", "ckt"];
 
 /// Imports an ngspice / LTspice-style netlist as a new Pro project `parent/<name>.breadbox`
 /// (a fresh name if it exists): parts with an auto-placed schematic, analysis cards from the
-/// netlist's dot-cards, and the original netlist kept in `analyses/`. Returns the folder.
+/// netlist's dot-cards (Pro → Analysis shows the netlist synced from that schematic), and the
+/// original file kept as `imported/<name>.cir`. Returns the folder.
 pub fn import_cir_project(cir: &Path, parent: &Path, lib: &Library) -> Result<PathBuf> {
     let text = std::fs::read_to_string(cir).with_context(|| cir.display().to_string())?;
     let stem = cir
@@ -108,9 +109,10 @@ pub fn import_cir_project(cir: &Path, parent: &Path, lib: &Library) -> Result<Pa
     project
         .save(&dest)
         .map_err(|e| anyhow::anyhow!("{}: {e}", dest.display()))?;
-    let analyses = dest.join("analyses");
-    std::fs::create_dir_all(&analyses)?;
-    std::fs::write(analyses.join(format!("{base}.original.cir")), &text)?;
+    std::fs::create_dir_all(dest.join("analyses"))?;
+    let kept = dest.join("imported");
+    std::fs::create_dir_all(&kept)?;
+    std::fs::write(kept.join(format!("{base}.cir")), &text)?;
     Ok(dest)
 }
 

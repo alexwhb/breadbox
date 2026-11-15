@@ -135,6 +135,11 @@ impl AppCtx {
     }
 
     pub fn set_project(&mut self, p: Option<Project>) {
+        // edits younger than the autosave debounce go to disk before the doc is replaced
+        if let Some(Err(e)) = self.circuit.as_mut().and_then(|c| c.flush()) {
+            self.toasts
+                .error(format!("Saving the circuit failed: {e:#}"));
+        }
         self.bench.shutdown();
         if let Some(p) = &p {
             project::touch_recent(&mut self.recent, p);
@@ -444,6 +449,19 @@ impl BreadboxApp {
         }
     }
 
+    /// Writes every pending (debounced) edit to disk: sketches, Pro netlists, the circuit.
+    /// eframe calls `save` when the app quits, so the last keystrokes survive (`APP-5`).
+    pub fn flush(&mut self) {
+        for slot in ScreenSlot::ALL {
+            if let Some(s) = self.screens.get_mut(slot) {
+                s.flush(&mut self.ctx);
+            }
+        }
+        if let Some(Err(e)) = self.ctx.circuit.as_mut().and_then(|c| c.flush()) {
+            log::error!("saving the circuit failed: {e:#}");
+        }
+    }
+
     /// The whole frame (also used directly by tests).
     pub fn frame(&mut self, ui: &mut Ui) {
         let ctx = ui.ctx().clone();
@@ -455,6 +473,9 @@ impl BreadboxApp {
         self.ctx.toolchain.poll();
         self.ctx.apply_plugins();
         self.ctx.bench.poll();
+        for a in std::mem::take(&mut self.ctx.bench.alerts) {
+            self.ctx.toasts.error(a);
+        }
         if let Some(m) = &self.menu {
             for cmd in m.take_commands() {
                 self.ctx.pending.push(cmd);
@@ -987,6 +1008,7 @@ impl eframe::App for BreadboxApp {
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        self.flush();
         eframe::set_value(storage, STORAGE_KEY, &self.persisted());
     }
 

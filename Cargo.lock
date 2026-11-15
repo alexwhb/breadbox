@@ -765,6 +765,7 @@ dependencies = [
  "rodio",
  "serde",
  "serde_json",
+ "wat",
  "zip",
 ]
 
