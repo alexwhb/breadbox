@@ -9,3 +9,4 @@ pub mod pen;
 pub mod plugin_parts;
 pub mod scene;
 pub mod schematic;
+pub mod world_objects;

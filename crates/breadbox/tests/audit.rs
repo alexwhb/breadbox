@@ -459,3 +459,249 @@ fn pro_shows_every_analysis_card_and_meas_tf_results() {
         "output impedance R1 ‖ R2"
     );
 }
+
+fn bench_view(h: &H) -> breadbox::canvas::pen::View {
+    h.state()
+        .ctx
+        .egui
+        .data(|d| d.get_temp::<breadbox::canvas::pen::View>(eframe::egui::Id::unique("bench-view")))
+        .expect("bench view")
+}
+
+/// Latest `cm=` reading of the sonar sketch.
+fn last_cm(h: &H) -> Option<f64> {
+    h.state()
+        .ctx
+        .bench
+        .serial
+        .iter()
+        .rev()
+        .find_map(|l| l.text.split("cm=").nth(1)?.trim().parse::<f64>().ok())
+}
+
+/// A mouse-wheel scroll over a point (content moves by `dy` points).
+fn scroll_at(h: &mut H, at: eframe::egui::Pos2, dy: f32) {
+    use eframe::egui;
+    h.hover_at(at);
+    h.run_steps(1);
+    h.event(egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: egui::vec2(0.0, dy),
+        phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Wheel,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.run_steps(20);
+}
+
+fn drag(h: &mut H, from: eframe::egui::Pos2, to: eframe::egui::Pos2) {
+    use eframe::egui;
+    h.hover_at(from);
+    h.run_steps(1);
+    h.event(egui::Event::PointerButton {
+        pos: from,
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.run_steps(1);
+    for k in 1..=8 {
+        let t = k as f32 / 8.0;
+        h.hover_at(from + (to - from) * t);
+        h.run_steps(1);
+    }
+    h.event(egui::Event::PointerButton {
+        pos: to,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.run_steps(2);
+}
+
+/// WORLD-4 / WORLD-5 on a real sketch: an HC-SR04 bench (the `sonar` firmware prints `cm=`)
+/// gets a hand from the World panel → the reading follows; dragging the hand on the bench moves
+/// it; a world script and a keyframe timeline drive variables; undo removes the timeline.
+#[test]
+fn hand_object_scripts_and_timelines_drive_the_world() {
+    let dir = scratch();
+    let proj = breadbox::project::Project::create(
+        &dir.join("projects"),
+        "sonar-hand",
+        breadbox::project::ProjectMode::Playground,
+    )
+    .unwrap();
+    // UNO running the sonar fixture + an HC-SR04 (TRIG D7, ECHO D8) to the right of it
+    {
+        let lib = bb_circuit::Library::builtin();
+        let mut c = bb_circuit::Project::load(&proj.dir).unwrap();
+        c.world.noise = false;
+        let fw = repo().join("crates/bb-sim/tests/fixtures/sonar.uno.hex");
+        c.parts[0].firmware.as_mut().unwrap().image = Some(fw.display().to_string());
+        let mut ed = bb_circuit::edit::Editor::new(c);
+        let s = ed.add_part(&lib, "hc_sr04", 80.0, 30.0).unwrap();
+        use bb_circuit::project::Endpoint;
+        for (a, b) in [
+            ("5V", "VCC"),
+            ("GND", "GND"),
+            ("D7", "TRIG"),
+            ("D8", "ECHO"),
+        ] {
+            ed.add_wire(&lib, Endpoint::pin("u1", a), Endpoint::pin(&s, b));
+        }
+        ed.project.save(&proj.dir).unwrap();
+    }
+    let mut h = harness();
+    h.state_mut().open_path(&proj.dir);
+    h.run_steps(4);
+    assert_eq!(h.state().ctx.route, Route::Workbench);
+    h.get_by_label("Run").click();
+    assert!(
+        wait_for(&mut h, 60.0, |h| last_cm(h).is_some_and(|c| c > 300.0)),
+        "nothing in front of the sensor: {:?}",
+        last_cm(&h)
+    );
+    // the World panel offers the objects the bench's sensors read
+    assert!(has_label_containing(&h, "drag them on the bench"));
+    h.get_by_label("Add hand").click();
+    h.run_steps(3);
+    assert!(
+        wait_for(&mut h, 60.0, |h| last_cm(h)
+            .is_some_and(|c| (20.0..35.0).contains(&c))),
+        "hand 30 cm in front: {:?}",
+        last_cm(&h)
+    );
+    // drag the hand 10 cm closer on the bench (≈ 39 bench units down)
+    let (hx, hy) = {
+        let o = &h
+            .state()
+            .ctx
+            .circuit
+            .as_ref()
+            .unwrap()
+            .project()
+            .world
+            .objects[0];
+        (o.pos.x / 0.00254, o.pos.y / 0.00254)
+    };
+    let v = bench_view(&h);
+    let from = v.to_screen(hx, hy);
+    let to = v.to_screen(hx, hy + 39.37);
+    assert!(
+        h.state().ctx.egui.content_rect().contains(to) && to.y > 100.0,
+        "drag stays on the canvas: {to:?}"
+    );
+    drag(&mut h, from, to);
+    let moved = h
+        .state()
+        .ctx
+        .circuit
+        .as_ref()
+        .unwrap()
+        .project()
+        .world
+        .objects[0]
+        .pos;
+    assert!(
+        (moved.y - (hy + 39.37) * 0.00254).abs() < 0.01,
+        "the hand's new place is saved: {moved:?}"
+    );
+    assert!(
+        wait_for(&mut h, 60.0, |h| last_cm(h)
+            .is_some_and(|c| (12.0..20.0).contains(&c))),
+        "reading follows the dragged hand: {:?}",
+        last_cm(&h)
+    );
+    screenshot(&mut h, "world-objects");
+    // a script: the room warms 2 °C per world hour
+    h.get_by_label("Program the world").click();
+    h.run_steps(2);
+    h.get_by_label("New script").click();
+    h.get_by_label("New script")
+        .type_text("air.temp_c = 18 + 2*t_hours");
+    h.run_steps(1);
+    h.get_by_label("Add script").click();
+    h.run_steps(3);
+    let w = h
+        .state()
+        .ctx
+        .circuit
+        .as_ref()
+        .unwrap()
+        .project()
+        .world
+        .clone();
+    assert_eq!(w.scripts.len(), 1, "{:?}", w.scripts);
+    assert!(
+        wait_for(&mut h, 30.0, |h| h
+            .state_mut()
+            .ctx
+            .sim()
+            .and_then(|s| s.telemetry())
+            .is_some_and(|t| (t.world.temp_c - 18.0).abs() < 0.5)),
+        "the script drives the air temperature"
+    );
+    // a bad script is refused with a message, nothing stored
+    h.get_by_label("New script").click();
+    h.get_by_label("New script").type_text("lux = 3 *");
+    h.get_by_label("Add script").click();
+    h.run_steps(2);
+    assert_eq!(
+        h.state()
+            .ctx
+            .circuit
+            .as_ref()
+            .unwrap()
+            .project()
+            .world
+            .scripts
+            .len(),
+        1
+    );
+    // a timeline on the ambient light: two keyframes, preview drawn (scroll the panel down
+    // to it, like a user)
+    scroll_at(&mut h, eframe::egui::pos2(1290.0, 400.0), -600.0);
+    h.get_by_label("Add timeline: Add timeline…").click();
+    h.run_steps(2);
+    h.get_by_label("Ambient light (lx)").click();
+    h.run_steps(3);
+    let w = h
+        .state()
+        .ctx
+        .circuit
+        .as_ref()
+        .unwrap()
+        .project()
+        .world
+        .clone();
+    assert_eq!(w.timelines.len(), 1);
+    assert_eq!(w.timelines[0].var, "light.ambient_lux");
+    assert!(has_label(&h, "Timeline preview light.ambient_lux"));
+    h.get_by_label("Keyframe 2 value")
+        .set_value_accesskit(900.0);
+    h.run_steps(3);
+    let w = h
+        .state()
+        .ctx
+        .circuit
+        .as_ref()
+        .unwrap()
+        .project()
+        .world
+        .clone();
+    assert_eq!(w.timelines[0].keys[1].value, 900.0, "{:?}", w.timelines[0]);
+    screenshot(&mut h, "world-program");
+    // undo takes the keyframe edit back
+    h.state_mut().ctx.command(breadbox::router::Command::Undo);
+    h.run_steps(3);
+    let w = h
+        .state()
+        .ctx
+        .circuit
+        .as_ref()
+        .unwrap()
+        .project()
+        .world
+        .clone();
+    assert_ne!(w.timelines[0].keys[1].value, 900.0);
+}

@@ -22,6 +22,13 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+/// World objects, scripts and timelines (what `AppCtx::sync_world_program` compares).
+type WorldProgram = (
+    Vec<bb_world::ObjectConfig>,
+    Vec<bb_world::Script>,
+    Vec<bb_world::Timeline>,
+);
+
 /// Storage key for [`PersistedState`].
 pub const STORAGE_KEY: &str = "breadbox-app";
 
@@ -111,6 +118,8 @@ pub struct AppCtx {
     pub project_generation: u64,
     /// Circuit electrical generation the bench last saw.
     bench_generation: u64,
+    /// World objects / scripts / timelines last pushed to the running bench (`WORLD-4/5`).
+    world_pushed: Option<WorldProgram>,
     pending: Vec<Command>,
     nav: Option<Route>,
     native_menu: bool,
@@ -134,6 +143,44 @@ impl AppCtx {
         Ok(())
     }
 
+    /// Applies the document's world objects, scripts and timelines to the running bench when
+    /// they changed (World panel edits, dragging an object, undo / redo).
+    fn sync_world_program(&mut self) {
+        if !self.bench.is_active() {
+            return;
+        }
+        let Some(doc) = self.circuit.as_ref() else {
+            return;
+        };
+        let w = &doc.project().world;
+        if self
+            .world_pushed
+            .as_ref()
+            .is_some_and(|(o, s, t)| *o == w.objects && *s == w.scripts && *t == w.timelines)
+        {
+            return;
+        }
+        let first = self.world_pushed.is_none();
+        let prog = (w.objects.clone(), w.scripts.clone(), w.timelines.clone());
+        self.world_pushed = Some(prog.clone());
+        if first {
+            return; // the bench was built from this project
+        }
+        if let Some(sim) = self.bench.sim() {
+            sim.send(bb_sim::Command::With(bb_sim::handle::BenchFn(Arc::new(
+                move |b| {
+                    let (o, s, t) = prog.clone();
+                    let w = b.world_mut();
+                    w.set_objects(o);
+                    if let Err(e) = w.set_scripts(s) {
+                        log::warn!("world scripts: {e}");
+                    }
+                    w.set_timelines(t);
+                },
+            ))));
+        }
+    }
+
     pub fn set_project(&mut self, p: Option<Project>) {
         // edits younger than the autosave debounce go to disk before the doc is replaced
         if let Some(Err(e)) = self.circuit.as_mut().and_then(|c| c.flush()) {
@@ -141,6 +188,7 @@ impl AppCtx {
                 .error(format!("Saving the circuit failed: {e:#}"));
         }
         self.bench.shutdown();
+        self.world_pushed = None;
         if let Some(p) = &p {
             project::touch_recent(&mut self.recent, p);
         }
@@ -253,6 +301,7 @@ impl AppCtx {
 
     /// Pushes circuit edits to the running bench and autosaves (called once per frame).
     pub fn sync_circuit(&mut self) {
+        self.sync_world_program();
         let Some(doc) = self.circuit.as_mut() else {
             return;
         };
@@ -394,6 +443,7 @@ impl BreadboxApp {
                 .unwrap_or_else(bb_lessons::Progress::default_path),
             project_generation: 0,
             bench_generation: 0,
+            world_pushed: None,
             circuit: None,
             pending: Vec::new(),
             nav: None,

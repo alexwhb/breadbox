@@ -194,6 +194,50 @@ impl World {
         self.cfg.timelines = timelines;
     }
 
+    /// Replaces the movable objects (WORLD-4: a hand / person / wall / magnet added, moved or
+    /// removed in the UI). Objects that moved count as motion for PIR sensors.
+    pub fn set_objects(&mut self, objects: Vec<ObjectConfig>) {
+        for o in &objects {
+            let moved = self
+                .cfg
+                .objects
+                .iter()
+                .find(|x| x.id == o.id)
+                .is_none_or(|x| x.pos != o.pos || x.present != o.present);
+            if moved {
+                self.moved_at.insert(o.id.clone(), self.world_secs);
+            }
+        }
+        self.cfg.objects = objects;
+        self.update_derived();
+    }
+
+    /// Checks one script's syntax without a world (`variable = expression` statements
+    /// separated by `;` or new lines, `#` comments) — the UI validates while typing.
+    pub fn check_script(source: &str) -> Result<(), WorldError> {
+        for stmt in source.split([';', '\n']) {
+            let stmt = stmt.trim();
+            if stmt.is_empty() || stmt.starts_with('#') {
+                continue;
+            }
+            let (lhs, rhs) = stmt.split_once('=').ok_or_else(|| WorldError::Script {
+                script: stmt.into(),
+                msg: "expected `variable = expression`".into(),
+            })?;
+            if lhs.trim().is_empty() {
+                return Err(WorldError::Script {
+                    script: stmt.into(),
+                    msg: "missing variable name".into(),
+                });
+            }
+            Expr::parse(rhs.trim()).map_err(|e| WorldError::Script {
+                script: stmt.into(),
+                msg: e.to_string(),
+            })?;
+        }
+        Ok(())
+    }
+
     fn compile_scripts(&mut self) -> Result<(), WorldError> {
         let mut out = Vec::new();
         for s in self.cfg.scripts.iter().filter(|s| s.enabled) {
@@ -584,7 +628,8 @@ impl World {
     }
 }
 
-fn eval_timeline(tl: &Timeline, t: f64) -> f64 {
+/// Value of a keyframe timeline at world time `t` (s) — also used by the UI's timeline preview.
+pub fn eval_timeline(tl: &Timeline, t: f64) -> f64 {
     let mut keys = tl.keys.clone();
     keys.sort_by(|a, b| a.t.total_cmp(&b.t));
     let t = match tl.repeat {

@@ -107,6 +107,12 @@ enum Drag {
         probe: String,
         pos: (f64, f64),
     },
+    /// A world object (hand, magnet, …) being moved (`WORLD-4`); `grab` = pointer offset.
+    Object {
+        id: String,
+        pos: (f64, f64),
+        grab: (f64, f64),
+    },
 }
 
 /// Per-frame result for the screen.
@@ -143,6 +149,10 @@ pub struct BenchCanvas {
     pressed: Option<String>,
     pub instruments: InstrumentRegistry,
     pub hover: HoverInfo,
+    /// World object under the pointer (`WORLD-4`).
+    pub hover_object: Option<String>,
+    /// Object ids seen last frame (a new one off-screen refits the view).
+    known_objects: Vec<String>,
     /// Screen rect of the canvas last frame.
     pub rect: Rect,
     /// Fit the view on the next frame.
@@ -166,6 +176,8 @@ impl Default for BenchCanvas {
             pressed: None,
             instruments: InstrumentRegistry::builtin(),
             hover: HoverInfo::default(),
+            hover_object: None,
+            known_objects: Vec::new(),
             rect: Rect::NOTHING,
             refit: false,
             t0: std::time::Instant::now(),
@@ -294,8 +306,30 @@ impl BenchCanvas {
         let mut out = BenchOutput::default();
         self.rect = rect;
         let scene = self.scene(doc);
+        // world objects count for the fit; one added off-screen brings the view along
+        let objs = super::world_objects::objects(&doc.project().world.objects, tel);
+        let ids: Vec<String> = objs.iter().map(|o| o.id.clone()).collect();
+        if ids != self.known_objects {
+            let off_screen = objs.iter().any(|o| {
+                !self.known_objects.contains(&o.id)
+                    && !rect.shrink(24.0).contains(self.view.to_screen(o.x, o.y))
+            });
+            if off_screen && self.fitted == Some(project_generation) {
+                self.refit = true;
+            }
+            self.known_objects = ids;
+        }
         if self.fitted != Some(project_generation) || self.refit {
-            self.view = View::fit(rect, padded(scene.extent), BASE_SCALE);
+            let mut extent = scene.extent;
+            for o in &objs {
+                extent = extent.union(&WRect::new(
+                    o.x - o.r,
+                    o.y - o.r,
+                    o.x + o.r,
+                    o.y + o.r * 1.6,
+                ));
+            }
+            self.view = View::fit(rect, padded(extent), BASE_SCALE);
             self.fitted = Some(project_generation);
             self.refit = false;
         }
@@ -377,8 +411,14 @@ impl BenchCanvas {
         let lib = doc.lib.clone();
         // hover
         self.hover = HoverInfo::default();
+        let objs = super::world_objects::objects(&doc.project().world.objects, tel);
+        self.hover_object = world
+            .filter(|_| resp.contains_pointer())
+            .and_then(|(x, y)| super::world_objects::hit(&objs, x, y))
+            .map(|o| o.id.clone());
         if let Some((x, y)) = world
             && resp.contains_pointer()
+            && self.hover_object.is_none()
         {
             if let Some(pin) = scene.pin_at(x, y, 0.42) {
                 let part = &scene.parts[pin.part];
@@ -421,6 +461,12 @@ impl BenchCanvas {
                 Drag::Pan {
                     origin: self.view.origin,
                     start: p,
+                }
+            } else if let Some(o) = super::world_objects::hit(&objs, x, y) {
+                Drag::Object {
+                    id: o.id.clone(),
+                    pos: (o.x, o.y),
+                    grab: (x - o.x, y - o.y),
                 }
             } else if let Some(probe) = self.label_at(doc, scene, p) {
                 let pos = doc
@@ -491,6 +537,19 @@ impl BenchCanvas {
                 Drag::Box { end, .. } => *end = (x, y),
                 Drag::Bend { pos, .. } => *pos = (x.round(), y.round()),
                 Drag::Label { pos, .. } => *pos = (x, y),
+                Drag::Object { id, pos, grab } => {
+                    let np = (x - grab.0, y - grab.1);
+                    if np != *pos {
+                        *pos = np;
+                        let m = super::world_objects::M_PER_UNIT;
+                        for (axis, v) in [("x", np.0), ("y", np.1)] {
+                            out.sim.push(Command::SetWorld {
+                                key: format!("{id}.{axis}"),
+                                value: v * m,
+                            });
+                        }
+                    }
+                }
                 Drag::Knob {
                     part,
                     start,
@@ -588,6 +647,15 @@ impl BenchCanvas {
                         out.live_edit = true;
                     }
                 }
+                Drag::Object { id, pos, .. } => {
+                    let m = super::world_objects::M_PER_UNIT;
+                    let mut w = doc.project().world.clone();
+                    if let Some(o) = w.objects.iter_mut().find(|o| o.id == id) {
+                        o.pos = bb_core::Pos::new(pos.0 * m, pos.1 * m);
+                        doc.editor.set_world(w);
+                        doc.touched();
+                    }
+                }
                 Drag::Pan { .. } | Drag::None => {}
             }
         }
@@ -648,6 +716,8 @@ impl BenchCanvas {
             (Drag::Pan { .. }, _) => Some(CursorIcon::Grabbing),
             (Drag::Move { .. }, _) => Some(CursorIcon::Grabbing),
             (Drag::Wire { .. }, _) => Some(CursorIcon::Crosshair),
+            (Drag::Object { .. }, _) => Some(CursorIcon::Grabbing),
+            _ if self.hover_object.is_some() => Some(CursorIcon::Grab),
             (_, h) if h.pin.is_some() => Some(CursorIcon::Crosshair),
             (_, h) if h.part.is_some() || h.wire.is_some() => Some(CursorIcon::PointingHand),
             _ if self.placing.is_some() => Some(CursorIcon::Copy),
@@ -673,6 +743,20 @@ impl BenchCanvas {
         let Some(def) = lib.get(def_id) else { return };
         if def_id == "jumper_wire" {
             // the palette's wire tile: arm wire drawing (drag from a pin)
+            return;
+        }
+        if def_id == "hand" {
+            // the Hand tile is a world object the distance / motion sensors read (WORLD-4)
+            let mut cfg = doc.project().world.clone();
+            let o = super::world_objects::new_object(
+                bb_world::ObjectKind::Hand,
+                &cfg.objects,
+                None,
+                (x, y),
+            );
+            cfg.objects.push(o);
+            doc.editor.set_world(cfg);
+            doc.touched();
             return;
         }
         let (px, py) = snap_drop(def, x, y);
@@ -1310,6 +1394,13 @@ impl BenchCanvas {
             draw_part(it, Pass::Body, &pen);
         }
         super::plugin_parts::draw_leads(&pen, doc, scene, &self.lead_drag);
+        // 6b. world objects (hand, magnet, …) over the bench
+        let objs = super::world_objects::objects(&project.world.objects, tel);
+        let dragging = match &self.drag {
+            Drag::Object { id, pos, .. } => Some((id.as_str(), *pos)),
+            _ => None,
+        };
+        super::world_objects::draw(&pen, &objs, dragging, self.hover_object.as_deref());
         // 7. night: the bench dims with ambient light; LEDs then glow over it
         let night = (1.0 - ambient).powi(2) * 0.36;
         if night > 0.01 {
@@ -1801,4 +1892,28 @@ fn dashed_screen(painter: &egui::Painter, a: Pos2, b: Pos2, color: Color32) {
         3.0,
         2.0,
     ));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The palette's Hand tile is a world object the distance / motion sensors read, not an
+    /// inert picture (WORLD-4).
+    #[test]
+    fn dropping_the_hand_tile_adds_a_world_object() {
+        let project = bb_circuit::Project::new("t", bb_circuit::project::Mode::Playground);
+        let mut doc = CircuitDoc::new(project, std::path::Path::new("/tmp/none"), false);
+        let mut c = BenchCanvas::default();
+        let mut out = BenchOutput::default();
+        c.place(&mut doc, "hand", 100.0, -50.0, &mut out);
+        let w = &doc.project().world;
+        assert!(doc.project().parts.is_empty(), "no inert part");
+        assert_eq!(w.objects.len(), 1);
+        assert_eq!(w.objects[0].kind, bb_world::ObjectKind::Hand);
+        assert!((w.objects[0].pos.x - 0.254).abs() < 1e-9);
+        // undo removes it again
+        assert!(doc.editor.undo());
+        assert!(doc.project().world.objects.is_empty());
+    }
 }

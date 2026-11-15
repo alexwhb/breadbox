@@ -14,6 +14,7 @@ use eframe::egui::{self, Color32, Sense, Stroke, Ui, vec2};
 #[derive(Default)]
 pub struct Panels {
     world: WorldUi,
+    program: super::world_program::WorldProgramUi,
     inspector: inspector::Inspector,
 }
 
@@ -336,6 +337,9 @@ impl Panels {
             doc.editor.set_world(new_cfg);
             doc.touched();
         }
+        // movable objects (WORLD-4) and the programmable world (WORLD-5)
+        super::world_program::objects(ui, app);
+        super::world_program::program(ui, app, &mut self.program);
     }
 }
 

@@ -232,3 +232,36 @@ fn config_round_trips_through_json() {
     assert_eq!(partial.air.temp_c, 21.0);
     assert_eq!(w.controls()[0].stops[1].0, "Field capacity");
 }
+
+#[test]
+fn objects_can_be_added_moved_and_removed_at_run_time() {
+    let mut w = World::new(WorldConfig::default()).unwrap();
+    let s = Pos::new(0.0, 0.0);
+    assert!(w.distance(s, 0.0, 15.0, 4.0).is_none());
+    w.step(SimTime::from_secs(10));
+    w.set_objects(vec![ObjectConfig {
+        id: "hand".into(),
+        pos: Pos::new(0.5, 0.0),
+        radius: 0.04,
+        ..Default::default()
+    }]);
+    let d = w.distance(s, 0.0, 15.0, 4.0).unwrap();
+    assert!((d - 0.46).abs() < 1e-9, "{d}");
+    // appearing counts as motion; staying put does not
+    assert!(w.motion(s, 1.0, 2.0));
+    w.step(SimTime::from_secs(20));
+    assert!(!w.motion(s, 1.0, 2.0));
+    w.set_objects(vec![]);
+    assert!(w.distance(s, 0.0, 15.0, 4.0).is_none());
+}
+
+#[test]
+fn scripts_are_checked_without_a_world() {
+    assert!(World::check_script("moisture = 45 - 0.8*t_hours").is_ok());
+    assert!(
+        World::check_script("# a comment\nlux = 100; air.temp_c = 20 + 5*sin(t_hours)").is_ok()
+    );
+    assert!(World::check_script("moisture 45").is_err());
+    assert!(World::check_script("moisture = 45 *").is_err());
+    assert!(World::check_script(" = 3").is_err());
+}

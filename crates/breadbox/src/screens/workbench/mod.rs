@@ -8,6 +8,7 @@ pub mod inspector;
 mod palette;
 mod panels;
 pub mod share;
+pub mod world_program;
 
 use crate::app::AppCtx;
 use crate::bench::{SimSpeed, clock_label};
