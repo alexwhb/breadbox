@@ -769,8 +769,8 @@ fn serial_monitor_radio_annotations_toggle() {
 }
 
 /// WORLD-6: the World panel's "Sensor noise & ADC quantization" switch picks realistic or
-/// ideal measurement for the whole bench — the panel says which, the running AVR's ADC follows
-/// at once, and the Inspector shows it on the board ("ADC"; sensors' "Noise" row:
+/// ideal measurement for the whole bench (its hover text says which is which) — the running
+/// AVR's ADC follows at once, and the Inspector shows it on the board ("ADC"; sensors' "Noise" row:
 /// `inspector::tests`).
 #[test]
 fn world_noise_switch_picks_realistic_or_ideal_measurement() {
@@ -795,17 +795,19 @@ fn world_noise_switch_picks_realistic_or_ideal_measurement() {
             .flatten()
     };
     // garden-node ships with realistic measurement
-    assert!(has_label_containing(
-        &h,
-        "Realistic: sensor noise + ADC offset"
-    ));
+    assert!(
+        h.state()
+            .ctx
+            .circuit
+            .as_ref()
+            .unwrap()
+            .project()
+            .world
+            .noise
+    );
     assert_eq!(live_realistic(&mut h), Some(true));
     h.get_by_label("Sensor noise & ADC quantization").click();
     h.run_steps(3);
-    assert!(has_label_containing(
-        &h,
-        "Ideal: noise-free sensors, exact ADC codes"
-    ));
     assert!(
         !h.state()
             .ctx
@@ -865,10 +867,16 @@ fn world_noise_switch_picks_realistic_or_ideal_measurement() {
     h.run_steps(3);
     h.get_by_label("Sensor noise & ADC quantization").click();
     h.run_steps(3);
-    assert!(has_label_containing(
-        &h,
-        "Realistic: sensor noise + ADC offset"
-    ));
+    assert!(
+        h.state()
+            .ctx
+            .circuit
+            .as_ref()
+            .unwrap()
+            .project()
+            .world
+            .noise
+    );
     assert!(has_label_containing(
         &h,
         "realistic · offset / gain error, INL, ±1 LSB noise"

@@ -294,20 +294,20 @@ impl Panels {
                 });
             }
             let mut noise = new_cfg.noise;
-            if widgets::checkbox(ui, &mut noise, "Sensor noise & ADC quantization").changed() {
+            // WORLD-6: what on / off mean, in the Inspector's words (hover text: the panel has
+            // no height to spare)
+            if widgets::checkbox(ui, &mut noise, "Sensor noise & ADC quantization")
+                .on_hover_text(format!(
+                    "On — {}\nOff — {}",
+                    measurement_text(true),
+                    measurement_text(false)
+                ))
+                .changed()
+            {
                 new_cfg.noise = noise;
                 sends.push(("world.noise".into(), noise as u8 as f64));
                 commit = true;
             }
-            // WORLD-6: what the switch means, in the Inspector's words
-            ui.add(
-                egui::Label::new(
-                    egui::RichText::new(measurement_text(noise))
-                        .font(font::ui(11.0))
-                        .color(p.text_faint),
-                )
-                .wrap(),
-            );
         });
         let mut toggle_more = false;
         ui.horizontal(|ui| {
@@ -757,8 +757,8 @@ fn waveforms(ui: &mut Ui, app: &mut AppCtx) {
 /// show the continuous voltage.
 pub fn measurement_text(realistic: bool) -> &'static str {
     if realistic {
-        "Realistic: sensor noise + ADC offset / gain error, INL / DNL and ±1 LSB noise (seeded)."
+        "realistic: sensor noise + ADC offset / gain error, INL / DNL and ±1 LSB noise (seeded)"
     } else {
-        "Ideal: noise-free sensors, exact ADC codes floor(V / Vref · 1024)."
+        "ideal: noise-free sensors, exact ADC codes floor(V / Vref · 1024)"
     }
 }

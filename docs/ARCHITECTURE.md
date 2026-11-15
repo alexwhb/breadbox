@@ -877,8 +877,8 @@ realistic or ideal measurement. Sensors read their noise through `WorldView::noi
 `bb_sim::bench::adc_model_for(noise)` gives every AVR `AdcModel::realistic()` or
 `AdcModel::Ideal` when it is built, on `set_world("world.noise", …)` and on every world step
 (`Bench::sync_adc_models`), so scripts, timelines and undo reach the ADC too. Probes and meters
-always show the continuous voltage; firmware reads codes. The World panel words it with
-`panels::measurement_text`, the Inspector with `inspector::measurement_row` ("ADC" on AVR
+always show the continuous voltage; firmware reads codes. The World panel switch's hover text
+words it with `panels::measurement_text`, the Inspector with `inspector::measurement_row` ("ADC" on AVR
 boards, "Noise" on sensors).
 
 **Persistence** (`APP-5`): eframe storage key `breadbox-app` → `PersistedState { route, theme,

@@ -1011,8 +1011,10 @@ Close-out (2026-11-14): toolchain hang (`MCU-4`), `PLAT-1`, `WORLD-6`, bundle po
   against the end-point line (bow + per-code ripple), DNL ≈ ±0.25 LSB, monotonic, no missing
   codes; conversion noise σ 0.4 clipped to ±1 LSB; chip errors from the seed alone, noise from
   the seeded RNG); **off** = ideal — noise-free sensors, `floor(V/Vref·1024)` clamped. bb-sim
-  applies it per AVR at build, on `set_world("world.noise")` and every world step. World panel
-  explains the switch; Inspector rows "ADC" (AVR boards) and "Noise" (sensors). Firmware reads
+  applies it per AVR at build, on `set_world("world.noise")` and every world step. The World
+  panel switch's hover text explains on / off (a visible line pushed "Program the world" out of
+  a 900 px window — caught by `audit.rs`); Inspector rows "ADC" (AVR boards) and "Noise"
+  (sensors). Firmware reads
   codes; probes show volts. Tests in bb-avr (`adc.rs`: ideal ramp exact for any seed, realistic
   bounded / seeded / per chip, steady input ±1 code, INL / DNL of 24 chips from a sweep, live
   switch), bb-sim `garden_node.rs::soil_raw_jitters_only_with_realistic_measurement`, GUI
