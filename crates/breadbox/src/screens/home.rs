@@ -20,6 +20,8 @@ struct NewProjectDialog {
     mode: ProjectMode,
     parent: PathBuf,
     error: Option<String>,
+    /// The suggested name has been focused + selected once.
+    selected: bool,
 }
 
 impl Screen for HomeScreen {
@@ -113,14 +115,13 @@ impl Screen for HomeScreen {
 
 impl HomeScreen {
     fn open_new(&mut self, mode: ProjectMode) {
+        let parent = project::default_projects_dir();
         self.new_dialog = Some(NewProjectDialog {
-            name: match mode {
-                ProjectMode::Playground => "my-bench".into(),
-                ProjectMode::Pro => "my-analysis".into(),
-            },
+            name: unique_name(&parent, default_name(mode)),
             mode,
-            parent: project::default_projects_dir(),
+            parent,
             error: None,
+            selected: false,
         });
     }
 
@@ -443,6 +444,7 @@ impl HomeScreen {
         let mut cancel = false;
         let r = widgets::modal(&app.egui, "new-project", "New project", 440.0, |ui| {
             ui.spacing_mut().item_spacing.y = 10.0;
+            let mode_before = d.mode;
             widgets::segmented(
                 ui,
                 "Project mode",
@@ -452,16 +454,37 @@ impl HomeScreen {
                     Seg::new(ProjectMode::Pro, "Pro").icon(Icon::SegSchematic),
                 ],
             );
+            // switching the mode keeps a typed name but swaps the suggestion
+            if d.mode != mode_before && d.name == unique_name(&d.parent, default_name(mode_before))
+            {
+                d.name = unique_name(&d.parent, default_name(d.mode));
+            }
             ui.label(
                 egui::RichText::new("Name")
                     .font(font::ui(12.0))
                     .color(p.text_muted),
             );
-            let resp = ui.add(
-                egui::TextEdit::singleline(&mut d.name)
-                    .font(font::ui(13.0))
-                    .desired_width(f32::INFINITY),
-            );
+            let mut out = egui::TextEdit::singleline(&mut d.name)
+                .font(font::ui(13.0))
+                .desired_width(f32::INFINITY)
+                .show(ui);
+            let resp = out.response.clone();
+            resp.widget_info(|| {
+                egui::WidgetInfo::labeled(egui::Role::TextInput, true, "Project name")
+            });
+            // the suggested name is focused and selected: typing replaces it
+            if !d.selected {
+                d.selected = true;
+                resp.request_focus();
+                let n = d.name.chars().count();
+                out.state
+                    .cursor
+                    .set_char_range(Some(egui::text::CCursorRange::two(
+                        egui::text::CCursor::new(0),
+                        egui::text::CCursor::new(n),
+                    )));
+                out.state.store(ui.ctx(), resp.id);
+            }
             if resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                 create = true;
             }
@@ -516,6 +539,24 @@ impl HomeScreen {
             }
         }
     }
+}
+
+fn default_name(mode: ProjectMode) -> &'static str {
+    match mode {
+        ProjectMode::Playground => "my-bench",
+        ProjectMode::Pro => "my-analysis",
+    }
+}
+
+/// `base`, or `base-2`, `base-3`, … — the first name without a project folder in `parent`.
+fn unique_name(parent: &std::path::Path, base: &str) -> String {
+    let mut name = base.to_string();
+    let mut n = 2;
+    while parent.join(format!("{name}.breadbox")).exists() {
+        name = format!("{base}-{n}");
+        n += 1;
+    }
+    name
 }
 
 fn ago(unix: u64) -> String {
