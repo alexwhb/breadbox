@@ -31,8 +31,8 @@ pub use debuginfo::{
     DebugInfo, FrameRegs, Function, SourceLocation, TypeInfo, Value, VarValue, Variable,
 };
 pub use toolchain::{
-    DetectOptions, InstallProgress, InstalledLibrary, LibraryInfo, NativeOverrides, Toolchain,
-    ToolchainSource,
+    CTAGS_SOURCE_URL, DetectOptions, InstallProgress, InstalledLibrary, LibraryInfo, NativeInstallOptions, NativeOverrides,
+    Toolchain, ToolchainSource, build_ctags,
 };
 
 use thiserror::Error;
@@ -57,4 +57,6 @@ pub enum FirmwareError {
     NoOutput,
     #[error("no code at {0}")]
     NoCode(String),
+    #[error("{0}")]
+    NativeTools(String),
 }
