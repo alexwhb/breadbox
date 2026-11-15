@@ -290,7 +290,8 @@ pub fn show(ui: &mut Ui, text: &str) {
                     );
                     let mut job = inline(&t, 13.0, p.text_dim, p.accent_soft, p.bg_raised);
                     job.wrap.max_width = ui.available_width();
-                    ui.label(job);
+                    // a label in a horizontal layout extends instead of wrapping
+                    ui.add(egui::Label::new(job).wrap());
                 });
             }
             Block::Numbered(n, t) => {
@@ -303,7 +304,8 @@ pub fn show(ui: &mut Ui, text: &str) {
                     );
                     let mut job = inline(&t, 13.0, p.text_dim, p.accent_soft, p.bg_raised);
                     job.wrap.max_width = ui.available_width();
-                    ui.label(job);
+                    // a label in a horizontal layout extends instead of wrapping
+                    ui.add(egui::Label::new(job).wrap());
                 });
             }
             Block::Quote(t) => {
@@ -327,16 +329,25 @@ pub fn show(ui: &mut Ui, text: &str) {
                     .inner_margin(egui::Margin::same(10))
                     .show(ui, |ui| {
                         ui.set_width(width - 22.0);
-                        let l = lang.to_ascii_lowercase();
-                        if l == "json" || l == "jsonc" {
-                            ui.label(json_job(&code, p));
-                        } else {
-                            ui.label(
-                                egui::RichText::new(code)
-                                    .font(font::mono(12.0))
-                                    .color(p.code_text),
-                            );
-                        }
+                        // long lines scroll sideways instead of widening the page
+                        egui::ScrollArea::horizontal()
+                            .id_salt(ui.next_auto_id())
+                            .auto_shrink([false, true])
+                            .show(ui, |ui| {
+                                let l = lang.to_ascii_lowercase();
+                                if l == "json" || l == "jsonc" {
+                                    ui.add(egui::Label::new(json_job(&code, p)).extend());
+                                } else {
+                                    ui.add(
+                                        egui::Label::new(
+                                            egui::RichText::new(code)
+                                                .font(font::mono(12.0))
+                                                .color(p.code_text),
+                                        )
+                                        .extend(),
+                                    );
+                                }
+                            });
                     });
                 ui.add_space(8.0);
             }
@@ -347,29 +358,37 @@ pub fn show(ui: &mut Ui, text: &str) {
                     .corner_radius(CornerRadius::same(6))
                     .inner_margin(egui::Margin::same(8))
                     .show(ui, |ui| {
-                        egui::Grid::new(ui.next_auto_id())
-                            .spacing(egui::vec2(16.0, 4.0))
+                        // a wide table scrolls sideways instead of widening the page
+                        egui::ScrollArea::horizontal()
+                            .id_salt(ui.next_auto_id())
+                            .max_width(width - 18.0)
                             .show(ui, |ui| {
-                                for (i, r) in rows.iter().enumerate() {
-                                    for c in 0..ncol {
-                                        let t =
-                                            r.get(c).map(|s| strip_inline(s)).unwrap_or_default();
-                                        ui.label(
-                                            egui::RichText::new(t)
-                                                .font(if i == 0 {
-                                                    font::medium(12.0)
-                                                } else {
-                                                    font::mono(12.0)
-                                                })
-                                                .color(if i == 0 {
-                                                    p.text_muted
-                                                } else {
-                                                    p.text_dim
-                                                }),
-                                        );
-                                    }
-                                    ui.end_row();
-                                }
+                                egui::Grid::new(ui.next_auto_id())
+                                    .spacing(egui::vec2(16.0, 4.0))
+                                    .show(ui, |ui| {
+                                        for (i, r) in rows.iter().enumerate() {
+                                            for c in 0..ncol {
+                                                let t = r
+                                                    .get(c)
+                                                    .map(|s| strip_inline(s))
+                                                    .unwrap_or_default();
+                                                ui.label(
+                                                    egui::RichText::new(t)
+                                                        .font(if i == 0 {
+                                                            font::medium(12.0)
+                                                        } else {
+                                                            font::mono(12.0)
+                                                        })
+                                                        .color(if i == 0 {
+                                                            p.text_muted
+                                                        } else {
+                                                            p.text_dim
+                                                        }),
+                                                );
+                                            }
+                                            ui.end_row();
+                                        }
+                                    });
                             });
                     });
                 ui.add_space(8.0);

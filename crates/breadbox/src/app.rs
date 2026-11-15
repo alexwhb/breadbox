@@ -670,11 +670,19 @@ impl BreadboxApp {
             ui.add_space(4.0);
             if let Some(proj) = &self.ctx.project {
                 slash(ui, p);
-                ui.label(
-                    egui::RichText::new(&proj.name)
-                        .font(font::ui(13.0))
-                        .color(p.text_dim),
-                );
+                // a long project name truncates (full name on hover) so the screen's own
+                // header controls keep their room at the minimum window width
+                ui.scope(|ui| {
+                    ui.set_max_width(160.0);
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(&proj.name)
+                                .font(font::ui(13.0))
+                                .color(p.text_dim),
+                        )
+                        .truncate(),
+                    );
+                });
             }
             // section crumb with a screen switcher
             let section = crumb.unwrap_or_else(|| self.ctx.route.title().to_string());

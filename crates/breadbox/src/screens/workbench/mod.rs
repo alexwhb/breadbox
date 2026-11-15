@@ -644,8 +644,9 @@ impl Screen for WorkbenchScreen {
             let mut action = None;
             egui::Popup::menu(&sr)
                 .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+                .width(300.0)
                 .show(|ui| {
-                    ui.set_min_width(220.0);
+                    ui.set_max_width(300.0);
                     action = sim_menu(ui, app, &mut chosen);
                 });
             if let Some(s) = chosen {

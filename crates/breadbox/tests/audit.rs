@@ -718,13 +718,13 @@ fn world_panel_schedules_watering() {
         .ctx
         .sim()
         .is_some()));
-    h.get_by_label("Water automatically: off").click();
+    h.get_by_label("Water automatically: Off").click();
     h.run_steps(2);
     h.get_by_label("Every 6 h").click();
     h.run_steps(3);
     let pot = h.state().ctx.circuit.as_ref().unwrap().project().world.pots[0].clone();
     assert_eq!(pot.schedule.map(|s| s.every_h), Some(6.0), "{pot:?}");
-    assert!(has_label(&h, "Water automatically: every 6 h · 100 ml"));
+    assert!(has_label(&h, "Water automatically: Every 6 h"));
     let live = h
         .state_mut()
         .ctx
@@ -770,7 +770,7 @@ fn serial_monitor_radio_annotations_toggle() {
 
 /// WORLD-6: the World panel's "Sensor noise & ADC quantization" switch picks realistic or
 /// ideal measurement for the whole bench (its hover text says which is which) — the running
-/// AVR's ADC follows at once, and the Inspector shows it on the board ("ADC"; sensors' "Noise" row:
+/// AVR's ADC follows at once, and the Inspector shows it on the board ("ADC"; sensors' "Sensor noise" row:
 /// `inspector::tests`).
 #[test]
 fn world_noise_switch_picks_realistic_or_ideal_measurement() {

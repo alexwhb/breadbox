@@ -302,6 +302,8 @@ fn scan() -> Seen {
     for d in ["docs/PLUGIN-SDK.md", "docs/LESSON-FORMAT.md", "README.md"] {
         data.push(repo().join(d));
     }
+    // the per-screen Help pages (each screen's "?")
+    data.extend(files("docs/guide", &["md"]));
     data.retain(|p| !p.to_string_lossy().contains("/target/"));
     assert!(data.len() > 50, "found only {} data files", data.len());
     for f in &data {

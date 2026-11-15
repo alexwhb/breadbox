@@ -544,7 +544,7 @@ impl HomeScreen {
             );
             left.add(
                 egui::Label::new(
-                    egui::RichText::new(d.parent.display().to_string())
+                    egui::RichText::new(tilde(&d.parent))
                         .font(font::mono(12.0))
                         .color(p.text_dim),
                 )
@@ -582,6 +582,18 @@ impl HomeScreen {
                 Err(e) => d.error = Some(format!("{e:#}")),
             }
         }
+    }
+}
+
+/// `~/Documents/Breadbox` for a folder under the home directory.
+fn tilde(path: &std::path::Path) -> String {
+    match std::env::var_os("HOME").map(PathBuf::from) {
+        Some(home) if path.starts_with(&home) => match path.strip_prefix(&home) {
+            Ok(rest) if rest.as_os_str().is_empty() => "~".into(),
+            Ok(rest) => format!("~/{}", rest.display()),
+            Err(_) => path.display().to_string(),
+        },
+        _ => path.display().to_string(),
     }
 }
 

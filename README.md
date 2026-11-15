@@ -31,6 +31,22 @@ themes and lesson packs.
 
 ![Plugins: the Handheld DMM](docs/screenshots/plugins.png)
 
+## Getting started
+
+- **New project** (Home, top right) asks for a name and a mode: **Playground** for the
+  breadboard bench, **Pro** for netlists and SPICE analyses. Projects live in
+  `~/Documents/Breadbox` unless you choose another folder.
+- **Examples** open read-only: try anything, then **File → Save As…** to keep your changes.
+  garden-node is the full tour (sensors in a pot of soil, two LEDs, Wi-Fi + MQTT).
+- **Open project…** opens a project folder or a shared `.breadbox.zip`; **Import .cir…**
+  opens a SPICE netlist as a new Pro project. **Recent projects** lists what you opened last.
+- **Lessons** teach electricity, sensors and microcontrollers step by step; **Plugins** add
+  instruments, parts and world models.
+- The **Firmware toolchain** card shows the compiler Breadbox found or installed (see
+  Requirements below). You need it only to build your own sketches — every example ships with
+  prebuilt firmware.
+- The **?** at the top right of every screen opens that screen's page in this Help window.
+
 ## Requirements
 
 - **macOS 14 or newer, Apple Silicon.** (The code is portable Rust; only Apple Silicon Macs are

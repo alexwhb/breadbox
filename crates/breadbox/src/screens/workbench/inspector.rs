@@ -69,11 +69,15 @@ pub fn measurement_row(def: &PartDef, realistic: bool) -> Option<(String, String
         } else {
             "ideal, none (World)"
         };
-        Some(("Noise".into(), v.into()))
+        // (the datasheet rows already have a "Noise" figure)
+        Some(("Sensor noise".into(), v.into()))
     } else {
         None
     }
 }
+
+/// Width of a numeric property field (the text edit plus its margins).
+const NUM_W: f32 = 110.0;
 
 fn compact(x: f64) -> String {
     if (x - x.round()).abs() < 1e-9 && x.abs() < 1e9 {
@@ -92,6 +96,7 @@ fn reading_label(k: &str) -> String {
         "lux" => "Light".into(),
         "temp" | "temp_c" => "Temperature".into(),
         "r" => "Resistance".into(),
+        "p" | "power" | "power_w" => "Power".into(),
         "vcc" => "Supply".into(),
         other => {
             let mut c = other.replace('_', " ");
@@ -111,7 +116,7 @@ fn reading_text(k: &str, v: f64) -> String {
         "v" | "voltage" | "vcc" | "vout" => bb_core::si::format(v, "V"),
         "i" | "current" => bb_core::si::format(v, "A"),
         "r" => bb_core::si::format(v, "Ω"),
-        "p" | "power" => bb_core::si::format(v, "W"),
+        "p" | "power" | "power_w" => bb_core::si::format(v, "W"),
         _ => {
             if v.abs() >= 100.0 || v == v.round() {
                 format!("{v:.0}")
@@ -310,13 +315,33 @@ impl Inspector {
         for pd in editable {
             let cur = Project::prop(&def, &part, &pd.key).unwrap_or_else(|| pd.default_value());
             ui.horizontal(|ui| {
-                let (lr, _) = ui.allocate_exact_size(vec2(110.0, 28.0), Sense::hover());
-                ui.painter().text(
-                    lr.left_center(),
-                    egui::Align2::LEFT_CENTER,
-                    &pd.label,
-                    font::ui(12.0),
-                    p.text_muted,
+                // the control keeps its width; the label column takes what is left (≤ 120 px)
+                // and truncates (full label on hover) so the row never widens the panel
+                let mini = crate::theme::size::MINI_BUTTON + ui.spacing().item_spacing.x;
+                let control = match &pd.kind {
+                    PropKind::Number {
+                        series: Some(_), ..
+                    } => NUM_W + 2.0 * mini,
+                    PropKind::Number { .. } => NUM_W,
+                    PropKind::Choice { .. } | PropKind::Text { .. } => 140.0,
+                    PropKind::Bool { .. } => 18.0,
+                };
+                let label_w = (ui.available_width() - ui.spacing().item_spacing.x - control)
+                    .clamp(60.0, 120.0);
+                ui.allocate_ui_with_layout(
+                    vec2(label_w, 28.0),
+                    egui::Layout::left_to_right(egui::Align::Center),
+                    |ui| {
+                        ui.set_min_size(vec2(label_w, 28.0));
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(&pd.label)
+                                    .font(font::ui(12.0))
+                                    .color(p.text_muted),
+                            )
+                            .truncate(),
+                        );
+                    },
                 );
                 match &pd.kind {
                     PropKind::Number { series, .. } => {
@@ -331,7 +356,7 @@ impl Inspector {
                             .or_insert_with(|| shown.clone());
                         let te = ui.add(
                             egui::TextEdit::singleline(buf)
-                                .desired_width(92.0)
+                                .desired_width(NUM_W - 12.0)
                                 .font(font::mono(12.5))
                                 .margin(vec2(6.0, 5.0)),
                         );
@@ -593,7 +618,7 @@ mod tests {
             measurement_row(uno, false).unwrap().1,
             "ideal · exact codes"
         );
-        assert_eq!(measurement_row(soil, true).unwrap().0, "Noise");
+        assert_eq!(measurement_row(soil, true).unwrap().0, "Sensor noise");
         assert_eq!(
             measurement_row(soil, false).unwrap().1,
             "ideal, none (World)"

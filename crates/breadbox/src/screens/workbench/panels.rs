@@ -612,6 +612,8 @@ fn instruments(ui: &mut Ui, app: &mut AppCtx, canvas: &mut BenchCanvas) {
         }
         go_plugins = Btn::plain("Browse plugins")
             .icon(Icon::Plug)
+            .font_size(12.0)
+            .height(26.0)
             .tooltip("Logic analyzer, bench supply and function generator come as plugins")
             .show(ui)
             .clicked();
@@ -816,17 +818,12 @@ fn probes(ui: &mut Ui, app: &mut AppCtx, canvas: &mut BenchCanvas) {
                             .font(font::mono_medium(15.0))
                             .color(p.text),
                     );
-                    if let Some(r) = r {
+                    if let Some(stats) = r.and_then(probe_stats) {
                         ui.add(
                             egui::Label::new(
-                                egui::RichText::new(format!(
-                                    "min {} · max {} · avg {}",
-                                    bb_core::si::format(r.min, &r.unit),
-                                    bb_core::si::format(r.max, &r.unit),
-                                    bb_core::si::format(r.avg, &r.unit)
-                                ))
-                                .font(font::mono(10.5))
-                                .color(p.text_faint),
+                                egui::RichText::new(stats)
+                                    .font(font::mono(10.5))
+                                    .color(p.text_faint),
                             )
                             .truncate(),
                         );
@@ -851,6 +848,17 @@ fn probes(ui: &mut Ui, app: &mut AppCtx, canvas: &mut BenchCanvas) {
     }
 }
 
+/// A probe's range line: min–max and average volts (a PWM probe's statistics are of its
+/// voltage, like the dock's cards); none for logic probes.
+fn probe_stats(r: &bb_sim::ProbeReading) -> Option<String> {
+    use bb_circuit::project::Quantity;
+    match r.quantity {
+        Quantity::Voltage => Some(format!("{:.2}–{:.2} V · avg {:.2} V", r.min, r.max, r.avg)),
+        Quantity::Duty => Some(format!("avg {:.2} V", r.avg)),
+        _ => None,
+    }
+}
+
 /// The mini scope's screen, large, with timebase / V/div / trigger controls.
 fn waveforms(ui: &mut Ui, app: &mut AppCtx) {
     let p = pal(ui);
@@ -868,8 +876,14 @@ fn waveforms(ui: &mut Ui, app: &mut AppCtx) {
     if t.scopes.is_empty() || !has_scope {
         let mut add = false;
         ui.horizontal(|ui| {
+            // the bench picks up a newly placed scope on its next update
+            let msg = if has_scope {
+                "No trace yet"
+            } else {
+                "No scope on the bench"
+            };
             ui.label(
-                egui::RichText::new("No scope on the bench")
+                egui::RichText::new(msg)
                     .font(font::ui(12.0))
                     .color(p.text_faint),
             );

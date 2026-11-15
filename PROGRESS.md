@@ -1165,3 +1165,52 @@ Open / notes:
   usually finishes sooner.
 - Scope cursors are only covered through the panel state; Mega Timer4, vibration motor and
   servo slew remain untested (SPEC-AUDIT notes).
+
+### text-a
+
+UI text + layout sweep of the Workbench, Home and the app shell against `docs/UI-TEXT.md`
+(branch `text-a`; `text-b` did Firmware / Pro / Plugins / Lessons).
+
+- **Instruments panel** (the user's screenshot: `Add Oscilloscope` over `2 channels · trigg…`):
+  fixed-height card rows lay out the trailing button first and truncate the title / subtitle
+  into the rest (`panels::card_row`). `Add` / `Remove` (accessible `Add Oscilloscope` …),
+  subtitles `2 channels` / `DC volts` / `On bench`, leads as `CH1 U1.D9  [Clip CH1]` with the
+  "clip a lead, then click a pin" sentence as the Clip button's tooltip; the plugin sentence
+  became a **Browse plugins** button. Caption shows `2 on bench` instead of "drag leads onto
+  pins".
+- **Overflows that widened the 300 px right panel** (the rail icons shifted left): World's
+  "Water automatically" row (now `Auto-water` + 120 px select), the World time select, Program
+  the world's script / timeline remove buttons, the resistor Inspector row (label column now
+  sized from what the control leaves, truncating). `tests/text_layout.rs` asserts the rail
+  stays put.
+- **Shorter text**: empty states (`Select a part`, `No probes yet`, `No scope on the bench` +
+  **Add scope**, `No output yet`, `Bench not running`, `No recent projects`), captions
+  (`mini scope`, `drag them on the bench`, the examples' "read-only, Save As" note → tooltip),
+  World-program help lines → `Scripts` / `Timelines` sub-labels with hover text, sim-menu
+  footer → Seed / Sync quantum tooltips, status-strip mode hints (`Placing R1 · Esc cancels`,
+  `Click a pin for CH2 · Esc cancels`), Home card copy (`Breadboards · sensors · real
+  firmware`, `New project` with full accessible names, duplicate Open project… dropped).
+- **Truncation (rule 6)**: status-strip title, dock port label, probe labels / stats, object
+  rows, the breadcrumb's project name (160 px), the new-project dialog's location (`~/…`).
+- **Data fixes on the way**: PWM probes' min/max/avg are volts (the panel printed them as
+  `109 p%`); `power_w` reads `Power`; the sensors' World-noise row is `Sensor noise` (the
+  datasheet already has a `Noise` row); the sim and Share menus have fixed widths (were ~600 px).
+- **Help**: a **?** (`Icon::Help`, question mark in a circle) at the right of the top bar opens
+  the current screen's page (`app::help_topic`). The Help window itself was broken — its page
+  inherited `horizontal_top`, so every Markdown block sat side by side and the window grew to
+  ~61 000 px, covering the top bar; now top-down, sized below the header, max = screen.
+  `docs/guide/workbench.md` written; README has a **Getting started** section (Home's page).
+  `tests/glyphs.rs` also scans `docs/guide/*.md`.
+- **Shared widgets** (all additive): `Btn::accessible_name` (`e65d046`, cherry-picked by
+  text-b), `section_header_row` truncates its caption, `Icon::Help`, `markdown.rs` list items
+  wrap (`Label::wrap()`; they extended in `horizontal_top`) and code blocks / tables scroll
+  sideways instead of widening the page (also used by the Plugins SDK docs view — worth a
+  look after the merge).
+- **Tests**: new `tests/text_layout.rs` — garden-node running, 9 right-rail states at 1440×900
+  and 1280×800: no partly-overlapping labelled widgets in the rail, header, status strip and
+  dock header (AccessKit bounds), the rail never pushed, a long project name; Home + dialog;
+  the `?` opens / closes the right page and the window stays ≤ 800 px below the top bar.
+  `audit.rs`: Objects header + Auto-water select names updated.
+- **Screenshots**: committed `home*.png`, `workbench*.png` (incl. new `workbench-panel-*.png`,
+  `workbench-help.png`), `home-new-project.png`, `widgets.png`. By agreement with text-b,
+  neither branch commits `session-*.png` — regenerate them after the merge.

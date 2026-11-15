@@ -192,7 +192,7 @@ fn workbench_panels_fit_without_overlap_at_both_sizes() {
     ] {
         h.set_size(size);
         h.run_steps(4);
-        let sets: [(&str, Vec<RailPanel>); 8] = [
+        let sets: [(&str, Vec<RailPanel>); 9] = [
             ("world", vec![RailPanel::World]),
             ("world-more", vec![RailPanel::World]),
             ("program", vec![RailPanel::World]),
@@ -203,6 +203,7 @@ fn workbench_panels_fit_without_overlap_at_both_sizes() {
                 vec![RailPanel::Inspector, RailPanel::Waveforms],
             ),
             ("wire", vec![RailPanel::Inspector]),
+            ("resistor", vec![RailPanel::Inspector]),
             (
                 "empty",
                 vec![
@@ -221,6 +222,9 @@ fn workbench_panels_fit_without_overlap_at_both_sizes() {
                 match name {
                     "inspector" => {
                         wb.canvas.selection.parts.insert("j1".into());
+                    }
+                    "resistor" => {
+                        wb.canvas.selection.parts.insert("r1".into());
                     }
                     "instruments" => {
                         // a lead armed: the status strip says what to click
@@ -303,7 +307,7 @@ fn workbench_panels_fit_without_overlap_at_both_sizes() {
                 failures.push(format!("{name}{tag}: {}", bad.join("\n    ")));
             }
             let shot = format!("workbench-panel-{name}");
-            if tag.is_empty() && !matches!(name, "world" | "wire") {
+            if tag.is_empty() && !matches!(name, "world" | "wire" | "resistor") {
                 screenshot(&mut h, &shot);
             } else {
                 scratch_shot(&mut h, &format!("{shot}{tag}"));
@@ -325,6 +329,26 @@ fn workbench_panels_fit_without_overlap_at_both_sizes() {
             }
         }
     }
+    // a long project name in the breadcrumb at the minimum width
+    let name = h
+        .state()
+        .ctx
+        .project
+        .as_ref()
+        .expect("project")
+        .name
+        .clone();
+    h.state_mut().ctx.project.as_mut().expect("project").name =
+        "garden-node-with-a-very-long-project-name-for-testing".into();
+    h.set_size(egui::vec2(1280.0, 800.0));
+    h.run_steps(4);
+    let header = chrome_rows(egui::vec2(1280.0, 800.0))[0].1;
+    let bad = overlaps(&h, header);
+    if !bad.is_empty() {
+        failures.push(format!("long name header: {}", bad.join("\n    ")));
+    }
+    scratch_shot(&mut h, "workbench-long-name-1280");
+    h.state_mut().ctx.project.as_mut().expect("project").name = name;
     // the dock's tab row, with nothing scrolled out behind it (paused, serial cleared,
     // a short right panel)
     h.get_by_label("Pause").click();
@@ -374,4 +398,57 @@ fn home_and_new_project_dialog_fit() {
     );
     let _ = bad; // the dialog sits over the page; the page's widgets are expected beneath it
     screenshot(&mut h, "home-new-project");
+}
+
+/// The top bar's "?" opens the current screen's Help page (and closes it again); the header's
+/// menus (speed / simulation, ERC list, Share) render for review.
+#[test]
+fn help_button_opens_the_screen_page_and_menus_render() {
+    use breadbox::widgets::help::HelpTopic;
+    let mut h = harness();
+    h.get_by_label("Help").click();
+    h.run_steps(3);
+    assert_eq!(
+        h.state().ctx.help,
+        Some(HelpTopic::Guide),
+        "Home → the guide"
+    );
+    assert!(has_label_containing(&h, "Getting started"));
+    for _ in 0..4 {
+        // the window keeps its size (wide tables / code scroll inside the page) and stays
+        // below the top bar, where its "?" can close it again
+        h.run_steps(1);
+        let w = h.get_by_label("Breadbox Help").rect();
+        assert!(
+            w.width() <= 800.0 && w.top() >= 56.0,
+            "help window at {w:?}"
+        );
+    }
+    scratch_shot(&mut h, "help-home");
+    h.get_by_label("Help").click();
+    h.run_steps(2);
+    assert_eq!(h.state().ctx.help, None, "? again closes it");
+    garden_running(&mut h);
+    h.get_by_label("Help").click();
+    h.run_steps(4);
+    assert_eq!(h.state().ctx.help, Some(HelpTopic::Workbench));
+    assert!(has_label_containing(&h, "Instruments → Add"));
+    screenshot(&mut h, "workbench-help");
+    h.get_by_label("Help").click();
+    h.run_steps(2);
+    // the simulation menu
+    h.get_by_label_contains("Speed:").click();
+    h.run_steps(3);
+    scratch_shot(&mut h, "menu-speed");
+    h.key_press(egui::Key::Escape);
+    h.run_steps(2);
+    // the ERC / DRC list
+    h.get_by_label_contains("ERC 1 warning").click();
+    h.run_steps(3);
+    scratch_shot(&mut h, "menu-erc");
+    h.get_by_label_contains("ERC 1 warning").click();
+    h.run_steps(2);
+    h.get_by_label("Share").click();
+    h.run_steps(3);
+    scratch_shot(&mut h, "menu-share");
 }

@@ -77,8 +77,8 @@ impl Export {
 impl ShareState {
     pub fn menu(&mut self, resp: &Response, app: &mut AppCtx) {
         let mut pick = None;
-        egui::Popup::menu(resp).show(|ui| {
-            ui.set_min_width(260.0);
+        egui::Popup::menu(resp).width(280.0).show(|ui| {
+            ui.set_max_width(280.0);
             for e in Export::ALL {
                 if widgets::Btn::plain(e.label())
                     .icon(e.icon())
