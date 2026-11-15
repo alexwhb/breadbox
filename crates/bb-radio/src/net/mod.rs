@@ -30,8 +30,8 @@ use std::collections::{BinaryHeap, HashMap, VecDeque};
 use std::net::{Ipv4Addr, SocketAddrV4};
 use thiserror::Error;
 
-pub use services::{HttpRequest, HttpResponse};
 use services::{DhcpClient, DhcpServer, HttpSession};
+pub use services::{HttpRequest, HttpResponse};
 use tcp::TcpConn;
 pub use tcp::TcpState;
 
@@ -145,7 +145,13 @@ pub struct NetConditions {
 
 impl Default for NetConditions {
     fn default() -> Self {
-        NetConditions { latency_ms: 3.0, jitter_ms: 1.0, loss_pct: 0.0, drop_ap_at_s: None, ap_down_s: 10.0 }
+        NetConditions {
+            latency_ms: 3.0,
+            jitter_ms: 1.0,
+            loss_pct: 0.0,
+            drop_ap_at_s: None,
+            ap_down_s: 10.0,
+        }
     }
 }
 
@@ -202,21 +208,67 @@ pub enum CloseReason {
 /// Events delivered to a station's owner (modem, host-board adapter).
 #[derive(Debug, Clone, PartialEq)]
 pub enum NetEvent {
-    WifiConnected { ssid: String, bssid: [u8; 6], channel: u8, rssi: i32 },
-    WifiJoinFailed { ssid: String, reason: JoinError },
-    GotIp { ip: Ipv4Addr, gateway: Ipv4Addr, netmask: Ipv4Addr, dns: Ipv4Addr },
-    WifiDisconnected { reason: DisconnectReason },
-    TcpConnected { sock: SockId },
-    TcpConnectFailed { sock: SockId, reason: CloseReason },
-    TcpData { sock: SockId, data: Vec<u8> },
+    WifiConnected {
+        ssid: String,
+        bssid: [u8; 6],
+        channel: u8,
+        rssi: i32,
+    },
+    WifiJoinFailed {
+        ssid: String,
+        reason: JoinError,
+    },
+    GotIp {
+        ip: Ipv4Addr,
+        gateway: Ipv4Addr,
+        netmask: Ipv4Addr,
+        dns: Ipv4Addr,
+    },
+    WifiDisconnected {
+        reason: DisconnectReason,
+    },
+    TcpConnected {
+        sock: SockId,
+    },
+    TcpConnectFailed {
+        sock: SockId,
+        reason: CloseReason,
+    },
+    TcpData {
+        sock: SockId,
+        data: Vec<u8>,
+    },
     /// Bytes acknowledged by the peer.
-    TcpAcked { sock: SockId, bytes: usize },
-    TcpClosed { sock: SockId, reason: CloseReason },
-    TcpAccepted { listener: SockId, sock: SockId, remote: SocketAddrV4 },
-    UdpData { sock: SockId, from: SocketAddrV4, data: Vec<u8> },
-    DnsResolved { query: u32, name: String, ip: Option<Ipv4Addr> },
-    PingReply { ping: u32, rtt: SimTime },
-    PingTimeout { ping: u32 },
+    TcpAcked {
+        sock: SockId,
+        bytes: usize,
+    },
+    TcpClosed {
+        sock: SockId,
+        reason: CloseReason,
+    },
+    TcpAccepted {
+        listener: SockId,
+        sock: SockId,
+        remote: SocketAddrV4,
+    },
+    UdpData {
+        sock: SockId,
+        from: SocketAddrV4,
+        data: Vec<u8>,
+    },
+    DnsResolved {
+        query: u32,
+        name: String,
+        ip: Option<Ipv4Addr>,
+    },
+    PingReply {
+        ping: u32,
+        rtt: SimTime,
+    },
+    PingTimeout {
+        ping: u32,
+    },
 }
 
 /// Serial-monitor annotation produced by the network (`RF-8`).
@@ -338,9 +390,23 @@ pub(crate) struct Socket {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Body {
-    Tcp { conn: ConnId, from_end: usize, flags: u8, seq: u32, ack: u32, data: Vec<u8> },
-    Udp { data: Vec<u8> },
-    Icmp { reply: bool, id: u16, seq: u16, data: Vec<u8> },
+    Tcp {
+        conn: ConnId,
+        from_end: usize,
+        flags: u8,
+        seq: u32,
+        ack: u32,
+        data: Vec<u8>,
+    },
+    Udp {
+        data: Vec<u8>,
+    },
+    Icmp {
+        reply: bool,
+        id: u16,
+        seq: u16,
+        data: Vec<u8>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -356,15 +422,46 @@ pub(crate) struct Packet {
 #[derive(Debug, Clone)]
 enum Ev {
     Deliver(Box<Packet>, Host),
-    AssocDone { sta: StationId, epoch: u64, ap: usize },
-    JoinFailed { sta: StationId, epoch: u64, ssid: String, reason: JoinError },
-    Dhcp { sta: StationId, epoch: u64, dgen: u64 },
-    TcpRto { conn: ConnId, end: usize, epoch: u64 },
-    ApDown { cgen: u64 },
-    ApUp { cgen: u64 },
-    Reconnect { sta: StationId, epoch: u64 },
-    DnsRetry { sta: StationId, id: u16, attempt: u32 },
-    PingTimeout { sta: StationId, id: u16 },
+    AssocDone {
+        sta: StationId,
+        epoch: u64,
+        ap: usize,
+    },
+    JoinFailed {
+        sta: StationId,
+        epoch: u64,
+        ssid: String,
+        reason: JoinError,
+    },
+    Dhcp {
+        sta: StationId,
+        epoch: u64,
+        dgen: u64,
+    },
+    TcpRto {
+        conn: ConnId,
+        end: usize,
+        epoch: u64,
+    },
+    ApDown {
+        cgen: u64,
+    },
+    ApUp {
+        cgen: u64,
+    },
+    Reconnect {
+        sta: StationId,
+        epoch: u64,
+    },
+    DnsRetry {
+        sta: StationId,
+        id: u16,
+        attempt: u32,
+    },
+    PingTimeout {
+        sta: StationId,
+        id: u16,
+    },
 }
 
 #[derive(Debug)]
@@ -497,12 +594,22 @@ impl Network {
         if let Some(at) = c.drop_ap_at_s {
             let at = SimTime::from_secs_f64(at);
             if at >= self.now {
-                self.schedule(at, Ev::ApDown { cgen: self.cond_gen });
+                self.schedule(
+                    at,
+                    Ev::ApDown {
+                        cgen: self.cond_gen,
+                    },
+                );
             }
         }
         if self.ap_down && c.drop_ap_at_s.is_none() {
             // Fault removed while active: bring the AP back now.
-            self.schedule(self.now, Ev::ApUp { cgen: self.cond_gen });
+            self.schedule(
+                self.now,
+                Ev::ApUp {
+                    cgen: self.cond_gen,
+                },
+            );
         }
         self.conditions = c;
     }
@@ -561,7 +668,12 @@ impl Network {
     }
 
     pub(crate) fn annotate(&mut self, station: StationId, kind: AnnotationKind, text: String) {
-        self.annotations.push(NetAnnotation { time: self.now, station, kind, text });
+        self.annotations.push(NetAnnotation {
+            time: self.now,
+            station,
+            kind,
+            text,
+        });
     }
 
     /// Wall-clock Unix time (s) at sim time `t`.
@@ -605,7 +717,9 @@ impl Network {
     }
 
     pub(crate) fn sta_mut(&mut self, id: StationId) -> Result<&mut Station, NetError> {
-        self.stations.get_mut(id.0 as usize).ok_or(NetError::NoStation)
+        self.stations
+            .get_mut(id.0 as usize)
+            .ok_or(NetError::NoStation)
     }
 
     pub fn set_station_pos(&mut self, id: StationId, pos: Pos) {
@@ -636,7 +750,12 @@ impl Network {
     pub fn set_static_ip(&mut self, id: StationId, ip: Option<(Ipv4Addr, Ipv4Addr, Ipv4Addr)>) {
         let dns = self.config.gateway;
         if let Ok(s) = self.sta_mut(id) {
-            s.static_ip = ip.map(|(ip, gateway, netmask)| IpConfig { ip, gateway, netmask, dns });
+            s.static_ip = ip.map(|(ip, gateway, netmask)| IpConfig {
+                ip,
+                gateway,
+                netmask,
+                dns,
+            });
             if s.ip.is_some()
                 && let Some(c) = s.static_ip
             {
@@ -656,7 +775,9 @@ impl Network {
     pub fn station_by_ip(&self, ip: Ipv4Addr) -> Option<StationId> {
         self.stations
             .iter()
-            .position(|s| s.ip.map(|c| c.ip) == Some(ip) && matches!(s.state, WifiState::Connected { .. }))
+            .position(|s| {
+                s.ip.map(|c| c.ip) == Some(ip) && matches!(s.state, WifiState::Connected { .. })
+            })
             .map(|i| StationId(i as u32))
     }
 
@@ -693,12 +814,15 @@ impl Network {
     }
 
     pub fn is_connected(&self, id: StationId) -> bool {
-        self.sta(id).is_ok_and(|s| matches!(s.state, WifiState::Connected { .. }))
+        self.sta(id)
+            .is_ok_and(|s| matches!(s.state, WifiState::Connected { .. }))
     }
 
     /// Events for a station since the last call.
     pub fn take_events(&mut self, id: StationId) -> Vec<NetEvent> {
-        self.sta_mut(id).map(|s| s.events.drain(..).collect()).unwrap_or_default()
+        self.sta_mut(id)
+            .map(|s| s.events.drain(..).collect())
+            .unwrap_or_default()
     }
 
     pub fn has_events(&self, id: StationId) -> bool {
@@ -731,13 +855,19 @@ impl Network {
                 })
             })
             .collect();
-        v.sort_by(|a, b| b.rssi.cmp(&a.rssi));
+        v.sort_by_key(|e| std::cmp::Reverse(e.rssi));
         v
     }
 
     /// Starts joining `ssid` (scan + WPA2 handshake + DHCP). Outcome: `WifiConnected` then
     /// `GotIp`, or `WifiJoinFailed`.
-    pub fn join(&mut self, id: StationId, ssid: &str, password: Option<&str>, now: SimTime) -> Result<(), NetError> {
+    pub fn join(
+        &mut self,
+        id: StationId,
+        ssid: &str,
+        password: Option<&str>,
+        now: SimTime,
+    ) -> Result<(), NetError> {
         self.sync(now);
         self.disconnect_station(id, DisconnectReason::Left, false)?;
         let s = self.sta_mut(id)?;
@@ -749,12 +879,19 @@ impl Network {
 
     fn attempt_join(&mut self, id: StationId, quiet: bool) {
         let Ok(s) = self.sta(id) else { return };
-        let Some((ssid, pass)) = s.join.clone() else { return };
+        let Some((ssid, pass)) = s.join.clone() else {
+            return;
+        };
         let epoch = s.epoch;
-        let found = self.aps.iter().enumerate().find(|(_, a)| a.ssid == ssid && a.enabled && !self.ap_down).map(|(i, a)| {
-            let l = self.geometry.link(&self.path_loss, a.tx_dbm, a.pos, s.pos);
-            (i, a.password.clone(), l)
-        });
+        let found = self
+            .aps
+            .iter()
+            .enumerate()
+            .find(|(_, a)| a.ssid == ssid && a.enabled && !self.ap_down)
+            .map(|(i, a)| {
+                let l = self.geometry.link(&self.path_loss, a.tx_dbm, a.pos, s.pos);
+                (i, a.password.clone(), l)
+            });
         let label = s.label.clone();
         // Scan: ~0.6 s across channels (+ jitter), then auth/assoc.
         let scan = SimTime::from_ms(550 + self.rng.below(120) as u64);
@@ -771,9 +908,20 @@ impl Network {
                     self.log_mgmt(id, Dir::Tx, format!("Wi-Fi AUTH {ssid} (WPA2-PSK)"));
                 }
                 if ok {
-                    self.schedule(self.now + scan + SimTime::from_ms(120), Ev::AssocDone { sta: id, epoch, ap });
+                    self.schedule(
+                        self.now + scan + SimTime::from_ms(120),
+                        Ev::AssocDone { sta: id, epoch, ap },
+                    );
                 } else {
-                    self.schedule(self.now + scan + SimTime::from_ms(1_600), Ev::JoinFailed { sta: id, epoch, ssid, reason: JoinError::WrongPassword });
+                    self.schedule(
+                        self.now + scan + SimTime::from_ms(1_600),
+                        Ev::JoinFailed {
+                            sta: id,
+                            epoch,
+                            ssid,
+                            reason: JoinError::WrongPassword,
+                        },
+                    );
                 }
             }
             _ => {
@@ -784,7 +932,15 @@ impl Network {
                     s.state = WifiState::Joining { ap: usize::MAX };
                 }
                 let _ = label;
-                self.schedule(self.now + SimTime::from_ms(2_100), Ev::JoinFailed { sta: id, epoch, ssid, reason: JoinError::NoAp });
+                self.schedule(
+                    self.now + SimTime::from_ms(2_100),
+                    Ev::JoinFailed {
+                        sta: id,
+                        epoch,
+                        ssid,
+                        reason: JoinError::NoAp,
+                    },
+                );
             }
         }
     }
@@ -799,7 +955,12 @@ impl Network {
     }
 
     /// Drops association + IP + every TCP connection of the station.
-    fn disconnect_station(&mut self, id: StationId, reason: DisconnectReason, notify: bool) -> Result<(), NetError> {
+    fn disconnect_station(
+        &mut self,
+        id: StationId,
+        reason: DisconnectReason,
+        notify: bool,
+    ) -> Result<(), NetError> {
         let s = self.sta_mut(id)?;
         let was = s.state;
         s.state = WifiState::Idle;
@@ -816,32 +977,63 @@ impl Network {
                 DisconnectReason::Left => "Wi-Fi DISASSOC (leaving)",
                 DisconnectReason::OutOfRange => "Wi-Fi beacon loss (out of range)",
             };
-            self.log_mgmt(id, if reason == DisconnectReason::ApDown { Dir::Rx } else { Dir::Tx }, text.into());
+            self.log_mgmt(
+                id,
+                if reason == DisconnectReason::ApDown {
+                    Dir::Rx
+                } else {
+                    Dir::Tx
+                },
+                text.into(),
+            );
             if notify {
-                self.annotate(id, AnnotationKind::Wifi, format!("WIFI DISCONNECT ({})", match reason {
-                    DisconnectReason::ApDown => "AP down",
-                    DisconnectReason::Left => "left",
-                    DisconnectReason::OutOfRange => "out of range",
-                }));
+                self.annotate(
+                    id,
+                    AnnotationKind::Wifi,
+                    format!(
+                        "WIFI DISCONNECT ({})",
+                        match reason {
+                            DisconnectReason::ApDown => "AP down",
+                            DisconnectReason::Left => "left",
+                            DisconnectReason::OutOfRange => "out of range",
+                        }
+                    ),
+                );
             }
         }
         Ok(())
     }
 
     fn on_assoc_done(&mut self, id: StationId, ap: usize) {
-        let Some(link) = self.link(id, ap) else { return };
+        let Some(link) = self.link(id, ap) else {
+            return;
+        };
         let a = self.aps[ap].clone();
         let Ok(s) = self.sta_mut(id) else { return };
         s.state = WifiState::Connected { ap };
         let rssi = link.rssi_dbm.round() as i32;
-        s.events.push_back(NetEvent::WifiConnected { ssid: a.ssid.clone(), bssid: a.bssid, channel: a.channel, rssi });
-        self.log_mgmt(id, Dir::Rx, format!("Wi-Fi ASSOC {} · ch {} · {} dBm", a.ssid, a.channel, rssi));
+        s.events.push_back(NetEvent::WifiConnected {
+            ssid: a.ssid.clone(),
+            bssid: a.bssid,
+            channel: a.channel,
+            rssi,
+        });
+        self.log_mgmt(
+            id,
+            Dir::Rx,
+            format!("Wi-Fi ASSOC {} · ch {} · {} dBm", a.ssid, a.channel, rssi),
+        );
         let static_ip = self.sta(id).ok().and_then(|s| s.static_ip);
         match static_ip {
             Some(c) => {
                 let s = self.sta_mut(id).expect("station exists");
                 s.ip = Some(c);
-                s.events.push_back(NetEvent::GotIp { ip: c.ip, gateway: c.gateway, netmask: c.netmask, dns: c.dns });
+                s.events.push_back(NetEvent::GotIp {
+                    ip: c.ip,
+                    gateway: c.gateway,
+                    netmask: c.netmask,
+                    dns: c.dns,
+                });
             }
             None => self.dhcp_start(id),
         }
@@ -851,7 +1043,11 @@ impl Network {
 
     fn schedule(&mut self, at: SimTime, ev: Ev) {
         self.seq += 1;
-        self.queue.push(Scheduled { at: at.max(self.now), seq: self.seq, ev });
+        self.queue.push(Scheduled {
+            at: at.max(self.now),
+            seq: self.seq,
+            ev,
+        });
     }
 
     fn sync(&mut self, now: SimTime) {
@@ -908,7 +1104,12 @@ impl Network {
                     }
                 }
             }
-            Ev::JoinFailed { sta, epoch, ssid, reason } => {
+            Ev::JoinFailed {
+                sta,
+                epoch,
+                ssid,
+                reason,
+            } => {
                 if self.sta(sta).is_ok_and(|s| s.epoch == epoch) {
                     self.join_failed(sta, ssid, reason);
                 }
@@ -919,7 +1120,12 @@ impl Network {
                 if cgen == self.cond_gen && !self.ap_down {
                     self.ap_down = true;
                     let label = self.aps.first().map(|a| a.ssid.clone()).unwrap_or_default();
-                    self.log.push(mgmt_entry(self.now, None, Dir::Drop, format!("fault injector: AP {label} down")));
+                    self.log.push(mgmt_entry(
+                        self.now,
+                        None,
+                        Dir::Drop,
+                        format!("fault injector: AP {label} down"),
+                    ));
                     for i in 0..self.stations.len() {
                         let id = StationId(i as u32);
                         if self.is_connected(id) {
@@ -934,7 +1140,12 @@ impl Network {
                 if cgen == self.cond_gen && self.ap_down {
                     self.ap_down = false;
                     let label = self.aps.first().map(|a| a.ssid.clone()).unwrap_or_default();
-                    self.log.push(mgmt_entry(self.now, None, Dir::Rx, format!("fault injector: AP {label} back up")));
+                    self.log.push(mgmt_entry(
+                        self.now,
+                        None,
+                        Dir::Rx,
+                        format!("fault injector: AP {label} back up"),
+                    ));
                     for i in 0..self.stations.len() {
                         let id = StationId(i as u32);
                         let s = &self.stations[i];
@@ -947,7 +1158,10 @@ impl Network {
                 }
             }
             Ev::Reconnect { sta, epoch } => {
-                if self.sta(sta).is_ok_and(|s| s.epoch == epoch && s.state == WifiState::Idle) {
+                if self
+                    .sta(sta)
+                    .is_ok_and(|s| s.epoch == epoch && s.state == WifiState::Idle)
+                {
                     self.attempt_join(sta, false);
                 }
             }
@@ -963,17 +1177,29 @@ impl Network {
     }
 
     fn join_failed(&mut self, id: StationId, ssid: String, reason: JoinError) {
-        let auto = self.sta(id).is_ok_and(|s| s.auto_reconnect && s.join.is_some());
+        let auto = self
+            .sta(id)
+            .is_ok_and(|s| s.auto_reconnect && s.join.is_some());
         let epoch = self.sta(id).map(|s| s.epoch).unwrap_or(0);
         if let Ok(s) = self.sta_mut(id) {
             s.state = WifiState::Idle;
-            s.events.push_back(NetEvent::WifiJoinFailed { ssid: ssid.clone(), reason });
+            s.events.push_back(NetEvent::WifiJoinFailed {
+                ssid: ssid.clone(),
+                reason,
+            });
         }
-        self.log_mgmt(id, Dir::Rx, format!("Wi-Fi join {ssid} failed: {}", reason.text()));
+        self.log_mgmt(
+            id,
+            Dir::Rx,
+            format!("Wi-Fi join {ssid} failed: {}", reason.text()),
+        );
         // Keep trying in the background like the ESP SDK's auto-connect (the AT command has
         // already reported FAIL).
         if auto && reason == JoinError::NoAp {
-            self.schedule(self.now + SimTime::from_secs(5), Ev::Reconnect { sta: id, epoch });
+            self.schedule(
+                self.now + SimTime::from_secs(5),
+                Ev::Reconnect { sta: id, epoch },
+            );
         }
     }
 
@@ -982,7 +1208,11 @@ impl Network {
     fn air_hop(&mut self, id: StationId) -> Result<SimTime, DropReason> {
         let s = self.sta(id).map_err(|_| DropReason::NoRoute)?;
         let WifiState::Connected { ap } = s.state else {
-            return Err(if self.ap_down { DropReason::ApDown } else { DropReason::NoRoute });
+            return Err(if self.ap_down {
+                DropReason::ApDown
+            } else {
+                DropReason::NoRoute
+            });
         };
         if self.ap_down {
             return Err(DropReason::ApDown);
@@ -1036,7 +1266,12 @@ impl Network {
         let ack_only = is_pure_ack(&p);
         if let Host::Station(s) = p.from {
             if drop.is_some() || !ack_only || self.log_acks {
-                self.log_packet(&p, Some(s), if drop.is_some() { Dir::Drop } else { Dir::Tx }, drop.clone());
+                self.log_packet(
+                    &p,
+                    Some(s),
+                    if drop.is_some() { Dir::Drop } else { Dir::Tx },
+                    drop.clone(),
+                );
             }
         } else if drop.is_some() && (!ack_only || self.log_acks) {
             let r = match to {
@@ -1059,7 +1294,11 @@ impl Network {
                 // The receiver may have lost its link while the frame was in flight.
                 if !self.is_connected(s) {
                     if !is_pure_ack(&p) || self.log_acks {
-                        let r = if self.ap_down { DropReason::ApDown } else { DropReason::NoRoute };
+                        let r = if self.ap_down {
+                            DropReason::ApDown
+                        } else {
+                            DropReason::NoRoute
+                        };
                         self.log_packet(&p, Some(s), Dir::Drop, Some(r));
                     }
                     return;
@@ -1076,8 +1315,24 @@ impl Network {
         match p.body.clone() {
             Body::Tcp { .. } => self.tcp_receive(p, Host::Gateway),
             Body::Udp { data } => self.gateway_udp(&p, data),
-            Body::Icmp { reply: false, id, seq, data } => {
-                let r = Packet { src: p.dst, dst: p.src, body: Body::Icmp { reply: true, id, seq, data }, from: Host::Gateway, to: Some(p.from) };
+            Body::Icmp {
+                reply: false,
+                id,
+                seq,
+                data,
+            } => {
+                let r = Packet {
+                    src: p.dst,
+                    dst: p.src,
+                    body: Body::Icmp {
+                        reply: true,
+                        id,
+                        seq,
+                        data,
+                    },
+                    from: Host::Gateway,
+                    to: Some(p.from),
+                };
                 self.transmit(r);
             }
             Body::Icmp { .. } => {}
@@ -1088,17 +1343,40 @@ impl Network {
         match p.body.clone() {
             Body::Tcp { .. } => self.tcp_receive(p, Host::Station(id)),
             Body::Udp { data } => self.station_udp(id, &p, data),
-            Body::Icmp { reply: false, id: iid, seq, data } => {
+            Body::Icmp {
+                reply: false,
+                id: iid,
+                seq,
+                data,
+            } => {
                 // Stations answer pings.
-                let r = Packet { src: p.dst, dst: p.src, body: Body::Icmp { reply: true, id: iid, seq, data }, from: Host::Station(id), to: Some(p.from) };
+                let r = Packet {
+                    src: p.dst,
+                    dst: p.src,
+                    body: Body::Icmp {
+                        reply: true,
+                        id: iid,
+                        seq,
+                        data,
+                    },
+                    from: Host::Station(id),
+                    to: Some(p.from),
+                };
                 self.transmit(r);
             }
-            Body::Icmp { reply: true, id: iid, .. } => {
+            Body::Icmp {
+                reply: true,
+                id: iid,
+                ..
+            } => {
                 let now = self.now;
                 if let Ok(s) = self.sta_mut(id)
                     && let Some((ping, sent)) = s.pings.remove(&iid)
                 {
-                    s.events.push_back(NetEvent::PingReply { ping, rtt: now - sent });
+                    s.events.push_back(NetEvent::PingReply {
+                        ping,
+                        rtt: now - sent,
+                    });
                 }
             }
         }
@@ -1110,7 +1388,10 @@ impl Network {
             self.dhcp_client_receive(id, &data);
             return;
         }
-        let dns_match = self.sta(id).ok().and_then(|s| s.dns.iter().find(|(_, q)| q.port == port).map(|(k, _)| *k));
+        let dns_match = self
+            .sta(id)
+            .ok()
+            .and_then(|s| s.dns.iter().find(|(_, q)| q.port == port).map(|(k, _)| *k));
         if let Some(dns_id) = dns_match {
             self.dns_client_receive(id, dns_id, &data);
             return;
@@ -1121,7 +1402,14 @@ impl Network {
             .find(|(_, s)| s.owner == id && s.kind == SockKind::Udp { port })
             .map(|(k, _)| *k);
         if let Some(sock) = sock {
-            self.push_event(id, NetEvent::UdpData { sock, from: p.src, data });
+            self.push_event(
+                id,
+                NetEvent::UdpData {
+                    sock,
+                    from: p.src,
+                    data,
+                },
+            );
         }
         // else: ICMP port unreachable (not modelled).
     }
@@ -1133,7 +1421,13 @@ impl Network {
         self.log.push(mgmt_entry(self.now, label, dir, text));
     }
 
-    fn log_packet(&mut self, p: &Packet, radio: Option<StationId>, dir: Dir, dropped: Option<DropReason>) {
+    fn log_packet(
+        &mut self,
+        p: &Packet,
+        radio: Option<StationId>,
+        dir: Dir,
+        dropped: Option<DropReason>,
+    ) {
         let (proto, summary, bytes) = self.summarize(p);
         let frame = self.frame(p);
         let radio = radio.and_then(|r| self.sta(r).ok().map(|s| s.label.clone()));
@@ -1155,7 +1449,11 @@ impl Network {
 
     fn mac_of(&self, h: Host) -> [u8; 6] {
         match h {
-            Host::Gateway => self.aps.first().map(|a| a.bssid).unwrap_or([2, 0, 0, 0, 0, 1]),
+            Host::Gateway => self
+                .aps
+                .first()
+                .map(|a| a.bssid)
+                .unwrap_or([2, 0, 0, 0, 0, 1]),
             Host::Station(s) => self.sta(s).map(|s| s.mac).unwrap_or([0; 6]),
         }
     }
@@ -1163,9 +1461,23 @@ impl Network {
     fn frame(&mut self, p: &Packet) -> Vec<u8> {
         self.ip_ident = self.ip_ident.wrapping_add(1);
         let (proto, l4) = match &p.body {
-            Body::Tcp { flags, seq, ack, data, .. } => (wire::PROTO_TCP, wire::tcp_segment(p.src, p.dst, *seq, *ack, *flags, 64_240, data)),
+            Body::Tcp {
+                flags,
+                seq,
+                ack,
+                data,
+                ..
+            } => (
+                wire::PROTO_TCP,
+                wire::tcp_segment(p.src, p.dst, *seq, *ack, *flags, 64_240, data),
+            ),
             Body::Udp { data } => (wire::PROTO_UDP, wire::udp_datagram(p.src, p.dst, data)),
-            Body::Icmp { reply, id, seq, data } => (wire::PROTO_ICMP, wire::icmp_echo(*reply, *id, *seq, data)),
+            Body::Icmp {
+                reply,
+                id,
+                seq,
+                data,
+            } => (wire::PROTO_ICMP, wire::icmp_echo(*reply, *id, *seq, data)),
         };
         let ip = wire::ipv4_packet(*p.src.ip(), *p.dst.ip(), proto, self.ip_ident, &l4);
         let dst_mac = match self.resolve_host(p) {
@@ -1181,29 +1493,36 @@ impl Network {
         let dp = p.dst.port();
         match &p.body {
             Body::Udp { data } => {
-                if sp == PORT_DHCP_C || dp == PORT_DHCP_C || sp == PORT_DHCP_S || dp == PORT_DHCP_S {
-                    if let Some(m) = wire::DhcpMessage::decode(data) {
-                        let s = match m.msg_type {
-                            wire::DhcpType::Discover => "DHCP DISCOVER".to_string(),
-                            wire::DhcpType::Offer => format!("DHCP OFFER {}", m.yiaddr),
-                            wire::DhcpType::Request => format!("DHCP REQUEST {}", m.requested_ip.unwrap_or(m.ciaddr)),
-                            wire::DhcpType::Ack => format!("DHCP ACK · lease {} s", m.lease_secs.unwrap_or(0)),
-                            t => format!("DHCP {}", t.name()),
-                        };
-                        return (Proto::Dhcp, s, data.len());
-                    }
+                if (sp == PORT_DHCP_C
+                    || dp == PORT_DHCP_C
+                    || sp == PORT_DHCP_S
+                    || dp == PORT_DHCP_S)
+                    && let Some(m) = wire::DhcpMessage::decode(data)
+                {
+                    let s = match m.msg_type {
+                        wire::DhcpType::Discover => "DHCP DISCOVER".to_string(),
+                        wire::DhcpType::Offer => format!("DHCP OFFER {}", m.yiaddr),
+                        wire::DhcpType::Request => {
+                            format!("DHCP REQUEST {}", m.requested_ip.unwrap_or(m.ciaddr))
+                        }
+                        wire::DhcpType::Ack => {
+                            format!("DHCP ACK · lease {} s", m.lease_secs.unwrap_or(0))
+                        }
+                        t => format!("DHCP {}", t.name()),
+                    };
+                    return (Proto::Dhcp, s, data.len());
                 }
-                if sp == PORT_DNS || dp == PORT_DNS {
-                    if let Some(m) = wire::DnsMessage::decode(data) {
-                        let s = if !m.response {
-                            format!("DNS A? {}", m.name)
-                        } else if let Some((ip, _)) = m.answers.first() {
-                            format!("DNS A {} = {}", m.name, ip)
-                        } else {
-                            format!("DNS {} NXDOMAIN", m.name)
-                        };
-                        return (Proto::Dns, s, data.len());
-                    }
+                if (sp == PORT_DNS || dp == PORT_DNS)
+                    && let Some(m) = wire::DnsMessage::decode(data)
+                {
+                    let s = if !m.response {
+                        format!("DNS A? {}", m.name)
+                    } else if let Some((ip, _)) = m.answers.first() {
+                        format!("DNS A {} = {}", m.name, ip)
+                    } else {
+                        format!("DNS {} NXDOMAIN", m.name)
+                    };
+                    return (Proto::Dns, s, data.len());
                 }
                 if sp == PORT_NTP || dp == PORT_NTP {
                     let s = match wire::ntp_reply_time(data) {
@@ -1212,18 +1531,34 @@ impl Network {
                     };
                     return (Proto::Ntp, s, data.len());
                 }
-                (Proto::Udp, format!("UDP {} → {} · {} B", p.src, p.dst, data.len()), data.len())
+                (
+                    Proto::Udp,
+                    format!("UDP {} → {} · {} B", p.src, p.dst, data.len()),
+                    data.len(),
+                )
             }
-            Body::Icmp { reply, seq, data, .. } => {
-                (Proto::Icmp, format!("ICMP echo {} seq={}", if *reply { "reply" } else { "request" }, seq), data.len())
-            }
+            Body::Icmp {
+                reply, seq, data, ..
+            } => (
+                Proto::Icmp,
+                format!(
+                    "ICMP echo {} seq={}",
+                    if *reply { "reply" } else { "request" },
+                    seq
+                ),
+                data.len(),
+            ),
             Body::Tcp { flags, data, .. } => {
                 use wire::tcp_flags::*;
                 if flags & RST != 0 {
                     return (Proto::Tcp, format!("TCP RST {}", p.dst), 0);
                 }
                 if flags & SYN != 0 {
-                    let s = if flags & ACK != 0 { format!("TCP SYN-ACK {}", p.src) } else { format!("TCP SYN {}", p.dst) };
+                    let s = if flags & ACK != 0 {
+                        format!("TCP SYN-ACK {}", p.src)
+                    } else {
+                        format!("TCP SYN {}", p.dst)
+                    };
                     return (Proto::Tcp, s, 0);
                 }
                 if !data.is_empty() {
@@ -1231,12 +1566,21 @@ impl Network {
                         if let Some(s) = crate::mqtt::codec::summarize(data) {
                             return (Proto::Mqtt, s, data.len());
                         }
-                        return (Proto::Mqtt, format!("MQTT data · {} B", data.len()), data.len());
+                        return (
+                            Proto::Mqtt,
+                            format!("MQTT data · {} B", data.len()),
+                            data.len(),
+                        );
                     }
                     if sp == PORT_HTTP || dp == PORT_HTTP {
                         let first = data.split(|&b| b == b'\r').next().unwrap_or(&[]);
-                        let line = String::from_utf8_lossy(&first[..first.len().min(60)]).into_owned();
-                        let s = if line.starts_with("HTTP/") || line.contains(" HTTP/") || line.starts_with("GET") || line.starts_with("POST") {
+                        let line =
+                            String::from_utf8_lossy(&first[..first.len().min(60)]).into_owned();
+                        let s = if line.starts_with("HTTP/")
+                            || line.contains(" HTTP/")
+                            || line.starts_with("GET")
+                            || line.starts_with("POST")
+                        {
                             format!("HTTP {line}")
                         } else {
                             format!("HTTP data · {} B", data.len())
@@ -1244,7 +1588,11 @@ impl Network {
                         return (Proto::Http, s, data.len());
                     }
                     let s = if flags & FIN != 0 { " + FIN" } else { "" };
-                    return (Proto::Tcp, format!("TCP {} → {} · {} B{}", p.src, p.dst, data.len(), s), data.len());
+                    return (
+                        Proto::Tcp,
+                        format!("TCP {} → {} · {} B{}", p.src, p.dst, data.len(), s),
+                        data.len(),
+                    );
                 }
                 if flags & FIN != 0 {
                     return (Proto::Tcp, format!("TCP FIN {} → {}", p.src, p.dst), 0);
@@ -1264,25 +1612,43 @@ impl Network {
             })
         };
         match &e {
-            BrokerEvent::Published { key, message, size, .. } => {
+            BrokerEvent::Published {
+                key, message, size, ..
+            } => {
                 if let Some(s) = station_of(self, *key) {
-                    let text = format!("PUB {} {} ({} B)", message.topic, String::from_utf8_lossy(&message.payload), size);
+                    let text = format!(
+                        "PUB {} {} ({} B)",
+                        message.topic,
+                        String::from_utf8_lossy(&message.payload),
+                        size
+                    );
                     self.annotate(s, AnnotationKind::Mqtt, text);
                 }
             }
             BrokerEvent::Connected { key, client, .. } => {
                 if let Some(s) = station_of(self, *key) {
-                    self.annotate(s, AnnotationKind::Mqtt, format!("CONNECT client={client} → CONNACK 0"));
+                    self.annotate(
+                        s,
+                        AnnotationKind::Mqtt,
+                        format!("CONNECT client={client} → CONNACK 0"),
+                    );
                 }
             }
             BrokerEvent::Rejected { key, client, code } => {
                 if let Some(s) = station_of(self, *key) {
-                    self.annotate(s, AnnotationKind::Mqtt, format!("CONNECT client={client} → CONNACK {code} (refused)"));
+                    self.annotate(
+                        s,
+                        AnnotationKind::Mqtt,
+                        format!("CONNECT client={client} → CONNACK {code} (refused)"),
+                    );
                 }
             }
             BrokerEvent::Subscribed { key, filters, .. } => {
                 if let Some(s) = station_of(self, *key) {
-                    let f: Vec<String> = filters.iter().map(|(f, q)| format!("{f} (QoS {q})")).collect();
+                    let f: Vec<String> = filters
+                        .iter()
+                        .map(|(f, q)| format!("{f} (QoS {q})"))
+                        .collect();
                     self.annotate(s, AnnotationKind::Mqtt, format!("SUB {}", f.join(", ")));
                 }
             }
@@ -1294,7 +1660,14 @@ impl Network {
     // ================================================================ ping
 
     /// ICMP echo to `dst`. Result: `PingReply` or `PingTimeout` (after `timeout`).
-    pub fn ping(&mut self, id: StationId, dst: Ipv4Addr, size: usize, timeout: SimTime, now: SimTime) -> Result<u32, NetError> {
+    pub fn ping(
+        &mut self,
+        id: StationId,
+        dst: Ipv4Addr,
+        size: usize,
+        timeout: SimTime,
+        now: SimTime,
+    ) -> Result<u32, NetError> {
         self.sync(now);
         let src = self.ip_of(id).ok_or(NetError::NoIp)?;
         let s = self.sta_mut(id)?;
@@ -1305,7 +1678,12 @@ impl Network {
         let p = Packet {
             src: SocketAddrV4::new(src, 0),
             dst: SocketAddrV4::new(dst, 0),
-            body: Body::Icmp { reply: false, id: iid, seq: 1, data: vec![0x42; size.min(1400)] },
+            body: Body::Icmp {
+                reply: false,
+                id: iid,
+                seq: 1,
+                data: vec![0x42; size.min(1400)],
+            },
             from: Host::Station(id),
             to: None,
         };
@@ -1317,7 +1695,11 @@ impl Network {
     pub(crate) fn ephemeral_port(&mut self, id: StationId) -> u16 {
         let s = &mut self.stations[id.0 as usize];
         let p = s.next_port;
-        s.next_port = if s.next_port >= 65_000 { 49_152 } else { s.next_port + 1 };
+        s.next_port = if s.next_port >= 65_000 {
+            49_152
+        } else {
+            s.next_port + 1
+        };
         p
     }
 
@@ -1326,8 +1708,16 @@ impl Network {
     /// Binds a UDP socket (`port` 0 = ephemeral).
     pub fn udp_bind(&mut self, id: StationId, port: u16) -> Result<SockId, NetError> {
         self.sta(id)?;
-        let port = if port == 0 { self.ephemeral_port(id) } else { port };
-        if self.sockets.values().any(|s| s.owner == id && s.kind == SockKind::Udp { port }) {
+        let port = if port == 0 {
+            self.ephemeral_port(id)
+        } else {
+            port
+        };
+        if self
+            .sockets
+            .values()
+            .any(|s| s.owner == id && s.kind == SockKind::Udp { port })
+        {
             return Err(NetError::PortInUse(port));
         }
         let sid = self.new_sock(id, SockKind::Udp { port });
@@ -1348,13 +1738,29 @@ impl Network {
         }
     }
 
-    pub fn udp_send(&mut self, sock: SockId, dst: SocketAddrV4, data: &[u8], now: SimTime) -> Result<(), NetError> {
+    pub fn udp_send(
+        &mut self,
+        sock: SockId,
+        dst: SocketAddrV4,
+        data: &[u8],
+        now: SimTime,
+    ) -> Result<(), NetError> {
         self.sync(now);
         let s = self.sockets.get(&sock).ok_or(NetError::NoSocket)?;
-        let SockKind::Udp { port } = s.kind else { return Err(NetError::Invalid("not a UDP socket".into())) };
+        let SockKind::Udp { port } = s.kind else {
+            return Err(NetError::Invalid("not a UDP socket".into()));
+        };
         let owner = s.owner;
         let ip = self.ip_of(owner).ok_or(NetError::NoIp)?;
-        let p = Packet { src: SocketAddrV4::new(ip, port), dst, body: Body::Udp { data: data.to_vec() }, from: Host::Station(owner), to: None };
+        let p = Packet {
+            src: SocketAddrV4::new(ip, port),
+            dst,
+            body: Body::Udp {
+                data: data.to_vec(),
+            },
+            from: Host::Station(owner),
+            to: None,
+        };
         self.transmit(p);
         Ok(())
     }
@@ -1362,7 +1768,9 @@ impl Network {
     /// Closes any socket (TCP: graceful FIN; listener/UDP: unbind).
     pub fn close(&mut self, sock: SockId, now: SimTime) {
         self.sync(now);
-        let Some(s) = self.sockets.get(&sock).cloned() else { return };
+        let Some(s) = self.sockets.get(&sock).cloned() else {
+            return;
+        };
         match s.kind {
             SockKind::Tcp { conn: Some(c), end } => {
                 self.tcp_close_end(c, end);

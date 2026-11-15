@@ -112,13 +112,20 @@ pub fn parse(line: &str) -> Option<AtCommand> {
     let rest = &t[2..];
     let (name, kind) = if let Some(i) = rest.find('=') {
         let (n, a) = (&rest[..i], &rest[i + 1..]);
-        if a == "?" { (n, AtKind::Test) } else { (n, AtKind::Set(split_args(a))) }
+        if a == "?" {
+            (n, AtKind::Test)
+        } else {
+            (n, AtKind::Set(split_args(a)))
+        }
     } else if let Some(n) = rest.strip_suffix('?') {
         (n, AtKind::Query)
     } else {
         (rest, AtKind::Exec)
     };
-    Some(AtCommand { name: name.to_ascii_uppercase(), kind })
+    Some(AtCommand {
+        name: name.to_ascii_uppercase(),
+        kind,
+    })
 }
 
 #[cfg(test)]
@@ -127,13 +134,25 @@ mod tests {
 
     #[test]
     fn parses_forms() {
-        assert_eq!(parse("AT").unwrap(), AtCommand { name: "".into(), kind: AtKind::Exec });
+        assert_eq!(
+            parse("AT").unwrap(),
+            AtCommand {
+                name: "".into(),
+                kind: AtKind::Exec
+            }
+        );
         assert_eq!(parse("ATE0\r").unwrap().name, "E0");
         assert_eq!(parse("AT+CWMODE?").unwrap().kind, AtKind::Query);
         assert_eq!(parse("AT+CWMODE=?").unwrap().kind, AtKind::Test);
         let c = parse(r#"AT+CWJAP="SIM-AP","bread\"box,1""#).unwrap();
         assert_eq!(c.name, "+CWJAP");
-        assert_eq!(c.args(), &[AtArg::Str("SIM-AP".into()), AtArg::Str("bread\"box,1".into())]);
+        assert_eq!(
+            c.args(),
+            &[
+                AtArg::Str("SIM-AP".into()),
+                AtArg::Str("bread\"box,1".into())
+            ]
+        );
         let c = parse(r#"AT+CIPSTART=0,"TCP","10.0.0.1",1883"#).unwrap();
         assert_eq!(c.arg_int(0), Some(0));
         assert_eq!(c.arg_int(3), Some(1883));

@@ -31,8 +31,8 @@ pub use debuginfo::{
     DebugInfo, FrameRegs, Function, SourceLocation, TypeInfo, Value, VarValue, Variable,
 };
 pub use toolchain::{
-    CTAGS_SOURCE_URL, DetectOptions, InstallProgress, InstalledLibrary, LibraryInfo, NativeInstallOptions, NativeOverrides,
-    Toolchain, ToolchainSource, build_ctags,
+    CTAGS_SOURCE_URL, DetectOptions, InstallProgress, InstalledLibrary, LibraryInfo,
+    NativeInstallOptions, NativeOverrides, Toolchain, ToolchainSource, build_ctags,
 };
 
 use thiserror::Error;

@@ -18,11 +18,11 @@ pub const PROTO_TCP: u8 = 6;
 pub const PROTO_UDP: u8 = 17;
 
 fn sum16(data: &[u8], mut acc: u32) -> u32 {
-    let mut chunks = data.chunks_exact(2);
-    for c in &mut chunks {
-        acc += u16::from_be_bytes([c[0], c[1]]) as u32;
+    let (chunks, rem) = data.as_chunks::<2>();
+    for c in chunks {
+        acc += u16::from_be_bytes(*c) as u32;
     }
-    if let [b] = chunks.remainder() {
+    if let [b] = rem {
         acc += (*b as u32) << 8;
     }
     acc
@@ -75,7 +75,15 @@ pub fn ipv4_packet(src: Ipv4Addr, dst: Ipv4Addr, proto: u8, ident: u16, payload:
 }
 
 /// TCP segment (20-byte header, no options) with a valid checksum.
-pub fn tcp_segment(src: SocketAddrV4, dst: SocketAddrV4, seq: u32, ack: u32, flags: u8, window: u16, data: &[u8]) -> Vec<u8> {
+pub fn tcp_segment(
+    src: SocketAddrV4,
+    dst: SocketAddrV4,
+    seq: u32,
+    ack: u32,
+    flags: u8,
+    window: u16,
+    data: &[u8],
+) -> Vec<u8> {
     let mut s = Vec::with_capacity(20 + data.len());
     s.extend_from_slice(&src.port().to_be_bytes());
     s.extend_from_slice(&dst.port().to_be_bytes());
@@ -134,7 +142,10 @@ pub fn ethernet_frame(dst: [u8; 6], src: [u8; 6], ip_packet: &[u8]) -> Vec<u8> {
 
 /// Formats a MAC address `aa:bb:cc:dd:ee:ff`.
 pub fn mac_string(m: [u8; 6]) -> String {
-    m.iter().map(|b| format!("{b:02x}")).collect::<Vec<_>>().join(":")
+    m.iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<Vec<_>>()
+        .join(":")
 }
 
 // ------------------------------------------------------------------------------------- DHCP
@@ -358,7 +369,11 @@ impl DnsMessage {
     pub fn encode(&self) -> Vec<u8> {
         let mut m = Vec::new();
         m.extend_from_slice(&self.id.to_be_bytes());
-        let flags: u16 = if self.response { 0x8180 | self.rcode as u16 } else { 0x0100 };
+        let flags: u16 = if self.response {
+            0x8180 | self.rcode as u16
+        } else {
+            0x0100
+        };
         m.extend_from_slice(&flags.to_be_bytes());
         m.extend_from_slice(&1u16.to_be_bytes());
         m.extend_from_slice(&(self.answers.len() as u16).to_be_bytes());
@@ -422,7 +437,12 @@ impl DnsMessage {
                 }
             }
             let rtype = u16::from_be_bytes([*b.get(i)?, *b.get(i + 1)?]);
-            let ttl = u32::from_be_bytes([*b.get(i + 4)?, *b.get(i + 5)?, *b.get(i + 6)?, *b.get(i + 7)?]);
+            let ttl = u32::from_be_bytes([
+                *b.get(i + 4)?,
+                *b.get(i + 5)?,
+                *b.get(i + 6)?,
+                *b.get(i + 7)?,
+            ]);
             let rdlen = u16::from_be_bytes([*b.get(i + 8)?, *b.get(i + 9)?]) as usize;
             i += 10;
             let rd = b.get(i..i + rdlen)?;
@@ -499,7 +519,11 @@ pub fn ntp_reply_time(reply: &[u8]) -> Option<f64> {
 pub fn civil_from_unix(secs: i64) -> (i64, u32, u32, u32, u32, u32, u32) {
     let days = secs.div_euclid(86_400);
     let rem = secs.rem_euclid(86_400);
-    let (h, mi, s) = ((rem / 3600) as u32, ((rem % 3600) / 60) as u32, (rem % 60) as u32);
+    let (h, mi, s) = (
+        (rem / 3600) as u32,
+        ((rem % 3600) / 60) as u32,
+        (rem % 60) as u32,
+    );
     let wd = ((days + 4).rem_euclid(7)) as u32;
     // Howard Hinnant's days_from_civil inverse.
     let z = days + 719_468;
@@ -517,9 +541,20 @@ pub fn civil_from_unix(secs: i64) -> (i64, u32, u32, u32, u32, u32, u32) {
 /// `asctime`-style text, as ESP-AT's `+CIPSNTPTIME:` prints it: `Thu Jan  1 00:00:00 1970`.
 pub fn asctime(unix: i64) -> String {
     const WD: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const MO: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const MO: [&str; 12] = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ];
     let (y, m, d, h, mi, s, wd) = civil_from_unix(unix);
-    format!("{} {} {:>2} {:02}:{:02}:{:02} {}", WD[wd as usize], MO[m as usize - 1], d, h, mi, s, y)
+    format!(
+        "{} {} {:>2} {:02}:{:02}:{:02} {}",
+        WD[wd as usize],
+        MO[m as usize - 1],
+        d,
+        h,
+        mi,
+        s,
+        y
+    )
 }
 
 #[cfg(test)]
@@ -530,7 +565,15 @@ mod tests {
     fn checksums_verify_to_zero() {
         let src = SocketAddrV4::new(Ipv4Addr::new(10, 0, 0, 42), 50_000);
         let dst = SocketAddrV4::new(Ipv4Addr::new(10, 0, 0, 1), 1883);
-        let seg = tcp_segment(src, dst, 1, 2, tcp_flags::ACK | tcp_flags::PSH, 5840, b"hello");
+        let seg = tcp_segment(
+            src,
+            dst,
+            1,
+            2,
+            tcp_flags::ACK | tcp_flags::PSH,
+            5840,
+            b"hello",
+        );
         assert_eq!(pseudo_checksum(*src.ip(), *dst.ip(), PROTO_TCP, &seg), 0);
         let ip = ipv4_packet(*src.ip(), *dst.ip(), PROTO_TCP, 7, &seg);
         assert_eq!(checksum(&ip[..20]), 0);

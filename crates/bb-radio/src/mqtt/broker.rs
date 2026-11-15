@@ -26,7 +26,12 @@ pub struct Message {
 
 impl Message {
     pub fn new(topic: &str, payload: impl Into<Vec<u8>>, qos: u8, retain: bool) -> Self {
-        Message { topic: topic.into(), payload: payload.into(), qos, retain }
+        Message {
+            topic: topic.into(),
+            payload: payload.into(),
+            qos,
+            retain,
+        }
     }
     pub fn payload_str(&self) -> String {
         String::from_utf8_lossy(&self.payload).into_owned()
@@ -51,12 +56,38 @@ pub enum BrokerOut {
 /// Broker-level events (MQTT explorer history, serial-monitor annotations, packet log).
 #[derive(Debug, Clone, PartialEq)]
 pub enum BrokerEvent {
-    Connected { key: ConnKey, client: String, clean: bool, keep_alive: u16 },
-    Rejected { key: ConnKey, client: String, code: u8 },
-    Disconnected { key: ConnKey, client: String, graceful: bool, reason: String },
-    Published { key: ConnKey, client: String, message: Message, size: usize },
-    Subscribed { key: ConnKey, client: String, filters: Vec<(String, u8)> },
-    WillPublished { client: String, message: Message },
+    Connected {
+        key: ConnKey,
+        client: String,
+        clean: bool,
+        keep_alive: u16,
+    },
+    Rejected {
+        key: ConnKey,
+        client: String,
+        code: u8,
+    },
+    Disconnected {
+        key: ConnKey,
+        client: String,
+        graceful: bool,
+        reason: String,
+    },
+    Published {
+        key: ConnKey,
+        client: String,
+        message: Message,
+        size: usize,
+    },
+    Subscribed {
+        key: ConnKey,
+        client: String,
+        filters: Vec<(String, u8)>,
+    },
+    WillPublished {
+        client: String,
+        message: Message,
+    },
 }
 
 /// One entry of the explorer's message history.
@@ -127,7 +158,11 @@ pub struct BrokerConfig {
 
 impl Default for BrokerConfig {
     fn default() -> Self {
-        BrokerConfig { credentials: None, history: 2000, max_queued: 1000 }
+        BrokerConfig {
+            credentials: None,
+            history: 2000,
+            max_queued: 1000,
+        }
     }
 }
 
@@ -185,17 +220,26 @@ impl Broker {
     /// A transport connection was opened.
     pub fn open(&mut self, key: ConnKey, now: SimTime) {
         self.now = now;
-        self.conns.insert(key, Conn { decoder: StreamDecoder::default(), client: None, keep_alive: 0, last_rx: now });
+        self.conns.insert(
+            key,
+            Conn {
+                decoder: StreamDecoder::default(),
+                client: None,
+                keep_alive: 0,
+                last_rx: now,
+            },
+        );
     }
 
     /// Bytes arrived on a connection. Returns the transport actions to perform.
     pub fn input(&mut self, key: ConnKey, data: &[u8], now: SimTime) -> Vec<BrokerOut> {
         self.now = now;
-        let Some(c) = self.conns.get_mut(&key) else { return self.take_out() };
+        let Some(c) = self.conns.get_mut(&key) else {
+            return self.take_out();
+        };
         c.last_rx = now;
         c.decoder.push(data);
-        loop {
-            let Some(c) = self.conns.get_mut(&key) else { break };
+        while let Some(c) = self.conns.get_mut(&key) {
             match c.decoder.next_packet() {
                 Ok(Some(p)) => self.handle(key, p),
                 Ok(None) => break,
@@ -264,16 +308,39 @@ impl Broker {
         key
     }
 
-    pub fn virtual_subscribe(&mut self, key: ConnKey, filter: &str, qos: u8, now: SimTime) -> Vec<BrokerOut> {
+    pub fn virtual_subscribe(
+        &mut self,
+        key: ConnKey,
+        filter: &str,
+        qos: u8,
+        now: SimTime,
+    ) -> Vec<BrokerOut> {
         self.now = now;
-        self.handle(key, Packet::Subscribe { pid: 1, topics: vec![(filter.into(), qos.min(1))] });
+        self.handle(
+            key,
+            Packet::Subscribe {
+                pid: 1,
+                topics: vec![(filter.into(), qos.min(1))],
+            },
+        );
         self.flush_virtual();
         self.take_out()
     }
 
-    pub fn virtual_unsubscribe(&mut self, key: ConnKey, filter: &str, now: SimTime) -> Vec<BrokerOut> {
+    pub fn virtual_unsubscribe(
+        &mut self,
+        key: ConnKey,
+        filter: &str,
+        now: SimTime,
+    ) -> Vec<BrokerOut> {
         self.now = now;
-        self.handle(key, Packet::Unsubscribe { pid: 1, topics: vec![filter.into()] });
+        self.handle(
+            key,
+            Packet::Unsubscribe {
+                pid: 1,
+                topics: vec![filter.into()],
+            },
+        );
         self.flush_virtual();
         self.take_out()
     }
@@ -282,7 +349,14 @@ impl Broker {
     pub fn virtual_publish(&mut self, key: ConnKey, msg: Message, now: SimTime) -> Vec<BrokerOut> {
         self.now = now;
         let qos = msg.qos.min(1);
-        let p = Publish { dup: false, qos, retain: msg.retain, topic: msg.topic, pid: (qos > 0).then_some(1), payload: msg.payload };
+        let p = Publish {
+            dup: false,
+            qos,
+            retain: msg.retain,
+            topic: msg.topic,
+            pid: (qos > 0).then_some(1),
+            payload: msg.payload,
+        };
         self.handle(key, Packet::Publish(p));
         self.flush_virtual();
         self.take_out()
@@ -297,7 +371,10 @@ impl Broker {
 
     /// Messages delivered to a virtual client since the last call.
     pub fn virtual_take(&mut self, key: ConnKey) -> Vec<Received> {
-        self.inboxes.get_mut(&key).map(std::mem::take).unwrap_or_default()
+        self.inboxes
+            .get_mut(&key)
+            .map(std::mem::take)
+            .unwrap_or_default()
     }
 
     /// Moves packets addressed to virtual clients into their inboxes (acking QoS 1).
@@ -313,7 +390,9 @@ impl Broker {
                 continue;
             }
             let k = *k;
-            let BrokerOut::Send(_, bytes) = self.out.remove(i) else { unreachable!() };
+            let BrokerOut::Send(_, bytes) = self.out.remove(i) else {
+                unreachable!()
+            };
             let mut off = 0;
             while let Ok(Some((p, n))) = codec::decode(&bytes[off..]) {
                 off += n;
@@ -324,7 +403,12 @@ impl Broker {
                     if let Some(inbox) = self.inboxes.get_mut(&k) {
                         inbox.push(Received {
                             time: self.now,
-                            message: Message { topic: p.topic, payload: p.payload, qos: p.qos, retain: p.retain },
+                            message: Message {
+                                topic: p.topic,
+                                payload: p.payload,
+                                qos: p.qos,
+                                retain: p.retain,
+                            },
                         });
                     }
                 }
@@ -344,7 +428,11 @@ impl Broker {
 
     /// Connected client ids.
     pub fn clients(&self) -> Vec<String> {
-        let mut v: Vec<String> = self.conns.values().filter_map(|c| c.client.clone()).collect();
+        let mut v: Vec<String> = self
+            .conns
+            .values()
+            .filter_map(|c| c.client.clone())
+            .collect();
         v.sort();
         v
     }
@@ -356,11 +444,18 @@ impl Broker {
 
     /// Subscriptions of a session.
     pub fn subscriptions(&self, client: &str) -> Vec<(String, u8)> {
-        self.sessions.get(client).map(|s| s.subs.clone()).unwrap_or_default()
+        self.sessions
+            .get(client)
+            .map(|s| s.subs.clone())
+            .unwrap_or_default()
     }
 
     pub fn stats(&self) -> BrokerStats {
-        BrokerStats { clients: self.conns.values().filter(|c| c.client.is_some()).count(), retained: self.retained.len(), ..self.stats }
+        BrokerStats {
+            clients: self.conns.values().filter(|c| c.client.is_some()).count(),
+            retained: self.retained.len(),
+            ..self.stats
+        }
     }
 
     // ------------------------------------------------------------------- protocol
@@ -395,7 +490,9 @@ impl Broker {
             }
             (Some(_), Packet::PubRec(pid)) => self.send(key, &Packet::PubRel(pid)),
             (Some(_), Packet::PubComp(_)) => {}
-            (Some(cid), Packet::Subscribe { pid, topics }) => self.on_subscribe(key, &cid, pid, topics),
+            (Some(cid), Packet::Subscribe { pid, topics }) => {
+                self.on_subscribe(key, &cid, pid, topics)
+            }
             (Some(cid), Packet::Unsubscribe { pid, topics }) => {
                 if let Some(s) = self.sessions.get_mut(&cid) {
                     s.subs.retain(|(f, _)| !topics.contains(f));
@@ -419,12 +516,24 @@ impl Broker {
 
     fn on_connect(&mut self, key: ConnKey, c: Connect) {
         let refuse = |b: &mut Broker, code: u8, client: &str| {
-            b.send(key, &Packet::ConnAck { session_present: false, code });
-            b.events.push(BrokerEvent::Rejected { key, client: client.into(), code });
+            b.send(
+                key,
+                &Packet::ConnAck {
+                    session_present: false,
+                    code,
+                },
+            );
+            b.events.push(BrokerEvent::Rejected {
+                key,
+                client: client.into(),
+                code,
+            });
             b.out.push(BrokerOut::Close(key));
             b.conns.remove(&key);
         };
-        if !(c.protocol_name == "MQTT" && c.protocol_level == 4 || c.protocol_name == "MQIsdp" && c.protocol_level == 3) {
+        if !(c.protocol_name == "MQTT" && c.protocol_level == 4
+            || c.protocol_name == "MQIsdp" && c.protocol_level == 3)
+        {
             return refuse(self, 1, &c.client_id);
         }
         let mut client_id = c.client_id.clone();
@@ -436,7 +545,8 @@ impl Broker {
             self.next_auto_id += 1;
         }
         if let Some((u, pw)) = &self.config.credentials
-            && (c.username.as_deref() != Some(u.as_str()) || c.password.as_deref() != Some(pw.as_bytes()))
+            && (c.username.as_deref() != Some(u.as_str())
+                || c.password.as_deref() != Some(pw.as_bytes()))
         {
             let code = if c.username.is_none() { 5 } else { 4 };
             return refuse(self, code, &client_id);
@@ -450,9 +560,13 @@ impl Broker {
         }
         let present = !c.clean_session && self.sessions.get(&client_id).is_some_and(|s| !s.clean);
         if c.clean_session || !present {
-            self.sessions.insert(client_id.clone(), Session::new(c.clean_session));
+            self.sessions
+                .insert(client_id.clone(), Session::new(c.clean_session));
         }
-        let s = self.sessions.get_mut(&client_id).expect("session just ensured");
+        let s = self
+            .sessions
+            .get_mut(&client_id)
+            .expect("session just ensured");
         s.conn = Some(key);
         s.clean = c.clean_session;
         s.will = c.will.clone();
@@ -461,16 +575,40 @@ impl Broker {
             conn.keep_alive = c.keep_alive;
             conn.last_rx = self.now;
         }
-        self.send(key, &Packet::ConnAck { session_present: present, code: 0 });
-        self.events.push(BrokerEvent::Connected { key, client: client_id.clone(), clean: c.clean_session, keep_alive: c.keep_alive });
+        self.send(
+            key,
+            &Packet::ConnAck {
+                session_present: present,
+                code: 0,
+            },
+        );
+        self.events.push(BrokerEvent::Connected {
+            key,
+            client: client_id.clone(),
+            clean: c.clean_session,
+            keep_alive: c.keep_alive,
+        });
         // Resend unacknowledged and queued messages of a resumed session.
         if present {
             let (inflight, queued): (Vec<(u16, Message)>, Vec<Message>) = {
                 let s = self.sessions.get_mut(&client_id).expect("session");
-                (s.inflight.iter().map(|(k, v)| (*k, v.clone())).collect(), s.queued.drain(..).collect())
+                (
+                    s.inflight.iter().map(|(k, v)| (*k, v.clone())).collect(),
+                    s.queued.drain(..).collect(),
+                )
             };
             for (pid, m) in inflight {
-                self.send(key, &Packet::Publish(Publish { dup: true, qos: 1, retain: false, topic: m.topic, pid: Some(pid), payload: m.payload }));
+                self.send(
+                    key,
+                    &Packet::Publish(Publish {
+                        dup: true,
+                        qos: 1,
+                        retain: false,
+                        topic: m.topic,
+                        pid: Some(pid),
+                        payload: m.payload,
+                    }),
+                );
             }
             for m in queued {
                 self.deliver_to(&client_id, m, false);
@@ -492,10 +630,24 @@ impl Broker {
             }
             _ => {}
         }
-        let msg = Message { topic: p.topic, payload: p.payload, qos: p.qos, retain: p.retain };
+        let msg = Message {
+            topic: p.topic,
+            payload: p.payload,
+            qos: p.qos,
+            retain: p.retain,
+        };
         self.stats.received += 1;
-        self.events.push(BrokerEvent::Published { key, client: client.into(), message: msg.clone(), size });
-        self.history.push_back(HistoryEntry { time: self.now, client: client.into(), message: msg.clone() });
+        self.events.push(BrokerEvent::Published {
+            key,
+            client: client.into(),
+            message: msg.clone(),
+            size,
+        });
+        self.history.push_back(HistoryEntry {
+            time: self.now,
+            client: client.into(),
+            message: msg.clone(),
+        });
         while self.history.len() > self.config.history {
             self.history.pop_front();
         }
@@ -514,7 +666,11 @@ impl Broker {
         let targets: Vec<String> = self
             .sessions
             .iter()
-            .filter(|(_, s)| s.subs.iter().any(|(f, _)| codec::topic_matches(f, &msg.topic)))
+            .filter(|(_, s)| {
+                s.subs
+                    .iter()
+                    .any(|(f, _)| codec::topic_matches(f, &msg.topic))
+            })
             .map(|(c, _)| c.clone())
             .collect();
         for c in targets {
@@ -524,8 +680,15 @@ impl Broker {
     }
 
     fn deliver_to(&mut self, client: &str, mut msg: Message, retained: bool) {
-        let Some(s) = self.sessions.get_mut(client) else { return };
-        let granted = s.subs.iter().filter(|(f, _)| codec::topic_matches(f, &msg.topic)).map(|(_, q)| *q).max();
+        let Some(s) = self.sessions.get_mut(client) else {
+            return;
+        };
+        let granted = s
+            .subs
+            .iter()
+            .filter(|(f, _)| codec::topic_matches(f, &msg.topic))
+            .map(|(_, q)| *q)
+            .max();
         let Some(granted) = granted else { return };
         msg.qos = msg.qos.min(granted).min(1);
         msg.retain = retained;
@@ -543,7 +706,17 @@ impl Broker {
             None
         };
         self.stats.delivered += 1;
-        self.send(conn, &Packet::Publish(Publish { dup: false, qos: msg.qos, retain: msg.retain, topic: msg.topic, pid, payload: msg.payload }));
+        self.send(
+            conn,
+            &Packet::Publish(Publish {
+                dup: false,
+                qos: msg.qos,
+                retain: msg.retain,
+                topic: msg.topic,
+                pid,
+                payload: msg.payload,
+            }),
+        );
     }
 
     fn on_subscribe(&mut self, key: ConnKey, client: &str, pid: u16, topics: Vec<(String, u8)>) {
@@ -558,11 +731,19 @@ impl Broker {
             }
         }
         self.send(key, &Packet::SubAck { pid, codes });
-        self.events.push(BrokerEvent::Subscribed { key, client: client.into(), filters: topics.clone() });
+        self.events.push(BrokerEvent::Subscribed {
+            key,
+            client: client.into(),
+            filters: topics.clone(),
+        });
         let retained: Vec<Message> = self
             .retained
             .values()
-            .filter(|m| topics.iter().any(|(f, _)| codec::topic_matches(f, &m.topic)))
+            .filter(|m| {
+                topics
+                    .iter()
+                    .any(|(f, _)| codec::topic_matches(f, &m.topic))
+            })
             .cloned()
             .collect();
         for m in retained {
@@ -572,7 +753,9 @@ impl Broker {
     }
 
     fn drop_conn(&mut self, key: ConnKey, graceful: bool, reason: &str) {
-        let Some(c) = self.conns.remove(&key) else { return };
+        let Some(c) = self.conns.remove(&key) else {
+            return;
+        };
         let Some(client) = c.client else { return };
         let mut will = None;
         if let Some(s) = self.sessions.get_mut(&client)
@@ -584,11 +767,28 @@ impl Broker {
                 self.sessions.remove(&client);
             }
         }
-        self.events.push(BrokerEvent::Disconnected { key, client: client.clone(), graceful, reason: reason.into() });
+        self.events.push(BrokerEvent::Disconnected {
+            key,
+            client: client.clone(),
+            graceful,
+            reason: reason.into(),
+        });
         if !graceful && let Some(w) = will {
-            let msg = Message { topic: w.topic, payload: w.payload, qos: w.qos.min(1), retain: w.retain };
-            self.events.push(BrokerEvent::WillPublished { client: client.clone(), message: msg.clone() });
-            self.history.push_back(HistoryEntry { time: self.now, client, message: msg.clone() });
+            let msg = Message {
+                topic: w.topic,
+                payload: w.payload,
+                qos: w.qos.min(1),
+                retain: w.retain,
+            };
+            self.events.push(BrokerEvent::WillPublished {
+                client: client.clone(),
+                message: msg.clone(),
+            });
+            self.history.push_back(HistoryEntry {
+                time: self.now,
+                client,
+                message: msg.clone(),
+            });
             if msg.retain {
                 self.retained.insert(msg.topic.clone(), msg.clone());
             }
@@ -638,27 +838,64 @@ mod tests {
     }
 
     fn publish(topic: &str, payload: &[u8], qos: u8, retain: bool, pid: Option<u16>) -> Vec<u8> {
-        encode(&Packet::Publish(Publish { dup: false, qos, retain, topic: topic.into(), pid, payload: payload.to_vec() }))
+        encode(&Packet::Publish(Publish {
+            dup: false,
+            qos,
+            retain,
+            topic: topic.into(),
+            pid,
+            payload: payload.to_vec(),
+        }))
     }
 
     #[test]
     fn connect_subscribe_publish_wildcards_and_qos1() {
         let mut b = Broker::default();
         let out = connect(&mut b, 1, Connect::new("garden-node", 60), t(0.0));
-        assert_eq!(sent_to(&out, 1), vec![Packet::ConnAck { session_present: false, code: 0 }]);
+        assert_eq!(
+            sent_to(&out, 1),
+            vec![Packet::ConnAck {
+                session_present: false,
+                code: 0
+            }]
+        );
         connect(&mut b, 2, Connect::new("dash", 0), t(0.0));
-        let out = b.input(2, &encode(&Packet::Subscribe { pid: 9, topics: vec![("garden/+".into(), 1), ("other/#".into(), 0)] }), t(0.1));
-        assert_eq!(sent_to(&out, 2), vec![Packet::SubAck { pid: 9, codes: vec![1, 0] }]);
+        let out = b.input(
+            2,
+            &encode(&Packet::Subscribe {
+                pid: 9,
+                topics: vec![("garden/+".into(), 1), ("other/#".into(), 0)],
+            }),
+            t(0.1),
+        );
+        assert_eq!(
+            sent_to(&out, 2),
+            vec![Packet::SubAck {
+                pid: 9,
+                codes: vec![1, 0]
+            }]
+        );
         // QoS 0 publish → QoS 0 delivery.
-        let out = b.input(1, &publish("garden/pot1", b"{\"m\":42}", 0, false, None), t(1.0));
+        let out = b.input(
+            1,
+            &publish("garden/pot1", b"{\"m\":42}", 0, false, None),
+            t(1.0),
+        );
         let got = sent_to(&out, 2);
         assert_eq!(got.len(), 1);
-        let Packet::Publish(p) = &got[0] else { panic!() };
-        assert_eq!((p.topic.as_str(), p.qos, p.payload.as_slice()), ("garden/pot1", 0, &b"{\"m\":42}"[..]));
+        let Packet::Publish(p) = &got[0] else {
+            panic!()
+        };
+        assert_eq!(
+            (p.topic.as_str(), p.qos, p.payload.as_slice()),
+            ("garden/pot1", 0, &b"{\"m\":42}"[..])
+        );
         // QoS 1 publish → PUBACK to sender, QoS 1 delivery with a packet id.
         let out = b.input(1, &publish("garden/pot1", b"x", 1, false, Some(5)), t(2.0));
         assert_eq!(sent_to(&out, 1), vec![Packet::PubAck(5)]);
-        let Packet::Publish(p) = &sent_to(&out, 2)[0] else { panic!() };
+        let Packet::Publish(p) = &sent_to(&out, 2)[0] else {
+            panic!()
+        };
         assert_eq!(p.qos, 1);
         let pid = p.pid.unwrap();
         b.input(2, &encode(&Packet::PubAck(pid)), t(2.1));
@@ -668,21 +905,35 @@ mod tests {
         // PINGREQ.
         let out = b.input(1, &encode(&Packet::PingReq), t(4.0));
         assert_eq!(sent_to(&out, 1), vec![Packet::PingResp]);
-        assert_eq!(b.clients(), vec!["dash".to_string(), "garden-node".to_string()]);
+        assert_eq!(
+            b.clients(),
+            vec!["dash".to_string(), "garden-node".to_string()]
+        );
     }
 
     #[test]
     fn retained_messages_and_deletion() {
         let mut b = Broker::default();
         connect(&mut b, 1, Connect::new("pub", 0), t(0.0));
-        b.input(1, &publish("garden/status", b"online", 0, true, None), t(0.0));
+        b.input(
+            1,
+            &publish("garden/status", b"online", 0, true, None),
+            t(0.0),
+        );
         let v = b.virtual_connect("explorer", t(1.0));
         b.virtual_subscribe(v, "garden/#", 0, t(1.0));
         let got = b.virtual_take(v);
         assert_eq!(got.len(), 1);
-        assert!(got[0].message.retain, "retained flag set on subscription delivery");
+        assert!(
+            got[0].message.retain,
+            "retained flag set on subscription delivery"
+        );
         // Live delivery has retain cleared.
-        b.input(1, &publish("garden/status", b"still", 0, true, None), t(2.0));
+        b.input(
+            1,
+            &publish("garden/status", b"still", 0, true, None),
+            t(2.0),
+        );
         let got = b.virtual_take(v);
         assert!(!got[0].message.retain);
         // Empty retained payload deletes.
@@ -694,7 +945,12 @@ mod tests {
     fn keep_alive_timeout_publishes_will() {
         let mut b = Broker::default();
         let mut c = Connect::new("node", 10);
-        c.will = Some(Will { topic: "node/status".into(), payload: b"offline".to_vec(), qos: 1, retain: true });
+        c.will = Some(Will {
+            topic: "node/status".into(),
+            payload: b"offline".to_vec(),
+            qos: 1,
+            retain: true,
+        });
         connect(&mut b, 1, c, t(0.0));
         let v = b.virtual_connect("watch", t(0.0));
         b.virtual_subscribe(v, "node/#", 1, t(0.0));
@@ -707,14 +963,23 @@ mod tests {
         assert_eq!(got.len(), 1);
         assert_eq!(got[0].message.payload, b"offline");
         assert_eq!(b.retained().next().unwrap().topic, "node/status");
-        assert!(b.take_events().iter().any(|e| matches!(e, BrokerEvent::WillPublished { .. })));
+        assert!(
+            b.take_events()
+                .iter()
+                .any(|e| matches!(e, BrokerEvent::WillPublished { .. }))
+        );
     }
 
     #[test]
     fn graceful_disconnect_suppresses_will_and_network_loss_sends_it() {
         let mut b = Broker::default();
         let mut c = Connect::new("a", 0);
-        c.will = Some(Will { topic: "w".into(), payload: b"gone".to_vec(), qos: 0, retain: false });
+        c.will = Some(Will {
+            topic: "w".into(),
+            payload: b"gone".to_vec(),
+            qos: 0,
+            retain: false,
+        });
         connect(&mut b, 1, c.clone(), t(0.0));
         let v = b.virtual_connect("watch", t(0.0));
         b.virtual_subscribe(v, "w", 0, t(0.0));
@@ -731,7 +996,14 @@ mod tests {
         let mut c = Connect::new("sub", 0);
         c.clean_session = false;
         connect(&mut b, 1, c.clone(), t(0.0));
-        b.input(1, &encode(&Packet::Subscribe { pid: 1, topics: vec![("q/#".into(), 1)] }), t(0.0));
+        b.input(
+            1,
+            &encode(&Packet::Subscribe {
+                pid: 1,
+                topics: vec![("q/#".into(), 1)],
+            }),
+            t(0.0),
+        );
         let p = b.virtual_connect("pub", t(0.0));
         // Delivered but never acked, then the link drops.
         let out = b.virtual_publish(p, Message::new("q/1", "one", 1, false), t(1.0));
@@ -742,7 +1014,13 @@ mod tests {
         b.virtual_publish(p, Message::new("q/3", "three-qos0", 0, false), t(3.0));
         let out = connect(&mut b, 2, c, t(4.0));
         let got = sent_to(&out, 2);
-        assert_eq!(got[0], Packet::ConnAck { session_present: true, code: 0 });
+        assert_eq!(
+            got[0],
+            Packet::ConnAck {
+                session_present: true,
+                code: 0
+            }
+        );
         let pubs: Vec<(String, bool)> = got[1..]
             .iter()
             .map(|p| match p {
@@ -762,19 +1040,43 @@ mod tests {
         let mut c = Connect::new("", 0);
         c.clean_session = false;
         let out = connect(&mut b, 2, c, t(0.0));
-        assert_eq!(sent_to(&out, 2), vec![Packet::ConnAck { session_present: false, code: 2 }]);
+        assert_eq!(
+            sent_to(&out, 2),
+            vec![Packet::ConnAck {
+                session_present: false,
+                code: 2
+            }]
+        );
         let mut c = Connect::new("x", 0);
         c.protocol_level = 5;
         let out = connect(&mut b, 3, c, t(0.0));
-        assert_eq!(sent_to(&out, 3), vec![Packet::ConnAck { session_present: false, code: 1 }]);
+        assert_eq!(
+            sent_to(&out, 3),
+            vec![Packet::ConnAck {
+                session_present: false,
+                code: 1
+            }]
+        );
         b.config.credentials = Some(("user".into(), "pw".into()));
         let out = connect(&mut b, 4, Connect::new("y", 0), t(0.0));
-        assert_eq!(sent_to(&out, 4), vec![Packet::ConnAck { session_present: false, code: 5 }]);
+        assert_eq!(
+            sent_to(&out, 4),
+            vec![Packet::ConnAck {
+                session_present: false,
+                code: 5
+            }]
+        );
         let mut c = Connect::new("y", 0);
         c.username = Some("user".into());
         c.password = Some(b"pw".to_vec());
         let out = connect(&mut b, 5, c, t(0.0));
-        assert_eq!(sent_to(&out, 5), vec![Packet::ConnAck { session_present: false, code: 0 }]);
+        assert_eq!(
+            sent_to(&out, 5),
+            vec![Packet::ConnAck {
+                session_present: false,
+                code: 0
+            }]
+        );
         // Takeover closes the old connection.
         let mut c = Connect::new("y", 0);
         c.username = Some("user".into());

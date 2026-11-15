@@ -12,9 +12,15 @@
 //! 3. Show [`RadioSpace::take_annotations`] in the serial monitor of the MCU wired to the module.
 
 use crate::ble::{BleSpace, Hc05, Hm10};
+use crate::bridge::{BridgeConfig, BridgeStatus, LanBridge};
 use crate::espat::{EspAt, EspAtConfig};
 use crate::geo::Pos;
+use crate::geo::Wall;
+use crate::log::LogEntry;
+use crate::lora::{Gateway, Region, Terrain};
 use crate::lora::{LoraSpace, Rylr896};
+use crate::mqtt::{ConnKey, Message, Received};
+use crate::net::{AccessPoint, NetConditions};
 use crate::net::{AnnotationKind, NetConfig, Network, StationId};
 use crate::uart::{UartConfig, UartDecoder, UartFrame};
 use bb_core::SimTime;
@@ -53,6 +59,8 @@ pub enum ModulePin {
     Key,
 }
 
+/// A radio module on the bench (few per bench, so the variants' sizes don't matter).
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone)]
 pub enum Module {
     Esp01(EspAt),
@@ -82,6 +90,19 @@ pub struct RadioCard {
     pub rows: Vec<(String, String)>,
 }
 
+/// Persisted radio settings of a project (`project.json` → `radios`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RadioSettings {
+    pub access_points: Vec<AccessPoint>,
+    pub conditions: NetConditions,
+    pub walls: Vec<Wall>,
+    pub phone_pos: Pos,
+    pub lan_bridge: Option<BridgeConfig>,
+    pub lora_terrain: Terrain,
+    pub lora_region: Region,
+    pub lora_gateway: Gateway,
+}
+
 /// Everything radio on one bench.
 #[derive(Debug)]
 pub struct RadioSpace {
@@ -91,6 +112,8 @@ pub struct RadioSpace {
     slots: Vec<Slot>,
     notes: Vec<Annotation>,
     now: SimTime,
+    bridge: Option<LanBridge>,
+    explorer: Option<ConnKey>,
 }
 
 impl Default for RadioSpace {
@@ -102,7 +125,16 @@ impl Default for RadioSpace {
 impl RadioSpace {
     pub fn new(config: NetConfig) -> Self {
         let seed = config.seed;
-        RadioSpace { net: Network::new(config), ble: BleSpace::new(seed ^ 0xb1e), lora: LoraSpace::new(seed ^ 0x10ba), slots: vec![], notes: vec![], now: SimTime::ZERO }
+        RadioSpace {
+            net: Network::new(config),
+            ble: BleSpace::new(seed ^ 0xb1e),
+            lora: LoraSpace::new(seed ^ 0x10ba),
+            slots: vec![],
+            notes: vec![],
+            now: SimTime::ZERO,
+            bridge: None,
+            explorer: None,
+        }
     }
 
     pub fn now(&self) -> SimTime {
@@ -112,7 +144,10 @@ impl RadioSpace {
     // ================================================================ devices
 
     fn push(&mut self, label: &str, module: Module) -> DeviceId {
-        self.slots.push(Slot { label: label.into(), module });
+        self.slots.push(Slot {
+            label: label.into(),
+            module,
+        });
         DeviceId(self.slots.len() as u32 - 1)
     }
 
@@ -143,14 +178,22 @@ impl RadioSpace {
     /// Registers the radio of a host-emulated board (ESP32: Wi-Fi station + BLE peripheral).
     pub fn add_host_radio(&mut self, label: &str, pos: Pos) -> DeviceId {
         let sta = self.net.add_station(label, pos);
-        self.net.set_hostname(sta, &format!("esp32-{}", label.to_ascii_lowercase()));
+        self.net
+            .set_hostname(sta, &format!("esp32-{}", label.to_ascii_lowercase()));
         let p = self.ble.add_peripheral(label, pos);
         self.ble.set_advertising(p, false);
-        self.push(label, Module::Host(crate::host::HostRadio::new(label, sta, p)))
+        self.push(
+            label,
+            Module::Host(crate::host::HostRadio::new(label, sta, p)),
+        )
     }
 
     pub fn devices(&self) -> Vec<(DeviceId, &str)> {
-        self.slots.iter().enumerate().map(|(i, s)| (DeviceId(i as u32), s.label.as_str())).collect()
+        self.slots
+            .iter()
+            .enumerate()
+            .map(|(i, s)| (DeviceId(i as u32), s.label.as_str()))
+            .collect()
     }
 
     pub fn module(&self, id: DeviceId) -> Option<&Module> {
@@ -219,8 +262,16 @@ impl RadioSpace {
     /// Supply on/off.
     pub fn power(&mut self, id: DeviceId, on: bool, now: SimTime) {
         self.advance(now);
-        let RadioSpace { net, ble, lora, slots, .. } = self;
-        let Some(slot) = slots.get_mut(id.0 as usize) else { return };
+        let RadioSpace {
+            net,
+            ble,
+            lora,
+            slots,
+            ..
+        } = self;
+        let Some(slot) = slots.get_mut(id.0 as usize) else {
+            return;
+        };
         match &mut slot.module {
             Module::Esp01(m) => {
                 if on {
@@ -240,8 +291,16 @@ impl RadioSpace {
     /// Drives a control pin (reset, enable, HC-05 KEY).
     pub fn set_pin(&mut self, id: DeviceId, pin: ModulePin, high: bool, now: SimTime) {
         self.advance(now);
-        let RadioSpace { net, ble, lora, slots, .. } = self;
-        let Some(slot) = slots.get_mut(id.0 as usize) else { return };
+        let RadioSpace {
+            net,
+            ble,
+            lora,
+            slots,
+            ..
+        } = self;
+        let Some(slot) = slots.get_mut(id.0 as usize) else {
+            return;
+        };
         match (&mut slot.module, pin) {
             (Module::Esp01(m), ModulePin::Reset) if !high => m.power_off(net, now),
             (Module::Esp01(m), ModulePin::Reset) => m.power_on(net, now),
@@ -274,8 +333,16 @@ impl RadioSpace {
     /// A byte arrived on a module's RX pin at `at`.
     pub fn uart_rx(&mut self, id: DeviceId, byte: u8, at: SimTime) {
         self.advance(at);
-        let RadioSpace { net, ble, lora, slots, .. } = self;
-        let Some(slot) = slots.get_mut(id.0 as usize) else { return };
+        let RadioSpace {
+            net,
+            ble,
+            lora,
+            slots,
+            ..
+        } = self;
+        let Some(slot) = slots.get_mut(id.0 as usize) else {
+            return;
+        };
         match &mut slot.module {
             Module::Esp01(m) => m.rx_byte(net, byte, at),
             Module::Hm10(m) => m.rx_byte(ble, byte, at),
@@ -301,7 +368,14 @@ impl RadioSpace {
 
     /// Earliest time anything radio needs attention.
     pub fn next_wake(&self) -> Option<SimTime> {
-        let mut t = [self.net.next_event_time(), self.ble.next_event_time(), self.lora.next_event_time()].into_iter().flatten().min();
+        let mut t = [
+            self.net.next_event_time(),
+            self.ble.next_event_time(),
+            self.lora.next_event_time(),
+        ]
+        .into_iter()
+        .flatten()
+        .min();
         for s in &self.slots {
             let w = match &s.module {
                 Module::Esp01(m) => m.next_wake(),
@@ -334,6 +408,9 @@ impl RadioSpace {
         if now > self.now {
             self.step_to(now);
         }
+        if let Some(b) = self.bridge.as_mut() {
+            b.pump(&mut self.net, self.now);
+        }
     }
 
     fn step_to(&mut self, t: SimTime) {
@@ -342,7 +419,13 @@ impl RadioSpace {
         self.net.advance(t);
         self.ble.advance(t);
         self.lora.advance(t);
-        let RadioSpace { net, ble, lora, slots, .. } = self;
+        let RadioSpace {
+            net,
+            ble,
+            lora,
+            slots,
+            ..
+        } = self;
         for s in slots.iter_mut() {
             match &mut s.module {
                 Module::Esp01(m) => m.poll(net, t),
@@ -372,7 +455,13 @@ impl RadioSpace {
         for n in self.net.take_annotations() {
             let d = device_of_station(&self.slots, n.station);
             let label = self.net.station_label(n.station).unwrap_or("").to_string();
-            self.notes.push(Annotation { time: n.time, device: d.map(|i| DeviceId(i as u32)), label, kind: n.kind, text: n.text });
+            self.notes.push(Annotation {
+                time: n.time,
+                device: d.map(|i| DeviceId(i as u32)),
+                label,
+                kind: n.kind,
+                text: n.text,
+            });
         }
         for (i, s) in self.slots.iter_mut().enumerate() {
             let notes = match &mut s.module {
@@ -383,7 +472,13 @@ impl RadioSpace {
                 Module::Host(h) => h.take_notes(),
             };
             for (time, kind, text) in notes {
-                self.notes.push(Annotation { time, device: Some(DeviceId(i as u32)), label: s.label.clone(), kind, text });
+                self.notes.push(Annotation {
+                    time,
+                    device: Some(DeviceId(i as u32)),
+                    label: s.label.clone(),
+                    kind,
+                    text,
+                });
             }
         }
         self.notes.sort_by_key(|n| n.time);
@@ -394,6 +489,110 @@ impl RadioSpace {
         std::mem::take(&mut self.notes)
     }
 
+    // ================================================================ settings, bridge, explorer
+
+    /// Current settings (for the project file).
+    pub fn settings(&self) -> RadioSettings {
+        RadioSettings {
+            access_points: self.net.access_points().to_vec(),
+            conditions: self.net.conditions().clone(),
+            walls: self.net.geometry.walls.clone(),
+            phone_pos: self.ble.phone_pos,
+            lan_bridge: self.bridge.as_ref().map(|b| b.config.clone()),
+            lora_terrain: self.lora.terrain,
+            lora_region: self.lora.region,
+            lora_gateway: self.lora.gateway.clone(),
+        }
+    }
+
+    /// Applies saved settings (APs, conditions, floor plan, phone, LAN bridge, LoRa).
+    pub fn apply_settings(&mut self, s: &RadioSettings) {
+        *self.net.access_points_mut() = s.access_points.clone();
+        self.net.set_conditions(s.conditions.clone());
+        self.net.geometry.walls = s.walls.clone();
+        self.ble.geometry.walls = s.walls.clone();
+        self.lora.geometry.walls = s.walls.clone();
+        self.ble.phone_pos = s.phone_pos;
+        self.lora.terrain = s.lora_terrain;
+        self.lora.region = s.lora_region;
+        self.lora.set_gateway(s.lora_gateway.clone());
+        self.set_lan_bridge(s.lan_bridge.clone());
+    }
+
+    /// Starts/stops "bridge to my real LAN broker" (`RF-3`). Blocking I/O stays on the bridge's
+    /// own thread; [`RadioSpace::advance`] only exchanges messages with it.
+    pub fn set_lan_bridge(&mut self, config: Option<BridgeConfig>) {
+        if self.bridge.as_ref().map(|b| &b.config) == config.as_ref() {
+            return;
+        }
+        if let Some(b) = self.bridge.take() {
+            b.stop(&mut self.net, self.now);
+        }
+        self.bridge = config.map(LanBridge::start);
+    }
+
+    pub fn lan_bridge_status(&self) -> Option<&BridgeStatus> {
+        self.bridge.as_ref().map(|b| b.status())
+    }
+
+    fn explorer_key(&mut self) -> ConnKey {
+        if let Some(k) = self.explorer {
+            return k;
+        }
+        let k = self
+            .net
+            .broker_mut()
+            .virtual_connect("breadbox-explorer", self.now);
+        self.explorer = Some(k);
+        k
+    }
+
+    /// MQTT explorer: subscribe the panel's virtual client.
+    pub fn explorer_subscribe(&mut self, filter: &str) {
+        let k = self.explorer_key();
+        let now = self.now;
+        let out = self.net.broker_mut().virtual_subscribe(k, filter, 1, now);
+        self.net.apply_broker(out);
+    }
+
+    pub fn explorer_unsubscribe(&mut self, filter: &str) {
+        let k = self.explorer_key();
+        let now = self.now;
+        let out = self.net.broker_mut().virtual_unsubscribe(k, filter, now);
+        self.net.apply_broker(out);
+    }
+
+    /// MQTT explorer: publish as the panel (QoS 0/1, retained or not).
+    pub fn explorer_publish(&mut self, topic: &str, payload: &[u8], qos: u8, retain: bool) {
+        let k = self.explorer_key();
+        let now = self.now;
+        let out = self.net.broker_mut().virtual_publish(
+            k,
+            Message::new(topic, payload.to_vec(), qos, retain),
+            now,
+        );
+        self.net.apply_broker(out);
+    }
+
+    /// Messages delivered to the explorer's subscriptions since the last call.
+    pub fn explorer_take(&mut self) -> Vec<Received> {
+        let k = self.explorer_key();
+        self.net.broker_mut().virtual_take(k)
+    }
+
+    /// Every packet-log row (Wi-Fi/IP, BLE, LoRa) in time order.
+    pub fn log_rows(&self) -> Vec<&LogEntry> {
+        let mut v: Vec<&LogEntry> = self
+            .net
+            .log()
+            .entries()
+            .chain(self.ble.log.entries())
+            .chain(self.lora.log.entries())
+            .collect();
+        v.sort_by_key(|e| e.time);
+        v
+    }
+
     // ================================================================ UI data
 
     /// Radio cards for the panel (`RF-7`).
@@ -402,8 +601,22 @@ impl RadioSpace {
         for (i, s) in self.slots.iter().enumerate() {
             let device = DeviceId(i as u32);
             let card = match &s.module {
-                Module::Esp01(m) => wifi_card(&self.net, device, &s.label, "ESP8266 Wi-Fi", m.station, m.status(&self.net).powered),
-                Module::Host(h) => wifi_card(&self.net, device, &s.label, "ESP32 Wi-Fi + BLE", h.station, true),
+                Module::Esp01(m) => wifi_card(
+                    &self.net,
+                    device,
+                    &s.label,
+                    "ESP8266 Wi-Fi",
+                    m.station,
+                    m.status(&self.net).powered,
+                ),
+                Module::Host(h) => wifi_card(
+                    &self.net,
+                    device,
+                    &s.label,
+                    "ESP32 Wi-Fi + BLE",
+                    h.station,
+                    true,
+                ),
                 Module::Hm10(m) => m.card(device, &self.ble),
                 Module::Hc05(m) => m.card(device, &self.ble),
                 Module::Rylr896(m) => m.card(device, &self.lora),
@@ -414,7 +627,14 @@ impl RadioSpace {
     }
 }
 
-fn wifi_card(net: &Network, device: DeviceId, label: &str, title: &str, sta: StationId, powered: bool) -> RadioCard {
+fn wifi_card(
+    net: &Network,
+    device: DeviceId,
+    label: &str,
+    title: &str,
+    sta: StationId,
+    powered: bool,
+) -> RadioCard {
     let info = net.station_info(sta);
     let mut rows = vec![];
     let status = match &info {
@@ -436,14 +656,33 @@ fn wifi_card(net: &Network, device: DeviceId, label: &str, title: &str, sta: Sta
                 1 => ", 1 wall".into(),
                 n => format!(", {n} walls"),
             };
-            rows.push(("RSSI".into(), format!("{} dBm ({:.1} m{walls})", l.rssi_dbm.round() as i32, l.distance_m)));
+            rows.push((
+                "RSSI".into(),
+                format!(
+                    "{} dBm ({:.1} m{walls})",
+                    l.rssi_dbm.round() as i32,
+                    l.distance_m
+                ),
+            ));
         }
         if let Some(ip) = i.ip {
-            rows.push(("IP".into(), format!("{ip} / {}", if i.dhcp { "DHCP" } else { "static" })));
+            rows.push((
+                "IP".into(),
+                format!("{ip} / {}", if i.dhcp { "DHCP" } else { "static" }),
+            ));
         }
-        rows.push(("Broker".into(), format!("mqtt://{} (built-in)", net.gateway())));
+        rows.push((
+            "Broker".into(),
+            format!("mqtt://{} (built-in)", net.gateway()),
+        ));
     }
-    RadioCard { device, label: label.into(), title: title.into(), status, rows }
+    RadioCard {
+        device,
+        label: label.into(),
+        title: title.into(),
+        status,
+        rows,
+    }
 }
 
 /// Wires one UART module to an MCU: decodes the MCU's TX line into module bytes and turns the
@@ -461,7 +700,12 @@ pub struct UartWire {
 impl UartWire {
     pub fn new(space: &RadioSpace, device: DeviceId) -> Self {
         let cfg = space.uart_config(device).unwrap_or_default();
-        UartWire { device, rx: UartDecoder::new(cfg), sent: vec![], received: vec![] }
+        UartWire {
+            device,
+            rx: UartDecoder::new(cfg),
+            sent: vec![],
+            received: vec![],
+        }
     }
 
     /// The MCU's TX line changed level at `t` (idle = high).
@@ -498,7 +742,12 @@ impl UartWire {
 
     /// Text the module sent at `baud` (frames at other speeds — the ESP boot log — skipped).
     pub fn received_text(&self, baud: u32) -> String {
-        let b: Vec<u8> = self.received.iter().filter(|f| f.config.baud == baud).map(|f| f.data as u8).collect();
+        let b: Vec<u8> = self
+            .received
+            .iter()
+            .filter(|f| f.config.baud == baud)
+            .map(|f| f.data as u8)
+            .collect();
         String::from_utf8_lossy(&b).into_owned()
     }
 
@@ -513,9 +762,17 @@ impl RadioSpace {
     /// Serves one host-board service request (`HostIo::service` in `bb-firmware`): Wi-Fi,
     /// sockets and BLE for an ESP32 registered with [`RadioSpace::add_host_radio`]. See
     /// [`crate::host`] for the byte format.
-    pub fn host_service(&mut self, id: DeviceId, channel: u8, request: &[u8], now: SimTime) -> Vec<u8> {
+    pub fn host_service(
+        &mut self,
+        id: DeviceId,
+        channel: u8,
+        request: &[u8],
+        now: SimTime,
+    ) -> Vec<u8> {
         self.advance(now);
-        let RadioSpace { net, ble, slots, .. } = self;
+        let RadioSpace {
+            net, ble, slots, ..
+        } = self;
         let reply = match slots.get_mut(id.0 as usize).map(|s| &mut s.module) {
             Some(Module::Host(h)) => h.serve(net, ble, channel, request, now),
             _ => {

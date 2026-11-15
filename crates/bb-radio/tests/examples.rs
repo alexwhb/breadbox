@@ -33,7 +33,10 @@ fn run(avr: &mut Avr, ms: f64, io: &mut Analog) -> Vec<PinEvent> {
 fn levels(ev: &[PinEvent], pin: Pin) -> Vec<(u64, bool)> {
     let mut out: Vec<(u64, bool)> = vec![];
     for e in ev.iter().filter(|e| e.pin == pin) {
-        let h = matches!(e.state, PinState::Output { high: true } | PinState::Input { pullup: true });
+        let h = matches!(
+            e.state,
+            PinState::Output { high: true } | PinState::Input { pullup: true }
+        );
         if out.last().map(|l| l.1) != Some(h) {
             out.push((e.cycle, h));
         }
@@ -42,7 +45,10 @@ fn levels(ev: &[PinEvent], pin: Pin) -> Vec<(u64, bool)> {
 }
 
 fn serial(avr: &mut Avr) -> String {
-    avr.take_usart_tx(0).iter().map(|b| b.data as u8 as char).collect()
+    avr.take_usart_tx(0)
+        .iter()
+        .map(|b| b.data as u8 as char)
+        .collect()
 }
 
 #[test]
@@ -101,14 +107,21 @@ struct Lcd {
 
 impl Lcd {
     fn decode(ev: &[PinEvent], rs: Pin, e: Pin, d: [Pin; 4]) -> Lcd {
-        let mut lcd = Lcd { ddram: [b' '; 128], addr: 0, nibbles: 0, pending: None };
+        let mut lcd = Lcd {
+            ddram: [b' '; 128],
+            addr: 0,
+            nibbles: 0,
+            pending: None,
+        };
         let mut level: HashMap<Pin, bool> = HashMap::new();
         let mut e_high = false;
         for ev in ev {
             let h = matches!(ev.state, PinState::Output { high: true });
             if ev.pin == e {
                 if e_high && !h {
-                    let nib = d.iter().enumerate().fold(0u8, |acc, (i, p)| acc | ((*level.get(p).unwrap_or(&false) as u8) << i));
+                    let nib = d.iter().enumerate().fold(0u8, |acc, (i, p)| {
+                        acc | ((*level.get(p).unwrap_or(&false) as u8) << i)
+                    });
                     lcd.nibble(*level.get(&rs).unwrap_or(&false), nib);
                 }
                 e_high = h;
@@ -147,7 +160,12 @@ impl Lcd {
 
     fn line(&self, n: usize) -> String {
         let start = if n == 0 { 0 } else { 0x40 };
-        self.ddram[start..start + 16].iter().map(|&c| if c == 223 { '°' } else { c as char }).collect::<String>().trim_end().to_string()
+        self.ddram[start..start + 16]
+            .iter()
+            .map(|&c| if c == 223 { '°' } else { c as char })
+            .collect::<String>()
+            .trim_end()
+            .to_string()
     }
 }
 
@@ -176,7 +194,11 @@ fn servo_sweep_pulses() {
     let mut avr = load_example("servo-sweep");
     let ev = run(&mut avr, 6_000.0, &mut Analog(HashMap::new()));
     let e = levels(&ev, uno(9));
-    let pulses: Vec<(u64, f64)> = e.windows(2).filter(|w| w[0].1 && !w[1].1).map(|w| (w[0].0, (w[1].0 - w[0].0) as f64 / 16.0)).collect();
+    let pulses: Vec<(u64, f64)> = e
+        .windows(2)
+        .filter(|w| w[0].1 && !w[1].1)
+        .map(|w| (w[0].0, (w[1].0 - w[0].0) as f64 / 16.0))
+        .collect();
     assert!(pulses.len() > 250);
     let min = pulses.iter().map(|p| p.1).fold(f64::MAX, f64::min);
     let max = pulses.iter().map(|p| p.1).fold(0.0, f64::max);

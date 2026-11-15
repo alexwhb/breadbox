@@ -31,7 +31,9 @@ pub enum Uuid {
 }
 
 impl Uuid {
-    const BASE: [u8; 16] = [0, 0, 0, 0, 0, 0, 0x10, 0, 0x80, 0, 0, 0x80, 0x5f, 0x9b, 0x34, 0xfb];
+    const BASE: [u8; 16] = [
+        0, 0, 0, 0, 0, 0, 0x10, 0, 0x80, 0, 0, 0x80, 0x5f, 0x9b, 0x34, 0xfb,
+    ];
 
     /// Parses `"FFE1"`, `"0xFFE1"` or a 128-bit `"6e400001-b5a3-f393-e0a9-e50e24dcca9e"`.
     pub fn parse(s: &str) -> Option<Uuid> {
@@ -62,7 +64,22 @@ impl fmt::Display for Uuid {
             Uuid::U128(b) => write!(
                 f,
                 "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-                b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]
+                b[0],
+                b[1],
+                b[2],
+                b[3],
+                b[4],
+                b[5],
+                b[6],
+                b[7],
+                b[8],
+                b[9],
+                b[10],
+                b[11],
+                b[12],
+                b[13],
+                b[14],
+                b[15]
             ),
         }
     }
@@ -103,7 +120,10 @@ pub struct Gatt {
 
 impl Gatt {
     pub fn add_service(&mut self, uuid: Uuid) -> usize {
-        self.services.push(Service { uuid, characteristics: vec![] });
+        self.services.push(Service {
+            uuid,
+            characteristics: vec![],
+        });
         self.services.len() - 1
     }
 
@@ -112,22 +132,39 @@ impl Gatt {
         self.next_handle += 3; // declaration, value, CCCD
         let handle = self.next_handle;
         if let Some(s) = self.services.get_mut(svc) {
-            s.characteristics.push(Characteristic { handle, uuid, props, value: value.to_vec(), notifying: false, description: None });
+            s.characteristics.push(Characteristic {
+                handle,
+                uuid,
+                props,
+                value: value.to_vec(),
+                notifying: false,
+                description: None,
+            });
         }
         handle
     }
 
     pub fn char(&self, handle: u16) -> Option<&Characteristic> {
-        self.services.iter().flat_map(|s| &s.characteristics).find(|c| c.handle == handle)
+        self.services
+            .iter()
+            .flat_map(|s| &s.characteristics)
+            .find(|c| c.handle == handle)
     }
 
     pub fn char_mut(&mut self, handle: u16) -> Option<&mut Characteristic> {
-        self.services.iter_mut().flat_map(|s| &mut s.characteristics).find(|c| c.handle == handle)
+        self.services
+            .iter_mut()
+            .flat_map(|s| &mut s.characteristics)
+            .find(|c| c.handle == handle)
     }
 
     /// Value handle of the first characteristic with `uuid`.
     pub fn find(&self, uuid: Uuid) -> Option<u16> {
-        self.services.iter().flat_map(|s| &s.characteristics).find(|c| c.uuid == uuid).map(|c| c.handle)
+        self.services
+            .iter()
+            .flat_map(|s| &s.characteristics)
+            .find(|c| c.uuid == uuid)
+            .map(|c| c.handle)
     }
 }
 
@@ -148,11 +185,19 @@ pub enum PeripheralEvent {
     Connected,
     Disconnected,
     /// The phone wrote `data` to the characteristic `handle`.
-    Write { handle: u16, data: Vec<u8> },
+    Write {
+        handle: u16,
+        data: Vec<u8>,
+    },
     /// The phone enabled/disabled notifications.
-    Subscribed { handle: u16, on: bool },
+    Subscribed {
+        handle: u16,
+        on: bool,
+    },
     /// The phone read `handle` (value already served from the table).
-    Read { handle: u16 },
+    Read {
+        handle: u16,
+    },
     /// Classic SPP bytes from the phone.
     SppData(Vec<u8>),
 }
@@ -189,14 +234,35 @@ pub struct ScanEntry {
 /// Results the phone UI shows.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum PhoneEvent {
-    Connected { id: PeripheralId },
-    ConnectFailed { id: PeripheralId, reason: String },
-    Disconnected { id: PeripheralId },
-    Notification { id: PeripheralId, handle: u16, data: Vec<u8> },
-    ReadResult { id: PeripheralId, handle: u16, data: Vec<u8> },
-    WriteDone { id: PeripheralId, handle: u16 },
+    Connected {
+        id: PeripheralId,
+    },
+    ConnectFailed {
+        id: PeripheralId,
+        reason: String,
+    },
+    Disconnected {
+        id: PeripheralId,
+    },
+    Notification {
+        id: PeripheralId,
+        handle: u16,
+        data: Vec<u8>,
+    },
+    ReadResult {
+        id: PeripheralId,
+        handle: u16,
+        data: Vec<u8>,
+    },
+    WriteDone {
+        id: PeripheralId,
+        handle: u16,
+    },
     /// Bytes arrived in the Bluetooth serial terminal.
-    Terminal { id: PeripheralId, data: Vec<u8> },
+    Terminal {
+        id: PeripheralId,
+        data: Vec<u8>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -217,13 +283,37 @@ pub enum BleError {
 
 #[derive(Debug, Clone)]
 enum BleEv {
-    ConnectDone { p: PeripheralId },
-    Write { p: PeripheralId, handle: u16, data: Vec<u8>, response: bool },
-    Read { p: PeripheralId, handle: u16 },
-    Notify { p: PeripheralId, handle: u16, data: Vec<u8> },
-    Subscribe { p: PeripheralId, handle: u16, on: bool },
-    SppToPeripheral { p: PeripheralId, data: Vec<u8> },
-    SppToPhone { p: PeripheralId, data: Vec<u8> },
+    ConnectDone {
+        p: PeripheralId,
+    },
+    Write {
+        p: PeripheralId,
+        handle: u16,
+        data: Vec<u8>,
+        response: bool,
+    },
+    Read {
+        p: PeripheralId,
+        handle: u16,
+    },
+    Notify {
+        p: PeripheralId,
+        handle: u16,
+        data: Vec<u8>,
+    },
+    Subscribe {
+        p: PeripheralId,
+        handle: u16,
+        on: bool,
+    },
+    SppToPeripheral {
+        p: PeripheralId,
+        data: Vec<u8>,
+    },
+    SppToPhone {
+        p: PeripheralId,
+        data: Vec<u8>,
+    },
 }
 
 #[derive(Debug)]
@@ -274,9 +364,15 @@ pub struct BleSpace {
 pub const HM10_SERVICE: Uuid = Uuid::U16(0xFFE0);
 pub const HM10_CHAR: Uuid = Uuid::U16(0xFFE1);
 /// Nordic UART Service (ESP32 BLE-UART sketches): service, RX (phone writes), TX (notify).
-pub const NUS_SERVICE: Uuid = Uuid::U128([0x6e, 0x40, 0x00, 0x01, 0xb5, 0xa3, 0xf3, 0x93, 0xe0, 0xa9, 0xe5, 0x0e, 0x24, 0xdc, 0xca, 0x9e]);
-pub const NUS_RX: Uuid = Uuid::U128([0x6e, 0x40, 0x00, 0x02, 0xb5, 0xa3, 0xf3, 0x93, 0xe0, 0xa9, 0xe5, 0x0e, 0x24, 0xdc, 0xca, 0x9e]);
-pub const NUS_TX: Uuid = Uuid::U128([0x6e, 0x40, 0x00, 0x03, 0xb5, 0xa3, 0xf3, 0x93, 0xe0, 0xa9, 0xe5, 0x0e, 0x24, 0xdc, 0xca, 0x9e]);
+pub const NUS_SERVICE: Uuid = Uuid::U128([
+    0x6e, 0x40, 0x00, 0x01, 0xb5, 0xa3, 0xf3, 0x93, 0xe0, 0xa9, 0xe5, 0x0e, 0x24, 0xdc, 0xca, 0x9e,
+]);
+pub const NUS_RX: Uuid = Uuid::U128([
+    0x6e, 0x40, 0x00, 0x02, 0xb5, 0xa3, 0xf3, 0x93, 0xe0, 0xa9, 0xe5, 0x0e, 0x24, 0xdc, 0xca, 0x9e,
+]);
+pub const NUS_TX: Uuid = Uuid::U128([
+    0x6e, 0x40, 0x00, 0x03, 0xb5, 0xa3, 0xf3, 0x93, 0xe0, 0xa9, 0xe5, 0x0e, 0x24, 0xdc, 0xca, 0x9e,
+]);
 
 impl BleSpace {
     pub fn new(seed: u64) -> Self {
@@ -299,7 +395,11 @@ impl BleSpace {
 
     fn schedule(&mut self, at: SimTime, ev: BleEv) {
         self.seq += 1;
-        self.queue.push(Sched { at: at.max(self.now), seq: self.seq, ev });
+        self.queue.push(Sched {
+            at: at.max(self.now),
+            seq: self.seq,
+            ev,
+        });
     }
 
     /// Next connection event at or after `t` (phase-locked to the connection interval).
@@ -310,11 +410,15 @@ impl BleSpace {
     }
 
     fn per(&self, id: PeripheralId) -> Result<&Peripheral, BleError> {
-        self.peripherals.get(id.0 as usize).ok_or(BleError::NoDevice)
+        self.peripherals
+            .get(id.0 as usize)
+            .ok_or(BleError::NoDevice)
     }
 
     fn per_mut(&mut self, id: PeripheralId) -> Result<&mut Peripheral, BleError> {
-        self.peripherals.get_mut(id.0 as usize).ok_or(BleError::NoDevice)
+        self.peripherals
+            .get_mut(id.0 as usize)
+            .ok_or(BleError::NoDevice)
     }
 
     fn log_row(&mut self, id: PeripheralId, dir: Dir, summary: String, bytes: usize) {
@@ -446,7 +550,9 @@ impl BleSpace {
     /// Sends a notification (if the phone subscribed). Values longer than 20 bytes are split.
     pub fn notify(&mut self, id: PeripheralId, handle: u16, data: &[u8], now: SimTime) -> bool {
         self.advance(now);
-        let ok = self.per(id).is_ok_and(|p| p.connected && p.gatt.char(handle).is_some_and(|c| c.notifying));
+        let ok = self
+            .per(id)
+            .is_ok_and(|p| p.connected && p.gatt.char(handle).is_some_and(|c| c.notifying));
         if let Some(c) = self.gatt_mut(id).and_then(|g| g.char_mut(handle)) {
             c.value = data.to_vec();
         }
@@ -455,8 +561,15 @@ impl BleSpace {
         }
         let mut t = self.conn_event(now);
         for chunk in data.chunks(20) {
-            self.schedule(t, BleEv::Notify { p: id, handle, data: chunk.to_vec() });
-            t = t + SimTime::from_us(1_500); // several packets per connection event
+            self.schedule(
+                t,
+                BleEv::Notify {
+                    p: id,
+                    handle,
+                    data: chunk.to_vec(),
+                },
+            );
+            t += SimTime::from_us(1_500); // several packets per connection event
         }
         true
     }
@@ -468,7 +581,13 @@ impl BleSpace {
             return;
         }
         let at = now + SimTime::from_ms(8 + self.rng.below(6) as u64);
-        self.schedule(at, BleEv::SppToPhone { p: id, data: data.to_vec() });
+        self.schedule(
+            at,
+            BleEv::SppToPhone {
+                p: id,
+                data: data.to_vec(),
+            },
+        );
     }
 
     /// The peripheral drops the link (module command / reset).
@@ -480,7 +599,9 @@ impl BleSpace {
     }
 
     pub fn take_peripheral_events(&mut self, id: PeripheralId) -> Vec<PeripheralEvent> {
-        self.per_mut(id).map(|p| p.events.drain(..).collect()).unwrap_or_default()
+        self.per_mut(id)
+            .map(|p| p.events.drain(..).collect())
+            .unwrap_or_default()
     }
 
     fn drop_link(&mut self, id: PeripheralId) {
@@ -495,7 +616,8 @@ impl BleSpace {
         }
         if self.phone_conn == Some(id) {
             self.phone_conn = None;
-            self.phone_events.push((self.now, PhoneEvent::Disconnected { id }));
+            self.phone_events
+                .push((self.now, PhoneEvent::Disconnected { id }));
         }
         self.log_row(id, Dir::Rx, "BLE disconnect".into(), 0);
     }
@@ -505,7 +627,11 @@ impl BleSpace {
     /// RSSI the phone measures from a peripheral.
     pub fn rssi(&self, id: PeripheralId) -> Option<f64> {
         let p = self.per(id).ok()?;
-        Some(self.geometry.link(&self.path_loss, p.tx_dbm, p.pos, self.phone_pos).rssi_dbm)
+        Some(
+            self.geometry
+                .link(&self.path_loss, p.tx_dbm, p.pos, self.phone_pos)
+                .rssi_dbm,
+        )
     }
 
     /// Devices the phone can see right now (strongest first): advertising LE peripherals and
@@ -515,7 +641,9 @@ impl BleSpace {
             .peripherals
             .iter()
             .enumerate()
-            .filter(|(_, p)| p.powered && (p.advertising || p.kind == BtKind::Classic && !p.connected))
+            .filter(|(_, p)| {
+                p.powered && (p.advertising || p.kind == BtKind::Classic && !p.connected)
+            })
             .filter_map(|(i, p)| {
                 let id = PeripheralId(i as u32);
                 let rssi = self.rssi(id)?;
@@ -529,12 +657,17 @@ impl BleSpace {
                 })
             })
             .collect();
-        v.sort_by(|a, b| b.rssi.cmp(&a.rssi));
+        v.sort_by_key(|e| std::cmp::Reverse(e.rssi));
         v
     }
 
     /// Connects the phone (LE: to an advertising peripheral; classic: pairs with `pin`).
-    pub fn connect(&mut self, id: PeripheralId, pin: Option<&str>, now: SimTime) -> Result<(), BleError> {
+    pub fn connect(
+        &mut self,
+        id: PeripheralId,
+        pin: Option<&str>,
+        now: SimTime,
+    ) -> Result<(), BleError> {
         self.advance(now);
         if let Some(old) = self.phone_conn {
             self.drop_link(old);
@@ -577,7 +710,11 @@ impl BleSpace {
 
     fn connected_char(&self, handle: u16) -> Result<(PeripheralId, &Characteristic), BleError> {
         let id = self.phone_connected().ok_or(BleError::NotConnected)?;
-        let c = self.per(id)?.gatt.char(handle).ok_or(BleError::NoCharacteristic)?;
+        let c = self
+            .per(id)?
+            .gatt
+            .char(handle)
+            .ok_or(BleError::NoCharacteristic)?;
         Ok((id, c))
     }
 
@@ -603,8 +740,16 @@ impl BleSpace {
         }
         let mut at = self.conn_event(now);
         for chunk in data.chunks(20) {
-            self.schedule(at, BleEv::Write { p: id, handle, data: chunk.to_vec(), response });
-            at = at + SimTime::from_us(1_500);
+            self.schedule(
+                at,
+                BleEv::Write {
+                    p: id,
+                    handle,
+                    data: chunk.to_vec(),
+                    response,
+                },
+            );
+            at += SimTime::from_us(1_500);
         }
         Ok(())
     }
@@ -651,7 +796,13 @@ impl BleSpace {
         let id = self.phone_connected().ok_or(BleError::NotConnected)?;
         if self.per(id)?.kind == BtKind::Classic {
             let at = now + SimTime::from_ms(8 + self.rng.below(6) as u64);
-            self.schedule(at, BleEv::SppToPeripheral { p: id, data: data.to_vec() });
+            self.schedule(
+                at,
+                BleEv::SppToPeripheral {
+                    p: id,
+                    data: data.to_vec(),
+                },
+            );
             return Ok(());
         }
         let (rx, _) = self.terminal_chars(id).ok_or(BleError::NoCharacteristic)?;
@@ -691,16 +842,28 @@ impl BleSpace {
                 let Ok(per) = self.per_mut(p) else { return };
                 if !per.powered {
                     self.phone_conn = None;
-                    self.phone_events.push((now, PhoneEvent::ConnectFailed { id: p, reason: "device went away".into() }));
+                    self.phone_events.push((
+                        now,
+                        PhoneEvent::ConnectFailed {
+                            id: p,
+                            reason: "device went away".into(),
+                        },
+                    ));
                     return;
                 }
                 per.connected = true;
                 per.advertising = false;
                 per.events.push_back(PeripheralEvent::Connected);
-                self.phone_events.push((now, PhoneEvent::Connected { id: p }));
+                self.phone_events
+                    .push((now, PhoneEvent::Connected { id: p }));
                 self.log_row(p, Dir::Rx, "BLE connected (interval 30 ms)".into(), 0);
             }
-            BleEv::Write { p, handle, data, response } => {
+            BleEv::Write {
+                p,
+                handle,
+                data,
+                response,
+            } => {
                 if !self.is_connected(p) {
                     return;
                 }
@@ -709,36 +872,77 @@ impl BleSpace {
                     c.value = data.clone();
                 }
                 let shown = printable(&data);
-                self.log_row(p, Dir::Rx, format!("ATT WRITE 0x{handle:04X} \"{shown}\""), n);
+                self.log_row(
+                    p,
+                    Dir::Rx,
+                    format!("ATT WRITE 0x{handle:04X} \"{shown}\""),
+                    n,
+                );
                 if let Ok(per) = self.per_mut(p) {
-                    per.events.push_back(PeripheralEvent::Write { handle, data });
+                    per.events
+                        .push_back(PeripheralEvent::Write { handle, data });
                 }
                 if response {
-                    self.phone_events.push((now, PhoneEvent::WriteDone { id: p, handle }));
+                    self.phone_events
+                        .push((now, PhoneEvent::WriteDone { id: p, handle }));
                 }
             }
             BleEv::Read { p, handle } => {
                 if !self.is_connected(p) {
                     return;
                 }
-                let data = self.gatt(p).and_then(|g| g.char(handle)).map(|c| c.value.clone()).unwrap_or_default();
+                let data = self
+                    .gatt(p)
+                    .and_then(|g| g.char(handle))
+                    .map(|c| c.value.clone())
+                    .unwrap_or_default();
                 if let Ok(per) = self.per_mut(p) {
                     per.events.push_back(PeripheralEvent::Read { handle });
                 }
-                self.log_row(p, Dir::Tx, format!("ATT READ RSP 0x{handle:04X} · {} B", data.len()), data.len());
-                self.phone_events.push((now, PhoneEvent::ReadResult { id: p, handle, data: data[..data.len().min(22)].to_vec() }));
+                self.log_row(
+                    p,
+                    Dir::Tx,
+                    format!("ATT READ RSP 0x{handle:04X} · {} B", data.len()),
+                    data.len(),
+                );
+                self.phone_events.push((
+                    now,
+                    PhoneEvent::ReadResult {
+                        id: p,
+                        handle,
+                        data: data[..data.len().min(22)].to_vec(),
+                    },
+                ));
             }
             BleEv::Notify { p, handle, data } => {
                 if !self.is_connected(p) || self.phone_conn != Some(p) {
                     return;
                 }
                 let shown = printable(&data);
-                self.log_row(p, Dir::Tx, format!("ATT NOTIFY 0x{handle:04X} \"{shown}\""), data.len());
+                self.log_row(
+                    p,
+                    Dir::Tx,
+                    format!("ATT NOTIFY 0x{handle:04X} \"{shown}\""),
+                    data.len(),
+                );
                 let term = self.terminal_chars(p).is_some_and(|(_, tx)| tx == handle);
                 if term {
-                    self.phone_events.push((now, PhoneEvent::Terminal { id: p, data: data.clone() }));
+                    self.phone_events.push((
+                        now,
+                        PhoneEvent::Terminal {
+                            id: p,
+                            data: data.clone(),
+                        },
+                    ));
                 }
-                self.phone_events.push((now, PhoneEvent::Notification { id: p, handle, data }));
+                self.phone_events.push((
+                    now,
+                    PhoneEvent::Notification {
+                        id: p,
+                        handle,
+                        data,
+                    },
+                ));
             }
             BleEv::Subscribe { p, handle, on } => {
                 if !self.is_connected(p) {
@@ -747,16 +951,30 @@ impl BleSpace {
                 if let Some(c) = self.gatt_mut(p).and_then(|g| g.char_mut(handle)) {
                     c.notifying = on;
                 }
-                self.log_row(p, Dir::Rx, format!("ATT WRITE CCCD 0x{handle:04X} = {}", if on { "notify" } else { "off" }), 2);
+                self.log_row(
+                    p,
+                    Dir::Rx,
+                    format!(
+                        "ATT WRITE CCCD 0x{handle:04X} = {}",
+                        if on { "notify" } else { "off" }
+                    ),
+                    2,
+                );
                 if let Ok(per) = self.per_mut(p) {
-                    per.events.push_back(PeripheralEvent::Subscribed { handle, on });
+                    per.events
+                        .push_back(PeripheralEvent::Subscribed { handle, on });
                 }
             }
             BleEv::SppToPeripheral { p, data } => {
                 if !self.is_connected(p) {
                     return;
                 }
-                self.log_row(p, Dir::Rx, format!("SPP \"{}\"", printable(&data)), data.len());
+                self.log_row(
+                    p,
+                    Dir::Rx,
+                    format!("SPP \"{}\"", printable(&data)),
+                    data.len(),
+                );
                 if let Ok(per) = self.per_mut(p) {
                     per.events.push_back(PeripheralEvent::SppData(data));
                 }
@@ -765,8 +983,14 @@ impl BleSpace {
                 if !self.is_connected(p) || self.phone_conn != Some(p) {
                     return;
                 }
-                self.log_row(p, Dir::Tx, format!("SPP \"{}\"", printable(&data)), data.len());
-                self.phone_events.push((now, PhoneEvent::Terminal { id: p, data }));
+                self.log_row(
+                    p,
+                    Dir::Tx,
+                    format!("SPP \"{}\"", printable(&data)),
+                    data.len(),
+                );
+                self.phone_events
+                    .push((now, PhoneEvent::Terminal { id: p, data }));
             }
         }
     }
@@ -774,5 +998,13 @@ impl BleSpace {
 
 /// Bytes as text for log rows (non-printables as `·`).
 pub(crate) fn printable(d: &[u8]) -> String {
-    d.iter().map(|&b| if (0x20..0x7f).contains(&b) { b as char } else { '·' }).collect()
+    d.iter()
+        .map(|&b| {
+            if (0x20..0x7f).contains(&b) {
+                b as char
+            } else {
+                '·'
+            }
+        })
+        .collect()
 }

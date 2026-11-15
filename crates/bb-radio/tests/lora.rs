@@ -24,19 +24,36 @@ fn path_loss_by_terrain_and_range() {
     let u = l.rssi_between(a, Pos::new(1000.0, 0.0), 14.0, 915_000_000);
     assert!(u < r - 14.0);
     // SF12 reaches further than SF7.
-    let sf7 = LoraParams { sf: 7, ..LoraParams::default() };
+    let sf7 = LoraParams {
+        sf: 7,
+        ..LoraParams::default()
+    };
     let sf12 = LoraParams::default();
     l.terrain = Terrain::Suburban;
     let at = |d: f64| l.rssi_between(a, Pos::new(d, 0.0), 14.0, 915_000_000);
-    let reach = |p: LoraParams| (1..2000).map(|k| k as f64 * 10.0).take_while(|d| at(*d) >= p.sensitivity()).last().unwrap_or(0.0);
-    assert!(reach(sf12) > 1.8 * reach(sf7), "{} vs {}", reach(sf12), reach(sf7));
+    let reach = |p: LoraParams| {
+        (1..2000)
+            .map(|k| k as f64 * 10.0)
+            .take_while(|d| at(*d) >= p.sensitivity())
+            .last()
+            .unwrap_or(0.0)
+    };
+    assert!(
+        reach(sf12) > 1.8 * reach(sf7),
+        "{} vs {}",
+        reach(sf12),
+        reach(sf7)
+    );
 }
 
 fn two_nodes(sf: u8) -> (LoraSpace, bb_radio::lora::NodeId, bb_radio::lora::NodeId) {
     let mut l = LoraSpace::new(7);
     let a = l.add_node("A", Pos::new(0.0, 0.0));
     let b = l.add_node("B", Pos::new(300.0, 0.0));
-    let p = LoraParams { sf, ..LoraParams::default() };
+    let p = LoraParams {
+        sf,
+        ..LoraParams::default()
+    };
     for (n, addr) in [(a, 1u16), (b, 2u16)] {
         l.set_powered(n, true);
         l.configure(n, 915_000_000, p, 14.0, 6, addr);
@@ -48,7 +65,11 @@ fn two_nodes(sf: u8) -> (LoraSpace, bb_radio::lora::NodeId, bb_radio::lora::Node
 fn airtime_delivery_duty_cycle_and_collisions() {
     let (mut l, a, b) = two_nodes(9);
     let end = l.transmit(a, 2, b"hello", ms(0)).unwrap();
-    let air = LoraParams { sf: 9, ..LoraParams::default() }.airtime(5);
+    let air = LoraParams {
+        sf: 9,
+        ..LoraParams::default()
+    }
+    .airtime(5);
     assert_eq!(end, SimTime::from_secs_f64(air));
     // Busy while transmitting; delivered at the end of the frame.
     assert!(l.transmit(a, 2, b"x", ms(10)).is_err());
@@ -60,7 +81,17 @@ fn airtime_delivery_duty_cycle_and_collisions() {
     assert_eq!((rx[0].from, rx[0].data.as_slice()), (1, &b"hello"[..]));
     assert!(rx[0].rssi < -60.0 && rx[0].snr > 0.0, "{rx:?}");
     // Wrong network id / address: not received.
-    l.configure(b, 915_000_000, LoraParams { sf: 9, ..LoraParams::default() }, 14.0, 7, 2);
+    l.configure(
+        b,
+        915_000_000,
+        LoraParams {
+            sf: 9,
+            ..LoraParams::default()
+        },
+        14.0,
+        7,
+        2,
+    );
     let e = l.transmit(a, 2, b"x", ms(1000)).unwrap();
     l.advance(e);
     assert!(l.take_rx(b).is_empty());
@@ -72,12 +103,21 @@ fn airtime_delivery_duty_cycle_and_collisions() {
     // SF12/125 kHz, preamble 4 (RYLR896 default), 10 bytes: 860.16 ms.
     assert!((t - 0.860_16).abs() < 1e-6, "{t}");
     let err = l.transmit(a, 2, b"again", e + ms(1000)).unwrap_err();
-    assert!(matches!(err, bb_radio::lora::LoraError::DutyCycle(w) if (w - (100.0 * t - t - 1.0)).abs() < 0.5), "{err:?}");
-    assert!(l.transmit(a, 2, b"again", SimTime::from_secs_f64(100.0 * t + 0.01)).is_ok());
+    assert!(
+        matches!(err, bb_radio::lora::LoraError::DutyCycle(w) if (w - (100.0 * t - t - 1.0)).abs() < 0.5),
+        "{err:?}"
+    );
+    assert!(
+        l.transmit(a, 2, b"again", SimTime::from_secs_f64(100.0 * t + 0.01))
+            .is_ok()
+    );
 
     // Collision: two equally strong senders overlapping at the receiver → both lost.
     let mut l = LoraSpace::new(9);
-    let p = LoraParams { sf: 7, ..LoraParams::default() };
+    let p = LoraParams {
+        sf: 7,
+        ..LoraParams::default()
+    };
     let r = l.add_node("R", Pos::new(0.0, 0.0));
     let s1 = l.add_node("S1", Pos::new(200.0, 0.0));
     let s2 = l.add_node("S2", Pos::new(-200.0, 0.0));
@@ -91,7 +131,11 @@ fn airtime_delivery_duty_cycle_and_collisions() {
     l.transmit(s2, 1, b"two", ms(5)).unwrap();
     l.advance(ms(200));
     assert!(l.take_rx(r).is_empty());
-    let col = l.log.entries().filter(|e| e.dir == Dir::Drop && e.dropped == Some(DropReason::Collision)).count();
+    let col = l
+        .log
+        .entries()
+        .filter(|e| e.dir == Dir::Drop && e.dropped == Some(DropReason::Collision))
+        .count();
     assert_eq!(col, 2);
     // Capture effect: a much stronger (closer) sender survives the overlap.
     l.transmit(s1, 1, b"weak", ms(1000)).unwrap();
@@ -118,7 +162,7 @@ impl Rig {
     fn send(&mut self, dev: DeviceId, s: &str) {
         let cfg = self.space.uart_config(dev).unwrap();
         for b in format!("{s}\r\n").bytes() {
-            self.t = self.t + cfg.frame_time();
+            self.t += cfg.frame_time();
             self.space.uart_rx(dev, b, self.t);
         }
     }
@@ -130,7 +174,11 @@ impl Rig {
         }
     }
     fn text(&mut self, dev: DeviceId) -> String {
-        self.space.take_uart_tx(dev).iter().map(|f| f.data as u8 as char).collect()
+        self.space
+            .take_uart_tx(dev)
+            .iter()
+            .map(|f| f.data as u8 as char)
+            .collect()
     }
 }
 
@@ -142,7 +190,10 @@ fn rylr896_at_commands_peer_to_peer_and_gateway_mqtt() {
     space.lora.gateway.pos = Pos::new(400.0, 100.0);
     space.power(a, true, SimTime::ZERO);
     space.power(b, true, SimTime::ZERO);
-    let mut r = Rig { space, t: SimTime::ZERO };
+    let mut r = Rig {
+        space,
+        t: SimTime::ZERO,
+    };
     r.run(ms(200));
     assert_eq!(r.text(a), "+READY\r\n");
     r.text(b);
@@ -159,15 +210,27 @@ fn rylr896_at_commands_peer_to_peer_and_gateway_mqtt() {
     r.send(a, "AT+FOO");
     r.send(a, "AT+SEND=102,4,hello");
     r.run(ms(20));
-    assert_eq!(r.text(a), "+PARAMETER=9,7,1,8\r\n+BAND=915000000\r\n+VER=RYLR89C_V1.2.7\r\n+ERR=4\r\n+ERR=5\r\n");
+    assert_eq!(
+        r.text(a),
+        "+PARAMETER=9,7,1,8\r\n+BAND=915000000\r\n+VER=RYLR89C_V1.2.7\r\n+ERR=4\r\n+ERR=5\r\n"
+    );
     // Subscribe to the gateway's uplinks.
     let sub = r.space.net.broker_mut().virtual_connect("lns", r.t);
-    let out = r.space.net.broker_mut().virtual_subscribe(sub, "lora/#", 0, r.t);
+    let out = r
+        .space
+        .net
+        .broker_mut()
+        .virtual_subscribe(sub, "lora/#", 0, r.t);
     r.space.net.apply_broker(out);
     r.send(a, "AT+SEND=102,10,temp=21,5C");
     let sent = r.t;
     r.run(ms(400));
-    let air = LoraParams { sf: 9, preamble: 8, ..LoraParams::default() }.airtime(10);
+    let air = LoraParams {
+        sf: 9,
+        preamble: 8,
+        ..LoraParams::default()
+    }
+    .airtime(10);
     assert_eq!(r.text(a), "+OK\r\n");
     let rcv = r.text(b);
     assert!(rcv.starts_with("+RCV=101,10,temp=21,5C,-"), "{rcv}");
@@ -182,14 +245,38 @@ fn rylr896_at_commands_peer_to_peer_and_gateway_mqtt() {
     assert!((up[0].time - sent).as_secs_f64() >= air - 1e-6);
     // Downlink: publish to lora/6/102/down → node 102 receives it from the gateway (address 0).
     let t = r.t;
-    let out = r.space.net.broker_mut().virtual_publish(sub, Message::new("lora/6/102/down", "water=on", 0, false), t);
+    let out = r.space.net.broker_mut().virtual_publish(
+        sub,
+        Message::new("lora/6/102/down", "water=on", 0, false),
+        t,
+    );
     r.space.net.apply_broker(out);
     r.run(ms(400));
     let rcv = r.text(b);
     assert!(rcv.starts_with("+RCV=0,8,water=on,"), "{rcv}");
-    let notes: Vec<String> = r.space.take_annotations().iter().map(|n| n.line()).collect();
-    assert!(notes.iter().any(|n| n.starts_with("lora: TX to 102 \"temp=21,5C\" (SF9,")), "{notes:#?}");
+    let notes: Vec<String> = r
+        .space
+        .take_annotations()
+        .iter()
+        .map(|n| n.line())
+        .collect();
+    assert!(
+        notes
+            .iter()
+            .any(|n| n.starts_with("lora: TX to 102 \"temp=21,5C\" (SF9,")),
+        "{notes:#?}"
+    );
     // Card for the radio panel.
-    let card = r.space.cards().into_iter().find(|c| c.title == "RYLR896 LoRa").unwrap();
-    assert!(card.rows.iter().any(|(k, v)| k == "Modulation" && v == "SF9 · 125 kHz · 4/5"), "{card:?}");
+    let card = r
+        .space
+        .cards()
+        .into_iter()
+        .find(|c| c.title == "RYLR896 LoRa")
+        .unwrap();
+    assert!(
+        card.rows
+            .iter()
+            .any(|(k, v)| k == "Modulation" && v == "SF9 · 125 kHz · 4/5"),
+        "{card:?}"
+    );
 }

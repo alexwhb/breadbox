@@ -20,16 +20,29 @@ pub(crate) struct DhcpServer {
 
 impl DhcpServer {
     pub fn new(_cfg: &NetConfig) -> Self {
-        DhcpServer { leases: HashMap::new() }
+        DhcpServer {
+            leases: HashMap::new(),
+        }
     }
 
     /// The address for `mac`: its existing lease, else the lowest free pool address.
-    fn allocate(&mut self, mac: [u8; 6], cfg: &NetConfig, now: SimTime, statics: &HashSet<Ipv4Addr>) -> Option<Ipv4Addr> {
+    fn allocate(
+        &mut self,
+        mac: [u8; 6],
+        cfg: &NetConfig,
+        now: SimTime,
+        statics: &HashSet<Ipv4Addr>,
+    ) -> Option<Ipv4Addr> {
         if let Some(l) = self.leases.get(&mac) {
             return Some(l.ip);
         }
         let base = cfg.gateway.octets();
-        let taken: HashSet<Ipv4Addr> = self.leases.iter().filter(|(_, l)| l.expires > now).map(|(_, l)| l.ip).collect();
+        let taken: HashSet<Ipv4Addr> = self
+            .leases
+            .iter()
+            .filter(|(_, l)| l.expires > now)
+            .map(|(_, l)| l.ip)
+            .collect();
         for last in cfg.pool_first..=cfg.pool_last {
             let ip = Ipv4Addr::new(base[0], base[1], base[2], last);
             if ip != cfg.gateway && !taken.contains(&ip) && !statics.contains(&ip) {
@@ -43,7 +56,11 @@ impl DhcpServer {
 
     /// Current leases: (MAC, address, expiry).
     pub fn leases(&self) -> Vec<([u8; 6], Ipv4Addr, SimTime)> {
-        let mut v: Vec<_> = self.leases.iter().map(|(m, l)| (*m, l.ip, l.expires)).collect();
+        let mut v: Vec<_> = self
+            .leases
+            .iter()
+            .map(|(m, l)| (*m, l.ip, l.expires))
+            .collect();
         v.sort_by_key(|x| x.1);
         v
     }
@@ -86,7 +103,10 @@ pub struct HttpRequest {
 
 impl HttpRequest {
     pub fn header(&self, name: &str) -> Option<&str> {
-        self.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case(name)).map(|(_, v)| v.as_str())
+        self.headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v.as_str())
     }
 
     /// Parses one complete request from the front of `buf`: `Some((request, consumed))`.
@@ -99,7 +119,10 @@ impl HttpRequest {
         let target = rl.next()?.to_string();
         let version = rl.next().unwrap_or("HTTP/1.0").to_string();
         let headers: Vec<(String, String)> = lines
-            .filter_map(|l| l.split_once(':').map(|(k, v)| (k.trim().to_string(), v.trim().to_string())))
+            .filter_map(|l| {
+                l.split_once(':')
+                    .map(|(k, v)| (k.trim().to_string(), v.trim().to_string()))
+            })
             .collect();
         let len: usize = headers
             .iter()
@@ -120,7 +143,14 @@ impl HttpRequest {
             })
             .collect();
         Some((
-            HttpRequest { method, path: path.to_string(), query, version, headers, body: buf[end + 4..total].to_vec() },
+            HttpRequest {
+                method,
+                path: path.to_string(),
+                query,
+                version,
+                headers,
+                body: buf[end + 4..total].to_vec(),
+            },
             total,
         ))
     }
@@ -158,10 +188,18 @@ pub struct HttpResponse {
 
 impl HttpResponse {
     fn json(status: u16, v: serde_json::Value) -> Self {
-        HttpResponse { status, content_type: "application/json".into(), body: serde_json::to_vec_pretty(&v).unwrap_or_default() }
+        HttpResponse {
+            status,
+            content_type: "application/json".into(),
+            body: serde_json::to_vec_pretty(&v).unwrap_or_default(),
+        }
     }
     fn text(status: u16, s: &str) -> Self {
-        HttpResponse { status, content_type: "text/plain; charset=utf-8".into(), body: s.as_bytes().to_vec() }
+        HttpResponse {
+            status,
+            content_type: "text/plain; charset=utf-8".into(),
+            body: s.as_bytes().to_vec(),
+        }
     }
 
     pub fn encode(&self, keep_alive: bool) -> Vec<u8> {
@@ -200,11 +238,21 @@ fn reason(code: u16) -> &'static str {
 /// The HTTP test server's routes (httpbin-style): `/`, `/get`, `/post`, `/put`, `/echo`,
 /// `/status/<code>`, `/bytes/<n>`, `/time`, `/json`.
 pub fn http_handle(req: &HttpRequest, client: Ipv4Addr, unix_now: f64) -> HttpResponse {
-    let headers: serde_json::Map<String, serde_json::Value> =
-        req.headers.iter().map(|(k, v)| (k.clone(), serde_json::Value::String(v.clone()))).collect();
-    let args: serde_json::Map<String, serde_json::Value> =
-        req.query.iter().map(|(k, v)| (k.clone(), serde_json::Value::String(v.clone()))).collect();
-    let url = format!("http://{}{}", req.header("host").unwrap_or("10.0.0.1"), req.path);
+    let headers: serde_json::Map<String, serde_json::Value> = req
+        .headers
+        .iter()
+        .map(|(k, v)| (k.clone(), serde_json::Value::String(v.clone())))
+        .collect();
+    let args: serde_json::Map<String, serde_json::Value> = req
+        .query
+        .iter()
+        .map(|(k, v)| (k.clone(), serde_json::Value::String(v.clone())))
+        .collect();
+    let url = format!(
+        "http://{}{}",
+        req.header("host").unwrap_or("10.0.0.1"),
+        req.path
+    );
     let seg: Vec<&str> = req.path.trim_matches('/').split('/').collect();
     match (req.method.as_str(), seg.as_slice()) {
         ("GET", [""]) => HttpResponse {
@@ -242,11 +290,33 @@ pub(crate) struct HttpSession {
 
 /// Names the gateway answers for (besides `<hostname>.sim` stations and configured hosts).
 const GATEWAY_NAMES: &[&str] = &[
-    "broker.sim", "mqtt.sim", "gateway.sim", "router.sim", "ap.sim", "http.sim", "echo.sim", "test.sim", "httpbin.sim", "api.sim",
-    "ntp.sim", "time.sim", "www.sim", "dns.sim",
+    "broker.sim",
+    "mqtt.sim",
+    "gateway.sim",
+    "router.sim",
+    "ap.sim",
+    "http.sim",
+    "echo.sim",
+    "test.sim",
+    "httpbin.sim",
+    "api.sim",
+    "ntp.sim",
+    "time.sim",
+    "www.sim",
+    "dns.sim",
     // Public names that sketches copied from tutorials use; there is no internet in the sim.
-    "test.mosquitto.org", "broker.hivemq.com", "broker.emqx.io", "mqtt.eclipseprojects.io", "broker.mqttdashboard.com",
-    "pool.ntp.org", "time.google.com", "time.nist.gov", "time.windows.com", "time.apple.com", "httpbin.org", "example.com",
+    "test.mosquitto.org",
+    "broker.hivemq.com",
+    "broker.emqx.io",
+    "mqtt.eclipseprojects.io",
+    "broker.mqttdashboard.com",
+    "pool.ntp.org",
+    "time.google.com",
+    "time.nist.gov",
+    "time.windows.com",
+    "time.apple.com",
+    "httpbin.org",
+    "example.com",
 ];
 
 impl Network {
@@ -271,16 +341,27 @@ impl Network {
                 self.apply_broker(out);
             }
             PORT_HTTP => {
-                let client = self.conns.get(&c).map(|k| *k.ends[0].addr.ip()).unwrap_or(Ipv4Addr::UNSPECIFIED);
+                let client = self
+                    .conns
+                    .get(&c)
+                    .map(|k| *k.ends[0].addr.ip())
+                    .unwrap_or(Ipv4Addr::UNSPECIFIED);
                 let unix = self.unix_time(self.now);
-                let Some(sess) = self.http.get_mut(&c) else { return };
+                let Some(sess) = self.http.get_mut(&c) else {
+                    return;
+                };
                 sess.buf.extend_from_slice(&data);
                 let mut out = Vec::new();
                 let mut close = false;
                 while let Some((req, n)) = HttpRequest::parse(&sess.buf) {
                     sess.buf.drain(..n);
-                    let keep = req.version == "HTTP/1.1" && !req.header("connection").is_some_and(|v| v.eq_ignore_ascii_case("close"))
-                        || req.header("connection").is_some_and(|v| v.eq_ignore_ascii_case("keep-alive"));
+                    let keep = req.version == "HTTP/1.1"
+                        && !req
+                            .header("connection")
+                            .is_some_and(|v| v.eq_ignore_ascii_case("close"))
+                        || req
+                            .header("connection")
+                            .is_some_and(|v| v.eq_ignore_ascii_case("keep-alive"));
                     out.extend(http_handle(&req, client, unix).encode(keep));
                     if !keep {
                         close = true;
@@ -314,13 +395,21 @@ impl Network {
 
     pub(super) fn gateway_udp(&mut self, p: &Packet, data: Vec<u8>) {
         let reply = |net: &mut Network, payload: Vec<u8>| {
-            let r = Packet { src: p.dst, dst: p.src, body: Body::Udp { data: payload }, from: Host::Gateway, to: Some(p.from) };
+            let r = Packet {
+                src: p.dst,
+                dst: p.src,
+                body: Body::Udp { data: payload },
+                from: Host::Gateway,
+                to: Some(p.from),
+            };
             net.transmit(r);
         };
         match p.dst.port() {
             PORT_DHCP_S => self.dhcp_server_receive(p, &data),
             PORT_DNS => {
-                let Some(q) = DnsMessage::decode(&data) else { return };
+                let Some(q) = DnsMessage::decode(&data) else {
+                    return;
+                };
                 if q.response {
                     return;
                 }
@@ -332,7 +421,13 @@ impl Network {
                     None => r.rcode = 3,
                 }
                 let src = SocketAddrV4::new(self.config.gateway, PORT_DNS);
-                let pk = Packet { src, dst: p.src, body: Body::Udp { data: r.encode() }, from: Host::Gateway, to: Some(p.from) };
+                let pk = Packet {
+                    src,
+                    dst: p.src,
+                    body: Body::Udp { data: r.encode() },
+                    from: Host::Gateway,
+                    to: Some(p.from),
+                };
                 self.transmit(pk);
             }
             PORT_NTP => {
@@ -351,7 +446,12 @@ impl Network {
         if let Ok(ip) = n.parse::<Ipv4Addr>() {
             return Some(ip);
         }
-        if let Some((_, ip)) = self.config.hosts.iter().find(|(h, _)| h.eq_ignore_ascii_case(&n)) {
+        if let Some((_, ip)) = self
+            .config
+            .hosts
+            .iter()
+            .find(|(h, _)| h.eq_ignore_ascii_case(&n))
+        {
             return Some(*ip);
         }
         let suffix = format!(".{}", self.config.domain);
@@ -373,12 +473,18 @@ impl Network {
     // ----------------------------------------------------------------- DHCP server
 
     fn dhcp_server_receive(&mut self, p: &Packet, data: &[u8]) {
-        let Some(m) = DhcpMessage::decode(data) else { return };
+        let Some(m) = DhcpMessage::decode(data) else {
+            return;
+        };
         if m.op != 1 {
             return;
         }
         let Host::Station(sta) = p.from else { return };
-        let statics: HashSet<Ipv4Addr> = self.stations.iter().filter_map(|s| s.static_ip.map(|c| c.ip)).collect();
+        let statics: HashSet<Ipv4Addr> = self
+            .stations
+            .iter()
+            .filter_map(|s| s.static_ip.map(|c| c.ip))
+            .collect();
         let now = self.now;
         let cfg = self.config.clone();
         let mut reply = DhcpMessage::request(DhcpType::Offer, m.xid, m.chaddr);
@@ -391,9 +497,14 @@ impl Network {
         reply.siaddr = cfg.gateway;
         match m.msg_type {
             DhcpType::Discover => {
-                let Some(ip) = self.dhcp_server.allocate(m.chaddr, &cfg, now, &statics) else { return };
+                let Some(ip) = self.dhcp_server.allocate(m.chaddr, &cfg, now, &statics) else {
+                    return;
+                };
                 // Hold the offer briefly so a parallel DISCOVER doesn't get the same address.
-                self.dhcp_server.leases.entry(m.chaddr).or_insert(Lease { ip, expires: now + SimTime::from_secs(60) });
+                self.dhcp_server.leases.entry(m.chaddr).or_insert(Lease {
+                    ip,
+                    expires: now + SimTime::from_secs(60),
+                });
                 reply.yiaddr = ip;
                 reply.lease_secs = Some(cfg.lease_secs);
             }
@@ -402,10 +513,20 @@ impl Network {
                 if m.server_id.is_some_and(|s| s != cfg.gateway) {
                     return; // chose another server
                 }
-                let ok = self.dhcp_server.leases.get(&m.chaddr).is_some_and(|l| l.ip == wanted)
+                let ok = self
+                    .dhcp_server
+                    .leases
+                    .get(&m.chaddr)
+                    .is_some_and(|l| l.ip == wanted)
                     || (self.dhcp_server.allocate(m.chaddr, &cfg, now, &statics) == Some(wanted));
                 if ok {
-                    self.dhcp_server.leases.insert(m.chaddr, Lease { ip: wanted, expires: now + SimTime::from_secs(cfg.lease_secs as u64) });
+                    self.dhcp_server.leases.insert(
+                        m.chaddr,
+                        Lease {
+                            ip: wanted,
+                            expires: now + SimTime::from_secs(cfg.lease_secs as u64),
+                        },
+                    );
                     reply.msg_type = DhcpType::Ack;
                     reply.yiaddr = wanted;
                     reply.lease_secs = Some(cfg.lease_secs);
@@ -422,7 +543,9 @@ impl Network {
         let pk = Packet {
             src: SocketAddrV4::new(cfg.gateway, PORT_DHCP_S),
             dst: SocketAddrV4::new(Ipv4Addr::BROADCAST, PORT_DHCP_C),
-            body: Body::Udp { data: reply.encode() },
+            body: Body::Udp {
+                data: reply.encode(),
+            },
             from: Host::Gateway,
             to: Some(Host::Station(sta)),
         };
@@ -438,7 +561,14 @@ impl Network {
     pub(super) fn dhcp_start(&mut self, id: StationId) {
         let xid = self.rng.next_u32();
         let Ok(s) = self.sta_mut(id) else { return };
-        s.dhcp = DhcpClient { state: DhcpState::Selecting, xid, attempt: 0, offered: None, server: None, dgen: s.dhcp.dgen + 1 };
+        s.dhcp = DhcpClient {
+            state: DhcpState::Selecting,
+            xid,
+            attempt: 0,
+            offered: None,
+            server: None,
+            dgen: s.dhcp.dgen + 1,
+        };
         self.dhcp_send(id);
     }
 
@@ -447,9 +577,21 @@ impl Network {
         let d = s.dhcp.clone();
         let (mac, host, epoch, cur_ip) = (s.mac, s.hostname.clone(), s.epoch, s.ip.map(|c| c.ip));
         let (ty, src_ip, dst_ip) = match d.state {
-            DhcpState::Selecting => (DhcpType::Discover, Ipv4Addr::UNSPECIFIED, Ipv4Addr::BROADCAST),
-            DhcpState::Requesting => (DhcpType::Request, Ipv4Addr::UNSPECIFIED, Ipv4Addr::BROADCAST),
-            DhcpState::Renewing => (DhcpType::Request, cur_ip.unwrap_or(Ipv4Addr::UNSPECIFIED), d.server.unwrap_or(self.config.gateway)),
+            DhcpState::Selecting => (
+                DhcpType::Discover,
+                Ipv4Addr::UNSPECIFIED,
+                Ipv4Addr::BROADCAST,
+            ),
+            DhcpState::Requesting => (
+                DhcpType::Request,
+                Ipv4Addr::UNSPECIFIED,
+                Ipv4Addr::BROADCAST,
+            ),
+            DhcpState::Renewing => (
+                DhcpType::Request,
+                cur_ip.unwrap_or(Ipv4Addr::UNSPECIFIED),
+                d.server.unwrap_or(self.config.gateway),
+            ),
             _ => return,
         };
         let mut m = DhcpMessage::request(ty, d.xid, mac);
@@ -471,15 +613,29 @@ impl Network {
         };
         self.transmit(p);
         // Retransmission: 1 s, 2 s, 4 s, 8 s … (±10 %), renewals every 60 s.
-        let backoff = if d.state == DhcpState::Renewing { 60.0 } else { (1u64 << d.attempt.min(4)) as f64 };
+        let backoff = if d.state == DhcpState::Renewing {
+            60.0
+        } else {
+            (1u64 << d.attempt.min(4)) as f64
+        };
         let jitter = self.rng.range_f64(0.9, 1.1);
         let at = self.now + SimTime::from_secs_f64(backoff * jitter);
-        self.schedule(at, Ev::Dhcp { sta: id, epoch, dgen: d.dgen });
+        self.schedule(
+            at,
+            Ev::Dhcp {
+                sta: id,
+                epoch,
+                dgen: d.dgen,
+            },
+        );
     }
 
     pub(super) fn dhcp_timer(&mut self, id: StationId, epoch: u64, dgen: u64) {
         let Ok(s) = self.sta_mut(id) else { return };
-        if s.epoch != epoch || s.dhcp.dgen != dgen || !matches!(s.state, WifiState::Connected { .. }) {
+        if s.epoch != epoch
+            || s.dhcp.dgen != dgen
+            || !matches!(s.state, WifiState::Connected { .. })
+        {
             return;
         }
         s.dhcp.dgen += 1;
@@ -515,7 +671,9 @@ impl Network {
     }
 
     pub(super) fn dhcp_client_receive(&mut self, id: StationId, data: &[u8]) {
-        let Some(m) = DhcpMessage::decode(data) else { return };
+        let Some(m) = DhcpMessage::decode(data) else {
+            return;
+        };
         let lease_default = self.config.lease_secs;
         let gw = self.config.gateway;
         let Ok(s) = self.sta_mut(id) else { return };
@@ -546,11 +704,23 @@ impl Network {
                 s.dhcp.dgen += 1;
                 let (epoch, dgen) = (s.epoch, s.dhcp.dgen);
                 if !renewing || changed {
-                    s.events.push_back(NetEvent::GotIp { ip: cfg.ip, gateway: cfg.gateway, netmask: cfg.netmask, dns: cfg.dns });
+                    s.events.push_back(NetEvent::GotIp {
+                        ip: cfg.ip,
+                        gateway: cfg.gateway,
+                        netmask: cfg.netmask,
+                        dns: cfg.dns,
+                    });
                 }
                 let lease = m.lease_secs.unwrap_or(lease_default).max(10);
                 let t1 = self.now + SimTime::from_secs_f64(lease as f64 / 2.0);
-                self.schedule(t1, Ev::Dhcp { sta: id, epoch, dgen });
+                self.schedule(
+                    t1,
+                    Ev::Dhcp {
+                        sta: id,
+                        epoch,
+                        dgen,
+                    },
+                );
             }
             (DhcpType::Nak, _) => {
                 s.ip = None;
@@ -564,46 +734,83 @@ impl Network {
 
     /// Resolves a host name through the gateway's DNS server (real query/response packets).
     /// Outcome: `DnsResolved`. IPv4 literals resolve immediately.
-    pub fn dns_resolve(&mut self, id: StationId, name: &str, now: SimTime) -> Result<u32, NetError> {
+    pub fn dns_resolve(
+        &mut self,
+        id: StationId,
+        name: &str,
+        now: SimTime,
+    ) -> Result<u32, NetError> {
         self.sync(now);
         let qid = self.rng.next_u32() & 0x7fff_ffff;
         if let Ok(ip) = name.trim().parse::<Ipv4Addr>() {
-            self.push_event(id, NetEvent::DnsResolved { query: qid, name: name.into(), ip: Some(ip) });
+            self.push_event(
+                id,
+                NetEvent::DnsResolved {
+                    query: qid,
+                    name: name.into(),
+                    ip: Some(ip),
+                },
+            );
             return Ok(qid);
         }
         self.ip_of(id).ok_or(NetError::NoIp)?;
         let port = self.ephemeral_port(id);
         let dns_id = (self.rng.next_u32() & 0xffff) as u16;
         let s = self.sta_mut(id)?;
-        s.dns.insert(dns_id, DnsQuery { query: qid, name: name.trim().into(), port, attempt: 0 });
+        s.dns.insert(
+            dns_id,
+            DnsQuery {
+                query: qid,
+                name: name.trim().into(),
+                port,
+                attempt: 0,
+            },
+        );
         self.dns_send(id, dns_id);
         Ok(qid)
     }
 
     fn dns_send(&mut self, id: StationId, dns_id: u16) {
         let Ok(s) = self.sta(id) else { return };
-        let Some(q) = s.dns.get(&dns_id).cloned() else { return };
+        let Some(q) = s.dns.get(&dns_id).cloned() else {
+            return;
+        };
         let Some(cfg) = s.ip else { return };
         let p = Packet {
             src: SocketAddrV4::new(cfg.ip, q.port),
             dst: SocketAddrV4::new(cfg.dns, PORT_DNS),
-            body: Body::Udp { data: DnsMessage::query(dns_id, &q.name).encode() },
+            body: Body::Udp {
+                data: DnsMessage::query(dns_id, &q.name).encode(),
+            },
             from: Host::Station(id),
             to: None,
         };
         self.transmit(p);
-        self.schedule(self.now + SimTime::from_secs(1), Ev::DnsRetry { sta: id, id: dns_id, attempt: q.attempt });
+        self.schedule(
+            self.now + SimTime::from_secs(1),
+            Ev::DnsRetry {
+                sta: id,
+                id: dns_id,
+                attempt: q.attempt,
+            },
+        );
     }
 
     pub(super) fn dns_retry(&mut self, id: StationId, dns_id: u16, attempt: u32) {
         let Ok(s) = self.sta_mut(id) else { return };
-        let Some(q) = s.dns.get_mut(&dns_id) else { return };
+        let Some(q) = s.dns.get_mut(&dns_id) else {
+            return;
+        };
         if q.attempt != attempt {
             return;
         }
         if q.attempt >= 3 {
             let q = s.dns.remove(&dns_id).expect("present");
-            s.events.push_back(NetEvent::DnsResolved { query: q.query, name: q.name, ip: None });
+            s.events.push_back(NetEvent::DnsResolved {
+                query: q.query,
+                name: q.name,
+                ip: None,
+            });
             return;
         }
         q.attempt += 1;
@@ -611,13 +818,25 @@ impl Network {
     }
 
     pub(super) fn dns_client_receive(&mut self, id: StationId, dns_id: u16, data: &[u8]) {
-        let Some(m) = DnsMessage::decode(data) else { return };
+        let Some(m) = DnsMessage::decode(data) else {
+            return;
+        };
         if !m.response || m.id != dns_id {
             return;
         }
         let Ok(s) = self.sta_mut(id) else { return };
-        let Some(q) = s.dns.remove(&dns_id) else { return };
-        let ip = if m.rcode == 0 { m.answers.first().map(|a| a.0) } else { None };
-        s.events.push_back(NetEvent::DnsResolved { query: q.query, name: q.name, ip });
+        let Some(q) = s.dns.remove(&dns_id) else {
+            return;
+        };
+        let ip = if m.rcode == 0 {
+            m.answers.first().map(|a| a.0)
+        } else {
+            None
+        };
+        s.events.push_back(NetEvent::DnsResolved {
+            query: q.query,
+            name: q.name,
+            ip,
+        });
     }
 }

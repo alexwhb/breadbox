@@ -414,7 +414,10 @@ impl Toolchain {
         tc.install_core(progress)?;
         if tc.needs_native_tools() {
             // Apple Silicon without Rosetta: the core's x86_64 avr-gcc/ctags can't run.
-            let opts = NativeInstallOptions { app_dir: dir.to_path_buf(), ..NativeInstallOptions::default() };
+            let opts = NativeInstallOptions {
+                app_dir: dir.to_path_buf(),
+                ..NativeInstallOptions::default()
+            };
             tc.install_native_tools_with(&opts, progress)?;
         }
         progress(InstallProgress::Done);
@@ -513,7 +516,8 @@ impl Toolchain {
 }
 
 /// Arduino's fork of Exuberant Ctags (what arduino-cli uses for prototype generation).
-pub const CTAGS_SOURCE_URL: &str = "https://github.com/arduino/ctags/archive/refs/tags/5.8-arduino11.tar.gz";
+pub const CTAGS_SOURCE_URL: &str =
+    "https://github.com/arduino/ctags/archive/refs/tags/5.8-arduino11.tar.gz";
 
 /// Knobs for [`Toolchain::install_native_tools_with`] (tests point them at fakes).
 #[derive(Debug, Clone)]
@@ -533,10 +537,27 @@ impl Default for NativeInstallOptions {
         let brew = std::env::var_os("BREADBOX_BREW")
             .map(PathBuf::from)
             .into_iter()
-            .chain(["/opt/homebrew/bin/brew", "/usr/local/bin/brew"].iter().map(PathBuf::from))
-            .chain(std::env::var_os("PATH").map(|p| std::env::split_paths(&p).map(|d| d.join("brew")).collect::<Vec<_>>()).unwrap_or_default())
+            .chain(
+                ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"]
+                    .iter()
+                    .map(PathBuf::from),
+            )
+            .chain(
+                std::env::var_os("PATH")
+                    .map(|p| {
+                        std::env::split_paths(&p)
+                            .map(|d| d.join("brew"))
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default(),
+            )
             .find(|p| p.is_file());
-        NativeInstallOptions { brew, brew_prefixes: brew_prefixes(), ctags_url: CTAGS_SOURCE_URL.to_string(), app_dir: Toolchain::app_dir() }
+        NativeInstallOptions {
+            brew,
+            brew_prefixes: brew_prefixes(),
+            ctags_url: CTAGS_SOURCE_URL.to_string(),
+            app_dir: Toolchain::app_dir(),
+        }
     }
 }
 
@@ -553,24 +574,45 @@ impl Toolchain {
 
     /// Installs native replacements for Apple Silicon Macs without Rosetta: avr-gcc 8 +
     /// binutils from Homebrew (`osx-cross/avr/avr-gcc@8`) and Arduino ctags built from source.
-    pub fn install_native_tools(&mut self, progress: &mut dyn FnMut(InstallProgress)) -> Result<(), FirmwareError> {
+    pub fn install_native_tools(
+        &mut self,
+        progress: &mut dyn FnMut(InstallProgress),
+    ) -> Result<(), FirmwareError> {
         self.install_native_tools_with(&NativeInstallOptions::default(), progress)
     }
 
-    pub fn install_native_tools_with(&mut self, opts: &NativeInstallOptions, progress: &mut dyn FnMut(InstallProgress)) -> Result<(), FirmwareError> {
+    pub fn install_native_tools_with(
+        &mut self,
+        opts: &NativeInstallOptions,
+        progress: &mut dyn FnMut(InstallProgress),
+    ) -> Result<(), FirmwareError> {
         let native = opts.app_dir.join("native");
         if self.avr_gcc_version.is_none() {
             let bin = match find_native_gcc_in(&native, &opts.brew_prefixes) {
                 Some(b) => {
-                    progress(InstallProgress::Step(format!("Using native avr-gcc in {}", b.display())));
+                    progress(InstallProgress::Step(format!(
+                        "Using native avr-gcc in {}",
+                        b.display()
+                    )));
                     b
                 }
                 None => {
-                    let brew = opts.brew.clone().ok_or_else(|| FirmwareError::NativeTools(NO_NATIVE_GCC.into()))?;
-                    progress(InstallProgress::Step("Installing avr-gcc 8 for Apple Silicon (Homebrew osx-cross/avr)".into()));
+                    let brew = opts
+                        .brew
+                        .clone()
+                        .ok_or_else(|| FirmwareError::NativeTools(NO_NATIVE_GCC.into()))?;
+                    progress(InstallProgress::Step(
+                        "Installing avr-gcc 8 for Apple Silicon (Homebrew osx-cross/avr)".into(),
+                    ));
                     let mut cmd = Command::new(&brew);
-                    cmd.args(["install", "osx-cross/avr/avr-gcc@8"]).env("HOMEBREW_NO_AUTO_UPDATE", "1").env("HOMEBREW_NO_INSTALL_CLEANUP", "1");
-                    run_cmd_streaming(cmd, progress).map_err(|e| FirmwareError::NativeTools(format!("Homebrew could not install avr-gcc@8: {e}")))?;
+                    cmd.args(["install", "osx-cross/avr/avr-gcc@8"])
+                        .env("HOMEBREW_NO_AUTO_UPDATE", "1")
+                        .env("HOMEBREW_NO_INSTALL_CLEANUP", "1");
+                    run_cmd_streaming(cmd, progress).map_err(|e| {
+                        FirmwareError::NativeTools(format!(
+                            "Homebrew could not install avr-gcc@8: {e}"
+                        ))
+                    })?;
                     find_native_gcc_in(&native, &opts.brew_prefixes)
                         .ok_or_else(|| FirmwareError::NativeTools("Homebrew finished, but avr-gcc@8 and avr-binutils were not found in its prefix".into()))?
                 }
@@ -584,46 +626,84 @@ impl Toolchain {
             self.overrides.ctags_dir = Some(dir);
         }
         if self.ready() {
-            progress(InstallProgress::Step(format!("Native toolchain ready ({})", self.compiler_label())));
+            progress(InstallProgress::Step(format!(
+                "Native toolchain ready ({})",
+                self.compiler_label()
+            )));
             Ok(())
         } else {
-            Err(FirmwareError::NativeTools("native tools installed but the toolchain is still not usable".into()))
+            Err(FirmwareError::NativeTools(
+                "native tools installed but the toolchain is still not usable".into(),
+            ))
         }
     }
 }
 
 /// Runs a command, streaming stdout/stderr lines as `Log` progress.
-fn run_cmd_streaming(mut cmd: Command, progress: &mut dyn FnMut(InstallProgress)) -> Result<(), String> {
-    let out = cmd.stdin(Stdio::null()).output().map_err(|e| e.to_string())?;
-    for line in String::from_utf8_lossy(&out.stdout).lines().chain(String::from_utf8_lossy(&out.stderr).lines()) {
+fn run_cmd_streaming(
+    mut cmd: Command,
+    progress: &mut dyn FnMut(InstallProgress),
+) -> Result<(), String> {
+    let out = cmd
+        .stdin(Stdio::null())
+        .output()
+        .map_err(|e| e.to_string())?;
+    for line in String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .chain(String::from_utf8_lossy(&out.stderr).lines())
+    {
         progress(InstallProgress::Log(line.to_string()));
     }
     if out.status.success() {
         Ok(())
     } else {
-        Err(String::from_utf8_lossy(&out.stderr).lines().last().unwrap_or("failed").to_string())
+        Err(String::from_utf8_lossy(&out.stderr)
+            .lines()
+            .last()
+            .unwrap_or("failed")
+            .to_string())
     }
 }
 
 /// Downloads Arduino ctags' source, patches it for current macOS SDKs (its `__unused__` macro
 /// clashes with `<sys/cdefs.h>`), builds it with the system C compiler and installs
 /// `<dest>/ctags`.
-pub fn build_ctags(url: &str, dest: &Path, progress: &mut dyn FnMut(InstallProgress)) -> Result<PathBuf, FirmwareError> {
+pub fn build_ctags(
+    url: &str,
+    dest: &Path,
+    progress: &mut dyn FnMut(InstallProgress),
+) -> Result<PathBuf, FirmwareError> {
     let fail = |m: String| FirmwareError::NativeTools(m);
-    progress(InstallProgress::Step("Downloading Arduino ctags source".into()));
+    progress(InstallProgress::Step(
+        "Downloading Arduino ctags source".into(),
+    ));
     let archive = fetch(url, progress)?;
-    let work = std::env::temp_dir().join(format!("breadbox-ctags-{}-{}", std::process::id(), archive.len()));
+    let work = std::env::temp_dir().join(format!(
+        "breadbox-ctags-{}-{}",
+        std::process::id(),
+        archive.len()
+    ));
     let _ = std::fs::remove_dir_all(&work);
     std::fs::create_dir_all(&work).map_err(|e| FirmwareError::Io(e.to_string()))?;
     tar::Archive::new(flate2::read::GzDecoder::new(&archive[..]))
         .unpack(&work)
         .map_err(|e| fail(format!("bad ctags archive: {e}")))?;
     let src = std::iter::once(work.clone())
-        .chain(std::fs::read_dir(&work).map_err(|e| FirmwareError::Io(e.to_string()))?.flatten().map(|e| e.path()))
+        .chain(
+            std::fs::read_dir(&work)
+                .map_err(|e| FirmwareError::Io(e.to_string()))?
+                .flatten()
+                .map(|e| e.path()),
+        )
         .find(|d| d.join("configure").exists())
         .ok_or_else(|| fail("ctags archive has no configure script".into()))?;
-    progress(InstallProgress::Step("Building Arduino ctags for this Mac".into()));
-    for e in std::fs::read_dir(&src).map_err(|e| FirmwareError::Io(e.to_string()))?.flatten() {
+    progress(InstallProgress::Step(
+        "Building Arduino ctags for this Mac".into(),
+    ));
+    for e in std::fs::read_dir(&src)
+        .map_err(|e| FirmwareError::Io(e.to_string()))?
+        .flatten()
+    {
         let p = e.path();
         if p.extension().is_some_and(|x| x == "c" || x == "h")
             && let Ok(t) = std::fs::read_to_string(&p)
@@ -634,14 +714,20 @@ pub fn build_ctags(url: &str, dest: &Path, progress: &mut dyn FnMut(InstallProgr
     }
     let cflags = "-O2 -Wno-implicit-function-declaration -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-deprecated-non-prototype";
     let mut configure = Command::new("sh");
-    configure.arg("configure").current_dir(&src).env("CFLAGS", cflags);
+    configure
+        .arg("configure")
+        .current_dir(&src)
+        .env("CFLAGS", cflags);
     run_cmd_streaming(configure, progress).map_err(|e| fail(format!("ctags configure failed ({e}); install the Xcode command line tools: xcode-select --install")))?;
     let mut make = Command::new("make");
-    make.arg("-j8").arg(format!("CFLAGS={cflags}")).current_dir(&src);
+    make.arg("-j8")
+        .arg(format!("CFLAGS={cflags}"))
+        .current_dir(&src);
     run_cmd_streaming(make, progress).map_err(|e| fail(format!("ctags build failed: {e}")))?;
     std::fs::create_dir_all(dest).map_err(|e| FirmwareError::Io(e.to_string()))?;
     let bin = dest.join("ctags");
-    std::fs::copy(src.join("ctags"), &bin).map_err(|e| fail(format!("ctags binary missing after build: {e}")))?;
+    std::fs::copy(src.join("ctags"), &bin)
+        .map_err(|e| fail(format!("ctags binary missing after build: {e}")))?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -656,7 +742,10 @@ pub fn build_ctags(url: &str, dest: &Path, progress: &mut dyn FnMut(InstallProgr
 
 /// Homebrew prefixes searched for `osx-cross` kegs (`$BREADBOX_BREW_PREFIX` first).
 fn brew_prefixes() -> Vec<PathBuf> {
-    let mut v: Vec<PathBuf> = std::env::var_os("BREADBOX_BREW_PREFIX").map(PathBuf::from).into_iter().collect();
+    let mut v: Vec<PathBuf> = std::env::var_os("BREADBOX_BREW_PREFIX")
+        .map(PathBuf::from)
+        .into_iter()
+        .collect();
     v.extend(["/opt/homebrew", "/usr/local"].iter().map(PathBuf::from));
     v
 }

@@ -33,7 +33,15 @@ pub struct BridgeConfig {
 
 impl BridgeConfig {
     pub fn new(host: &str, port: u16) -> Self {
-        BridgeConfig { host: host.into(), port, client_id: "breadbox-bridge".into(), topics: vec!["#".into()], username: None, password: None, keep_alive_s: 30 }
+        BridgeConfig {
+            host: host.into(),
+            port,
+            client_id: "breadbox-bridge".into(),
+            topics: vec!["#".into()],
+            username: None,
+            password: None,
+            keep_alive_s: 30,
+        }
     }
 }
 
@@ -77,7 +85,10 @@ pub struct LanBridge {
 
 impl std::fmt::Debug for LanBridge {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("LanBridge").field("config", &self.config).field("status", &self.status).finish()
+        f.debug_struct("LanBridge")
+            .field("config", &self.config)
+            .field("status", &self.status)
+            .finish()
     }
 }
 
@@ -87,8 +98,20 @@ impl LanBridge {
         let (to_io, rx_io) = mpsc::channel();
         let (tx_sim, from_io) = mpsc::channel();
         let cfg = config.clone();
-        let thread = std::thread::Builder::new().name("bb-lan-bridge".into()).spawn(move || io_thread(cfg, rx_io, tx_sim)).ok();
-        LanBridge { config, to_io, from_io, thread, status: BridgeStatus::Connecting, sim_client: None, injected: VecDeque::new(), stats: BridgeStats::default() }
+        let thread = std::thread::Builder::new()
+            .name("bb-lan-bridge".into())
+            .spawn(move || io_thread(cfg, rx_io, tx_sim))
+            .ok();
+        LanBridge {
+            config,
+            to_io,
+            from_io,
+            thread,
+            status: BridgeStatus::Connecting,
+            sim_client: None,
+            injected: VecDeque::new(),
+            stats: BridgeStats::default(),
+        }
     }
 
     pub fn status(&self) -> &BridgeStatus {
@@ -101,7 +124,9 @@ impl LanBridge {
         let key = match self.sim_client {
             Some(k) => k,
             None => {
-                let k = net.broker_mut().virtual_connect(&format!("{}-sim", self.config.client_id), now);
+                let k = net
+                    .broker_mut()
+                    .virtual_connect(&format!("{}-sim", self.config.client_id), now);
                 for f in self.config.topics.clone() {
                     let out = net.broker_mut().virtual_subscribe(k, &f, 0, now);
                     net.apply_broker(out);
@@ -113,7 +138,11 @@ impl LanBridge {
         // sim → LAN
         for r in net.broker_mut().virtual_take(key) {
             let m = r.message;
-            if let Some(i) = self.injected.iter().position(|(t, p)| *t == m.topic && *p == m.payload) {
+            if let Some(i) = self
+                .injected
+                .iter()
+                .position(|(t, p)| *t == m.topic && *p == m.payload)
+            {
                 self.injected.remove(i);
                 continue;
             }
@@ -128,7 +157,8 @@ impl LanBridge {
                 Ok(FromIo::Status(s)) => self.status = s,
                 Ok(FromIo::Message(m)) => {
                     self.stats.from_lan += 1;
-                    self.injected.push_back((m.topic.clone(), m.payload.clone()));
+                    self.injected
+                        .push_back((m.topic.clone(), m.payload.clone()));
                     if self.injected.len() > 1000 {
                         self.injected.pop_front();
                     }
@@ -173,7 +203,10 @@ fn io_thread(cfg: BridgeConfig, rx: Receiver<ToIo>, tx: Sender<FromIo>) {
                 return;
             }
             Err(e) => {
-                if tx.send(FromIo::Status(BridgeStatus::Disconnected(e))).is_err() {
+                if tx
+                    .send(FromIo::Status(BridgeStatus::Disconnected(e)))
+                    .is_err()
+                {
                     return;
                 }
             }
@@ -195,14 +228,21 @@ fn io_thread(cfg: BridgeConfig, rx: Receiver<ToIo>, tx: Sender<FromIo>) {
 
 /// One connected session; `Ok` = asked to stop, `Err` = connection problem.
 fn session(cfg: &BridgeConfig, rx: &Receiver<ToIo>, tx: &Sender<FromIo>) -> Result<(), String> {
-    let addr = (cfg.host.as_str(), cfg.port).to_socket_addrs().map_err(|e| e.to_string())?.next().ok_or("no address")?;
-    let mut s = TcpStream::connect_timeout(&addr, Duration::from_secs(3)).map_err(|e| e.to_string())?;
+    let addr = (cfg.host.as_str(), cfg.port)
+        .to_socket_addrs()
+        .map_err(|e| e.to_string())?
+        .next()
+        .ok_or("no address")?;
+    let mut s =
+        TcpStream::connect_timeout(&addr, Duration::from_secs(3)).map_err(|e| e.to_string())?;
     s.set_nodelay(true).ok();
-    s.set_read_timeout(Some(Duration::from_millis(20))).map_err(|e| e.to_string())?;
+    s.set_read_timeout(Some(Duration::from_millis(20)))
+        .map_err(|e| e.to_string())?;
     let mut c = Connect::new(&cfg.client_id, cfg.keep_alive_s);
     c.username = cfg.username.clone();
     c.password = cfg.password.as_ref().map(|p| p.as_bytes().to_vec());
-    s.write_all(&codec::encode(&Packet::Connect(c))).map_err(|e| e.to_string())?;
+    s.write_all(&codec::encode(&Packet::Connect(c)))
+        .map_err(|e| e.to_string())?;
     let mut dec = StreamDecoder::default();
     let mut buf = [0u8; 4096];
     let deadline = Instant::now() + Duration::from_secs(3);
@@ -225,7 +265,8 @@ fn session(cfg: &BridgeConfig, rx: &Receiver<ToIo>, tx: &Sender<FromIo>) -> Resu
         }
     }
     let topics: Vec<(String, u8)> = cfg.topics.iter().map(|t| (t.clone(), 0)).collect();
-    s.write_all(&codec::encode(&Packet::Subscribe { pid: 1, topics })).map_err(|e| e.to_string())?;
+    s.write_all(&codec::encode(&Packet::Subscribe { pid: 1, topics }))
+        .map_err(|e| e.to_string())?;
     let _ = tx.send(FromIo::Status(BridgeStatus::Connected));
     let mut sent: VecDeque<(String, Vec<u8>)> = VecDeque::new();
     let mut last_tx = Instant::now();
@@ -234,8 +275,16 @@ fn session(cfg: &BridgeConfig, rx: &Receiver<ToIo>, tx: &Sender<FromIo>) -> Resu
         loop {
             match rx.try_recv() {
                 Ok(ToIo::Publish(m)) => {
-                    let p = Publish { dup: false, qos: 0, retain: m.retain, topic: m.topic.clone(), pid: None, payload: m.payload.clone() };
-                    s.write_all(&codec::encode(&Packet::Publish(p))).map_err(|e| e.to_string())?;
+                    let p = Publish {
+                        dup: false,
+                        qos: 0,
+                        retain: m.retain,
+                        topic: m.topic.clone(),
+                        pid: None,
+                        payload: m.payload.clone(),
+                    };
+                    s.write_all(&codec::encode(&Packet::Publish(p)))
+                        .map_err(|e| e.to_string())?;
                     sent.push_back((m.topic, m.payload));
                     if sent.len() > 1000 {
                         sent.pop_front();
@@ -250,8 +299,11 @@ fn session(cfg: &BridgeConfig, rx: &Receiver<ToIo>, tx: &Sender<FromIo>) -> Resu
                 Err(TryRecvError::Disconnected) => return Ok(()),
             }
         }
-        if cfg.keep_alive_s > 0 && last_tx.elapsed() > Duration::from_secs(cfg.keep_alive_s as u64 / 2) {
-            s.write_all(&codec::encode(&Packet::PingReq)).map_err(|e| e.to_string())?;
+        if cfg.keep_alive_s > 0
+            && last_tx.elapsed() > Duration::from_secs(cfg.keep_alive_s as u64 / 2)
+        {
+            s.write_all(&codec::encode(&Packet::PingReq))
+                .map_err(|e| e.to_string())?;
             last_tx = Instant::now();
         }
         // Incoming.
@@ -263,11 +315,19 @@ fn session(cfg: &BridgeConfig, rx: &Receiver<ToIo>, tx: &Sender<FromIo>) -> Resu
         }
         while let Some(p) = dec.next_packet().map_err(|e| e.to_string())? {
             if let Packet::Publish(p) = p {
-                if let Some(i) = sent.iter().position(|(t, d)| *t == p.topic && *d == p.payload) {
+                if let Some(i) = sent
+                    .iter()
+                    .position(|(t, d)| *t == p.topic && *d == p.payload)
+                {
                     sent.remove(i); // our own message echoed back
                     continue;
                 }
-                let m = Message { topic: p.topic, payload: p.payload, qos: 0, retain: p.retain };
+                let m = Message {
+                    topic: p.topic,
+                    payload: p.payload,
+                    qos: 0,
+                    retain: p.retain,
+                };
                 if tx.send(FromIo::Message(m)).is_err() {
                     return Ok(());
                 }

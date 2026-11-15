@@ -16,9 +16,18 @@ pub const HOSTCORE: &[(&str, &str)] = &[
     ("Arduino.h", include_str!("../../hostcore/Arduino.h")),
     ("BLE.cpp", include_str!("../../hostcore/BLE.cpp")),
     ("BLE2902.h", include_str!("../../hostcore/BLE2902.h")),
-    ("BLEAdvertising.h", include_str!("../../hostcore/BLEAdvertising.h")),
-    ("BLECharacteristic.h", include_str!("../../hostcore/BLECharacteristic.h")),
-    ("BLEDescriptor.h", include_str!("../../hostcore/BLEDescriptor.h")),
+    (
+        "BLEAdvertising.h",
+        include_str!("../../hostcore/BLEAdvertising.h"),
+    ),
+    (
+        "BLECharacteristic.h",
+        include_str!("../../hostcore/BLECharacteristic.h"),
+    ),
+    (
+        "BLEDescriptor.h",
+        include_str!("../../hostcore/BLEDescriptor.h"),
+    ),
     ("BLEDevice.h", include_str!("../../hostcore/BLEDevice.h")),
     ("BLEServer.h", include_str!("../../hostcore/BLEServer.h")),
     ("BLEService.h", include_str!("../../hostcore/BLEService.h")),
@@ -27,20 +36,47 @@ pub const HOSTCORE: &[(&str, &str)] = &[
     ("Client.h", include_str!("../../hostcore/Client.h")),
     ("DHT.cpp", include_str!("../../hostcore/DHT.cpp")),
     ("DHT.h", include_str!("../../hostcore/DHT.h")),
-    ("ESP8266WiFi.h", include_str!("../../hostcore/ESP8266WiFi.h")),
-    ("HTTPClient.cpp", include_str!("../../hostcore/HTTPClient.cpp")),
+    (
+        "ESP8266WiFi.h",
+        include_str!("../../hostcore/ESP8266WiFi.h"),
+    ),
+    (
+        "HTTPClient.cpp",
+        include_str!("../../hostcore/HTTPClient.cpp"),
+    ),
     ("HTTPClient.h", include_str!("../../hostcore/HTTPClient.h")),
-    ("HardwareSerial.cpp", include_str!("../../hostcore/HardwareSerial.cpp")),
-    ("HardwareSerial.h", include_str!("../../hostcore/HardwareSerial.h")),
-    ("IPAddress.cpp", include_str!("../../hostcore/IPAddress.cpp")),
+    (
+        "HardwareSerial.cpp",
+        include_str!("../../hostcore/HardwareSerial.cpp"),
+    ),
+    (
+        "HardwareSerial.h",
+        include_str!("../../hostcore/HardwareSerial.h"),
+    ),
+    (
+        "IPAddress.cpp",
+        include_str!("../../hostcore/IPAddress.cpp"),
+    ),
     ("IPAddress.h", include_str!("../../hostcore/IPAddress.h")),
-    ("Preferences.cpp", include_str!("../../hostcore/Preferences.cpp")),
-    ("Preferences.h", include_str!("../../hostcore/Preferences.h")),
+    (
+        "Preferences.cpp",
+        include_str!("../../hostcore/Preferences.cpp"),
+    ),
+    (
+        "Preferences.h",
+        include_str!("../../hostcore/Preferences.h"),
+    ),
     ("Print.cpp", include_str!("../../hostcore/Print.cpp")),
     ("Print.h", include_str!("../../hostcore/Print.h")),
     ("Printable.h", include_str!("../../hostcore/Printable.h")),
-    ("PubSubClient.cpp", include_str!("../../hostcore/PubSubClient.cpp")),
-    ("PubSubClient.h", include_str!("../../hostcore/PubSubClient.h")),
+    (
+        "PubSubClient.cpp",
+        include_str!("../../hostcore/PubSubClient.cpp"),
+    ),
+    (
+        "PubSubClient.h",
+        include_str!("../../hostcore/PubSubClient.h"),
+    ),
     ("SPI.cpp", include_str!("../../hostcore/SPI.cpp")),
     ("SPI.h", include_str!("../../hostcore/SPI.h")),
     ("Server.h", include_str!("../../hostcore/Server.h")),
@@ -55,7 +91,10 @@ pub const HOSTCORE: &[(&str, &str)] = &[
     ("WiFiUdp.h", include_str!("../../hostcore/WiFiUdp.h")),
     ("Wire.cpp", include_str!("../../hostcore/Wire.cpp")),
     ("Wire.h", include_str!("../../hostcore/Wire.h")),
-    ("arduino_core.cpp", include_str!("../../hostcore/arduino_core.cpp")),
+    (
+        "arduino_core.cpp",
+        include_str!("../../hostcore/arduino_core.cpp"),
+    ),
     ("bb_ble.h", include_str!("../../hostcore/bb_ble.h")),
     ("bb_host.cpp", include_str!("../../hostcore/bb_host.cpp")),
     ("bb_host.h", include_str!("../../hostcore/bb_host.h")),
@@ -84,13 +123,24 @@ fn fnv(data: &[u8], mut h: u64) -> u64 {
 }
 
 fn hostcore_hash() -> u64 {
-    HOSTCORE.iter().fold(0xcbf2_9ce4_8422_2325, |h, (n, s)| fnv(s.as_bytes(), fnv(n.as_bytes(), h)))
+    HOSTCORE.iter().fold(0xcbf2_9ce4_8422_2325, |h, (n, s)| {
+        fnv(s.as_bytes(), fnv(n.as_bytes(), h))
+    })
 }
 
 /// The C++ compiler: `$BREADBOX_CXX`, else `clang++`, else `c++`.
 pub fn cxx() -> Option<PathBuf> {
-    let candidates: Vec<PathBuf> = std::env::var_os("BREADBOX_CXX").map(PathBuf::from).into_iter().chain(["clang++", "c++", "g++"].iter().map(PathBuf::from)).collect();
-    candidates.into_iter().find(|c| Command::new(c).arg("--version").output().is_ok_and(|o| o.status.success()))
+    let candidates: Vec<PathBuf> = std::env::var_os("BREADBOX_CXX")
+        .map(PathBuf::from)
+        .into_iter()
+        .chain(["clang++", "c++", "g++"].iter().map(PathBuf::from))
+        .collect();
+    candidates.into_iter().find(|c| {
+        Command::new(c)
+            .arg("--version")
+            .output()
+            .is_ok_and(|o| o.status.success())
+    })
 }
 
 /// Writes the embedded host core into the cache (once per content hash) and returns its dir.
@@ -108,19 +158,39 @@ pub fn hostcore_dir() -> Result<PathBuf, FirmwareError> {
 }
 
 fn base_flags(kind: HostKind, core: &Path) -> Vec<String> {
-    let mut v: Vec<String> = ["-std=gnu++17", "-O1", "-g", "-fno-omit-frame-pointer", "-Wno-unused-command-line-argument"].iter().map(|s| s.to_string()).collect();
+    let mut v: Vec<String> = [
+        "-std=gnu++17",
+        "-O1",
+        "-g",
+        "-fno-omit-frame-pointer",
+        "-Wno-unused-command-line-argument",
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect();
     v.extend(kind.defines().iter().map(|s| s.to_string()));
     v.push(format!("-I{}", core.display()));
     v
 }
 
 /// Compiles the host core for `kind` (cached); returns the object files.
-fn hostcore_objects(cxx: &Path, kind: HostKind, log: &mut String) -> Result<Vec<PathBuf>, FirmwareError> {
+fn hostcore_objects(
+    cxx: &Path,
+    kind: HostKind,
+    log: &mut String,
+) -> Result<Vec<PathBuf>, FirmwareError> {
     let core = hostcore_dir()?;
     let obj_dir = core.join(format!("obj-{}", kind.id()));
     let stamp = obj_dir.join(".complete");
-    let sources: Vec<&str> = HOSTCORE.iter().map(|(n, _)| *n).filter(|n| n.ends_with(".cpp")).collect();
-    let objs: Vec<PathBuf> = sources.iter().map(|s| obj_dir.join(s.replace(".cpp", ".o"))).collect();
+    let sources: Vec<&str> = HOSTCORE
+        .iter()
+        .map(|(n, _)| *n)
+        .filter(|n| n.ends_with(".cpp"))
+        .collect();
+    let objs: Vec<PathBuf> = sources
+        .iter()
+        .map(|s| obj_dir.join(s.replace(".cpp", ".o")))
+        .collect();
     if stamp.exists() {
         return Ok(objs);
     }
@@ -128,7 +198,13 @@ fn hostcore_objects(cxx: &Path, kind: HostKind, log: &mut String) -> Result<Vec<
     let flags = base_flags(kind, &core);
     let mut children = vec![];
     for (src, obj) in sources.iter().zip(&objs) {
-        let child = Command::new(cxx).args(&flags).arg("-c").arg(core.join(src)).arg("-o").arg(obj).output();
+        let child = Command::new(cxx)
+            .args(&flags)
+            .arg("-c")
+            .arg(core.join(src))
+            .arg("-o")
+            .arg(obj)
+            .output();
         children.push(child);
     }
     let mut ok = true;
@@ -138,14 +214,32 @@ fn hostcore_objects(cxx: &Path, kind: HostKind, log: &mut String) -> Result<Vec<
         ok &= o.status.success();
     }
     if !ok {
-        return Err(FirmwareError::Cli(format!("the host core failed to compile:\n{log}")));
+        return Err(FirmwareError::Cli(format!(
+            "the host core failed to compile:\n{log}"
+        )));
     }
     std::fs::write(&stamp, b"").map_err(|e| FirmwareError::Io(e.to_string()))?;
     Ok(objs)
 }
 
 /// Words that start a top-level construct that is not a function definition.
-const NOT_FUNCS: &[&str] = &["if", "while", "for", "switch", "struct", "class", "namespace", "enum", "union", "typedef", "template", "else", "return", "do", "extern"];
+const NOT_FUNCS: &[&str] = &[
+    "if",
+    "while",
+    "for",
+    "switch",
+    "struct",
+    "class",
+    "namespace",
+    "enum",
+    "union",
+    "typedef",
+    "template",
+    "else",
+    "return",
+    "do",
+    "extern",
+];
 
 /// Blanks comments, string and char literals (keeping newlines) so a scanner can see structure.
 fn strip(src: &str) -> String {
@@ -238,12 +332,26 @@ fn prototype(head: &str) -> Option<String> {
         return None;
     }
     let before = head[..open].trim();
-    let first = before.split(|c: char| !c.is_alphanumeric() && c != '_').next().unwrap_or("");
-    if before.is_empty() || NOT_FUNCS.contains(&first) || before.contains('=') || before.contains("::") || !before.contains(' ') && !before.contains('*') && !before.contains('&') {
+    let first = before
+        .split(|c: char| !c.is_alphanumeric() && c != '_')
+        .next()
+        .unwrap_or("");
+    if before.is_empty()
+        || NOT_FUNCS.contains(&first)
+        || before.contains('=')
+        || before.contains("::")
+        || !before.contains(' ') && !before.contains('*') && !before.contains('&')
+    {
         return None;
     }
-    let name = before.rsplit(|c: char| c == ' ' || c == '*' || c == '&').next().unwrap_or("");
-    if name.is_empty() || name == "operator" || !name.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_') {
+    let name = before.rsplit([' ', '*', '&']).next().unwrap_or("");
+    if name.is_empty()
+        || name == "operator"
+        || !name
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_alphabetic() || c == '_')
+    {
         return None;
     }
     // Default arguments must not be repeated; keep the head up to the closing paren + qualifiers.
@@ -269,15 +377,30 @@ fn prototype(head: &str) -> Option<String> {
         }
     }
     cleaned.push(cur);
-    let params: Vec<String> = cleaned.iter().map(|p| p.split('=').next().unwrap_or("").trim().to_string()).collect();
-    Some(format!("{}({}){};", &head[..open], params.join(", "), if tail.is_empty() { String::new() } else { format!(" {tail}") }))
+    let params: Vec<String> = cleaned
+        .iter()
+        .map(|p| p.split('=').next().unwrap_or("").trim().to_string())
+        .collect();
+    Some(format!(
+        "{}({}){};",
+        &head[..open],
+        params.join(", "),
+        if tail.is_empty() {
+            String::new()
+        } else {
+            format!(" {tail}")
+        }
+    ))
 }
 
 /// Generates `<sketch>.ino.cpp`: every `.ino` tab (main first, others alphabetically), with
 /// prototypes inserted before the first function definition and `#line` directives so errors
 /// point at the user's files.
 pub fn preprocess(sketch_dir: &Path) -> Result<String, FirmwareError> {
-    let name = sketch_dir.file_name().and_then(|n| n.to_str()).ok_or_else(|| FirmwareError::Io("bad sketch path".into()))?;
+    let name = sketch_dir
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| FirmwareError::Io("bad sketch path".into()))?;
     let main = sketch_dir.join(format!("{name}.ino"));
     if !main.exists() {
         return Err(FirmwareError::Io(format!("{} not found", main.display())));
@@ -292,7 +415,10 @@ pub fn preprocess(sketch_dir: &Path) -> Result<String, FirmwareError> {
     tabs.insert(0, main);
     let mut texts = vec![];
     for t in &tabs {
-        texts.push((t.clone(), std::fs::read_to_string(t).map_err(|e| FirmwareError::Io(e.to_string()))?));
+        texts.push((
+            t.clone(),
+            std::fs::read_to_string(t).map_err(|e| FirmwareError::Io(e.to_string()))?,
+        ));
     }
     let mut protos = vec![];
     for (_, text) in &texts {
@@ -301,7 +427,11 @@ pub fn preprocess(sketch_dir: &Path) -> Result<String, FirmwareError> {
     let mut out = String::from("#include <Arduino.h>\n");
     let mut inserted = false;
     for (path, text) in &texts {
-        let first_def = if inserted { None } else { find_prototypes(text).first().map(|p| p.1) };
+        let first_def = if inserted {
+            None
+        } else {
+            find_prototypes(text).first().map(|p| p.1)
+        };
         out.push_str(&format!("#line 1 \"{}\"\n", path.display()));
         for (i, line) in text.lines().enumerate() {
             let ln = i as u32 + 1;
@@ -321,11 +451,26 @@ pub fn preprocess(sketch_dir: &Path) -> Result<String, FirmwareError> {
 }
 
 /// Compiles `sketch_dir` for `kind`. `build_dir` defaults to the per-sketch cache directory.
-pub fn compile_host(sketch_dir: &Path, kind: HostKind, build_dir: Option<&Path>) -> Result<HostBuild, FirmwareError> {
+pub fn compile_host(
+    sketch_dir: &Path,
+    kind: HostKind,
+    build_dir: Option<&Path>,
+) -> Result<HostBuild, FirmwareError> {
     let t0 = Instant::now();
-    let cxx = cxx().ok_or_else(|| FirmwareError::Cli("no C++ compiler found (install the Xcode command line tools: xcode-select --install)".into()))?;
-    let sketch_dir = sketch_dir.canonicalize().map_err(|e| FirmwareError::Io(e.to_string()))?;
-    let name = sketch_dir.file_name().and_then(|n| n.to_str()).unwrap_or("sketch").to_string();
+    let cxx = cxx().ok_or_else(|| {
+        FirmwareError::Cli(
+            "no C++ compiler found (install the Xcode command line tools: xcode-select --install)"
+                .into(),
+        )
+    })?;
+    let sketch_dir = sketch_dir
+        .canonicalize()
+        .map_err(|e| FirmwareError::Io(e.to_string()))?;
+    let name = sketch_dir
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("sketch")
+        .to_string();
     let mut log = String::new();
     let cpp = preprocess(&sketch_dir)?;
     // Other tabs: .h are included from the sketch dir, .cpp/.c are compiled.
@@ -338,10 +483,18 @@ pub fn compile_host(sketch_dir: &Path, kind: HostKind, build_dir: Option<&Path>)
     extra.sort();
     let mut key = fnv(cpp.as_bytes(), hostcore_hash() ^ kind.id().len() as u64);
     key = fnv(kind.id().as_bytes(), key);
-    for p in std::fs::read_dir(&sketch_dir).map_err(|e| FirmwareError::Io(e.to_string()))?.flatten() {
+    for p in std::fs::read_dir(&sketch_dir)
+        .map_err(|e| FirmwareError::Io(e.to_string()))?
+        .flatten()
+    {
         let p = p.path();
-        if p.extension().is_some_and(|x| x == "h" || x == "hpp" || x == "cpp" || x == "c") {
-            key = fnv(&std::fs::read(&p).unwrap_or_default(), fnv(p.to_string_lossy().as_bytes(), key));
+        if p.extension()
+            .is_some_and(|x| x == "h" || x == "hpp" || x == "cpp" || x == "c")
+        {
+            key = fnv(
+                &std::fs::read(&p).unwrap_or_default(),
+                fnv(p.to_string_lossy().as_bytes(), key),
+            );
         }
     }
     let dir = match build_dir {
@@ -351,8 +504,17 @@ pub fn compile_host(sketch_dir: &Path, kind: HostKind, build_dir: Option<&Path>)
     std::fs::create_dir_all(&dir).map_err(|e| FirmwareError::Io(e.to_string()))?;
     let exe = dir.join(format!("{name}.{}.host", kind.id()));
     let stamp = dir.join("build.key");
-    if exe.exists() && std::fs::read_to_string(&stamp).ok().as_deref() == Some(&format!("{key:016x}")) {
-        return Ok(HostBuild { success: true, exe: Some(exe), diagnostics: vec![], log, duration: t0.elapsed(), cached: true });
+    if exe.exists()
+        && std::fs::read_to_string(&stamp).ok().as_deref() == Some(&format!("{key:016x}"))
+    {
+        return Ok(HostBuild {
+            success: true,
+            exe: Some(exe),
+            diagnostics: vec![],
+            log,
+            duration: t0.elapsed(),
+            cached: true,
+        });
     }
     let objs = hostcore_objects(&cxx, kind, &mut log)?;
     let core = hostcore_dir()?;
@@ -367,13 +529,26 @@ pub fn compile_host(sketch_dir: &Path, kind: HostKind, build_dir: Option<&Path>)
     let mut ok = true;
     for (i, src) in std::iter::once(main_cpp.clone()).chain(extra).enumerate() {
         let obj = dir.join(format!("sketch{i}.o"));
-        let o = Command::new(&cxx).args(&flags).arg("-c").arg(&src).arg("-o").arg(&obj).output().map_err(|e| FirmwareError::Io(e.to_string()))?;
+        let o = Command::new(&cxx)
+            .args(&flags)
+            .arg("-c")
+            .arg(&src)
+            .arg("-o")
+            .arg(&obj)
+            .output()
+            .map_err(|e| FirmwareError::Io(e.to_string()))?;
         log.push_str(&String::from_utf8_lossy(&o.stderr));
         ok &= o.status.success();
         sketch_objs.push(obj);
     }
     if ok {
-        let o = Command::new(&cxx).args(&sketch_objs).args(&objs).arg("-o").arg(&exe).output().map_err(|e| FirmwareError::Io(e.to_string()))?;
+        let o = Command::new(&cxx)
+            .args(&sketch_objs)
+            .args(&objs)
+            .arg("-o")
+            .arg(&exe)
+            .output()
+            .map_err(|e| FirmwareError::Io(e.to_string()))?;
         log.push_str(&String::from_utf8_lossy(&o.stderr));
         ok = o.status.success();
     }
@@ -386,12 +561,28 @@ pub fn compile_host(sketch_dir: &Path, kind: HostKind, build_dir: Option<&Path>)
         }
     }
     if !ok && !diagnostics.iter().any(|d| d.severity == Severity::Error) {
-        diagnostics.push(Diagnostic { file: None, tab: None, line: None, column: None, severity: Severity::Error, message: log.lines().last().unwrap_or("build failed").to_string(), excerpt: vec![], context: vec![] });
+        diagnostics.push(Diagnostic {
+            file: None,
+            tab: None,
+            line: None,
+            column: None,
+            severity: Severity::Error,
+            message: log.lines().last().unwrap_or("build failed").to_string(),
+            excerpt: vec![],
+            context: vec![],
+        });
     }
     if ok {
         let _ = std::fs::write(&stamp, format!("{key:016x}"));
     }
-    Ok(HostBuild { success: ok, exe: ok.then_some(exe), diagnostics, log, duration: t0.elapsed(), cached: false })
+    Ok(HostBuild {
+        success: ok,
+        exe: ok.then_some(exe),
+        diagnostics,
+        log,
+        duration: t0.elapsed(),
+        cached: false,
+    })
 }
 
 #[cfg(test)]
@@ -403,7 +594,15 @@ mod tests {
         let src = "#include <WiFi.h>\n// void commented() {}\nconst char* s = \"void fake() {\";\nint add(int a, int b = 2) {\n  return a + b;\n}\nstatic void blink(uint8_t pin)\n{\n  if (pin) { digitalWrite(pin, HIGH); }\n}\nstruct P { int x; };\nvoid setup() { blink(add(1)); }\nvoid loop() {}\nbool Foo::bar() { return true; }\n";
         let p = find_prototypes(src);
         let names: Vec<&str> = p.iter().map(|x| x.0.as_str()).collect();
-        assert_eq!(names, vec!["int add(int a, int b);", "static void blink(uint8_t pin);", "void setup();", "void loop();"]);
+        assert_eq!(
+            names,
+            vec![
+                "int add(int a, int b);",
+                "static void blink(uint8_t pin);",
+                "void setup();",
+                "void loop();"
+            ]
+        );
         assert_eq!(p[0].1, 4);
         assert_eq!(p[1].1, 7);
     }

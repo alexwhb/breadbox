@@ -35,7 +35,14 @@ pub struct LoraParams {
 impl Default for LoraParams {
     /// RYLR896 factory setting: SF12, 125 kHz, 4/5, preamble 4.
     fn default() -> Self {
-        LoraParams { sf: 12, bw_hz: 125_000, cr: 1, preamble: 4, crc: true, explicit_header: true }
+        LoraParams {
+            sf: 12,
+            bw_hz: 125_000,
+            cr: 1,
+            preamble: 4,
+            crc: true,
+            explicit_header: true,
+        }
     }
 }
 
@@ -191,7 +198,7 @@ struct Tx {
 }
 
 /// The virtual gateway.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Gateway {
     pub enabled: bool,
     pub pos: Pos,
@@ -240,13 +247,28 @@ impl LoraSpace {
             terrain: Terrain::Suburban,
             region: Region::Us915,
             geometry: Geometry::default(),
-            gateway: Gateway { enabled: true, pos: Pos::new(0.0, 0.0), freq_hz: 915_000_000, address: 0, tx_dbm: 14.0, gain_db: 3.0, mqtt: None },
+            gateway: Gateway {
+                enabled: true,
+                pos: Pos::new(0.0, 0.0),
+                freq_hz: 915_000_000,
+                address: 0,
+                tx_dbm: 14.0,
+                gain_db: 3.0,
+                mqtt: None,
+            },
             txs: vec![],
             uplinks: vec![],
             log: PacketLog::default(),
             rng: Pcg32::new(seed),
             now: SimTime::ZERO,
         }
+    }
+
+    /// Replaces the gateway settings (keeps its broker connection).
+    pub fn set_gateway(&mut self, g: Gateway) {
+        let key = self.gateway.mqtt;
+        self.gateway = g;
+        self.gateway.mqtt = key;
     }
 
     pub fn add_node(&mut self, label: &str, pos: Pos) -> NodeId {
@@ -278,7 +300,15 @@ impl LoraSpace {
         }
     }
 
-    pub fn configure(&mut self, id: NodeId, freq_hz: u32, params: LoraParams, tx_dbm: f64, network_id: u8, address: u16) {
+    pub fn configure(
+        &mut self,
+        id: NodeId,
+        freq_hz: u32,
+        params: LoraParams,
+        tx_dbm: f64,
+        network_id: u8,
+        address: u16,
+    ) {
         if let Some(n) = self.node_mut(id) {
             n.freq_hz = freq_hz;
             n.params = params;
@@ -301,29 +331,48 @@ impl LoraSpace {
     }
 
     fn path_loss(&self, freq: u32) -> PathLoss {
-        PathLoss { freq_hz: freq as f64, exponent: self.terrain.exponent() }
+        PathLoss {
+            freq_hz: freq as f64,
+            exponent: self.terrain.exponent(),
+        }
     }
 
     /// Received power at `to` from a transmitter at `from` (dBm).
     pub fn rssi_between(&self, from: Pos, to: Pos, power: f64, freq: u32) -> f64 {
-        let walls = if self.terrain == Terrain::Indoor { self.geometry.walls_between(from, to).1 } else { 0.0 };
+        let walls = if self.terrain == Terrain::Indoor {
+            self.geometry.walls_between(from, to).1
+        } else {
+            0.0
+        };
         power - self.path_loss(freq).loss_db(from.dist(to)) - walls
     }
 
     /// Duty-cycle budget left (s of airtime) and when the next `airtime` fits.
     fn duty_wait(&self, n: &Node, airtime: f64, now: SimTime) -> Option<f64> {
-        let Region::Eu868 { duty_pct } = self.region else { return None };
+        let Region::Eu868 { duty_pct } = self.region else {
+            return None;
+        };
         // Simple per-transmission rule (as LoRaWAN stacks do): after a frame of T seconds the
         // radio stays silent for T·(100/duty - 1).
         let off = 100.0 / duty_pct.max(0.001) - 1.0;
-        let blocked_until = n.history.iter().map(|(s, t)| s.as_secs_f64() + t * (1.0 + off)).fold(0.0, f64::max);
+        let blocked_until = n
+            .history
+            .iter()
+            .map(|(s, t)| s.as_secs_f64() + t * (1.0 + off))
+            .fold(0.0, f64::max);
         let wait = blocked_until - now.as_secs_f64();
         let _ = airtime;
         (wait > 0.0).then_some(wait)
     }
 
     /// Starts a transmission from a node. Returns its end time.
-    pub fn transmit(&mut self, id: NodeId, dest: u16, data: &[u8], now: SimTime) -> Result<SimTime, LoraError> {
+    pub fn transmit(
+        &mut self,
+        id: NodeId,
+        dest: u16,
+        data: &[u8],
+        now: SimTime,
+    ) -> Result<SimTime, LoraError> {
         self.advance(now);
         let n = self.nodes.get(id.0 as usize).ok_or(LoraError::Off)?;
         if !n.powered {
@@ -339,24 +388,57 @@ impl LoraSpace {
         if let Some(w) = self.duty_wait(n, airtime, now) {
             return Err(LoraError::DutyCycle(w));
         }
-        if self.region == Region::Us915 && airtime > 0.4 && n.params.bw_hz <= 125_000 && n.params.sf >= 11 {
+        if self.region == Region::Us915
+            && airtime > 0.4
+            && n.params.bw_hz <= 125_000
+            && n.params.sf >= 11
+        {
             // Dwell limit applies to 125 kHz channels; Breadbox reports but still allows SF11/12
             // demos (the RYLR896 does not enforce it).
         }
         let end = now + SimTime::from_secs_f64(airtime);
-        let (pos, power, freq, params, network_id, from_addr, label) = (n.pos, n.tx_dbm, n.freq_hz, n.params, n.network_id, n.address, n.label.clone());
+        let (pos, power, freq, params, network_id, from_addr, label) = (
+            n.pos,
+            n.tx_dbm,
+            n.freq_hz,
+            n.params,
+            n.network_id,
+            n.address,
+            n.label.clone(),
+        );
         let node = self.node_mut(id).expect("exists");
         node.tx_until = end;
         node.history.push((now, airtime));
-        node.history.retain(|(s, _)| now.as_secs_f64() - s.as_secs_f64() < 3600.0);
-        self.txs.push(Tx { from: Sender::Node(id), from_addr, pos, power, freq, params, network_id, dest, data: data.to_vec(), start: now, end, delivered: false });
+        node.history
+            .retain(|(s, _)| now.as_secs_f64() - s.as_secs_f64() < 3600.0);
+        self.txs.push(Tx {
+            from: Sender::Node(id),
+            from_addr,
+            pos,
+            power,
+            freq,
+            params,
+            network_id,
+            dest,
+            data: data.to_vec(),
+            start: now,
+            end,
+            delivered: false,
+        });
         self.log.push(LogEntry {
             seq: 0,
             time: now,
             dir: Dir::Tx,
             radio: Some(label),
             proto: Proto::Lora,
-            summary: format!("LoRa {} → {} · {} B · SF{} · {:.0} ms on air", from_addr, dest, data.len(), params.sf, airtime * 1e3),
+            summary: format!(
+                "LoRa {} → {} · {} B · SF{} · {:.0} ms on air",
+                from_addr,
+                dest,
+                data.len(),
+                params.sf,
+                airtime * 1e3
+            ),
             bytes: data.len(),
             src: None,
             dst: None,
@@ -368,10 +450,24 @@ impl LoraSpace {
     }
 
     /// Downlink from the gateway to a node address.
-    pub fn gateway_send(&mut self, network_id: u8, dest: u16, data: &[u8], params: LoraParams, now: SimTime) -> SimTime {
+    pub fn gateway_send(
+        &mut self,
+        network_id: u8,
+        dest: u16,
+        data: &[u8],
+        params: LoraParams,
+        now: SimTime,
+    ) -> SimTime {
         self.advance(now);
         let airtime = params.airtime(data.len());
-        let start = self.txs.iter().filter(|t| t.from == Sender::Gateway).map(|t| t.end).max().unwrap_or(now).max(now);
+        let start = self
+            .txs
+            .iter()
+            .filter(|t| t.from == Sender::Gateway)
+            .map(|t| t.end)
+            .max()
+            .unwrap_or(now)
+            .max(now);
         let end = start + SimTime::from_secs_f64(airtime);
         let g = &self.gateway;
         self.txs.push(Tx {
@@ -394,7 +490,12 @@ impl LoraSpace {
             dir: Dir::Rx,
             radio: None,
             proto: Proto::Lora,
-            summary: format!("LoRa gateway → {} · {} B · SF{}", dest, data.len(), params.sf),
+            summary: format!(
+                "LoRa gateway → {} · {} B · SF{}",
+                dest,
+                data.len(),
+                params.sf
+            ),
             bytes: data.len(),
             src: None,
             dst: None,
@@ -407,12 +508,16 @@ impl LoraSpace {
 
     /// Packets a node received since the last call.
     pub fn take_rx(&mut self, id: NodeId) -> Vec<LoraRx> {
-        self.node_mut(id).map(|n| n.rx.drain(..).collect()).unwrap_or_default()
+        self.node_mut(id)
+            .map(|n| n.rx.drain(..).collect())
+            .unwrap_or_default()
     }
 
     /// Transmissions of this node that finished since the last call (their end times).
     pub fn take_tx_done(&mut self, id: NodeId) -> Vec<SimTime> {
-        self.node_mut(id).map(|n| n.tx_done.drain(..).collect()).unwrap_or_default()
+        self.node_mut(id)
+            .map(|n| n.tx_done.drain(..).collect())
+            .unwrap_or_default()
     }
 
     pub fn take_gateway_uplinks(&mut self) -> Vec<GatewayUplink> {
@@ -420,12 +525,22 @@ impl LoraSpace {
     }
 
     pub fn next_event_time(&self) -> Option<SimTime> {
-        self.txs.iter().filter(|t| !t.delivered).map(|t| t.end).min()
+        self.txs
+            .iter()
+            .filter(|t| !t.delivered)
+            .map(|t| t.end)
+            .min()
     }
 
     pub fn advance(&mut self, now: SimTime) {
         loop {
-            let next = self.txs.iter().enumerate().filter(|(_, t)| !t.delivered && t.end <= now).min_by_key(|(_, t)| t.end).map(|(i, _)| i);
+            let next = self
+                .txs
+                .iter()
+                .enumerate()
+                .filter(|(_, t)| !t.delivered && t.end <= now)
+                .min_by_key(|(_, t)| t.end)
+                .map(|(i, _)| i);
             let Some(i) = next else { break };
             self.now = self.now.max(self.txs[i].end);
             self.txs[i].delivered = true;
@@ -433,12 +548,24 @@ impl LoraSpace {
         }
         self.now = self.now.max(now);
         // Forget transmissions that can no longer overlap anything.
-        let horizon = self.txs.iter().filter(|t| !t.delivered).map(|t| t.start).min().unwrap_or(self.now);
+        let horizon = self
+            .txs
+            .iter()
+            .filter(|t| !t.delivered)
+            .map(|t| t.start)
+            .min()
+            .unwrap_or(self.now);
         self.txs.retain(|t| !t.delivered || t.end >= horizon);
     }
 
     /// Does `x` survive at a receiver at `pos` (`me` = receiver identity to skip own frames)?
-    fn survives(&self, xi: usize, pos: Pos, me: Sender, gain: f64) -> Result<(f64, f64), DropReason> {
+    fn survives(
+        &self,
+        xi: usize,
+        pos: Pos,
+        me: Sender,
+        gain: f64,
+    ) -> Result<(f64, f64), DropReason> {
         let x = &self.txs[xi];
         let p = self.rssi_between(x.pos, pos, x.power, x.freq) + gain;
         if p < x.params.sensitivity() {
@@ -471,21 +598,41 @@ impl LoraSpace {
         for i in 0..self.nodes.len() {
             let me = Sender::Node(NodeId(i as u32));
             let n = &self.nodes[i];
-            if me == x.from || !n.powered || !n.rx_on || n.freq_hz != x.freq || n.params.sf != x.params.sf || n.params.bw_hz != x.params.bw_hz || n.network_id != x.network_id {
+            if me == x.from
+                || !n.powered
+                || !n.rx_on
+                || n.freq_hz != x.freq
+                || n.params.sf != x.params.sf
+                || n.params.bw_hz != x.params.bw_hz
+                || n.network_id != x.network_id
+            {
                 continue;
             }
             if !(x.dest == 0 || x.dest == n.address) {
                 continue;
             }
             // Half duplex: a radio that was transmitting during the frame hears nothing.
-            let deaf = self.txs.iter().any(|y| y.from == me && y.start < x.end && x.start < y.end);
+            let deaf = self
+                .txs
+                .iter()
+                .any(|y| y.from == me && y.start < x.end && x.start < y.end);
             let label = n.label.clone();
             let pos = n.pos;
-            let res = if deaf { Err(DropReason::Collision) } else { self.survives(xi, pos, me, 0.0) };
+            let res = if deaf {
+                Err(DropReason::Collision)
+            } else {
+                self.survives(xi, pos, me, 0.0)
+            };
             match res {
                 Ok((rssi, snr)) => {
                     let jitter = self.rng.range_f64(-0.5, 0.5);
-                    self.nodes[i].rx.push_back(LoraRx { time: t, from: x.from_addr, data: x.data.clone(), rssi: (rssi + jitter).round(), snr: (snr * 2.0).round() / 2.0 });
+                    self.nodes[i].rx.push_back(LoraRx {
+                        time: t,
+                        from: x.from_addr,
+                        data: x.data.clone(),
+                        rssi: (rssi + jitter).round(),
+                        snr: (snr * 2.0).round() / 2.0,
+                    });
                 }
                 Err(r) => self.log.push(LogEntry {
                     seq: 0,
@@ -545,7 +692,12 @@ impl LoraSpace {
 }
 
 /// Publishes gateway uplinks to the broker (`lora/<net>/<addr>/up`).
-pub fn forward_uplinks(net: &mut Network, lora: &mut LoraSpace, ups: Vec<GatewayUplink>, now: SimTime) {
+pub fn forward_uplinks(
+    net: &mut Network,
+    lora: &mut LoraSpace,
+    ups: Vec<GatewayUplink>,
+    now: SimTime,
+) {
     let key = gateway_client(net, lora, now);
     for u in ups {
         let text = String::from_utf8_lossy(&u.data).into_owned();
@@ -554,7 +706,11 @@ pub fn forward_uplinks(net: &mut Network, lora: &mut LoraSpace, ups: Vec<Gateway
             "time": u.time.as_secs_f64(),
         });
         let topic = format!("lora/{}/{}/up", u.network_id, u.from);
-        let out = net.broker_mut().virtual_publish(key, Message::new(&topic, json.to_string(), 0, false), now);
+        let out = net.broker_mut().virtual_publish(
+            key,
+            Message::new(&topic, json.to_string(), 0, false),
+            now,
+        );
         net.apply_broker(out);
     }
 }
@@ -573,7 +729,12 @@ pub fn forward_downlinks(net: &mut Network, lora: &mut LoraSpace, now: SimTime) 
             && let (Ok(nid), Ok(addr)) = (nid.parse::<u8>(), addr.parse::<u16>())
         {
             // Answer with the addressed node's settings (gateway is multi-SF).
-            let params = lora.nodes.iter().find(|n| n.address == addr && n.network_id == nid).map(|n| n.params).unwrap_or_default();
+            let params = lora
+                .nodes
+                .iter()
+                .find(|n| n.address == addr && n.network_id == nid)
+                .map(|n| n.params)
+                .unwrap_or_default();
             lora.gateway_send(nid, addr, &r.message.payload, params, now);
         }
     }
@@ -584,7 +745,9 @@ fn gateway_client(net: &mut Network, lora: &mut LoraSpace, now: SimTime) -> Conn
         return k;
     }
     let k = net.broker_mut().virtual_connect("lora-gateway", now);
-    let out = net.broker_mut().virtual_subscribe(k, "lora/+/+/down", 0, now);
+    let out = net
+        .broker_mut()
+        .virtual_subscribe(k, "lora/+/+/down", 0, now);
     net.apply_broker(out);
     lora.gateway.mqtt = Some(k);
     k
@@ -597,7 +760,14 @@ mod tests {
     #[test]
     fn airtime_matches_semtech_calculator() {
         // Reference values from the Semtech LoRa calculator (CRC on, explicit header).
-        let p = |sf, bw, cr, pre| LoraParams { sf, bw_hz: bw, cr, preamble: pre, crc: true, explicit_header: true };
+        let p = |sf, bw, cr, pre| LoraParams {
+            sf,
+            bw_hz: bw,
+            cr,
+            preamble: pre,
+            crc: true,
+            explicit_header: true,
+        };
         let ms = |p: LoraParams, n| p.airtime(n) * 1e3;
         assert!((ms(p(7, 125_000, 1, 8), 10) - 41.216).abs() < 1e-3);
         assert!((ms(p(12, 125_000, 1, 8), 10) - 991.232).abs() < 1e-3);

@@ -4,6 +4,12 @@ pub mod broker;
 pub mod client;
 pub mod codec;
 
-pub use broker::{Broker, BrokerConfig, BrokerEvent, BrokerOut, BrokerStats, ConnKey, HistoryEntry, Message, Received};
+pub use broker::{
+    Broker, BrokerConfig, BrokerEvent, BrokerOut, BrokerStats, ConnKey, HistoryEntry, Message,
+    Received,
+};
 pub use client::{ClientEvent, ClientState, MqttClient};
-pub use codec::{Connect, MqttError, Packet, Publish, StreamDecoder, Will, decode, encode, topic_matches, valid_filter};
+pub use codec::{
+    Connect, MqttError, Packet, Publish, StreamDecoder, Will, decode, encode, topic_matches,
+    valid_filter,
+};

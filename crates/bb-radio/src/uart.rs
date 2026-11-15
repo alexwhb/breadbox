@@ -81,7 +81,7 @@ impl UartConfig {
         match self.parity {
             Parity::None => None,
             Parity::Even => Some(ones % 2 == 1),
-            Parity::Odd => Some(ones % 2 == 0),
+            Parity::Odd => Some(ones.is_multiple_of(2)),
         }
     }
 
@@ -95,9 +95,7 @@ impl UartConfig {
         if let Some(p) = self.parity_bit(data) {
             v.push(p);
         }
-        for _ in 0..self.stop_bits {
-            v.push(true);
-        }
+        v.extend(std::iter::repeat_n(true, self.stop_bits as usize));
         v
     }
 }
@@ -304,7 +302,9 @@ impl UartDecoder {
         let start = self.edges[i].0;
         let cfg = self.config;
         let k = cfg.frame_bits() - 1;
-        Some(SimTime::from_ps((start.as_ps() as f64 + cfg.bit_ps() / 2.0 + cfg.bit_ps() * k as f64).round() as u64))
+        Some(SimTime::from_ps(
+            (start.as_ps() as f64 + cfg.bit_ps() / 2.0 + cfg.bit_ps() * k as f64).round() as u64,
+        ))
     }
 
     fn level_at(&self, t: SimTime) -> bool {
@@ -342,12 +342,24 @@ impl UartDecoder {
         let half = cfg.bit_ps() / 2.0;
         while let Some(i) = self.find_start() {
             let start = self.edges[i].0;
-            let sample = |k: u32| SimTime::from_ps((start.as_ps() as f64 + half + cfg.bit_ps() * k as f64).round() as u64);
+            let sample = |k: u32| {
+                SimTime::from_ps(
+                    (start.as_ps() as f64 + half + cfg.bit_ps() * k as f64).round() as u64,
+                )
+            };
             let last = sample(cfg.frame_bits() - 1);
-            let decided = if inclusive { last <= limit } else { last < limit };
+            let decided = if inclusive {
+                last <= limit
+            } else {
+                last < limit
+            };
             // A glitch (start bit high again at its centre) can be rejected early.
             let centre = sample(0);
-            let centre_known = if inclusive { centre <= limit } else { centre < limit };
+            let centre_known = if inclusive {
+                centre <= limit
+            } else {
+                centre < limit
+            };
             if centre_known && self.level_at(centre) {
                 self.drop_edges_before(start);
                 // Skip this falling edge: require the next one.
@@ -373,8 +385,8 @@ impl UartDecoder {
                     k += 1;
                     let total = ones + bit;
                     match p {
-                        Parity::Even => total % 2 != 0,
-                        _ => total % 2 != 1,
+                        Parity::Even => !total.is_multiple_of(2),
+                        _ => total.is_multiple_of(2),
                     }
                 }
             };
@@ -418,7 +430,13 @@ mod tests {
     use super::*;
     use crate::rng::Pcg32;
 
-    fn roundtrip(cfg: UartConfig, data: &[u16], jitter_frac: f64, baud_err: f64, seed: u64) -> Vec<RxByte> {
+    fn roundtrip(
+        cfg: UartConfig,
+        data: &[u16],
+        jitter_frac: f64,
+        baud_err: f64,
+        seed: u64,
+    ) -> Vec<RxByte> {
         let mut enc_cfg = cfg;
         enc_cfg.baud = (cfg.baud as f64 * (1.0 + baud_err)).round() as u32;
         let mut enc = UartEncoder::new(enc_cfg);
@@ -463,7 +481,12 @@ mod tests {
         let data: Vec<u16> = b"Hello, AT+CWJAP\r\n".iter().map(|&b| b as u16).collect();
         let rx = roundtrip(UartConfig::new(9600), &data, 0.02, 0.025, 1);
         assert_eq!(rx.iter().map(|r| r.data).collect::<Vec<_>>(), data);
-        for (bits, par, stop) in [(7, Parity::Even, 2), (8, Parity::Odd, 1), (9, Parity::None, 1), (5, Parity::Even, 1)] {
+        for (bits, par, stop) in [
+            (7, Parity::Even, 2),
+            (8, Parity::Odd, 1),
+            (9, Parity::None, 1),
+            (5, Parity::Even, 1),
+        ] {
             let cfg = UartConfig::new(19_200).with_format(bits, par, stop);
             let mask = (1u16 << bits) - 1;
             let data: Vec<u16> = (0..40u16).map(|i| (i * 37) & mask).collect();
@@ -476,7 +499,11 @@ mod tests {
     #[test]
     fn framing_and_parity_errors() {
         let cfg = UartConfig::new(9600).with_format(8, Parity::Even, 1);
-        let f = UartFrame { start: SimTime::from_us(10), data: 0x41, config: cfg };
+        let f = UartFrame {
+            start: SimTime::from_us(10),
+            data: 0x41,
+            config: cfg,
+        };
         // Corrupt: flip the parity bit and hold the stop bit low.
         let mut levels = cfg.frame_levels(0x41);
         let n = levels.len();
@@ -505,7 +532,10 @@ mod tests {
         assert!(decode_edges(&edges, cfg, SimTime::from_ms(5)).is_empty());
         // ESP8266 boot text at 74880 baud seen by a 9600-baud receiver is garbage, not text.
         let mut enc = UartEncoder::new(UartConfig::new(74_880));
-        let edges = enc.encode(b"ets Jan  8 2013,rst cause:2, boot mode:(3,6)\r\n", SimTime::from_us(10));
+        let edges = enc.encode(
+            b"ets Jan  8 2013,rst cause:2, boot mode:(3,6)\r\n",
+            SimTime::from_us(10),
+        );
         let rx = decode_edges(&edges, cfg, SimTime::from_ms(20));
         let text: Vec<u8> = rx.iter().map(|r| r.data as u8).collect();
         assert!(!rx.is_empty());

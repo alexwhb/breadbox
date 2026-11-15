@@ -148,9 +148,20 @@ impl Writer {
 
 #[derive(Debug, Clone)]
 enum HSock {
-    Tcp { sock: SockId, failed: bool, closed: bool, rx: VecDeque<u8> },
-    Listener { sock: SockId, pending: VecDeque<(SockId, SocketAddrV4)> },
-    Udp { sock: SockId, rx: VecDeque<(SocketAddrV4, Vec<u8>)> },
+    Tcp {
+        sock: SockId,
+        failed: bool,
+        closed: bool,
+        rx: VecDeque<u8>,
+    },
+    Listener {
+        sock: SockId,
+        pending: VecDeque<(SockId, SocketAddrV4)>,
+    },
+    Udp {
+        sock: SockId,
+        rx: VecDeque<(SocketAddrV4, Vec<u8>)>,
+    },
 }
 
 /// Wi-Fi + BLE radio of a host-emulated board.
@@ -205,7 +216,9 @@ impl HostRadio {
         let h = self.next_handle;
         self.next_handle += 1;
         let sock = match &s {
-            HSock::Tcp { sock, .. } | HSock::Listener { sock, .. } | HSock::Udp { sock, .. } => *sock,
+            HSock::Tcp { sock, .. } | HSock::Listener { sock, .. } | HSock::Udp { sock, .. } => {
+                *sock
+            }
         };
         self.by_sock.insert(sock, h);
         self.socks.insert(h, s);
@@ -219,39 +232,74 @@ impl HostRadio {
                 NetEvent::WifiConnected { .. } => {}
                 NetEvent::GotIp { ip, .. } => {
                     self.status = wl::CONNECTED;
-                    let rssi = net.station_info(self.station).and_then(|i| i.link).map(|l| l.rssi_dbm.round() as i32).unwrap_or(0);
-                    self.notes.push((now, AnnotationKind::Wifi, format!("WiFi.begin(\"{}\") → connected rssi={rssi} dBm ip={ip}", self.ssid)));
+                    let rssi = net
+                        .station_info(self.station)
+                        .and_then(|i| i.link)
+                        .map(|l| l.rssi_dbm.round() as i32)
+                        .unwrap_or(0);
+                    self.notes.push((
+                        now,
+                        AnnotationKind::Wifi,
+                        format!(
+                            "WiFi.begin(\"{}\") → connected rssi={rssi} dBm ip={ip}",
+                            self.ssid
+                        ),
+                    ));
                 }
                 NetEvent::WifiJoinFailed { reason, ssid } => {
-                    self.status = if reason == JoinError::NoAp { wl::NO_SSID_AVAIL } else { wl::CONNECT_FAILED };
-                    self.notes.push((now, AnnotationKind::Wifi, format!("WiFi.begin(\"{ssid}\") → failed ({})", reason.text())));
+                    self.status = if reason == JoinError::NoAp {
+                        wl::NO_SSID_AVAIL
+                    } else {
+                        wl::CONNECT_FAILED
+                    };
+                    self.notes.push((
+                        now,
+                        AnnotationKind::Wifi,
+                        format!("WiFi.begin(\"{ssid}\") → failed ({})", reason.text()),
+                    ));
                 }
                 NetEvent::WifiDisconnected { .. } => self.status = wl::DISCONNECTED,
                 NetEvent::TcpConnected { .. } => {}
                 NetEvent::TcpConnectFailed { sock, .. } => {
-                    if let Some(HSock::Tcp { failed, .. }) = self.by_sock.get(&sock).and_then(|h| self.socks.get_mut(h)) {
+                    if let Some(HSock::Tcp { failed, .. }) =
+                        self.by_sock.get(&sock).and_then(|h| self.socks.get_mut(h))
+                    {
                         *failed = true;
                     }
                 }
                 NetEvent::TcpData { sock, data } => {
-                    if let Some(HSock::Tcp { rx, .. }) = self.by_sock.get(&sock).and_then(|h| self.socks.get_mut(h)) {
+                    if let Some(HSock::Tcp { rx, .. }) =
+                        self.by_sock.get(&sock).and_then(|h| self.socks.get_mut(h))
+                    {
                         rx.extend(data);
                     }
                 }
                 NetEvent::TcpClosed { sock, .. } => {
-                    if let Some(HSock::Tcp { closed, .. }) = self.by_sock.get(&sock).and_then(|h| self.socks.get_mut(h)) {
+                    if let Some(HSock::Tcp { closed, .. }) =
+                        self.by_sock.get(&sock).and_then(|h| self.socks.get_mut(h))
+                    {
                         *closed = true;
                     }
                 }
-                NetEvent::TcpAccepted { listener, sock, remote } => {
-                    if let Some(HSock::Listener { pending, .. }) = self.by_sock.get(&listener).and_then(|h| self.socks.get_mut(h)) {
+                NetEvent::TcpAccepted {
+                    listener,
+                    sock,
+                    remote,
+                } => {
+                    if let Some(HSock::Listener { pending, .. }) = self
+                        .by_sock
+                        .get(&listener)
+                        .and_then(|h| self.socks.get_mut(h))
+                    {
                         pending.push_back((sock, remote));
                     } else {
                         net.tcp_abort(sock, now);
                     }
                 }
                 NetEvent::UdpData { sock, from, data } => {
-                    if let Some(HSock::Udp { rx, .. }) = self.by_sock.get(&sock).and_then(|h| self.socks.get_mut(h)) {
+                    if let Some(HSock::Udp { rx, .. }) =
+                        self.by_sock.get(&sock).and_then(|h| self.socks.get_mut(h))
+                    {
                         rx.push_back((from, data));
                     }
                 }
@@ -259,15 +307,25 @@ impl HostRadio {
                     self.dns.insert(query as i32, Some(ip));
                 }
 
-                NetEvent::TcpAcked { .. } | NetEvent::PingReply { .. } | NetEvent::PingTimeout { .. } => {}
+                NetEvent::TcpAcked { .. }
+                | NetEvent::PingReply { .. }
+                | NetEvent::PingTimeout { .. } => {}
             }
         }
         let evs = ble.take_peripheral_events(self.peripheral);
         for e in &evs {
             match e {
-                PeripheralEvent::Connected => self.notes.push((now, AnnotationKind::Ble, format!("phone connected to {} (ESP32 BLE)", self.label))),
+                PeripheralEvent::Connected => self.notes.push((
+                    now,
+                    AnnotationKind::Ble,
+                    format!("phone connected to {} (ESP32 BLE)", self.label),
+                )),
                 PeripheralEvent::Disconnected => {
-                    self.notes.push((now, AnnotationKind::Ble, format!("phone disconnected from {}", self.label)));
+                    self.notes.push((
+                        now,
+                        AnnotationKind::Ble,
+                        format!("phone disconnected from {}", self.label),
+                    ));
                     // BLEServer keeps the old link; sketches restart advertising themselves.
                 }
                 _ => {}
@@ -277,7 +335,14 @@ impl HostRadio {
     }
 
     /// Serves one request (see the module docs for the encoding).
-    pub fn serve(&mut self, net: &mut Network, ble: &mut BleSpace, channel: u8, req: &[u8], now: SimTime) -> Vec<u8> {
+    pub fn serve(
+        &mut self,
+        net: &mut Network,
+        ble: &mut BleSpace,
+        channel: u8,
+        req: &[u8],
+        now: SimTime,
+    ) -> Vec<u8> {
         let mut r = Reader::new(req);
         let op = r.u8();
         let mut w = Writer::default();
@@ -291,7 +356,14 @@ impl HostRadio {
         w.done()
     }
 
-    fn serve_net(&mut self, net: &mut Network, op: u8, r: &mut Reader, w: &mut Writer, now: SimTime) {
+    fn serve_net(
+        &mut self,
+        net: &mut Network,
+        op: u8,
+        r: &mut Reader,
+        w: &mut Writer,
+        now: SimTime,
+    ) {
         use net_op::*;
         let st = self.station;
         match op {
@@ -310,13 +382,30 @@ impl HostRadio {
                 let has_ip = net.ip_of(st).is_some();
                 w.u8(self.status);
                 w.ip(ip);
-                w.ip(if has_ip { net.gateway() } else { Ipv4Addr::UNSPECIFIED });
-                w.ip(if has_ip { net.config.netmask } else { Ipv4Addr::UNSPECIFIED });
-                w.ip(if has_ip { net.gateway() } else { Ipv4Addr::UNSPECIFIED });
+                w.ip(if has_ip {
+                    net.gateway()
+                } else {
+                    Ipv4Addr::UNSPECIFIED
+                });
+                w.ip(if has_ip {
+                    net.config.netmask
+                } else {
+                    Ipv4Addr::UNSPECIFIED
+                });
+                w.ip(if has_ip {
+                    net.gateway()
+                } else {
+                    Ipv4Addr::UNSPECIFIED
+                });
                 let link = info.as_ref().and_then(|i| i.link);
                 w.i32(link.map(|l| l.rssi_dbm.round() as i32).unwrap_or(0));
                 w.u8(info.as_ref().and_then(|i| i.channel).unwrap_or(0));
-                let bssid = net.access_points().iter().find(|a| info.as_ref().and_then(|i| i.ssid.as_ref()) == Some(&a.ssid)).map(|a| a.bssid).unwrap_or_default();
+                let bssid = net
+                    .access_points()
+                    .iter()
+                    .find(|a| info.as_ref().and_then(|i| i.ssid.as_ref()) == Some(&a.ssid))
+                    .map(|a| a.bssid)
+                    .unwrap_or_default();
                 w.0.extend_from_slice(&bssid);
                 w.str(info.and_then(|i| i.ssid).as_deref().unwrap_or(""));
             }
@@ -388,7 +477,12 @@ impl HostRadio {
                 let port = r.u16();
                 match net.tcp_connect(st, SocketAddrV4::new(ip, port), now) {
                     Ok(sock) => {
-                        let h = self.handle(HSock::Tcp { sock, failed: false, closed: false, rx: VecDeque::new() });
+                        let h = self.handle(HSock::Tcp {
+                            sock,
+                            failed: false,
+                            closed: false,
+                            rx: VecDeque::new(),
+                        });
                         w.i32(h);
                     }
                     Err(_) => {
@@ -399,7 +493,12 @@ impl HostRadio {
             TCP_STATUS => {
                 let h = r.i32();
                 match self.socks.get(&h) {
-                    Some(HSock::Tcp { sock, failed, closed, rx }) => {
+                    Some(HSock::Tcp {
+                        sock,
+                        failed,
+                        closed,
+                        rx,
+                    }) => {
                         let state = if *failed {
                             3
                         } else if *closed {
@@ -422,7 +521,10 @@ impl HostRadio {
                 let h = r.i32();
                 let data = r.bytes();
                 let n = match self.socks.get(&h) {
-                    Some(HSock::Tcp { sock, .. }) => net.tcp_send(*sock, &data, now).map(|n| n as i32).unwrap_or(-1),
+                    Some(HSock::Tcp { sock, .. }) => net
+                        .tcp_send(*sock, &data, now)
+                        .map(|n| n as i32)
+                        .unwrap_or(-1),
                     _ => -1,
                 };
                 w.i32(n);
@@ -443,7 +545,9 @@ impl HostRadio {
                 let h = r.i32();
                 if let Some(s) = self.socks.remove(&h) {
                     let sock = match s {
-                        HSock::Tcp { sock, .. } | HSock::Listener { sock, .. } | HSock::Udp { sock, .. } => sock,
+                        HSock::Tcp { sock, .. }
+                        | HSock::Listener { sock, .. }
+                        | HSock::Udp { sock, .. } => sock,
                     };
                     self.by_sock.remove(&sock);
                     net.close(sock, now);
@@ -454,7 +558,10 @@ impl HostRadio {
                 let port = r.u16();
                 match net.tcp_listen(st, port) {
                     Ok(sock) => {
-                        let h = self.handle(HSock::Listener { sock, pending: VecDeque::new() });
+                        let h = self.handle(HSock::Listener {
+                            sock,
+                            pending: VecDeque::new(),
+                        });
                         w.i32(h);
                     }
                     Err(_) => {
@@ -470,7 +577,12 @@ impl HostRadio {
                 };
                 match next {
                     Some((sock, remote)) => {
-                        let nh = self.handle(HSock::Tcp { sock, failed: false, closed: false, rx: VecDeque::new() });
+                        let nh = self.handle(HSock::Tcp {
+                            sock,
+                            failed: false,
+                            closed: false,
+                            rx: VecDeque::new(),
+                        });
                         w.i32(nh).ip(*remote.ip()).u16(remote.port());
                     }
                     None => {
@@ -484,14 +596,20 @@ impl HostRadio {
                     Some(HSock::Tcp { sock, .. }) => net.tcp_addrs(*sock),
                     _ => None,
                 };
-                let (l, rem) = addrs.unwrap_or((SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0), SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0)));
+                let (l, rem) = addrs.unwrap_or((
+                    SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0),
+                    SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0),
+                ));
                 w.ip(*rem.ip()).u16(rem.port()).ip(*l.ip()).u16(l.port());
             }
             UDP_BIND => {
                 let port = r.u16();
                 match net.udp_bind(st, port) {
                     Ok(sock) => {
-                        let h = self.handle(HSock::Udp { sock, rx: VecDeque::new() });
+                        let h = self.handle(HSock::Udp {
+                            sock,
+                            rx: VecDeque::new(),
+                        });
                         w.i32(h);
                     }
                     Err(_) => {
@@ -505,7 +623,9 @@ impl HostRadio {
                 let port = r.u16();
                 let data = r.bytes();
                 let ok = match self.socks.get(&h) {
-                    Some(HSock::Udp { sock, .. }) => net.udp_send(*sock, SocketAddrV4::new(ip, port), &data, now).is_ok(),
+                    Some(HSock::Udp { sock, .. }) => net
+                        .udp_send(*sock, SocketAddrV4::new(ip, port), &data, now)
+                        .is_ok(),
                     _ => false,
                 };
                 w.i32(if ok { data.len() as i32 } else { -1 });
@@ -531,7 +651,14 @@ impl HostRadio {
         }
     }
 
-    fn serve_ble(&mut self, ble: &mut BleSpace, op: u8, r: &mut Reader, w: &mut Writer, now: SimTime) {
+    fn serve_ble(
+        &mut self,
+        ble: &mut BleSpace,
+        op: u8,
+        r: &mut Reader,
+        w: &mut Writer,
+        now: SimTime,
+    ) {
         use ble_op::*;
         let p = self.peripheral;
         match op {
@@ -552,7 +679,10 @@ impl HostRadio {
                 let svc = r.i32().max(0) as usize;
                 let uuid = Uuid::parse(&r.str()).unwrap_or(Uuid::U16(0));
                 let props = r.u8();
-                let h = ble.gatt_mut(p).map(|g| g.add_characteristic(svc, uuid, props, b"")).unwrap_or(0);
+                let h = ble
+                    .gatt_mut(p)
+                    .map(|g| g.add_characteristic(svc, uuid, props, b""))
+                    .unwrap_or(0);
                 w.i32(h as i32);
             }
             SET_VALUE => {
@@ -563,7 +693,11 @@ impl HostRadio {
             }
             GET_VALUE => {
                 let h = r.u16();
-                let v = ble.gatt(p).and_then(|g| g.char(h)).map(|c| c.value.clone()).unwrap_or_default();
+                let v = ble
+                    .gatt(p)
+                    .and_then(|g| g.char(h))
+                    .map(|c| c.value.clone())
+                    .unwrap_or_default();
                 w.bytes(&v);
             }
             NOTIFY => {
@@ -571,7 +705,11 @@ impl HostRadio {
                 let v = r.bytes();
                 let sent = ble.notify(p, h, &v, now);
                 if sent {
-                    self.notes.push((now, AnnotationKind::Ble, format!("{} → phone notify {} B", self.label, v.len())));
+                    self.notes.push((
+                        now,
+                        AnnotationKind::Ble,
+                        format!("{} → phone notify {} B", self.label, v.len()),
+                    ));
                 }
                 w.u8(sent as u8);
             }

@@ -21,7 +21,9 @@ impl HostKind {
     }
     pub fn by_id(id: &str) -> Option<HostKind> {
         match id.to_ascii_lowercase().as_str() {
-            "esp32" | "esp32dev" | "esp32-devkit" | "breadbox:host:esp32" => Some(HostKind::Esp32DevKit),
+            "esp32" | "esp32dev" | "esp32-devkit" | "breadbox:host:esp32" => {
+                Some(HostKind::Esp32DevKit)
+            }
             "pico" | "rp2040" | "breadbox:host:pico" => Some(HostKind::Pico),
             _ => None,
         }
@@ -29,8 +31,19 @@ impl HostKind {
     /// Preprocessor defines for the host compiler.
     pub fn defines(self) -> &'static [&'static str] {
         match self {
-            HostKind::Esp32DevKit => &["-DBB_HOST_ESP32", "-DESP32", "-DARDUINO_ESP32_DEV", "-DARDUINO_ARCH_ESP32", "-DARDUINO_BOARD=\"ESP32_DEV\""],
-            HostKind::Pico => &["-DBB_HOST_PICO", "-DARDUINO_ARCH_RP2040", "-DARDUINO_RASPBERRY_PI_PICO", "-DARDUINO_BOARD=\"RASPBERRY_PI_PICO\""],
+            HostKind::Esp32DevKit => &[
+                "-DBB_HOST_ESP32",
+                "-DESP32",
+                "-DARDUINO_ESP32_DEV",
+                "-DARDUINO_ARCH_ESP32",
+                "-DARDUINO_BOARD=\"ESP32_DEV\"",
+            ],
+            HostKind::Pico => &[
+                "-DBB_HOST_PICO",
+                "-DARDUINO_ARCH_RP2040",
+                "-DARDUINO_RASPBERRY_PI_PICO",
+                "-DARDUINO_BOARD=\"RASPBERRY_PI_PICO\"",
+            ],
         }
     }
     pub fn spec(self) -> HostBoardSpec {
@@ -117,7 +130,9 @@ impl HostBoardSpec {
             };
             return self.pin(gpio);
         }
-        self.pins.iter().find(|p| p.name.eq_ignore_ascii_case(&n) || format!("GPIO{}", p.gpio) == n)
+        self.pins
+            .iter()
+            .find(|p| p.name.eq_ignore_ascii_case(&n) || format!("GPIO{}", p.gpio) == n)
     }
     pub fn analog_pins(&self) -> Vec<&HostPin> {
         self.pins.iter().filter(|p| p.adc.is_some()).collect()
@@ -125,13 +140,44 @@ impl HostBoardSpec {
 }
 
 fn hp(gpio: u8, name: &str, functions: &[&'static str]) -> HostPin {
-    HostPin { gpio, name: name.into(), adc: None, input_only: false, touch: None, dac: None, pwm: true, functions: functions.to_vec() }
+    HostPin {
+        gpio,
+        name: name.into(),
+        adc: None,
+        input_only: false,
+        touch: None,
+        dac: None,
+        pwm: true,
+        functions: functions.to_vec(),
+    }
 }
 
 fn esp32() -> HostBoardSpec {
     let adc1 = [(36, 0), (39, 3), (32, 4), (33, 5), (34, 6), (35, 7)];
-    let adc2 = [(4, 0), (0, 1), (2, 2), (15, 3), (13, 4), (12, 5), (14, 6), (27, 7), (25, 8), (26, 9)];
-    let touch = [(4, 0), (0, 1), (2, 2), (15, 3), (13, 4), (12, 5), (14, 6), (27, 7), (33, 8), (32, 9)];
+    let adc2 = [
+        (4, 0),
+        (0, 1),
+        (2, 2),
+        (15, 3),
+        (13, 4),
+        (12, 5),
+        (14, 6),
+        (27, 7),
+        (25, 8),
+        (26, 9),
+    ];
+    let touch = [
+        (4, 0),
+        (0, 1),
+        (2, 2),
+        (15, 3),
+        (13, 4),
+        (12, 5),
+        (14, 6),
+        (27, 7),
+        (33, 8),
+        (32, 9),
+    ];
     let mut pins = vec![
         hp(36, "VP", &[]),
         hp(39, "VN", &[]),
@@ -160,7 +206,11 @@ fn esp32() -> HostBoardSpec {
         hp(15, "D15", &["strap"]),
     ];
     for p in &mut pins {
-        p.adc = adc1.iter().find(|a| a.0 == p.gpio).map(|a| (1, a.1)).or_else(|| adc2.iter().find(|a| a.0 == p.gpio).map(|a| (2, a.1)));
+        p.adc = adc1
+            .iter()
+            .find(|a| a.0 == p.gpio)
+            .map(|a| (1, a.1))
+            .or_else(|| adc2.iter().find(|a| a.0 == p.gpio).map(|a| (2, a.1)));
         p.touch = touch.iter().find(|t| t.0 == p.gpio).map(|t| t.1);
         p.dac = match p.gpio {
             25 => Some(1),
@@ -198,8 +248,20 @@ fn esp32() -> HostBoardSpec {
         ble: true,
         pins,
         headers: vec![
-            Header { name: "J2", labels: vec!["EN", "VP", "VN", "D34", "D35", "D32", "D33", "D25", "D26", "D27", "D14", "D12", "D13", "GND", "VIN"] },
-            Header { name: "J3", labels: vec!["D23", "D22", "TX0", "RX0", "D21", "D19", "D18", "D5", "TX2", "RX2", "D4", "D2", "D15", "GND", "3V3"] },
+            Header {
+                name: "J2",
+                labels: vec![
+                    "EN", "VP", "VN", "D34", "D35", "D32", "D33", "D25", "D26", "D27", "D14",
+                    "D12", "D13", "GND", "VIN",
+                ],
+            },
+            Header {
+                name: "J3",
+                labels: vec![
+                    "D23", "D22", "TX0", "RX0", "D21", "D19", "D18", "D5", "TX2", "RX2", "D4",
+                    "D2", "D15", "GND", "3V3",
+                ],
+            },
         ],
     }
 }
@@ -222,7 +284,18 @@ fn pico() -> HostBoardSpec {
             p.functions.push(f);
         }
     };
-    for (g, f) in [(0, "TX0"), (1, "RX0"), (4, "SDA"), (5, "SCL"), (16, "MISO"), (17, "SS"), (18, "SCK"), (19, "MOSI"), (8, "TX1"), (9, "RX1")] {
+    for (g, f) in [
+        (0, "TX0"),
+        (1, "RX0"),
+        (4, "SDA"),
+        (5, "SCL"),
+        (16, "MISO"),
+        (17, "SS"),
+        (18, "SCK"),
+        (19, "MOSI"),
+        (8, "TX1"),
+        (9, "RX1"),
+    ] {
         set(g, f);
     }
     HostBoardSpec {
@@ -254,13 +327,16 @@ fn pico() -> HostBoardSpec {
             Header {
                 name: "left",
                 labels: vec![
-                    "GP0", "GP1", "GND", "GP2", "GP3", "GP4", "GP5", "GND", "GP6", "GP7", "GP8", "GP9", "GND", "GP10", "GP11", "GP12", "GP13", "GND", "GP14", "GP15",
+                    "GP0", "GP1", "GND", "GP2", "GP3", "GP4", "GP5", "GND", "GP6", "GP7", "GP8",
+                    "GP9", "GND", "GP10", "GP11", "GP12", "GP13", "GND", "GP14", "GP15",
                 ],
             },
             Header {
                 name: "right",
                 labels: vec![
-                    "VBUS", "VSYS", "GND", "3V3_EN", "3V3", "ADC_VREF", "GP28", "AGND", "GP27", "GP26", "RUN", "GP22", "GND", "GP21", "GP20", "GP19", "GP18", "GND", "GP17", "GP16",
+                    "VBUS", "VSYS", "GND", "3V3_EN", "3V3", "ADC_VREF", "GP28", "AGND", "GP27",
+                    "GP26", "RUN", "GP22", "GND", "GP21", "GP20", "GP19", "GP18", "GND", "GP17",
+                    "GP16",
                 ],
             },
         ],

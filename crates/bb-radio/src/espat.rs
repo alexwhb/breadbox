@@ -36,7 +36,12 @@ pub struct EspFlash {
 
 impl Default for EspFlash {
     fn default() -> Self {
-        EspFlash { uart: UartConfig::new(115_200), cwmode: 1, saved_ap: None, autoconn: true }
+        EspFlash {
+            uart: UartConfig::new(115_200),
+            cwmode: 1,
+            saved_ap: None,
+            autoconn: true,
+        }
     }
 }
 
@@ -52,7 +57,11 @@ pub struct EspAtConfig {
 
 impl Default for EspAtConfig {
     fn default() -> Self {
-        EspAtConfig { flash: EspFlash::default(), boot_time_ms: 360, cmd_latency_us: 1_200 }
+        EspAtConfig {
+            flash: EspFlash::default(),
+            boot_time_ms: 360,
+            cmd_latency_us: 1_200,
+        }
     }
 }
 
@@ -84,16 +93,40 @@ struct Link {
 
 #[derive(Debug, Clone, PartialEq)]
 enum Busy {
-    Join { ssid: String },
-    Start { link: usize, kind: LinkKind, port: u16, local_port: u16, host: String, query: Option<u32>, sock: Option<SockId> },
+    Join {
+        ssid: String,
+    },
+    Start {
+        link: usize,
+        kind: LinkKind,
+        port: u16,
+        local_port: u16,
+        host: String,
+        query: Option<u32>,
+        sock: Option<SockId>,
+    },
     /// `>` prompt shown, collecting `len` bytes.
-    SendData { link: usize, len: usize, buf: Vec<u8> },
+    SendData {
+        link: usize,
+        len: usize,
+        buf: Vec<u8>,
+    },
     /// Data handed to TCP, `SEND OK` pending.
-    SendWait { link: usize },
-    Ping { host: String, query: Option<u32>, ping: Option<u32> },
-    Domain { query: u32 },
+    SendWait {
+        link: usize,
+    },
+    Ping {
+        host: String,
+        query: Option<u32>,
+        ping: Option<u32>,
+    },
+    Domain {
+        query: u32,
+    },
     Scan,
-    MqttConn { query: Option<u32> },
+    MqttConn {
+        query: Option<u32>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -216,8 +249,16 @@ impl EspAt {
             ready: self.ready,
             baud: self.uart.baud,
             echo: self.echo,
-            links: self.links.iter().flatten().filter(|l| net.tcp_state(l.sock) != TcpState::Closed || l.kind == LinkKind::Udp).count(),
-            mqtt_connected: self.mqtt.as_ref().is_some_and(|m| m.client.state() == ClientState::Connected),
+            links: self
+                .links
+                .iter()
+                .flatten()
+                .filter(|l| net.tcp_state(l.sock) != TcpState::Closed || l.kind == LinkKind::Udp)
+                .count(),
+            mqtt_connected: self
+                .mqtt
+                .as_ref()
+                .is_some_and(|m| m.client.state() == ClientState::Connected),
             sntp_synced: self.sntp.base.is_some(),
         }
     }
@@ -272,9 +313,13 @@ impl EspAt {
         // ROM log at 74880 baud, then the SDK switches to the AT UART speed.
         self.enc.set_config(UartConfig::new(74_880));
         let start = now + SimTime::from_us(800);
-        self.out.extend(self.enc.push_bytes(BOOT_ROM_LOG.as_bytes(), start));
+        self.out
+            .extend(self.enc.push_bytes(BOOT_ROM_LOG.as_bytes(), start));
         self.enc.set_config(self.uart);
-        self.timers.push((now + SimTime::from_ms(self.config.boot_time_ms), Timer::Ready));
+        self.timers.push((
+            now + SimTime::from_ms(self.config.boot_time_ms),
+            Timer::Ready,
+        ));
     }
 
     fn drop_all(&mut self, net: &mut Network, now: SimTime) {
@@ -344,7 +389,11 @@ impl EspAt {
                 return;
             }
             if self.is_busy() {
-                let msg: &[u8] = if matches!(self.busy, Some(Busy::SendWait { .. })) { b"busy s...\r\n" } else { b"busy p...\r\n" };
+                let msg: &[u8] = if matches!(self.busy, Some(Busy::SendWait { .. })) {
+                    b"busy s...\r\n"
+                } else {
+                    b"busy p...\r\n"
+                };
                 self.reply(now, msg);
                 return;
             }
@@ -363,7 +412,13 @@ impl EspAt {
     /// Handles due timers and network events. Call at every network step / wake time.
     pub fn poll(&mut self, net: &mut Network, now: SimTime) {
         loop {
-            let due = self.timers.iter().enumerate().filter(|(_, t)| t.0 <= now).min_by_key(|(_, t)| t.0).map(|(i, _)| i);
+            let due = self
+                .timers
+                .iter()
+                .enumerate()
+                .filter(|(_, t)| t.0 <= now)
+                .min_by_key(|(_, t)| t.0)
+                .map(|(i, _)| i);
             let Some(i) = due else { break };
             let (at, t) = self.timers.remove(i);
             let _ = at;
@@ -399,7 +454,14 @@ impl EspAt {
                     let mut text = String::new();
                     for ap in net.scan(self.station) {
                         let ecn = if ap.secure { 3 } else { 0 };
-                        text.push_str(&format!("+CWLAP:({},\"{}\",{},\"{}\",{},-1,-1)\r\n", ecn, ap.ssid, ap.rssi, crate::wire::mac_string(ap.bssid), ap.channel));
+                        text.push_str(&format!(
+                            "+CWLAP:({},\"{}\",{},\"{}\",{},-1,-1)\r\n",
+                            ecn,
+                            ap.ssid,
+                            ap.rssi,
+                            crate::wire::mac_string(ap.bssid),
+                            ap.channel
+                        ));
                     }
                     text.push_str("\r\nOK\r\n");
                     self.emit_at(now + EVT, text.as_bytes());
@@ -856,9 +918,13 @@ impl EspAt {
         self.sntp = Sntp::default();
         self.mqtt = None;
         self.enc.set_config(UartConfig::new(74_880));
-        self.out.extend(self.enc.push_bytes(BOOT_ROM_LOG.as_bytes(), at));
+        self.out
+            .extend(self.enc.push_bytes(BOOT_ROM_LOG.as_bytes(), at));
         self.enc.set_config(self.uart);
-        self.timer(at + SimTime::from_ms(self.config.boot_time_ms), Timer::Ready);
+        self.timer(
+            at + SimTime::from_ms(self.config.boot_time_ms),
+            Timer::Ready,
+        );
         self.ready = false;
     }
 
@@ -871,13 +937,21 @@ impl EspAt {
     }
 
     fn link_prefix(&self, i: usize) -> String {
-        if self.mux { format!("{i},") } else { String::new() }
+        if self.mux {
+            format!("{i},")
+        } else {
+            String::new()
+        }
     }
 
     fn cipstart(&mut self, net: &mut Network, cmd: &AtCommand, now: SimTime) {
         let a = cmd.args();
         let off = if self.mux { 1 } else { 0 };
-        let link = if self.mux { cmd.arg_int(0).unwrap_or(-1) } else { 0 };
+        let link = if self.mux {
+            cmd.arg_int(0).unwrap_or(-1)
+        } else {
+            0
+        };
         if !(0..5).contains(&link) || a.len() < 3 + off {
             return self.reply(now, b"\r\nERROR\r\n");
         }
@@ -892,28 +966,52 @@ impl EspAt {
         };
         let host = cmd.arg_str(off + 1).unwrap_or("").to_string();
         let port = cmd.arg_int(off + 2).unwrap_or(0) as u16;
-        let local_port = if kind == LinkKind::Udp { cmd.arg_int(off + 3).unwrap_or(0) as u16 } else { 0 };
+        let local_port = if kind == LinkKind::Udp {
+            cmd.arg_int(off + 3).unwrap_or(0) as u16
+        } else {
+            0
+        };
         if net.ip_of(self.station).is_none() {
             return self.reply(now, b"no ip\r\n\r\nERROR\r\n");
         }
         match net.dns_resolve(self.station, &host, now) {
-            Ok(q) => self.busy = Some(Busy::Start { link, kind, port, local_port, host, query: Some(q), sock: None }),
+            Ok(q) => {
+                self.busy = Some(Busy::Start {
+                    link,
+                    kind,
+                    port,
+                    local_port,
+                    host,
+                    query: Some(q),
+                    sock: None,
+                })
+            }
             Err(_) => self.reply(now, b"DNS Fail\r\n\r\nERROR\r\n"),
         }
     }
 
     fn cipsend(&mut self, net: &mut Network, cmd: &AtCommand, now: SimTime) {
-        let (link, len) = if self.mux { (cmd.arg_int(0).unwrap_or(-1), cmd.arg_int(1).unwrap_or(0)) } else { (0, cmd.arg_int(0).unwrap_or(0)) };
+        let (link, len) = if self.mux {
+            (cmd.arg_int(0).unwrap_or(-1), cmd.arg_int(1).unwrap_or(0))
+        } else {
+            (0, cmd.arg_int(0).unwrap_or(0))
+        };
         if !(0..5).contains(&link) || !(1..=2048).contains(&len) {
             return self.reply(now, b"\r\nERROR\r\n");
         }
         let link = link as usize;
-        let valid = self.links[link].as_ref().is_some_and(|l| l.kind == LinkKind::Udp || net.tcp_state(l.sock) == TcpState::Established);
+        let valid = self.links[link].as_ref().is_some_and(|l| {
+            l.kind == LinkKind::Udp || net.tcp_state(l.sock) == TcpState::Established
+        });
         if !valid {
             return self.reply(now, b"link is not valid\r\n\r\nERROR\r\n");
         }
         self.reply(now, b"\r\nOK\r\n> ");
-        self.busy = Some(Busy::SendData { link, len: len as usize, buf: Vec::with_capacity(len as usize) });
+        self.busy = Some(Busy::SendData {
+            link,
+            len: len as usize,
+            buf: Vec::with_capacity(len as usize),
+        });
     }
 
     fn finish_send(&mut self, net: &mut Network, link: usize, data: Vec<u8>, now: SimTime) {
@@ -944,15 +1042,30 @@ impl EspAt {
     }
 
     fn mqtt_conn(&mut self, net: &mut Network, cmd: &AtCommand, now: SimTime) {
-        let (Some(host), Some(port)) = (cmd.arg_str(1).map(|x| x.to_string()), cmd.arg_int(2)) else {
+        let (Some(host), Some(port)) = (cmd.arg_str(1).map(|x| x.to_string()), cmd.arg_int(2))
+        else {
             return self.reply(now, b"\r\nERROR\r\n");
         };
-        let Some(client) = self.mqtt_cfg.clone() else { return self.reply(now, b"\r\nERROR\r\n") };
-        if self.mqtt.as_ref().is_some_and(|m| m.client.state() == ClientState::Connected) {
+        let Some(client) = self.mqtt_cfg.clone() else {
+            return self.reply(now, b"\r\nERROR\r\n");
+        };
+        if self
+            .mqtt
+            .as_ref()
+            .is_some_and(|m| m.client.state() == ClientState::Connected)
+        {
             return self.reply(now, b"\r\nERROR\r\n");
         }
         let reconnect = cmd.arg_int(3).unwrap_or(0) == 1;
-        self.mqtt = Some(MqttLink { client, scheme: 1, host: host.clone(), port: port as u16, reconnect, sock: None, subs: vec![] });
+        self.mqtt = Some(MqttLink {
+            client,
+            scheme: 1,
+            host: host.clone(),
+            port: port as u16,
+            reconnect,
+            sock: None,
+            subs: vec![],
+        });
         match net.dns_resolve(self.station, &host, now) {
             Ok(q) => self.busy = Some(Busy::MqttConn { query: Some(q) }),
             Err(_) => self.reply(now, b"\r\nERROR\r\n"),
@@ -979,7 +1092,9 @@ impl EspAt {
     // ================================================================ network events
 
     fn link_of(&self, sock: SockId) -> Option<usize> {
-        self.links.iter().position(|l| l.as_ref().is_some_and(|l| l.sock == sock))
+        self.links
+            .iter()
+            .position(|l| l.as_ref().is_some_and(|l| l.sock == sock))
     }
 
     fn on_net(&mut self, net: &mut Network, e: NetEvent, now: SimTime) {
@@ -991,8 +1106,16 @@ impl EspAt {
                 if let Some(Busy::Join { ssid }) = self.busy.clone() {
                     self.busy = None;
                     self.emit_at(now + EVT, b"\r\nOK\r\n");
-                    let rssi = net.station_info(st).and_then(|i| i.link).map(|l| l.rssi_dbm.round() as i32).unwrap_or(0);
-                    self.note(now, AnnotationKind::Wifi, format!("AT+CWJAP=\"{ssid}\" → OK rssi={rssi} dBm ip={ip}"));
+                    let rssi = net
+                        .station_info(st)
+                        .and_then(|i| i.link)
+                        .map(|l| l.rssi_dbm.round() as i32)
+                        .unwrap_or(0);
+                    self.note(
+                        now,
+                        AnnotationKind::Wifi,
+                        format!("AT+CWJAP=\"{ssid}\" → OK rssi={rssi} dBm ip={ip}"),
+                    );
                 }
                 if self.sntp.enabled {
                     self.timer(now + SimTime::from_ms(20), Timer::SntpPoll);
@@ -1003,7 +1126,11 @@ impl EspAt {
                     self.busy = None;
                     let t = format!("+CWJAP:{}\r\n\r\nFAIL\r\n", reason.esp_code());
                     self.emit_at(now + EVT, t.as_bytes());
-                    self.note(now, AnnotationKind::Wifi, format!("AT+CWJAP=\"{ssid}\" → FAIL ({})", reason.text()));
+                    self.note(
+                        now,
+                        AnnotationKind::Wifi,
+                        format!("AT+CWJAP=\"{ssid}\" → FAIL ({})", reason.text()),
+                    );
                 }
             }
             NetEvent::WifiDisconnected { .. } => {
@@ -1012,16 +1139,36 @@ impl EspAt {
             }
             NetEvent::DnsResolved { query, name, ip } => self.on_dns(net, query, &name, ip, now),
             NetEvent::TcpConnected { sock } => {
-                if let Some(Busy::Start { link, sock: Some(s), port, host, .. }) = self.busy.clone()
+                if let Some(Busy::Start {
+                    link,
+                    sock: Some(s),
+                    port,
+                    host,
+                    ..
+                }) = self.busy.clone()
                     && s == sock
                 {
                     self.busy = None;
-                    let remote = net.tcp_addrs(sock).map(|a| a.1).unwrap_or(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port));
+                    let remote = net
+                        .tcp_addrs(sock)
+                        .map(|a| a.1)
+                        .unwrap_or(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port));
                     let local_port = net.tcp_addrs(sock).map(|a| a.0.port()).unwrap_or(0);
-                    self.links[link] = Some(Link { kind: LinkKind::Tcp, sock, remote, local_port, server: false, awaiting_ack: 0 });
+                    self.links[link] = Some(Link {
+                        kind: LinkKind::Tcp,
+                        sock,
+                        remote,
+                        local_port,
+                        server: false,
+                        awaiting_ack: 0,
+                    });
                     let t = format!("{}CONNECT\r\n\r\nOK\r\n", self.link_prefix(link));
                     self.emit_at(now + EVT, t.as_bytes());
-                    self.note(now, AnnotationKind::Net, format!("AT+CIPSTART TCP {host}:{port} → CONNECT"));
+                    self.note(
+                        now,
+                        AnnotationKind::Net,
+                        format!("AT+CIPSTART TCP {host}:{port} → CONNECT"),
+                    );
                     return;
                 }
                 if let Some(m) = self.mqtt.as_mut()
@@ -1046,7 +1193,8 @@ impl EspAt {
             }
             NetEvent::TcpData { sock, data } => {
                 if let Some(i) = self.link_of(sock) {
-                    let mut t = format!("\r\n+IPD,{}{}:", self.link_prefix(i), data.len()).into_bytes();
+                    let mut t =
+                        format!("\r\n+IPD,{}{}:", self.link_prefix(i), data.len()).into_bytes();
                     t.extend_from_slice(&data);
                     self.emit_at(now + EVT, &t);
                     return;
@@ -1106,7 +1254,14 @@ impl EspAt {
                 match self.links.iter().position(|l| l.is_none()) {
                     Some(i) => {
                         let local_port = net.tcp_addrs(sock).map(|a| a.0.port()).unwrap_or(0);
-                        self.links[i] = Some(Link { kind: LinkKind::Tcp, sock, remote, local_port, server: true, awaiting_ack: 0 });
+                        self.links[i] = Some(Link {
+                            kind: LinkKind::Tcp,
+                            sock,
+                            remote,
+                            local_port,
+                            server: true,
+                            awaiting_ack: 0,
+                        });
                         let t = format!("{i},CONNECT\r\n");
                         self.emit_at(now + EVT, t.as_bytes());
                     }
@@ -1124,7 +1279,8 @@ impl EspAt {
                     if let Some(l) = self.links[i].as_mut() {
                         l.remote = from;
                     }
-                    let mut t = format!("\r\n+IPD,{}{}:", self.link_prefix(i), data.len()).into_bytes();
+                    let mut t =
+                        format!("\r\n+IPD,{}{}:", self.link_prefix(i), data.len()).into_bytes();
                     t.extend_from_slice(&data);
                     self.emit_at(now + EVT, &t);
                 }
@@ -1149,7 +1305,14 @@ impl EspAt {
         }
     }
 
-    fn on_dns(&mut self, net: &mut Network, query: u32, name: &str, ip: Option<Ipv4Addr>, now: SimTime) {
+    fn on_dns(
+        &mut self,
+        net: &mut Network,
+        query: u32,
+        name: &str,
+        ip: Option<Ipv4Addr>,
+        now: SimTime,
+    ) {
         let st = self.station;
         if self.sntp.query == Some(query) {
             self.sntp.query = None;
@@ -1158,13 +1321,26 @@ impl EspAt {
                     self.sntp.sock = net.udp_bind(st, 0).ok();
                 }
                 if let Some(s) = self.sntp.sock {
-                    let _ = net.udp_send(s, SocketAddrV4::new(ip, 123), &crate::wire::ntp_request(0.0), now);
+                    let _ = net.udp_send(
+                        s,
+                        SocketAddrV4::new(ip, 123),
+                        &crate::wire::ntp_request(0.0),
+                        now,
+                    );
                 }
             }
             return;
         }
         match self.busy.clone() {
-            Some(Busy::Start { link, kind, port, local_port, host, query: Some(q), .. }) if q == query => {
+            Some(Busy::Start {
+                link,
+                kind,
+                port,
+                local_port,
+                host,
+                query: Some(q),
+                ..
+            }) if q == query => {
                 let Some(ip) = ip else {
                     self.busy = None;
                     return self.emit_at(now + EVT, b"DNS Fail\r\n\r\nERROR\r\n");
@@ -1172,7 +1348,17 @@ impl EspAt {
                 let dst = SocketAddrV4::new(ip, port);
                 match kind {
                     LinkKind::Tcp => match net.tcp_connect(st, dst, now) {
-                        Ok(sock) => self.busy = Some(Busy::Start { link, kind, port, local_port, host, query: None, sock: Some(sock) }),
+                        Ok(sock) => {
+                            self.busy = Some(Busy::Start {
+                                link,
+                                kind,
+                                port,
+                                local_port,
+                                host,
+                                query: None,
+                                sock: Some(sock),
+                            })
+                        }
                         Err(_) => {
                             self.busy = None;
                             self.emit_at(now + EVT, b"ERROR\r\nCLOSED\r\n");
@@ -1182,7 +1368,14 @@ impl EspAt {
                         Ok(sock) => {
                             self.busy = None;
                             let lp = net.udp_local_port(sock).unwrap_or(local_port);
-                            self.links[link] = Some(Link { kind, sock, remote: dst, local_port: lp, server: false, awaiting_ack: 0 });
+                            self.links[link] = Some(Link {
+                                kind,
+                                sock,
+                                remote: dst,
+                                local_port: lp,
+                                server: false,
+                                awaiting_ack: 0,
+                            });
                             let t = format!("{}CONNECT\r\n\r\nOK\r\n", self.link_prefix(link));
                             self.emit_at(now + EVT, t.as_bytes());
                         }
@@ -1193,9 +1386,19 @@ impl EspAt {
                     },
                 }
             }
-            Some(Busy::Ping { host, query: Some(q), .. }) if q == query => match ip {
+            Some(Busy::Ping {
+                host,
+                query: Some(q),
+                ..
+            }) if q == query => match ip {
                 Some(ip) => match net.ping(st, ip, 32, SimTime::from_secs(2), now) {
-                    Ok(p) => self.busy = Some(Busy::Ping { host, query: None, ping: Some(p) }),
+                    Ok(p) => {
+                        self.busy = Some(Busy::Ping {
+                            host,
+                            query: None,
+                            ping: Some(p),
+                        })
+                    }
                     Err(_) => {
                         self.busy = None;
                         self.emit_at(now + EVT, b"+PING:TIMEOUT\r\n\r\nERROR\r\n");
@@ -1245,7 +1448,11 @@ impl EspAt {
     fn on_mqtt(&mut self, ev: ClientEvent, now: SimTime) {
         match ev {
             ClientEvent::Connected { .. } => {
-                let (host, port, rc) = self.mqtt.as_ref().map(|m| (m.host.clone(), m.port, m.reconnect as u8)).unwrap_or_default();
+                let (host, port, rc) = self
+                    .mqtt
+                    .as_ref()
+                    .map(|m| (m.host.clone(), m.port, m.reconnect as u8))
+                    .unwrap_or_default();
                 let t = format!("+MQTTCONNECTED:0,1,\"{host}\",\"{port}\",\"\",{rc}\r\n");
                 self.emit_at(now + EVT, t.as_bytes());
                 if self.busy == Some(Busy::MqttConn { query: None }) {
@@ -1270,7 +1477,10 @@ impl EspAt {
     }
 
     fn mqtt_failed(&mut self, net: &mut Network, now: SimTime) {
-        let was_connected = self.mqtt.as_ref().is_some_and(|m| m.client.state() == ClientState::Connected);
+        let was_connected = self
+            .mqtt
+            .as_ref()
+            .is_some_and(|m| m.client.state() == ClientState::Connected);
         if self.busy == Some(Busy::MqttConn { query: None }) {
             self.busy = None;
             self.emit_at(now + EVT, b"\r\nERROR\r\n");
@@ -1289,7 +1499,18 @@ impl EspAt {
 /// `Thu Aug 04 14:48:05 2016` (ESP-AT's zero-padded asctime).
 fn esp_time(unix: i64) -> String {
     const WD: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const MO: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const MO: [&str; 12] = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ];
     let (y, m, d, h, mi, s, wd) = crate::wire::civil_from_unix(unix);
-    format!("{} {} {:02} {:02}:{:02}:{:02} {}", WD[wd as usize], MO[m as usize - 1], d, h, mi, s, y)
+    format!(
+        "{} {} {:02} {:02}:{:02}:{:02} {}",
+        WD[wd as usize],
+        MO[m as usize - 1],
+        d,
+        h,
+        mi,
+        s,
+        y
+    )
 }

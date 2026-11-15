@@ -119,7 +119,12 @@ impl Network {
 
     /// Opens a TCP connection from the station to `dst`. Outcome: `TcpConnected` or
     /// `TcpConnectFailed` (refused by RST, or SYN retries exhausted after ~31 s).
-    pub fn tcp_connect(&mut self, id: StationId, dst: SocketAddrV4, now: SimTime) -> Result<SockId, NetError> {
+    pub fn tcp_connect(
+        &mut self,
+        id: StationId,
+        dst: SocketAddrV4,
+        now: SimTime,
+    ) -> Result<SockId, NetError> {
         self.sync(now);
         let ip = self.ip_of(id).ok_or(NetError::NoIp)?;
         let port = self.ephemeral_port(id);
@@ -127,13 +132,26 @@ impl Network {
         self.next_conn += 1;
         let iss = self.rng.next_u32();
         let mut a = TcpEnd::new(Host::Station(id), SocketAddrV4::new(ip, port), iss);
-        let sock = self.new_sock(id, SockKind::Tcp { conn: Some(c), end: 0 });
+        let sock = self.new_sock(
+            id,
+            SockKind::Tcp {
+                conn: Some(c),
+                end: 0,
+            },
+        );
         a.sock = Some(sock);
         // Placeholder for the passive side until the SYN arrives.
         let mut b = TcpEnd::new(Host::Gateway, dst, 0);
         b.alive = false;
         b.notified = true;
-        self.conns.insert(c, TcpConn { ends: [a, b], service: None, listener: None });
+        self.conns.insert(
+            c,
+            TcpConn {
+                ends: [a, b],
+                service: None,
+                listener: None,
+            },
+        );
         self.queue_seg(c, 0, Vec::new(), true, false);
         Ok(sock)
     }
@@ -141,7 +159,11 @@ impl Network {
     /// Listens on a TCP port; connections arrive as `TcpAccepted`.
     pub fn tcp_listen(&mut self, id: StationId, port: u16) -> Result<SockId, NetError> {
         self.sta(id)?;
-        if self.sockets.values().any(|s| s.owner == id && s.kind == SockKind::Listener { port }) {
+        if self
+            .sockets
+            .values()
+            .any(|s| s.owner == id && s.kind == SockKind::Listener { port })
+        {
             return Err(NetError::PortInUse(port));
         }
         Ok(self.new_sock(id, SockKind::Listener { port }))
@@ -151,8 +173,13 @@ impl Network {
     pub fn tcp_send(&mut self, sock: SockId, data: &[u8], now: SimTime) -> Result<usize, NetError> {
         self.sync(now);
         let s = self.sockets.get(&sock).ok_or(NetError::NoSocket)?;
-        let SockKind::Tcp { conn: Some(c), end } = s.kind else { return Err(NetError::NotConnected) };
-        let ok = self.conns.get(&c).is_some_and(|k| k.ends[end].est && !k.ends[end].fin_sent && k.ends[end].alive);
+        let SockKind::Tcp { conn: Some(c), end } = s.kind else {
+            return Err(NetError::NotConnected);
+        };
+        let ok = self
+            .conns
+            .get(&c)
+            .is_some_and(|k| k.ends[end].est && !k.ends[end].fin_sent && k.ends[end].alive);
         if !ok {
             return Err(NetError::NotConnected);
         }
@@ -163,7 +190,9 @@ impl Network {
     /// Aborts a connection with RST.
     pub fn tcp_abort(&mut self, sock: SockId, now: SimTime) {
         self.sync(now);
-        let Some(s) = self.sockets.remove(&sock) else { return };
+        let Some(s) = self.sockets.remove(&sock) else {
+            return;
+        };
         if let SockKind::Tcp { conn: Some(c), end } = s.kind {
             self.abort_end(c, end);
         }
@@ -183,15 +212,24 @@ impl Network {
 
     /// (local, remote) addresses of a TCP socket.
     pub fn tcp_addrs(&self, sock: SockId) -> Option<(SocketAddrV4, SocketAddrV4)> {
-        let SockKind::Tcp { conn: Some(c), end } = self.sockets.get(&sock)?.kind else { return None };
+        let SockKind::Tcp { conn: Some(c), end } = self.sockets.get(&sock)?.kind else {
+            return None;
+        };
         let k = self.conns.get(&c)?;
         Some((k.ends[end].addr, k.ends[1 - end].addr))
     }
 
     /// Bytes sent but not yet acknowledged.
     pub fn tcp_unacked(&self, sock: SockId) -> usize {
-        let Some(SockKind::Tcp { conn: Some(c), end }) = self.sockets.get(&sock).map(|s| s.kind.clone()) else { return 0 };
-        self.conns.get(&c).map(|k| k.ends[end].unacked.iter().map(|s| s.data.len()).sum()).unwrap_or(0)
+        let Some(SockKind::Tcp { conn: Some(c), end }) =
+            self.sockets.get(&sock).map(|s| s.kind.clone())
+        else {
+            return 0;
+        };
+        self.conns
+            .get(&c)
+            .map(|k| k.ends[end].unacked.iter().map(|s| s.data.len()).sum())
+            .unwrap_or(0)
     }
 
     /// Number of live connection records (tests / diagnostics).
@@ -203,9 +241,18 @@ impl Network {
 
     fn queue_seg(&mut self, c: ConnId, end: usize, data: Vec<u8>, syn: bool, fin: bool) {
         let now = self.now;
-        let Some(k) = self.conns.get_mut(&c) else { return };
+        let Some(k) = self.conns.get_mut(&c) else {
+            return;
+        };
         let e = &mut k.ends[end];
-        let seg = Seg { seq: e.snd_nxt, data, syn, fin, sent_at: now, retx: false };
+        let seg = Seg {
+            seq: e.snd_nxt,
+            data,
+            syn,
+            fin,
+            sent_at: now,
+            retx: false,
+        };
         e.snd_nxt = e.snd_nxt.wrapping_add(seg.len());
         let arm = e.unacked.is_empty();
         e.unacked.push_back(seg.clone());
@@ -235,7 +282,14 @@ impl Network {
         let p = Packet {
             src: e.addr,
             dst: k.ends[1 - end].addr,
-            body: Body::Tcp { conn: c, from_end: end, flags, seq: seg.seq, ack, data: seg.data.clone() },
+            body: Body::Tcp {
+                conn: c,
+                from_end: end,
+                flags,
+                seq: seg.seq,
+                ack,
+                data: seg.data.clone(),
+            },
             from: e.host,
             to: None,
         };
@@ -248,7 +302,14 @@ impl Network {
         let p = Packet {
             src: e.addr,
             dst: k.ends[1 - end].addr,
-            body: Body::Tcp { conn: c, from_end: end, flags: ACK, seq: e.snd_nxt, ack: e.rcv_nxt, data: vec![] },
+            body: Body::Tcp {
+                conn: c,
+                from_end: end,
+                flags: ACK,
+                seq: e.snd_nxt,
+                ack: e.rcv_nxt,
+                data: vec![],
+            },
             from: e.host,
             to: None,
         };
@@ -257,24 +318,39 @@ impl Network {
 
     fn arm_rto(&mut self, c: ConnId, end: usize) {
         let now = self.now;
-        let Some(k) = self.conns.get_mut(&c) else { return };
+        let Some(k) = self.conns.get_mut(&c) else {
+            return;
+        };
         let e = &mut k.ends[end];
         e.rto_gen += 1;
         let at = now + SimTime::from_secs_f64(e.rto);
         let epoch = e.rto_gen;
-        self.schedule(at, Ev::TcpRto { conn: c, end, epoch });
+        self.schedule(
+            at,
+            Ev::TcpRto {
+                conn: c,
+                end,
+                epoch,
+            },
+        );
     }
 
     pub(super) fn tcp_rto(&mut self, c: ConnId, end: usize, epoch: u64) {
         let now = self.now;
-        let Some(k) = self.conns.get_mut(&c) else { return };
+        let Some(k) = self.conns.get_mut(&c) else {
+            return;
+        };
         let e = &mut k.ends[end];
         if e.rto_gen != epoch || e.unacked.is_empty() || !e.alive {
             return;
         }
         e.retries += 1;
         let syn = e.unacked.front().is_some_and(|s| s.syn);
-        let limit = if syn { MAX_SYN_RETRIES } else { MAX_DATA_RETRIES };
+        let limit = if syn {
+            MAX_SYN_RETRIES
+        } else {
+            MAX_DATA_RETRIES
+        };
         if e.retries > limit {
             self.kill_end(c, end, CloseReason::Timeout);
             return;
@@ -292,7 +368,10 @@ impl Network {
 
     /// Writes application data from `end` (split into MSS-sized segments).
     pub(crate) fn tcp_write_end(&mut self, c: ConnId, end: usize, data: &[u8]) {
-        let ok = self.conns.get(&c).is_some_and(|k| k.ends[end].est && !k.ends[end].fin_sent && k.ends[end].alive);
+        let ok = self
+            .conns
+            .get(&c)
+            .is_some_and(|k| k.ends[end].est && !k.ends[end].fin_sent && k.ends[end].alive);
         if !ok {
             return;
         }
@@ -303,7 +382,9 @@ impl Network {
 
     /// Graceful close from `end` (FIN after queued data). The owner is not notified.
     pub(crate) fn tcp_close_end(&mut self, c: ConnId, end: usize) {
-        let Some(k) = self.conns.get_mut(&c) else { return };
+        let Some(k) = self.conns.get_mut(&c) else {
+            return;
+        };
         let established = k.ends[end].est;
         let e = &mut k.ends[end];
         e.notified = true;
@@ -330,7 +411,9 @@ impl Network {
 
     /// Kills `end` locally and tells the peer with an RST.
     fn abort_end(&mut self, c: ConnId, end: usize) {
-        let Some(k) = self.conns.get_mut(&c) else { return };
+        let Some(k) = self.conns.get_mut(&c) else {
+            return;
+        };
         let peer_live = k.ends[1 - end].alive;
         let peer_addr = k.ends[1 - end].addr;
         let e = &mut k.ends[end];
@@ -339,7 +422,14 @@ impl Network {
         let p = Packet {
             src: e.addr,
             dst: peer_addr,
-            body: Body::Tcp { conn: c, from_end: end, flags: RST | ACK, seq: e.snd_nxt, ack: e.rcv_nxt, data: vec![] },
+            body: Body::Tcp {
+                conn: c,
+                from_end: end,
+                flags: RST | ACK,
+                seq: e.snd_nxt,
+                ack: e.rcv_nxt,
+                data: vec![],
+            },
             from: e.host,
             to: None,
         };
@@ -373,21 +463,33 @@ impl Network {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn notify_closed(&mut self, c: ConnId, i: usize, host: Host, sock: Option<SockId>, est: bool, service: Option<u16>, reason: CloseReason, failed: bool) {
+    fn notify_closed(
+        &mut self,
+        c: ConnId,
+        i: usize,
+        host: Host,
+        sock: Option<SockId>,
+        est: bool,
+        service: Option<u16>,
+        reason: CloseReason,
+        failed: bool,
+    ) {
         match host {
             Host::Station(s) => {
                 if let Some(sock) = sock {
                     if let Some(so) = self.sockets.get_mut(&sock) {
                         so.kind = SockKind::Tcp { conn: None, end: i };
                     }
-                    let ev = if failed { NetEvent::TcpConnectFailed { sock, reason } } else { NetEvent::TcpClosed { sock, reason } };
+                    let ev = if failed {
+                        NetEvent::TcpConnectFailed { sock, reason }
+                    } else {
+                        NetEvent::TcpClosed { sock, reason }
+                    };
                     self.push_event(s, ev);
                 }
             }
             Host::Gateway => {
-                if est
-                    && let Some(port) = service
-                {
+                if est && let Some(port) = service {
                     self.service_closed(c, port);
                 }
             }
@@ -396,10 +498,11 @@ impl Network {
 
     /// Removes a connection that is fully closed in both directions.
     fn maybe_finish(&mut self, c: ConnId) {
-        let done = self
-            .conns
-            .get(&c)
-            .is_some_and(|k| k.ends.iter().all(|e| !e.alive || (e.fin_sent && e.unacked.is_empty() && e.fin_rcvd)));
+        let done = self.conns.get(&c).is_some_and(|k| {
+            k.ends
+                .iter()
+                .all(|e| !e.alive || (e.fin_sent && e.unacked.is_empty() && e.fin_rcvd))
+        });
         if done {
             self.conns.remove(&c);
         }
@@ -411,7 +514,10 @@ impl Network {
         let ids: Vec<ConnId> = self.conns.keys().copied().collect();
         for c in ids {
             for i in 0..2 {
-                let mine = self.conns.get(&c).is_some_and(|k| k.ends[i].host == Host::Station(id) && k.ends[i].alive);
+                let mine = self
+                    .conns
+                    .get(&c)
+                    .is_some_and(|k| k.ends[i].host == Host::Station(id) && k.ends[i].alive);
                 if mine {
                     self.kill_end(c, i, CloseReason::LinkLost);
                 }
@@ -423,7 +529,17 @@ impl Network {
 
     /// A TCP segment arrived at host `at`.
     pub(super) fn tcp_receive(&mut self, p: Packet, at: Host) {
-        let Body::Tcp { conn: c, from_end, flags, seq, ack, data } = p.body.clone() else { return };
+        let Body::Tcp {
+            conn: c,
+            from_end,
+            flags,
+            seq,
+            ack,
+            data,
+        } = p.body.clone()
+        else {
+            return;
+        };
         let r = 1 - from_end;
         if !self.conns.contains_key(&c) {
             if flags & RST == 0 {
@@ -463,14 +579,20 @@ impl Network {
             return;
         }
         if flags & RST != 0 {
-            let reason = if self.conns[&c].ends[r].est { CloseReason::Reset } else { CloseReason::Refused };
+            let reason = if self.conns[&c].ends[r].est {
+                CloseReason::Reset
+            } else {
+                CloseReason::Refused
+            };
             self.kill_end(c, r, reason);
             return;
         }
         if flags & ACK != 0 {
             self.process_ack(c, r, ack);
         }
-        let Some(k) = self.conns.get_mut(&c) else { return };
+        let Some(k) = self.conns.get_mut(&c) else {
+            return;
+        };
         // Active open completes on SYN-ACK.
         if flags & SYN != 0 {
             let e = &mut k.ends[r];
@@ -512,7 +634,9 @@ impl Network {
                 };
                 take(e, seq, &data, fin);
                 while !e.fin_rcvd {
-                    let Some((&s, _)) = e.ooo.iter().next() else { break };
+                    let Some((&s, _)) = e.ooo.iter().next() else {
+                        break;
+                    };
                     if seq_lt(e.rcv_nxt, s) {
                         break;
                     }
@@ -534,7 +658,9 @@ impl Network {
 
     fn process_ack(&mut self, c: ConnId, r: usize, ack: u32) {
         let now = self.now;
-        let Some(k) = self.conns.get_mut(&c) else { return };
+        let Some(k) = self.conns.get_mut(&c) else {
+            return;
+        };
         let e = &mut k.ends[r];
         if !(seq_lt(e.snd_una, ack) && seq_le(ack, e.snd_nxt)) {
             return;
@@ -566,7 +692,8 @@ impl Network {
                     e.srtt = Some(0.875 * srtt + 0.125 * m);
                 }
             }
-            e.rto = (e.srtt.unwrap_or(INIT_RTO) + (4.0 * e.rttvar).max(0.01)).clamp(MIN_RTO, MAX_RTO);
+            e.rto =
+                (e.srtt.unwrap_or(INIT_RTO) + (4.0 * e.rttvar).max(0.01)).clamp(MIN_RTO, MAX_RTO);
         }
         let has_more = !e.unacked.is_empty();
         let (host, sock) = (e.host, e.sock);
@@ -578,21 +705,43 @@ impl Network {
         if acked_bytes > 0
             && let (Host::Station(s), Some(sock)) = (host, sock)
         {
-            self.push_event(s, NetEvent::TcpAcked { sock, bytes: acked_bytes });
+            self.push_event(
+                s,
+                NetEvent::TcpAcked {
+                    sock,
+                    bytes: acked_bytes,
+                },
+            );
         }
         // Passive open completes when our SYN is acknowledged.
-        let Some(k) = self.conns.get_mut(&c) else { return };
+        let Some(k) = self.conns.get_mut(&c) else {
+            return;
+        };
         if syn_acked && !k.ends[r].est && r == 1 {
             k.ends[r].est = true;
-            let (service, listener, remote, host) = (k.service, k.listener, k.ends[0].addr, k.ends[1].host);
+            let (service, listener, remote, host) =
+                (k.service, k.listener, k.ends[0].addr, k.ends[1].host);
             if let Some(port) = service {
                 self.service_open(c, port);
             } else if let (Some(l), Host::Station(s)) = (listener, host) {
-                let sock = self.new_sock(s, SockKind::Tcp { conn: Some(c), end: 1 });
+                let sock = self.new_sock(
+                    s,
+                    SockKind::Tcp {
+                        conn: Some(c),
+                        end: 1,
+                    },
+                );
                 if let Some(k) = self.conns.get_mut(&c) {
                     k.ends[1].sock = Some(sock);
                 }
-                self.push_event(s, NetEvent::TcpAccepted { listener: l, sock, remote });
+                self.push_event(
+                    s,
+                    NetEvent::TcpAccepted {
+                        listener: l,
+                        sock,
+                        remote,
+                    },
+                );
             }
         }
     }
@@ -618,18 +767,44 @@ impl Network {
         let e = &k.ends[r];
         if !e.notified {
             let (host, sock, est, service) = (e.host, e.sock, e.est, k.service);
-            self.notify_closed(c, r, host, sock, est, service, CloseReason::PeerClosed, false);
+            self.notify_closed(
+                c,
+                r,
+                host,
+                sock,
+                est,
+                service,
+                CloseReason::PeerClosed,
+                false,
+            );
         }
         self.tcp_close_end(c, r);
     }
 
     fn rst_reply(&mut self, p: &Packet, at: Host) {
-        let Body::Tcp { conn, from_end, seq, data, flags, .. } = &p.body else { return };
+        let Body::Tcp {
+            conn,
+            from_end,
+            seq,
+            data,
+            flags,
+            ..
+        } = &p.body
+        else {
+            return;
+        };
         let ack = seq.wrapping_add(data.len() as u32 + (flags & (SYN | FIN) != 0) as u32);
         let r = Packet {
             src: p.dst,
             dst: p.src,
-            body: Body::Tcp { conn: *conn, from_end: 1 - from_end, flags: RST | ACK, seq: 0, ack, data: vec![] },
+            body: Body::Tcp {
+                conn: *conn,
+                from_end: 1 - from_end,
+                flags: RST | ACK,
+                seq: 0,
+                ack,
+                data: vec![],
+            },
             from: at,
             to: Some(p.from),
         };
@@ -638,7 +813,9 @@ impl Network {
 
     fn find_listener(&self, at: Host, port: u16) -> Option<Listener> {
         match at {
-            Host::Gateway => self.gateway_listening(port).then_some(Listener::Service(port)),
+            Host::Gateway => self
+                .gateway_listening(port)
+                .then_some(Listener::Service(port)),
             Host::Station(s) => self
                 .sockets
                 .iter()

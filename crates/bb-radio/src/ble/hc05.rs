@@ -78,7 +78,10 @@ impl Hc05 {
     }
 
     pub fn next_wake(&self) -> Option<SimTime> {
-        [self.ready_at, self.data_deadline].into_iter().flatten().min()
+        [self.ready_at, self.data_deadline]
+            .into_iter()
+            .flatten()
+            .min()
     }
 
     /// KEY/EN pin level (sampled at power-up).
@@ -95,7 +98,11 @@ impl Hc05 {
         ble.take_peripheral_events(self.device);
         if on {
             self.at_mode = self.key;
-            self.uart = if self.at_mode { UartConfig::new(38_400) } else { self.data_uart };
+            self.uart = if self.at_mode {
+                UartConfig::new(38_400)
+            } else {
+                self.data_uart
+            };
             self.enc.set_config(self.uart);
             self.ready_at = Some(now + SimTime::from_ms(500));
         } else {
@@ -105,7 +112,8 @@ impl Hc05 {
 
     fn send(&mut self, now: SimTime, text: &[u8]) {
         if self.powered {
-            self.out.extend(self.enc.push_bytes(text, now + SimTime::from_us(600)));
+            self.out
+                .extend(self.enc.push_bytes(text, now + SimTime::from_us(600)));
         }
     }
 
@@ -141,7 +149,16 @@ impl Hc05 {
         let d = std::mem::take(&mut self.data);
         if !d.is_empty() {
             ble.spp_send(self.device, &d, now);
-            self.notes.push((now, AnnotationKind::Ble, format!("{} → phone SPP \"{}\" ({} B)", self.label, printable(&d), d.len())));
+            self.notes.push((
+                now,
+                AnnotationKind::Ble,
+                format!(
+                    "{} → phone SPP \"{}\" ({} B)",
+                    self.label,
+                    printable(&d),
+                    d.len()
+                ),
+            ));
         }
     }
 
@@ -162,17 +179,21 @@ impl Hc05 {
             match e {
                 PeripheralEvent::Connected => {
                     self.connected = true;
-                    self.notes.push((now, AnnotationKind::Ble, format!("phone paired + connected to {} (HC-05 SPP)", self.label)));
+                    self.notes.push((
+                        now,
+                        AnnotationKind::Ble,
+                        format!("phone paired + connected to {} (HC-05 SPP)", self.label),
+                    ));
                 }
                 PeripheralEvent::Disconnected => {
                     self.connected = false;
-                    self.notes.push((now, AnnotationKind::Ble, format!("phone disconnected from {}", self.label)));
+                    self.notes.push((
+                        now,
+                        AnnotationKind::Ble,
+                        format!("phone disconnected from {}", self.label),
+                    ));
                 }
-                PeripheralEvent::SppData(d) => {
-                    if !self.at_mode {
-                        self.send(now, &d);
-                    }
-                }
+                PeripheralEvent::SppData(d) if !self.at_mode => self.send(now, &d),
                 _ => {}
             }
         }
@@ -187,11 +208,16 @@ impl Hc05 {
             ("", AtKind::Exec) => ok.to_vec(),
             ("+NAME", AtKind::Query) => format!("+NAME:{}\r\nOK\r\n", self.name).into_bytes(),
             ("+NAME", AtKind::Set(_)) => {
-                self.name = text.split_once('=').map(|x| x.1.trim().trim_matches('"').to_string()).unwrap_or_default();
+                self.name = text
+                    .split_once('=')
+                    .map(|x| x.1.trim().trim_matches('"').to_string())
+                    .unwrap_or_default();
                 ble.set_name(self.device, &self.name);
                 ok.to_vec()
             }
-            ("+UART", AtKind::Query) => format!("+UART:{},0,0\r\nOK\r\n", self.data_uart.baud).into_bytes(),
+            ("+UART", AtKind::Query) => {
+                format!("+UART:{},0,0\r\nOK\r\n", self.data_uart.baud).into_bytes()
+            }
             ("+UART", AtKind::Set(_)) => match cmd.arg_int(0) {
                 Some(b) if (1200..=1_382_400).contains(&b) => {
                     let stop = if cmd.arg_int(1) == Some(1) { 2 } else { 1 };
@@ -205,7 +231,9 @@ impl Hc05 {
                 }
                 _ => b"ERROR:(1D)\r\n".to_vec(),
             },
-            ("+PSWD" | "+PIN", AtKind::Query) => format!("{}:\"{}\"\r\nOK\r\n", cmd.name, self.pin).into_bytes(),
+            ("+PSWD" | "+PIN", AtKind::Query) => {
+                format!("{}:\"{}\"\r\nOK\r\n", cmd.name, self.pin).into_bytes()
+            }
             ("+PSWD" | "+PIN", AtKind::Set(_)) => {
                 self.pin = cmd.arg_str(0).unwrap_or("1234").to_string();
                 ble.set_pin(self.device, &self.pin);
@@ -218,11 +246,19 @@ impl Hc05 {
             }
             ("+ADDR", AtKind::Query) => {
                 let a = ble.address(self.device).unwrap_or_default();
-                format!("+ADDR:{:02x}{:02x}:{:02x}:{:02x}{:02x}{:02x}\r\nOK\r\n", a[0], a[1], a[2], a[3], a[4], a[5]).into_bytes()
+                format!(
+                    "+ADDR:{:02x}{:02x}:{:02x}:{:02x}{:02x}{:02x}\r\nOK\r\n",
+                    a[0], a[1], a[2], a[3], a[4], a[5]
+                )
+                .into_bytes()
             }
             ("+VERSION", AtKind::Query) => b"+VERSION:3.0-20170601\r\nOK\r\n".to_vec(),
             ("+STATE", AtKind::Query) => {
-                let s = if self.connected { "CONNECTED" } else { "PAIRABLE" };
+                let s = if self.connected {
+                    "CONNECTED"
+                } else {
+                    "PAIRABLE"
+                };
                 format!("+STATE:{s}\r\nOK\r\n").into_bytes()
             }
             ("+CMODE", AtKind::Query) => b"+CMODE:0\r\nOK\r\n".to_vec(),
@@ -256,11 +292,20 @@ impl Hc05 {
         } else {
             "pairable"
         };
-        let mut rows = vec![("Name".into(), self.name.clone()), ("PIN".into(), self.pin.clone())];
+        let mut rows = vec![
+            ("Name".into(), self.name.clone()),
+            ("PIN".into(), self.pin.clone()),
+        ];
         if let Some(r) = ble.rssi(self.device) {
             rows.push(("RSSI at phone".into(), format!("{} dBm", r.round() as i32)));
         }
         rows.push(("UART".into(), format!("{} baud", self.uart.baud)));
-        RadioCard { device, label: self.label.clone(), title: "HC-05 Bluetooth SPP".into(), status: status.into(), rows }
+        RadioCard {
+            device,
+            label: self.label.clone(),
+            title: "HC-05 Bluetooth SPP".into(),
+            status: status.into(),
+            rows,
+        }
     }
 }

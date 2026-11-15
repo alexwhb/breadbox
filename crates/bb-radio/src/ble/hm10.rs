@@ -9,7 +9,9 @@ use crate::space::{DeviceId, RadioCard};
 use crate::uart::{UartConfig, UartEncoder, UartFrame};
 use bb_core::SimTime;
 
-const BAUDS: [u32; 9] = [9600, 19_200, 38_400, 57_600, 115_200, 4800, 2400, 1200, 230_400];
+const BAUDS: [u32; 9] = [
+    9600, 19_200, 38_400, 57_600, 115_200, 4800, 2400, 1200, 230_400,
+];
 
 #[derive(Debug, Clone)]
 pub struct Hm10 {
@@ -79,7 +81,10 @@ impl Hm10 {
     }
 
     pub fn next_wake(&self) -> Option<SimTime> {
-        [self.ready_at, self.cmd_deadline, self.data_deadline].into_iter().flatten().min()
+        [self.ready_at, self.cmd_deadline, self.data_deadline]
+            .into_iter()
+            .flatten()
+            .min()
     }
 
     pub fn power(&mut self, ble: &mut BleSpace, on: bool, now: SimTime) {
@@ -106,20 +111,29 @@ impl Hm10 {
             && g.find(HM10_CHAR).is_none()
         {
             let s = g.add_service(HM10_SERVICE);
-            self.handle = g.add_characteristic(s, HM10_CHAR, props::READ | props::WRITE_NO_RESPONSE | props::NOTIFY, b"");
+            self.handle = g.add_characteristic(
+                s,
+                HM10_CHAR,
+                props::READ | props::WRITE_NO_RESPONSE | props::NOTIFY,
+                b"",
+            );
             if let Some(c) = g.char_mut(self.handle) {
                 c.description = Some("HMSoft".into());
             }
         }
         ble.set_name(self.peripheral, &self.name);
-        ble.set_tx_power(self.peripheral, [-23.0, -6.0, 0.0, 6.0][self.power_level as usize % 4]);
+        ble.set_tx_power(
+            self.peripheral,
+            [-23.0, -6.0, 0.0, 6.0][self.power_level as usize % 4],
+        );
         ble.set_powered(self.peripheral, true, now);
         ble.set_advertising(self.peripheral, true);
     }
 
     fn send(&mut self, now: SimTime, text: &[u8]) {
         if self.powered {
-            self.out.extend(self.enc.push_bytes(text, now + SimTime::from_us(800)));
+            self.out
+                .extend(self.enc.push_bytes(text, now + SimTime::from_us(800)));
         }
     }
 
@@ -156,7 +170,16 @@ impl Hm10 {
         }
         let d = std::mem::take(&mut self.data);
         if ble.notify(self.peripheral, self.handle, &d, now) {
-            self.notes.push((now, AnnotationKind::Ble, format!("{} → phone notify FFE1 \"{}\" ({} B)", self.label, printable(&d).trim_end_matches('·'), d.len())));
+            self.notes.push((
+                now,
+                AnnotationKind::Ble,
+                format!(
+                    "{} → phone notify FFE1 \"{}\" ({} B)",
+                    self.label,
+                    printable(&d).trim_end_matches('·'),
+                    d.len()
+                ),
+            ));
         }
     }
 
@@ -170,7 +193,9 @@ impl Hm10 {
         if self.cmd_deadline.is_some_and(|t| t <= now) {
             self.cmd_deadline = None;
             let raw = std::mem::take(&mut self.cmd);
-            let text = String::from_utf8_lossy(&raw).trim_matches(|c: char| c == '\r' || c == '\n' || c == '\0').to_string();
+            let text = String::from_utf8_lossy(&raw)
+                .trim_matches(|c: char| c == '\r' || c == '\n' || c == '\0')
+                .to_string();
             if !text.is_empty() {
                 self.command(ble, &text, now);
             }
@@ -187,7 +212,14 @@ impl Hm10 {
                     if self.noti {
                         self.send(now, b"OK+CONN");
                     }
-                    self.notes.push((now, AnnotationKind::Ble, format!("phone connected to {} (HM-10 \"{}\")", self.label, self.name)));
+                    self.notes.push((
+                        now,
+                        AnnotationKind::Ble,
+                        format!(
+                            "phone connected to {} (HM-10 \"{}\")",
+                            self.label, self.name
+                        ),
+                    ));
                 }
                 PeripheralEvent::Disconnected => {
                     self.connected = false;
@@ -195,13 +227,26 @@ impl Hm10 {
                     if self.noti {
                         self.send(now, b"OK+LOST");
                     }
-                    self.notes.push((now, AnnotationKind::Ble, format!("phone disconnected from {}", self.label)));
+                    self.notes.push((
+                        now,
+                        AnnotationKind::Ble,
+                        format!("phone disconnected from {}", self.label),
+                    ));
                     if self.powered {
                         ble.set_advertising(self.peripheral, true);
                     }
                 }
                 PeripheralEvent::Write { handle, data } if handle == self.handle => {
-                    self.notes.push((now, AnnotationKind::Ble, format!("phone → {} write FFE1 \"{}\" ({} B)", self.label, printable(&data), data.len())));
+                    self.notes.push((
+                        now,
+                        AnnotationKind::Ble,
+                        format!(
+                            "phone → {} write FFE1 \"{}\" ({} B)",
+                            self.label,
+                            printable(&data),
+                            data.len()
+                        ),
+                    ));
                     self.send(now, &data);
                 }
                 _ => {}
@@ -220,19 +265,29 @@ impl Hm10 {
             "OK".into()
         } else if rup == "+NAME?" {
             format!("OK+NAME:{}", self.name)
-        } else if let Some(n) = rest.strip_prefix("+NAME").or_else(|| rest.strip_prefix("+name")) {
+        } else if let Some(n) = rest
+            .strip_prefix("+NAME")
+            .or_else(|| rest.strip_prefix("+name"))
+        {
             let n: String = n.chars().take(12).collect();
             self.name = n.clone();
             ble.set_name(self.peripheral, &n);
             format!("OK+Set:{n}")
         } else if rup == "+ADDR?" {
             let a = ble.address(self.peripheral).unwrap_or_default();
-            format!("OK+ADDR:{}", a.iter().map(|b| format!("{b:02X}")).collect::<String>())
+            format!(
+                "OK+ADDR:{}",
+                a.iter().map(|b| format!("{b:02X}")).collect::<String>()
+            )
         } else if rup == "+VERR?" || rup == "+VERS?" {
             "HMSoft V609".into()
         } else if rup == "+BAUD?" {
             format!("OK+Get:{}", self.baud_code)
-        } else if let Some(c) = rup.strip_prefix("+BAUD").and_then(|x| x.parse::<usize>().ok()).filter(|c| *c < BAUDS.len()) {
+        } else if let Some(c) = rup
+            .strip_prefix("+BAUD")
+            .and_then(|x| x.parse::<usize>().ok())
+            .filter(|c| *c < BAUDS.len())
+        {
             self.baud_code = c; // takes effect after AT+RESET / power cycle
             format!("OK+Set:{c}")
         } else if rup == "+ROLE?" {
@@ -250,13 +305,15 @@ impl Hm10 {
             "OK+Get:0xFFE1".into()
         } else if rup == "+PIN?" {
             "OK+Get:000000".into()
-        } else if rup == "+TYPE?" {
-            "OK+Get:0".into()
-        } else if rup == "+ADVI?" {
+        } else if rup == "+TYPE?" || rup == "+ADVI?" {
             "OK+Get:0".into()
         } else if rup == "+POWE?" {
             format!("OK+Get:{}", self.power_level)
-        } else if let Some(p) = rup.strip_prefix("+POWE").and_then(|x| x.parse::<u8>().ok()).filter(|p| *p < 4) {
+        } else if let Some(p) = rup
+            .strip_prefix("+POWE")
+            .and_then(|x| x.parse::<u8>().ok())
+            .filter(|p| *p < 4)
+        {
             self.power_level = p;
             ble.set_tx_power(self.peripheral, [-23.0, -6.0, 0.0, 6.0][p as usize]);
             format!("OK+Set:{p}")
@@ -295,11 +352,20 @@ impl Hm10 {
         } else {
             "advertising"
         };
-        let mut rows = vec![("Name".into(), self.name.clone()), ("Service".into(), "FFE0 · FFE1 (transparent UART)".into())];
+        let mut rows = vec![
+            ("Name".into(), self.name.clone()),
+            ("Service".into(), "FFE0 · FFE1 (transparent UART)".into()),
+        ];
         if let Some(r) = ble.rssi(self.peripheral) {
             rows.push(("RSSI at phone".into(), format!("{} dBm", r.round() as i32)));
         }
         rows.push(("UART".into(), format!("{} baud", self.uart.baud)));
-        RadioCard { device, label: self.label.clone(), title: "HM-10 BLE".into(), status: status.into(), rows }
+        RadioCard {
+            device,
+            label: self.label.clone(),
+            title: "HM-10 BLE".into(),
+            status: status.into(),
+            rows,
+        }
     }
 }

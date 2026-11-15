@@ -32,21 +32,41 @@ pub enum Pull {
 /// Logical drive of a pin (electrical modelling is the co-simulator's job).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum HostPinState {
-    Input { pull: Pull },
-    Output { high: bool },
+    Input {
+        pull: Pull,
+    },
+    Output {
+        high: bool,
+    },
     /// Open drain: `low` = actively pulled low, else released.
-    OpenDrain { low: bool },
+    OpenDrain {
+        low: bool,
+    },
 }
 
 /// Something the sketch did, stamped with the board clock.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum HostEvent {
-    Pin { time: SimTime, pin: u8, state: HostPinState },
+    Pin {
+        time: SimTime,
+        pin: u8,
+        state: HostPinState,
+    },
     /// PWM output (`analogWrite`, `ledcWrite`, `tone`): duty 0–1 at `freq_hz` (0 Hz = DC).
-    Pwm { time: SimTime, pin: u8, duty: f64, freq_hz: f64 },
-    Log { time: SimTime, text: String },
+    Pwm {
+        time: SimTime,
+        pin: u8,
+        duty: f64,
+        freq_hz: f64,
+    },
+    Log {
+        time: SimTime,
+        text: String,
+    },
     /// The sketch called `ESP.restart()`; the process was restarted.
-    Restarted { time: SimTime },
+    Restarted {
+        time: SimTime,
+    },
 }
 
 /// Why [`HostBoard::run`] returned.
@@ -122,14 +142,27 @@ pub struct HostConfig {
 
 impl HostConfig {
     pub fn new(kind: HostKind) -> Self {
-        HostConfig { kind, seed: 1, nvs_path: None, poll_interval: SimTime::from_ms(10), stop_on_output: false, hang_timeout: Duration::from_secs(10) }
+        HostConfig {
+            kind,
+            seed: 1,
+            nvs_path: None,
+            poll_interval: SimTime::from_ms(10),
+            stop_on_output: false,
+            hang_timeout: Duration::from_secs(10),
+        }
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Blocked {
-    Sleep { deadline: SimTime },
-    WaitPin { pin: u8, level: bool, deadline: SimTime },
+    Sleep {
+        deadline: SimTime,
+    },
+    WaitPin {
+        pin: u8,
+        level: bool,
+        deadline: SimTime,
+    },
 }
 
 #[derive(Debug, Clone, Default)]
@@ -178,20 +211,39 @@ pub struct HostBoard {
 
 impl std::fmt::Debug for HostBoard {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("HostBoard").field("kind", &self.config.kind).field("exe", &self.exe).field("now", &self.now).finish()
+        f.debug_struct("HostBoard")
+            .field("kind", &self.config.kind)
+            .field("exe", &self.exe)
+            .field("now", &self.now)
+            .finish()
     }
 }
 
 fn spawn(exe: &Path, cfg: &HostConfig) -> Result<Proc, FirmwareError> {
     let mut cmd = Command::new(exe);
-    cmd.env("BB_HOST_BOARD", cfg.kind.id()).env("BB_HOST_SEED", cfg.seed.to_string()).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    cmd.env("BB_HOST_BOARD", cfg.kind.id())
+        .env("BB_HOST_SEED", cfg.seed.to_string())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     if let Some(p) = &cfg.nvs_path {
         cmd.env("BB_HOST_NVS", p);
     }
-    let mut child = cmd.spawn().map_err(|e| FirmwareError::Io(format!("cannot start {}: {e}", exe.display())))?;
-    let stdin = child.stdin.take().ok_or_else(|| FirmwareError::Io("no stdin".into()))?;
-    let mut stdout = child.stdout.take().ok_or_else(|| FirmwareError::Io("no stdout".into()))?;
-    let mut err = child.stderr.take().ok_or_else(|| FirmwareError::Io("no stderr".into()))?;
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| FirmwareError::Io(format!("cannot start {}: {e}", exe.display())))?;
+    let stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| FirmwareError::Io("no stdin".into()))?;
+    let mut stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| FirmwareError::Io("no stdout".into()))?;
+    let mut err = child
+        .stderr
+        .take()
+        .ok_or_else(|| FirmwareError::Io("no stderr".into()))?;
     let (tx, rx) = mpsc::channel();
     std::thread::Builder::new()
         .name("bb-host-rx".into())
@@ -235,14 +287,21 @@ fn spawn(exe: &Path, cfg: &HostConfig) -> Result<Proc, FirmwareError> {
                     s.push_str(&String::from_utf8_lossy(&buf[..n]));
                     if s.len() > 64 * 1024 {
                         let cut = s.len() - 32 * 1024;
-                        let cut = (cut..s.len()).find(|&i| s.is_char_boundary(i)).unwrap_or(s.len());
+                        let cut = (cut..s.len())
+                            .find(|&i| s.is_char_boundary(i))
+                            .unwrap_or(s.len());
                         s.drain(..cut);
                     }
                 }
             }
         })
         .map_err(|e| FirmwareError::Io(e.to_string()))?;
-    Ok(Proc { child, stdin, rx, stderr })
+    Ok(Proc {
+        child,
+        stdin,
+        rx,
+        stderr,
+    })
 }
 
 impl HostBoard {
@@ -299,7 +358,11 @@ impl HostBoard {
             p.irq = None;
             if p.mode != MODE_INPUT {
                 p.mode = MODE_INPUT;
-                self.events.push(HostEvent::Pin { time: self.now, pin: *pin, state: HostPinState::Input { pull: Pull::None } });
+                self.events.push(HostEvent::Pin {
+                    time: self.now,
+                    pin: *pin,
+                    state: HostPinState::Input { pull: Pull::None },
+                });
             }
         }
         Ok(())
@@ -322,7 +385,8 @@ impl HostBoard {
     /// Changes an input level at an exact future time (sensor protocols, UART bits, buttons).
     pub fn schedule_pin_input(&mut self, pin: u8, level: Option<bool>, at: SimTime) {
         self.sched_seq += 1;
-        self.sched.insert((at.max(self.now), self.sched_seq), (pin, level));
+        self.sched
+            .insert((at.max(self.now), self.sched_seq), (pin, level));
     }
 
     /// Fallback voltage for `analogRead` when [`HostIo::analog_read`] returns `None`.
@@ -344,7 +408,10 @@ impl HostBoard {
     /// Bytes written to UART `port`, stamped with the end of their stop bit (paced at the
     /// configured baud).
     pub fn take_serial(&mut self, port: u8) -> Vec<(SimTime, u8)> {
-        self.serial_tx.get_mut(&port).map(std::mem::take).unwrap_or_default()
+        self.serial_tx
+            .get_mut(&port)
+            .map(std::mem::take)
+            .unwrap_or_default()
     }
 
     pub fn serial_baud(&self, port: u8) -> Option<u32> {
@@ -353,18 +420,26 @@ impl HostBoard {
 
     /// Current logical state of a pin.
     pub fn pin_state(&self, pin: u8) -> HostPinState {
-        self.pins.get(&pin).map(state_of).unwrap_or(HostPinState::Input { pull: Pull::None })
+        self.pins
+            .get(&pin)
+            .map(state_of)
+            .unwrap_or(HostPinState::Input { pull: Pull::None })
     }
 
     /// The child's stderr so far (sketch `printf`, crash messages).
     pub fn stderr(&self) -> String {
-        self.proc.as_ref().and_then(|p| p.stderr.lock().ok().map(|s| s.clone())).unwrap_or_default()
+        self.proc
+            .as_ref()
+            .and_then(|p| p.stderr.lock().ok().map(|s| s.clone()))
+            .unwrap_or_default()
     }
 
     // ================================================================ running
 
     fn level(&self, pin: u8) -> bool {
-        let Some(p) = self.pins.get(&pin) else { return false };
+        let Some(p) = self.pins.get(&pin) else {
+            return false;
+        };
         if let Some(e) = p.ext {
             return e;
         }
@@ -397,13 +472,23 @@ impl HostBoard {
     fn reply(&mut self, payload: &[u8]) -> bool {
         let irqs = std::mem::take(&mut self.irqs);
         let frame = reply_frame(self.now.as_ps() / 1_000_000, &irqs, payload);
-        let Some(p) = self.proc.as_mut() else { return false };
-        p.stdin.write_all(&frame).and_then(|_| p.stdin.flush()).is_ok()
+        let Some(p) = self.proc.as_mut() else {
+            return false;
+        };
+        p.stdin
+            .write_all(&frame)
+            .and_then(|_| p.stdin.flush())
+            .is_ok()
     }
 
     /// Applies scheduled inputs up to `t` (inclusive). Stops early (returning that time) at the
     /// first one that satisfies `want` (pin, level) or, with `stop_on_irq`, raises an interrupt.
-    fn apply_scheduled(&mut self, t: SimTime, want: Option<(u8, bool)>, stop_on_irq: bool) -> Option<SimTime> {
+    fn apply_scheduled(
+        &mut self,
+        t: SimTime,
+        want: Option<(u8, bool)>,
+        stop_on_irq: bool,
+    ) -> Option<SimTime> {
         while let Some((&(at, seq), _)) = self.sched.iter().next() {
             if at > t {
                 break;
@@ -411,7 +496,9 @@ impl HostBoard {
             let (pin, level) = self.sched.remove(&(at, seq)).expect("present");
             self.now = self.now.max(at);
             self.apply_input(pin, level);
-            if (stop_on_irq && !self.irqs.is_empty()) || want.is_some_and(|(p, l)| self.level(p) == l) {
+            if (stop_on_irq && !self.irqs.is_empty())
+                || want.is_some_and(|(p, l)| self.level(p) == l)
+            {
                 return Some(self.now);
             }
         }
@@ -426,7 +513,11 @@ impl HostBoard {
     /// `while (millis() < t) {}` advances quickly.
     fn poll_cost(&mut self, base_ns: u64) {
         self.spin = self.spin.saturating_add(1);
-        let k = if self.spin > 1000 { (self.spin / 1000) as u64 + 1 } else { 1 };
+        let k = if self.spin > 1000 {
+            (self.spin / 1000) as u64 + 1
+        } else {
+            1
+        };
         self.cost((base_ns * k).min(50_000));
     }
 
@@ -462,7 +553,11 @@ impl HostBoard {
                             return self.finish();
                         }
                     }
-                    Blocked::WaitPin { pin, level, deadline } => {
+                    Blocked::WaitPin {
+                        pin,
+                        level,
+                        deadline,
+                    } => {
                         if self.level(pin) != level {
                             let target = deadline.min(until);
                             match self.apply_scheduled(target, Some((pin, level)), false) {
@@ -488,7 +583,11 @@ impl HostBoard {
                 return HostStop::ReachedTime;
             }
             // The child is running: wait for its next message.
-            let msg = match self.proc.as_ref().map(|p| p.rx.recv_timeout(self.config.hang_timeout)) {
+            let msg = match self
+                .proc
+                .as_ref()
+                .map(|p| p.rx.recv_timeout(self.config.hang_timeout))
+            {
                 Some(Ok(m)) => m,
                 Some(Err(RecvTimeoutError::Timeout)) => {
                     self.stopped = Some(HostStop::Hung);
@@ -519,23 +618,39 @@ impl HostBoard {
     }
 
     fn finish(&mut self) -> HostStop {
-        let code = self.proc.as_mut().and_then(|p| p.child.wait().ok()).and_then(|s| s.code());
+        let code = self
+            .proc
+            .as_mut()
+            .and_then(|p| p.child.wait().ok())
+            .and_then(|s| s.code());
         let stderr = self.stderr();
         let s = HostStop::Exited { code, stderr };
         self.stopped = Some(s.clone());
         s
     }
 
-    fn handle(&mut self, ty: u8, body: &[u8], io: &mut dyn HostIo, output: &mut bool) -> Result<(), HostStop> {
+    fn handle(
+        &mut self,
+        ty: u8,
+        body: &[u8],
+        io: &mut dyn HostIo,
+        output: &mut bool,
+    ) -> Result<(), HostStop> {
         let mut r = Rd::new(body);
         let ok = |b: &mut HostBoard, payload: &[u8]| -> Result<(), HostStop> {
             if b.reply(payload) {
                 Ok(())
             } else {
-                Err(HostStop::Exited { code: None, stderr: b.stderr() })
+                Err(HostStop::Exited {
+                    code: None,
+                    stderr: b.stderr(),
+                })
             }
         };
-        if !matches!(ty, MSG_TIME | MSG_YIELD | MSG_DIGITAL_READ | MSG_SERIAL_READ | MSG_SERIAL_AVAILABLE) {
+        if !matches!(
+            ty,
+            MSG_TIME | MSG_YIELD | MSG_DIGITAL_READ | MSG_SERIAL_READ | MSG_SERIAL_AVAILABLE
+        ) {
             self.spin = 0;
         }
         match ty {
@@ -551,7 +666,11 @@ impl HostBoard {
             MSG_SLEEP => {
                 let kind = r.u8();
                 let v = r.u64();
-                let deadline = if kind == 1 { self.now + SimTime::from_us(v) } else { SimTime::from_us(v) };
+                let deadline = if kind == 1 {
+                    self.now + SimTime::from_us(v)
+                } else {
+                    SimTime::from_us(v)
+                };
                 self.blocked = Some(Blocked::Sleep { deadline });
                 Ok(())
             }
@@ -563,7 +682,11 @@ impl HostBoard {
                 p.mode = mode;
                 let after = state_of(p);
                 if before != after {
-                    self.events.push(HostEvent::Pin { time: self.now, pin, state: after });
+                    self.events.push(HostEvent::Pin {
+                        time: self.now,
+                        pin,
+                        state: after,
+                    });
                     *output = true;
                 }
                 Ok(())
@@ -580,7 +703,11 @@ impl HostBoard {
                 }
                 let after = state_of(p);
                 if before != after {
-                    self.events.push(HostEvent::Pin { time: self.now, pin, state: after });
+                    self.events.push(HostEvent::Pin {
+                        time: self.now,
+                        pin,
+                        state: after,
+                    });
                     *output = true;
                 }
                 Ok(())
@@ -594,17 +721,33 @@ impl HostBoard {
             }
             MSG_ANALOG_READ => {
                 let pin = r.u8();
-                let conv = if self.config.kind == HostKind::Pico { 2_000 } else { 10_000 };
+                let conv = if self.config.kind == HostKind::Pico {
+                    2_000
+                } else {
+                    10_000
+                };
                 self.cost(conv);
-                let v = io.analog_read(pin, self.now).or_else(|| self.pins.get(&pin).and_then(|p| p.volts)).unwrap_or(0.0);
+                let v = io
+                    .analog_read(pin, self.now)
+                    .or_else(|| self.pins.get(&pin).and_then(|p| p.volts))
+                    .unwrap_or(0.0);
                 ok(self, &Wr::default().f64(v).0)
             }
             MSG_PWM => {
                 let (pin, duty, full, freq) = (r.u8(), r.u32(), r.u32(), r.u32());
                 self.cost(1_000);
-                let d = if full == 0 { 0.0 } else { (duty as f64 / full as f64).clamp(0.0, 1.0) };
+                let d = if full == 0 {
+                    0.0
+                } else {
+                    (duty as f64 / full as f64).clamp(0.0, 1.0)
+                };
                 self.pins.entry(pin).or_default().mode = MODE_OUTPUT;
-                self.events.push(HostEvent::Pwm { time: self.now, pin, duty: d, freq_hz: freq as f64 });
+                self.events.push(HostEvent::Pwm {
+                    time: self.now,
+                    pin,
+                    duty: d,
+                    freq_hz: freq as f64,
+                });
                 *output = true;
                 Ok(())
             }
@@ -662,7 +805,8 @@ impl HostBoard {
                 ok(self, &[st as u8])
             }
             MSG_I2C_READ => {
-                let (bus, addr, freq, _stop, n) = (r.u8(), r.u8(), r.u32().max(1), r.u8(), r.u16() as usize);
+                let (bus, addr, freq, _stop, n) =
+                    (r.u8(), r.u8(), r.u32().max(1), r.u8(), r.u16() as usize);
                 self.cost((n as u64 + 1) * 9 * 1_000_000_000 / freq as u64);
                 let data = io.i2c_read(bus, addr, n, self.now).unwrap_or_default();
                 ok(self, &Wr::default().bytes(&data[..data.len().min(n)]).0)
@@ -684,28 +828,42 @@ impl HostBoard {
             }
             MSG_WAIT_PIN => {
                 let (pin, level, timeout) = (r.u8(), r.u8() != 0, r.u32());
-                self.blocked = Some(Blocked::WaitPin { pin, level, deadline: self.now + SimTime::from_us(timeout as u64) });
+                self.blocked = Some(Blocked::WaitPin {
+                    pin,
+                    level,
+                    deadline: self.now + SimTime::from_us(timeout as u64),
+                });
                 Ok(())
             }
             MSG_LOG => {
                 let text = r.string();
-                self.events.push(HostEvent::Log { time: self.now, text });
+                self.events.push(HostEvent::Log {
+                    time: self.now,
+                    text,
+                });
                 Ok(())
             }
             MSG_ASYNC => {
                 self.async_on = r.u8() != 0;
-                self.async_next = if self.async_on { self.now + self.config.poll_interval } else { SimTime::MAX };
+                self.async_next = if self.async_on {
+                    self.now + self.config.poll_interval
+                } else {
+                    SimTime::MAX
+                };
                 Ok(())
             }
             MSG_RESTART => {
                 // Reply to the trailing YIELD is never read; respawn now.
                 let t = self.now;
-                self.reset(None).map_err(|e| HostStop::Panic(e.to_string()))?;
+                self.reset(None)
+                    .map_err(|e| HostStop::Panic(e.to_string()))?;
                 self.events.push(HostEvent::Restarted { time: t });
                 Ok(())
             }
             MSG_PANIC => Err(HostStop::Panic(r.string())),
-            other => Err(HostStop::Panic(format!("unknown message type 0x{other:02x}"))),
+            other => Err(HostStop::Panic(format!(
+                "unknown message type 0x{other:02x}"
+            ))),
         }
     }
 }

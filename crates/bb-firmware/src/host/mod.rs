@@ -14,6 +14,8 @@ pub mod catalog;
 pub mod compile;
 pub mod protocol;
 
-pub use board::{HostBoard, HostConfig, HostEvent, HostIo, HostPinState, HostStop, I2cStatus, Pull};
+pub use board::{
+    HostBoard, HostConfig, HostEvent, HostIo, HostPinState, HostStop, I2cStatus, Pull,
+};
 pub use catalog::{HostBoardSpec, HostKind, HostPin};
 pub use compile::{HostBuild, compile_host, cxx, find_prototypes, hostcore_dir, preprocess};

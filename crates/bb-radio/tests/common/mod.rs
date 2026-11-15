@@ -11,14 +11,20 @@ use std::path::PathBuf;
 pub const F_CPU: u64 = 16_000_000;
 
 pub fn example_fixture(name: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/fixtures").join(name)
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../examples/fixtures")
+        .join(name)
 }
 
 pub fn load_example(name: &str) -> Avr {
     let mut cfg = AvrConfig::new(Mcu::Atmega328p);
-    cfg.stop_on = StopOn { pin_change: true, ..StopOn::default() };
+    cfg.stop_on = StopOn {
+        pin_change: true,
+        ..StopOn::default()
+    };
     let mut avr = Avr::new(cfg);
-    let hex = std::fs::read_to_string(example_fixture(&format!("{name}.uno.hex"))).expect("fixture missing; run scripts/build-test-firmware.sh");
+    let hex = std::fs::read_to_string(example_fixture(&format!("{name}.uno.hex")))
+        .expect("fixture missing; run scripts/build-test-firmware.sh");
     avr.load_hex(&hex).unwrap();
     avr
 }
@@ -101,7 +107,9 @@ impl Bench {
                 target = target.min(d.max(now));
             }
             let until = self.avr.cycle_at(target).max(self.avr.cycle() + 1);
-            let mut io = Io { volts: &mut self.volts };
+            let mut io = Io {
+                volts: &mut self.volts,
+            };
             let r = self.avr.run(until, &mut io);
             match r {
                 StopReason::ReachedCycle | StopReason::PinChange => {}
@@ -126,14 +134,21 @@ impl Bench {
             for (et, lvl) in self.wire.module_edges(&mut self.space) {
                 let c = self.avr.cycle_at(et);
                 // The core may overshoot a stop by one instruction (+ interrupt entry).
-                assert!(c + 32 >= cyc, "module edge at {et} lands in the MCU's past ({})", self.avr.time());
+                assert!(
+                    c + 32 >= cyc,
+                    "module edge at {et} lands in the MCU's past ({})",
+                    self.avr.time()
+                );
                 self.avr.schedule_pin_input(self.mcu_rx, Some(lvl), c);
             }
             for b in self.avr.take_usart_tx(0) {
                 let c = b.data as u8 as char;
                 if c == '\n' {
                     let line = std::mem::take(&mut self.partial);
-                    self.lines.push((SimTime::from_cycles(b.cycle, F_CPU), line.trim_end_matches('\r').to_string()));
+                    self.lines.push((
+                        SimTime::from_cycles(b.cycle, F_CPU),
+                        line.trim_end_matches('\r').to_string(),
+                    ));
                 } else {
                     self.partial.push(c);
                 }

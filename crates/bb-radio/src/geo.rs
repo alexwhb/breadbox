@@ -36,11 +36,21 @@ pub struct Wall {
 impl Wall {
     /// An interior wall (15 dB at 2.4 GHz, plasterboard + studs + furniture).
     pub fn interior(a: Pos, b: Pos) -> Self {
-        Wall { a, b, loss_db: 15.0, label: "interior wall".into() }
+        Wall {
+            a,
+            b,
+            loss_db: 15.0,
+            label: "interior wall".into(),
+        }
     }
     /// An exterior / concrete wall (25 dB).
     pub fn exterior(a: Pos, b: Pos) -> Self {
-        Wall { a, b, loss_db: 25.0, label: "exterior wall".into() }
+        Wall {
+            a,
+            b,
+            loss_db: 25.0,
+            label: "exterior wall".into(),
+        }
     }
 
     fn crosses(&self, p: Pos, q: Pos) -> bool {
@@ -106,9 +116,15 @@ pub struct PathLoss {
 
 impl PathLoss {
     /// 2.4 GHz Wi-Fi indoors (channel 6, n = 3).
-    pub const WIFI_INDOOR: PathLoss = PathLoss { freq_hz: 2.437e9, exponent: 3.0 };
+    pub const WIFI_INDOOR: PathLoss = PathLoss {
+        freq_hz: 2.437e9,
+        exponent: 3.0,
+    };
     /// 2.4 GHz BLE in a room (n = 2.2).
-    pub const BLE_ROOM: PathLoss = PathLoss { freq_hz: 2.44e9, exponent: 2.2 };
+    pub const BLE_ROOM: PathLoss = PathLoss {
+        freq_hz: 2.44e9,
+        exponent: 2.2,
+    };
 
     /// Free-space path loss at 1 m (dB).
     pub fn pl0_db(&self) -> f64 {
@@ -139,14 +155,24 @@ mod tests {
         let g = Geometry {
             walls: vec![Wall::interior(Pos::new(1.5, -5.0), Pos::new(1.5, 5.0))],
         };
-        let l = g.link(&PathLoss::WIFI_INDOOR, 16.0, Pos::new(0.0, 0.0), Pos::new(3.2, 0.0));
+        let l = g.link(
+            &PathLoss::WIFI_INDOOR,
+            16.0,
+            Pos::new(0.0, 0.0),
+            Pos::new(3.2, 0.0),
+        );
         assert_eq!(l.walls, 1);
         assert!((l.distance_m - 3.2).abs() < 1e-12);
         assert_eq!(l.rssi_dbm.round(), -54.0, "{l:?}");
         // Free-space reference: 40.2 dB at 2.437 GHz, 1 m.
         assert!((PathLoss::WIFI_INDOOR.pl0_db() - 40.18).abs() < 0.05);
         // Doubling the distance costs 10·n·log10(2) ≈ 9 dB; parallel walls are not crossed.
-        let far = g.link(&PathLoss::WIFI_INDOOR, 16.0, Pos::new(0.0, 0.0), Pos::new(6.4, 0.0));
+        let far = g.link(
+            &PathLoss::WIFI_INDOOR,
+            16.0,
+            Pos::new(0.0, 0.0),
+            Pos::new(6.4, 0.0),
+        );
         assert!((l.rssi_dbm - far.rssi_dbm - 9.03).abs() < 0.01);
         let (n, _) = g.walls_between(Pos::new(0.0, 0.0), Pos::new(1.0, 3.0));
         assert_eq!(n, 0);

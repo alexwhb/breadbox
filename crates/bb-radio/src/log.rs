@@ -79,7 +79,9 @@ pub enum DropReason {
 impl DropReason {
     pub fn text(&self) -> String {
         match self {
-            DropReason::Loss { pct } => format!("dropped by fault injector (loss {}%)", fmt_pct(*pct)),
+            DropReason::Loss { pct } => {
+                format!("dropped by fault injector (loss {}%)", fmt_pct(*pct))
+            }
             DropReason::ApDown => "dropped: access point down".into(),
             DropReason::NoRoute => "dropped: no route to host".into(),
             DropReason::WeakSignal => "dropped: signal below sensitivity".into(),
@@ -89,7 +91,11 @@ impl DropReason {
 }
 
 fn fmt_pct(p: f64) -> String {
-    if (p - p.round()).abs() < 1e-9 { format!("{}", p.round() as i64) } else { format!("{p:.1}") }
+    if (p - p.round()).abs() < 1e-9 {
+        format!("{}", p.round() as i64)
+    } else {
+        format!("{p:.1}")
+    }
 }
 
 /// One row of the packet log.
@@ -133,7 +139,12 @@ impl LogEntry {
 /// `ss.mmm` (or `m:ss.mmm`, `h:mm:ss.mmm`).
 pub fn time_label(t: SimTime) -> String {
     let ms = t.as_millis();
-    let (h, m, s, f) = (ms / 3_600_000, (ms / 60_000) % 60, (ms / 1000) % 60, ms % 1000);
+    let (h, m, s, f) = (
+        ms / 3_600_000,
+        (ms / 60_000) % 60,
+        (ms / 1000) % 60,
+        ms % 1000,
+    );
     if h > 0 {
         format!("{h}:{m:02}:{s:02}.{f:03}")
     } else if m > 0 {
@@ -153,7 +164,11 @@ pub struct PacketLog {
 
 impl Default for PacketLog {
     fn default() -> Self {
-        PacketLog { entries: VecDeque::new(), capacity: 20_000, next_seq: 0 }
+        PacketLog {
+            entries: VecDeque::new(),
+            capacity: 20_000,
+            next_seq: 0,
+        }
     }
 }
 
@@ -203,7 +218,11 @@ impl PacketLog {
         let mut s = String::from("time_s,dir,radio,proto,src,dst,bytes,frame,dropped\n");
         for e in &self.entries {
             let q = |x: &str| {
-                if x.contains([',', '"', '\n']) { format!("\"{}\"", x.replace('"', "\"\"")) } else { x.to_string() }
+                if x.contains([',', '"', '\n']) {
+                    format!("\"{}\"", x.replace('"', "\"\""))
+                } else {
+                    x.to_string()
+                }
             };
             s.push_str(&format!(
                 "{:.6},{},{},{},{},{},{},{},{}\n",
@@ -263,7 +282,7 @@ impl PacketLog {
 }
 
 fn pad4(v: &mut Vec<u8>) {
-    while v.len() % 4 != 0 {
+    while !v.len().is_multiple_of(4) {
         v.push(0);
     }
 }
@@ -287,11 +306,16 @@ fn push_block(out: &mut Vec<u8>, ty: u32, body: &[u8]) {
     out.extend_from_slice(&total.to_le_bytes());
 }
 
+/// One packet read back from a pcap-ng file: (timestamp µs, frame, comment).
+pub type PcapPacket = (u64, Vec<u8>, Option<String>);
+
 /// Minimal pcap-ng reader used by tests: returns (timestamp µs, frame, comment) per EPB.
-pub fn read_pcapng(data: &[u8]) -> Option<Vec<(u64, Vec<u8>, Option<String>)>> {
+pub fn read_pcapng(data: &[u8]) -> Option<Vec<PcapPacket>> {
     let mut out = vec![];
     let mut i = 0;
-    let u32le = |b: &[u8], i: usize| -> Option<u32> { Some(u32::from_le_bytes(b.get(i..i + 4)?.try_into().ok()?)) };
+    let u32le = |b: &[u8], i: usize| -> Option<u32> {
+        Some(u32::from_le_bytes(b.get(i..i + 4)?.try_into().ok()?))
+    };
     while i < data.len() {
         let ty = u32le(data, i)?;
         let len = u32le(data, i + 4)? as usize;

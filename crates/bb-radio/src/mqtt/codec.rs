@@ -167,7 +167,10 @@ pub fn encode(p: &Packet) -> Vec<u8> {
             }
             frame(0x10, b)
         }
-        Packet::ConnAck { session_present, code } => frame(0x20, vec![*session_present as u8, *code]),
+        Packet::ConnAck {
+            session_present,
+            code,
+        } => frame(0x20, vec![*session_present as u8, *code]),
         Packet::Publish(p) => {
             let mut b = Vec::with_capacity(p.topic.len() + p.payload.len() + 4);
             put_str(&mut b, p.topic.as_bytes());
@@ -216,7 +219,10 @@ struct Reader<'a> {
 
 impl<'a> Reader<'a> {
     fn u8(&mut self) -> Result<u8, MqttError> {
-        let v = *self.b.get(self.i).ok_or(MqttError::Malformed("truncated"))?;
+        let v = *self
+            .b
+            .get(self.i)
+            .ok_or(MqttError::Malformed("truncated"))?;
         self.i += 1;
         Ok(v)
     }
@@ -225,7 +231,10 @@ impl<'a> Reader<'a> {
     }
     fn bytes(&mut self) -> Result<&'a [u8], MqttError> {
         let n = self.u16()? as usize;
-        let s = self.b.get(self.i..self.i + n).ok_or(MqttError::Malformed("truncated string"))?;
+        let s = self
+            .b
+            .get(self.i..self.i + n)
+            .ok_or(MqttError::Malformed("truncated string"))?;
         self.i += n;
         Ok(s)
     }
@@ -256,7 +265,9 @@ pub fn fixed_header(buf: &[u8]) -> Result<Option<(u8, usize, usize)>, MqttError>
     let mut len = 0usize;
     let mut mult = 1usize;
     for i in 1..=4 {
-        let Some(&b) = buf.get(i) else { return Ok(None) };
+        let Some(&b) = buf.get(i) else {
+            return Ok(None);
+        };
         len += (b & 0x7f) as usize * mult;
         if b & 0x80 == 0 {
             if len > MAX_PACKET {
@@ -272,7 +283,9 @@ pub fn fixed_header(buf: &[u8]) -> Result<Option<(u8, usize, usize)>, MqttError>
 /// Decodes one packet from the front of `buf`: `Ok(Some((packet, consumed)))`, `Ok(None)` if
 /// the packet is incomplete.
 pub fn decode(buf: &[u8]) -> Result<Option<(Packet, usize)>, MqttError> {
-    let Some((first, len, hl)) = fixed_header(buf)? else { return Ok(None) };
+    let Some((first, len, hl)) = fixed_header(buf)? else {
+        return Ok(None);
+    };
     if buf.len() < hl + len {
         return Ok(None);
     }
@@ -297,7 +310,9 @@ fn decode_body(first: u8, body: &[u8]) -> Result<Packet, MqttError> {
             expect_flags(0)?;
             let protocol_name = r.string()?;
             let protocol_level = r.u8()?;
-            if !(protocol_name == "MQTT" && protocol_level == 4 || protocol_name == "MQIsdp" && protocol_level == 3) {
+            if !(protocol_name == "MQTT" && protocol_level == 4
+                || protocol_name == "MQIsdp" && protocol_level == 3)
+            {
                 // Reported to the client as CONNACK 1 by the broker.
                 return Ok(Packet::Connect(Connect {
                     protocol_name,
@@ -323,15 +338,28 @@ fn decode_body(first: u8, body: &[u8]) -> Result<Packet, MqttError> {
                 if qos == 3 {
                     return Err(MqttError::Protocol("will QoS 3"));
                 }
-                Some(Will { topic, payload, qos, retain: f & 0x20 != 0 })
+                Some(Will {
+                    topic,
+                    payload,
+                    qos,
+                    retain: f & 0x20 != 0,
+                })
             } else {
                 if f & 0x38 != 0 {
                     return Err(MqttError::Protocol("will flags without will"));
                 }
                 None
             };
-            let username = if f & 0x80 != 0 { Some(r.string()?) } else { None };
-            let password = if f & 0x40 != 0 { Some(r.bytes()?.to_vec()) } else { None };
+            let username = if f & 0x80 != 0 {
+                Some(r.string()?)
+            } else {
+                None
+            };
+            let password = if f & 0x40 != 0 {
+                Some(r.bytes()?.to_vec())
+            } else {
+                None
+            };
             Packet::Connect(Connect {
                 protocol_name,
                 protocol_level,
@@ -347,7 +375,10 @@ fn decode_body(first: u8, body: &[u8]) -> Result<Packet, MqttError> {
             expect_flags(0)?;
             let sp = r.u8()?;
             let code = r.u8()?;
-            Packet::ConnAck { session_present: sp & 1 != 0, code }
+            Packet::ConnAck {
+                session_present: sp & 1 != 0,
+                code,
+            }
         }
         3 => {
             let qos = (flags >> 1) & 3;
@@ -407,7 +438,10 @@ fn decode_body(first: u8, body: &[u8]) -> Result<Packet, MqttError> {
         9 => {
             expect_flags(0)?;
             let pid = r.u16()?;
-            Packet::SubAck { pid, codes: r.rest().to_vec() }
+            Packet::SubAck {
+                pid,
+                codes: r.rest().to_vec(),
+            }
         }
         10 => {
             expect_flags(2)?;
@@ -532,10 +566,20 @@ pub fn summary_of(p: &Packet, size: usize) -> String {
     match p {
         Packet::Connect(c) => format!("MQTT CONNECT client={}", c.client_id),
         Packet::ConnAck { code, .. } => format!("MQTT CONNACK rc={code}"),
-        Packet::Publish(p) => format!("PUBLISH {} · {} B · QoS {}{}", p.topic, size, p.qos, if p.retain { " · retained" } else { "" }),
+        Packet::Publish(p) => format!(
+            "PUBLISH {} · {} B · QoS {}{}",
+            p.topic,
+            size,
+            p.qos,
+            if p.retain { " · retained" } else { "" }
+        ),
         Packet::Subscribe { topics, .. } => format!(
             "MQTT SUBSCRIBE {}",
-            topics.iter().map(|(t, q)| format!("{t} (QoS {q})")).collect::<Vec<_>>().join(", ")
+            topics
+                .iter()
+                .map(|(t, q)| format!("{t} (QoS {q})"))
+                .collect::<Vec<_>>()
+                .join(", ")
         ),
         Packet::SubAck { codes, .. } => format!("MQTT SUBACK {codes:?}"),
         Packet::Unsubscribe { topics, .. } => format!("MQTT UNSUBSCRIBE {}", topics.join(", ")),
@@ -553,19 +597,50 @@ mod tests {
         let mut c = Connect::new("garden-node", 60);
         c.username = Some("u".into());
         c.password = Some(b"p".to_vec());
-        c.will = Some(Will { topic: "garden/status".into(), payload: b"offline".to_vec(), qos: 1, retain: true });
+        c.will = Some(Will {
+            topic: "garden/status".into(),
+            payload: b"offline".to_vec(),
+            qos: 1,
+            retain: true,
+        });
         let packets = vec![
             Packet::Connect(c),
-            Packet::ConnAck { session_present: true, code: 0 },
-            Packet::Publish(Publish { dup: false, qos: 0, retain: false, topic: "garden/pot1".into(), pid: None, payload: br#"{"m":42,"lux":180,"t":21}"#.to_vec() }),
-            Packet::Publish(Publish { dup: true, qos: 1, retain: true, topic: "a/b".into(), pid: Some(7), payload: vec![0; 300] }),
+            Packet::ConnAck {
+                session_present: true,
+                code: 0,
+            },
+            Packet::Publish(Publish {
+                dup: false,
+                qos: 0,
+                retain: false,
+                topic: "garden/pot1".into(),
+                pid: None,
+                payload: br#"{"m":42,"lux":180,"t":21}"#.to_vec(),
+            }),
+            Packet::Publish(Publish {
+                dup: true,
+                qos: 1,
+                retain: true,
+                topic: "a/b".into(),
+                pid: Some(7),
+                payload: vec![0; 300],
+            }),
             Packet::PubAck(7),
             Packet::PubRec(8),
             Packet::PubRel(8),
             Packet::PubComp(8),
-            Packet::Subscribe { pid: 3, topics: vec![("garden/#".into(), 1), ("+/x".into(), 0)] },
-            Packet::SubAck { pid: 3, codes: vec![1, 0] },
-            Packet::Unsubscribe { pid: 4, topics: vec!["garden/#".into()] },
+            Packet::Subscribe {
+                pid: 3,
+                topics: vec![("garden/#".into(), 1), ("+/x".into(), 0)],
+            },
+            Packet::SubAck {
+                pid: 3,
+                codes: vec![1, 0],
+            },
+            Packet::Unsubscribe {
+                pid: 4,
+                topics: vec!["garden/#".into()],
+            },
             Packet::UnsubAck(4),
             Packet::PingReq,
             Packet::PingResp,
@@ -590,7 +665,10 @@ mod tests {
         assert_eq!(got, packets);
         // The design's payload makes a 40-byte PUBLISH.
         assert_eq!(encode(&packets[2]).len(), 40);
-        assert_eq!(summarize(&encode(&packets[2])).unwrap(), "PUBLISH garden/pot1 · 40 B · QoS 0");
+        assert_eq!(
+            summarize(&encode(&packets[2])).unwrap(),
+            "PUBLISH garden/pot1 · 40 B · QoS 0"
+        );
     }
 
     #[test]
@@ -600,7 +678,14 @@ mod tests {
         assert!(decode(&[0x36, 0]).is_err()); // PUBLISH QoS 3
         assert!(decode(&[0xf0, 0]).is_err());
         assert!(decode(&[0x30, 0xff, 0xff, 0xff, 0xff, 0x01]).is_err());
-        let bad_topic = encode(&Packet::Publish(Publish { dup: false, qos: 0, retain: false, topic: "a/+".into(), pid: None, payload: vec![] }));
+        let bad_topic = encode(&Packet::Publish(Publish {
+            dup: false,
+            qos: 0,
+            retain: false,
+            topic: "a/+".into(),
+            pid: None,
+            payload: vec![],
+        }));
         assert!(decode(&bad_topic).is_err());
     }
 
@@ -616,6 +701,11 @@ mod tests {
         assert!(!topic_matches("#", "$SYS/uptime"));
         assert!(topic_matches("$SYS/#", "$SYS/uptime"));
         assert!(topic_matches("+/+", "/x"));
-        assert!(valid_filter("a/+/#") && !valid_filter("a/#/b") && !valid_filter("a+") && !valid_filter(""));
+        assert!(
+            valid_filter("a/+/#")
+                && !valid_filter("a/#/b")
+                && !valid_filter("a+")
+                && !valid_filter("")
+        );
     }
 }

@@ -16,10 +16,20 @@ pub enum ClientState {
 /// Events surfaced to the owner.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClientEvent {
-    Connected { session_present: bool },
+    Connected {
+        session_present: bool,
+    },
     Refused(u8),
-    Message { topic: String, payload: Vec<u8>, qos: u8, retain: bool },
-    SubAck { pid: u16, codes: Vec<u8> },
+    Message {
+        topic: String,
+        payload: Vec<u8>,
+        qos: u8,
+        retain: bool,
+    },
+    SubAck {
+        pid: u16,
+        codes: Vec<u8>,
+    },
     UnsubAck(u16),
     PubAck(u16),
     PingResp,
@@ -86,23 +96,49 @@ impl MqttClient {
         p
     }
 
-    pub fn publish(&mut self, topic: &str, payload: &[u8], qos: u8, retain: bool, now: SimTime) -> Vec<u8> {
+    pub fn publish(
+        &mut self,
+        topic: &str,
+        payload: &[u8],
+        qos: u8,
+        retain: bool,
+        now: SimTime,
+    ) -> Vec<u8> {
         self.last_tx = now;
         let pid = (qos > 0).then(|| self.pid());
-        codec::encode(&Packet::Publish(Publish { dup: false, qos: qos.min(1), retain, topic: topic.into(), pid, payload: payload.to_vec() }))
+        codec::encode(&Packet::Publish(Publish {
+            dup: false,
+            qos: qos.min(1),
+            retain,
+            topic: topic.into(),
+            pid,
+            payload: payload.to_vec(),
+        }))
     }
 
     /// Returns (packet id, bytes).
     pub fn subscribe(&mut self, filter: &str, qos: u8, now: SimTime) -> (u16, Vec<u8>) {
         self.last_tx = now;
         let pid = self.pid();
-        (pid, codec::encode(&Packet::Subscribe { pid, topics: vec![(filter.into(), qos.min(1))] }))
+        (
+            pid,
+            codec::encode(&Packet::Subscribe {
+                pid,
+                topics: vec![(filter.into(), qos.min(1))],
+            }),
+        )
     }
 
     pub fn unsubscribe(&mut self, filter: &str, now: SimTime) -> (u16, Vec<u8>) {
         self.last_tx = now;
         let pid = self.pid();
-        (pid, codec::encode(&Packet::Unsubscribe { pid, topics: vec![filter.into()] }))
+        (
+            pid,
+            codec::encode(&Packet::Unsubscribe {
+                pid,
+                topics: vec![filter.into()],
+            }),
+        )
     }
 
     pub fn disconnect(&mut self) -> Vec<u8> {
@@ -117,7 +153,8 @@ impl MqttClient {
 
     /// When the next PINGREQ is due (keep-alive), if connected.
     pub fn ping_due(&self) -> Option<SimTime> {
-        (self.state == ClientState::Connected && self.keep_alive > 0).then(|| self.last_tx + SimTime::from_secs(self.keep_alive as u64))
+        (self.state == ClientState::Connected && self.keep_alive > 0)
+            .then(|| self.last_tx + SimTime::from_secs(self.keep_alive as u64))
     }
 
     /// PINGREQ bytes if the keep-alive interval elapsed.
@@ -139,7 +176,10 @@ impl MqttClient {
         loop {
             match self.decoder.next_packet() {
                 Ok(Some(p)) => match p {
-                    Packet::ConnAck { session_present, code } => {
+                    Packet::ConnAck {
+                        session_present,
+                        code,
+                    } => {
                         if code == 0 {
                             self.state = ClientState::Connected;
                             ev.push(ClientEvent::Connected { session_present });
@@ -159,7 +199,12 @@ impl MqttClient {
                         {
                             reply.extend(codec::encode(&Packet::PubRec(pid)));
                         }
-                        ev.push(ClientEvent::Message { topic: p.topic, payload: p.payload, qos: p.qos, retain: p.retain });
+                        ev.push(ClientEvent::Message {
+                            topic: p.topic,
+                            payload: p.payload,
+                            qos: p.qos,
+                            retain: p.retain,
+                        });
                     }
                     Packet::PubRel(pid) => reply.extend(codec::encode(&Packet::PubComp(pid))),
                     Packet::SubAck { pid, codes } => ev.push(ClientEvent::SubAck { pid, codes }),
@@ -169,7 +214,10 @@ impl MqttClient {
                         self.ping_outstanding = false;
                         ev.push(ClientEvent::PingResp);
                     }
-                    other => ev.push(ClientEvent::ProtocolError(format!("unexpected {}", other.name()))),
+                    other => ev.push(ClientEvent::ProtocolError(format!(
+                        "unexpected {}",
+                        other.name()
+                    ))),
                 },
                 Ok(None) => break,
                 Err(e) => {

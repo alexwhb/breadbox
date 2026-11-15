@@ -9,7 +9,9 @@ use crate::space::{DeviceId, RadioCard};
 use crate::uart::{UartConfig, UartEncoder, UartFrame};
 use bb_core::SimTime;
 
-const BW_CODES: [u32; 10] = [7_800, 10_400, 15_600, 20_800, 31_250, 41_700, 62_500, 125_000, 250_000, 500_000];
+const BW_CODES: [u32; 10] = [
+    7_800, 10_400, 15_600, 20_800, 31_250, 41_700, 62_500, 125_000, 250_000, 500_000,
+];
 
 #[derive(Debug, Clone)]
 pub struct Rylr896 {
@@ -77,7 +79,14 @@ impl Rylr896 {
     }
 
     fn apply(&self, lora: &mut LoraSpace) {
-        lora.configure(self.node, self.band, self.params, self.power as f64, self.network_id, self.address);
+        lora.configure(
+            self.node,
+            self.band,
+            self.params,
+            self.power as f64,
+            self.network_id,
+            self.address,
+        );
         lora.set_rx(self.node, self.mode == 0);
     }
 
@@ -96,7 +105,10 @@ impl Rylr896 {
 
     fn send(&mut self, now: SimTime, text: &str) {
         if self.powered {
-            self.out.extend(self.enc.push_bytes(text.as_bytes(), now + SimTime::from_us(400)));
+            self.out.extend(
+                self.enc
+                    .push_bytes(text.as_bytes(), now + SimTime::from_us(400)),
+            );
         }
     }
 
@@ -112,7 +124,9 @@ impl Rylr896 {
         }
         if byte == b'\n' {
             let raw = std::mem::take(&mut self.line);
-            let text = String::from_utf8_lossy(&raw).trim_end_matches(['\r', '\n']).to_string();
+            let text = String::from_utf8_lossy(&raw)
+                .trim_end_matches(['\r', '\n'])
+                .to_string();
             self.command(lora, &text, now);
         }
     }
@@ -134,9 +148,23 @@ impl Rylr896 {
         }
         for rx in lora.take_rx(self.node) {
             let data = String::from_utf8_lossy(&rx.data).into_owned();
-            let line = format!("+RCV={},{},{},{},{}\r\n", rx.from, rx.data.len(), data, rx.rssi as i32, rx.snr as i32);
+            let line = format!(
+                "+RCV={},{},{},{},{}\r\n",
+                rx.from,
+                rx.data.len(),
+                data,
+                rx.rssi as i32,
+                rx.snr as i32
+            );
             self.send(now, &line);
-            self.notes.push((now, AnnotationKind::Lora, format!("RX from {} \"{}\" rssi={} dBm snr={}", rx.from, data, rx.rssi as i32, rx.snr)));
+            self.notes.push((
+                now,
+                AnnotationKind::Lora,
+                format!(
+                    "RX from {} \"{}\" rssi={} dBm snr={}",
+                    rx.from, data, rx.rssi as i32, rx.snr
+                ),
+            ));
         }
     }
 
@@ -164,7 +192,9 @@ impl Rylr896 {
             },
             ("+IPR", AtKind::Query) => format!("+IPR={}\r\n", self.uart.baud),
             ("+IPR", AtKind::Set(_)) => match cmd.arg_int(0) {
-                Some(b @ (300 | 1200 | 4800 | 9600 | 19_200 | 28_800 | 38_400 | 57_600 | 115_200)) => {
+                Some(
+                    b @ (300 | 1200 | 4800 | 9600 | 19_200 | 28_800 | 38_400 | 57_600 | 115_200),
+                ) => {
                     self.send(now, ok);
                     self.uart = UartConfig::new(b as u32);
                     self.enc.set_config(self.uart);
@@ -173,14 +203,32 @@ impl Rylr896 {
                 _ => "+ERR=4\r\n".into(),
             },
             ("+PARAMETER", AtKind::Query) => {
-                let bw = BW_CODES.iter().position(|&b| b == self.params.bw_hz).unwrap_or(7);
-                format!("+PARAMETER={},{},{},{}\r\n", self.params.sf, bw, self.params.cr, self.params.preamble)
+                let bw = BW_CODES
+                    .iter()
+                    .position(|&b| b == self.params.bw_hz)
+                    .unwrap_or(7);
+                format!(
+                    "+PARAMETER={},{},{},{}\r\n",
+                    self.params.sf, bw, self.params.cr, self.params.preamble
+                )
             }
             ("+PARAMETER", AtKind::Set(_)) => {
-                let (sf, bw, cr, pre) = (cmd.arg_int(0), cmd.arg_int(1), cmd.arg_int(2), cmd.arg_int(3));
+                let (sf, bw, cr, pre) = (
+                    cmd.arg_int(0),
+                    cmd.arg_int(1),
+                    cmd.arg_int(2),
+                    cmd.arg_int(3),
+                );
                 match (sf, bw, cr, pre) {
                     (Some(sf @ 7..=12), Some(bw @ 0..=9), Some(cr @ 1..=4), Some(pre @ 4..=24)) => {
-                        self.params = LoraParams { sf: sf as u8, bw_hz: BW_CODES[bw as usize], cr: cr as u8, preamble: pre as u16, crc: true, explicit_header: true };
+                        self.params = LoraParams {
+                            sf: sf as u8,
+                            bw_hz: BW_CODES[bw as usize],
+                            cr: cr as u8,
+                            preamble: pre as u16,
+                            crc: true,
+                            explicit_header: true,
+                        };
                         self.apply(lora);
                         ok.into()
                     }
@@ -237,8 +285,13 @@ impl Rylr896 {
                 // Data may contain commas: address,length,<rest>.
                 let body = text.split_once('=').map(|x| x.1).unwrap_or("");
                 let mut it = body.splitn(3, ',');
-                let (Some(a), Some(l), Some(data)) = (it.next(), it.next(), it.next()) else { return self.send(now, "+ERR=4\r\n") };
-                let (Ok(addr), Ok(len)) = (a.trim().parse::<u16>(), l.trim().parse::<usize>()) else { return self.send(now, "+ERR=4\r\n") };
+                let (Some(a), Some(l), Some(data)) = (it.next(), it.next(), it.next()) else {
+                    return self.send(now, "+ERR=4\r\n");
+                };
+                let (Ok(addr), Ok(len)) = (a.trim().parse::<u16>(), l.trim().parse::<usize>())
+                else {
+                    return self.send(now, "+ERR=4\r\n");
+                };
                 if len > 240 {
                     return self.send(now, "+ERR=13\r\n");
                 }
@@ -252,11 +305,22 @@ impl Rylr896 {
                     Ok(end) => {
                         self.sending = true;
                         let air = (end - now).as_secs_f64() * 1e3;
-                        self.notes.push((now, AnnotationKind::Lora, format!("TX to {addr} \"{data}\" (SF{}, {air:.0} ms on air)", self.params.sf)));
+                        self.notes.push((
+                            now,
+                            AnnotationKind::Lora,
+                            format!(
+                                "TX to {addr} \"{data}\" (SF{}, {air:.0} ms on air)",
+                                self.params.sf
+                            ),
+                        ));
                         return;
                     }
                     Err(LoraError::DutyCycle(w)) => {
-                        self.notes.push((now, AnnotationKind::Lora, format!("TX refused: duty cycle, wait {w:.1} s")));
+                        self.notes.push((
+                            now,
+                            AnnotationKind::Lora,
+                            format!("TX refused: duty cycle, wait {w:.1} s"),
+                        ));
                         "+ERR=10\r\n".into()
                     }
                     Err(LoraError::TooLong(_)) => "+ERR=13\r\n".into(),
@@ -269,17 +333,43 @@ impl Rylr896 {
     }
 
     pub fn card(&self, device: DeviceId, lora: &LoraSpace) -> RadioCard {
-        let status = if !self.powered { "off" } else if self.sending { "transmitting" } else { "listening" };
+        let status = if !self.powered {
+            "off"
+        } else if self.sending {
+            "transmitting"
+        } else {
+            "listening"
+        };
         let mut rows = vec![
-            ("Address".into(), format!("{} · network {}", self.address, self.network_id)),
+            (
+                "Address".into(),
+                format!("{} · network {}", self.address, self.network_id),
+            ),
             ("Band".into(), format!("{:.1} MHz", self.band as f64 / 1e6)),
-            ("Modulation".into(), format!("SF{} · {} kHz · 4/{}", self.params.sf, self.params.bw_hz as f64 / 1e3, self.params.cr + 4)),
+            (
+                "Modulation".into(),
+                format!(
+                    "SF{} · {} kHz · 4/{}",
+                    self.params.sf,
+                    self.params.bw_hz as f64 / 1e3,
+                    self.params.cr + 4
+                ),
+            ),
         ];
         if let Some(pos) = lora.node_pos(self.node) {
             let g = &lora.gateway;
             let rssi = lora.rssi_between(pos, g.pos, self.power as f64, self.band) + g.gain_db;
-            rows.push(("Gateway".into(), format!("{:.0} dBm at {:.0} m", rssi, pos.dist(g.pos))));
+            rows.push((
+                "Gateway".into(),
+                format!("{:.0} dBm at {:.0} m", rssi, pos.dist(g.pos)),
+            ));
         }
-        RadioCard { device, label: self.label.clone(), title: "RYLR896 LoRa".into(), status: status.into(), rows }
+        RadioCard {
+            device,
+            label: self.label.clone(),
+            title: "RYLR896 LoRa".into(),
+            status: status.into(),
+            rows,
+        }
     }
 }
