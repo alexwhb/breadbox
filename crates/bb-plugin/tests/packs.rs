@@ -364,3 +364,119 @@ fn theme_plugin_overrides_tokens() {
     assert_eq!(t[0].1.base, "light");
     assert_eq!(t[0].1.colors()["bg"], [0xFD, 0xF6, 0xE3, 0xFF]);
 }
+
+/// 12 V (`vsource`) → the example plugin's LM317 (`.subckt LM317BB` shipped in its
+/// parts.json) with R1 = 240 Ω (OUT → ADJ), R2 = 720 Ω (ADJ → GND) and a 100 Ω load.
+fn lm317_bench(h: &PluginHost, vin: f64) -> (bb_circuit::Project, Bench) {
+    let lib = h.library();
+    let mut bb = BenchBuilder::new(&lib, "lm317", Mode::Playground);
+    let v1 = bb.offboard(
+        "vsource",
+        "V1",
+        0.0,
+        0.0,
+        &[("spec", PropValue::Text(format!("DC {vin}")))],
+    );
+    // the bench's ground: a board's GND (a source's minus is not ground by itself)
+    let uno = bb.offboard("uno", "U9", -40.0, 0.0, &[]);
+    bb.wire((&v1, "minus"), (&uno, "GND"), "black");
+    let u1 = bb.offboard("lm317_bb", "U1", 20.0, 0.0, &[]);
+    let r = |bb: &mut BenchBuilder, name: &str, x: f64, ohms: f64| {
+        bb.offboard(
+            "resistor",
+            name,
+            x,
+            0.0,
+            &[
+                ("resistance", PropValue::Num(ohms)),
+                ("power", PropValue::Num(5.0)),
+            ],
+        )
+    };
+    let r1 = r(&mut bb, "R1", 30.0, 240.0);
+    let r2 = r(&mut bb, "R2", 40.0, 720.0);
+    let rl = r(&mut bb, "R3", 50.0, 100.0);
+    bb.wire((&v1, "plus"), (&u1, "IN"), "red");
+    bb.wire((&u1, "OUT"), (&r1, "1"), "orange");
+    bb.wire((&r1, "2"), (&u1, "ADJ"), "yellow");
+    bb.wire((&r2, "1"), (&u1, "ADJ"), "yellow");
+    bb.wire((&r2, "2"), (&v1, "minus"), "black");
+    bb.wire((&rl, "1"), (&u1, "OUT"), "orange");
+    bb.wire((&rl, "2"), (&v1, "minus"), "black");
+    let p = bb.finish();
+    let b = Bench::new(p.clone(), lib, h.bench_options()).unwrap();
+    (p, b)
+}
+
+/// PLUG-7: a plugin part that ships its own SPICE subcircuit (the `example.lm317` plugin,
+/// built by scripts/build-plugins.sh): it regulates on the bench, its wasm side sees it, it
+/// drops out with a warning, and Pro / `.cir` netlists carry the same `.subckt`.
+#[test]
+fn plugin_part_with_a_subckt_model_regulates_on_the_bench_and_in_pro() {
+    let h = host(&["examples/lm317"]);
+    let lib = h.library();
+    let def = lib.get("lm317_bb").expect("the plugin's part");
+    assert!(
+        def.model
+            .library
+            .iter()
+            .any(|l| l.starts_with(".subckt LM317BB")),
+        "{:?}",
+        def.model.library
+    );
+    // Vout = 1.25 V × (1 + 720 / 240) + 50 µA × 720 Ω
+    let want = 1.25 * (1.0 + 720.0 / 240.0) + 50e-6 * 720.0;
+    let (p, mut b) = lm317_bench(&h, 12.0);
+    b.run_until(SimTime::from_ms(50)).unwrap();
+    let vout = b.pin_voltage("u1", "OUT").unwrap();
+    assert!((vout - want).abs() < 0.01, "bench {vout} V, want {want} V");
+    let r = |b: &Bench, k: &str| {
+        b.readings("u1")
+            .into_iter()
+            .find(|x| x.0 == k)
+            .map(|x| x.1)
+            .unwrap_or(f64::NAN)
+    };
+    assert_eq!(r(&b, "regulating"), 1.0, "{:?}", b.readings("u1"));
+    assert!(
+        (r(&b, "vref") - 1.25).abs() < 0.005,
+        "{:?}",
+        b.readings("u1")
+    );
+    assert!((r(&b, "headroom") - (12.0 - want)).abs() < 0.02);
+    // the same subcircuit in Pro: .op on the circuit's netlist agrees with the bench
+    let nl = bb_circuit::spice_io::pro_netlist(&p, &lib).unwrap();
+    let text = nl.to_spice_text();
+    assert!(
+        text.to_ascii_lowercase()
+            .contains(".subckt lm317bb in adj out"),
+        "{text}"
+    );
+    let mut s = bb_spice::Session::new(&nl).unwrap();
+    s.op().unwrap();
+    let out_net = {
+        let conn = bb_circuit::Connectivity::compute(&p, &lib);
+        conn.net(conn.net_of("u1", "OUT").unwrap()).name.clone()
+    };
+    let v_pro = s.voltage(&out_net).unwrap();
+    assert!(
+        (v_pro - vout).abs() < 1e-3,
+        "Pro {v_pro} V vs bench {vout} V"
+    );
+    let cir = bb_circuit::spice_io::export_cir(&p, &lib).unwrap();
+    assert!(
+        cir.to_ascii_lowercase().contains(".subckt lm317bb"),
+        "{cir}"
+    );
+    // 6 V in: not enough headroom — dropout, with a warning on the bench
+    let (_, mut b) = lm317_bench(&h, 6.0);
+    b.run_until(SimTime::from_ms(50)).unwrap();
+    let vout = b.pin_voltage("u1", "OUT").unwrap();
+    assert!(vout < want - 0.5 && vout > 3.0, "dropout {vout} V");
+    assert_eq!(r(&b, "dropout"), 1.0, "{:?}", b.readings("u1"));
+    assert_eq!(r(&b, "regulating"), 0.0);
+    let warned = b.take_events().into_iter().any(|e| {
+        matches!(&e.event, bb_core::DeviceEvent::Log { text, .. } if text.contains("LM317 in dropout"))
+    });
+    assert!(warned, "dropout warning");
+}

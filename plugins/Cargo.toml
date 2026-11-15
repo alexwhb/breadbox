@@ -13,6 +13,7 @@ members = [
     "examples/template",
     "examples/sawtooth",
     "examples/sensitivity",
+    "examples/lm317",
 ]
 
 [workspace.package]

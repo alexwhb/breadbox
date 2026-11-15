@@ -336,6 +336,13 @@ model as the part's device; a built-in behaviour id reuses it (radio modules nee
 `radio:space`); none = a pure SPICE part. Art in the plugin folder becomes
 `plugin://<id>/<file>`.
 
+A part can ship its own SPICE models: `model.library` holds `.model` / `.subckt` cards
+(de-duplicated by name across parts) and `model.spice` instantiates them, e.g.
+`"$(el:X) $(IN) $(ADJ) $(OUT) LM317BB"`. The same cards reach the bench's co-simulation, Pro
+analyses and `.cir` exports. `plugins/examples/lm317` is a complete example: an LM317 whose
+analog model is a `.subckt` in its `parts.json`, plus a small wasm behaviour (`read:nets`)
+that reports the reference, the headroom and a dropout warning.
+
 ### 7.2 `instrument`
 A part (with jacks as pins) + model + panel. Its input impedance is SPICE elements of its
 template between its probe pins, set live with `bb_set_ext` (`inject:load`); call the input

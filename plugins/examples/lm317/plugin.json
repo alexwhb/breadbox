@@ -1,0 +1,18 @@
+{
+  "id": "example.lm317",
+  "version": "0.1.0",
+  "name": "LM317 regulator (subcircuit example)",
+  "kind": [
+    "part"
+  ],
+  "summary": "Plugin SDK example: a part whose analog model is a SPICE .subckt shipped with the plugin, plus a little wasm behaviour that watches it.",
+  "author": "Breadbox",
+  "license": "MIT",
+  "provides": {
+    "model": "./lm317.wasm",
+    "parts": "./parts.json"
+  },
+  "permissions": [
+    "read:nets"
+  ]
+}

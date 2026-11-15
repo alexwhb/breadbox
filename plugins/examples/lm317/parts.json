@@ -1,0 +1,60 @@
+[
+  {
+    "id": "lm317_bb",
+    "name": "LM317 adjustable regulator",
+    "part_number": "LM317T",
+    "category": "power",
+    "icon": "reg",
+    "ref_prefix": "U",
+    "description": "1.25–37 V adjustable regulator: Vout = 1.25 V × (1 + R2/R1) + 50 µA × R2. Plugin example with its own SPICE subcircuit.",
+    "pins": [
+      "IN:power_in",
+      "ADJ:input",
+      "OUT:power_out"
+    ],
+    "model": {
+      "spice": [
+        "$(el:X) $(IN) $(ADJ) $(OUT) LM317BB"
+      ],
+      "library": [
+        ".subckt LM317BB in adj out\n* 1.25 V between OUT and ADJ, held by a pass element that only sources current\n* (0 … 1.5 A) and needs 1.5–2.5 V of headroom; 50 µA flows out of ADJ. Three\n* terminals, no ground pin: the quiescent current returns through OUT.\nBpass in out I={limit(1000*(v(adj)+1.25-v(out)), 0, 1.5)*limit(v(in)-v(out)-1.5, 0, 1)}\nIadj in adj DC 50u\nRleak in out 10Meg\n.ends LM317BB"
+      ],
+      "behaviour": "wasm",
+      "device_pins": [
+        "IN",
+        "ADJ",
+        "OUT"
+      ]
+    },
+    "inspector": [
+      {
+        "label": "Reference",
+        "value": "1.25 V (OUT − ADJ)"
+      },
+      {
+        "label": "Dropout",
+        "value": "≈ 2 V"
+      },
+      {
+        "label": "Current limit",
+        "value": "1.5 A"
+      },
+      {
+        "label": "Model",
+        "value": ".subckt LM317BB (plugin)"
+      }
+    ],
+    "bench": {
+      "art": "to220",
+      "layout": "row"
+    },
+    "schematic": {
+      "symbol": "box"
+    },
+    "tags": [
+      "plugin",
+      "regulator",
+      "spice"
+    ]
+  }
+]

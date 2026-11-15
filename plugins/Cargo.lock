@@ -32,6 +32,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "bbp_lm317"
+version = "1.0.0"
+dependencies = [
+ "bb-plugin-sdk",
+]
+
+[[package]]
 name = "bbp_logic_analyzer"
 version = "1.0.0"
 dependencies = [
