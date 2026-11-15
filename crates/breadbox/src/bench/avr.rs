@@ -13,7 +13,7 @@ use bb_avr::{Avr, AvrConfig, AvrIo, Pin, PinOwner, PinState, StopOn, StopReason}
 use bb_firmware::{Board, DebugInfo, Debugger, Decision, HitCondition, PauseInfo, PauseReason};
 use bb_radio::espat::EspAtConfig;
 use bb_radio::geo::{Pos, Wall};
-use bb_radio::{DeviceId, RadioSpace, UartWire};
+use bb_radio::{RadioSpace, UartWire};
 use std::collections::HashMap;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};

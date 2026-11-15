@@ -16,6 +16,7 @@
 //! new data is available, so an idle UI costs nothing.
 
 pub mod avr;
+pub mod service;
 
 use bb_core::SimTime;
 use std::path::PathBuf;

@@ -1179,3 +1179,33 @@ mod tests {
         assert_eq!(s.nearest_stop(55.0), Some("Saturated"));
     }
 }
+
+/// A top-down child `Ui` filling `rect` (independent of the parent's layout direction).
+pub fn child_ui(ui: &mut Ui, rect: Rect) -> Ui {
+    ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(rect)
+            .layout(egui::Layout::top_down(egui::Align::Min)),
+    )
+}
+
+/// Wrapped text limited to `max_rows` rows (ellipsis), as a label.
+pub fn wrapped_text(ui: &mut Ui, text: &str, font: FontId, color: Color32, max_rows: usize) -> Response {
+    let mut job = LayoutJob::single_section(
+        text.to_string(),
+        egui::TextFormat {
+            font_id: font,
+            color,
+            ..Default::default()
+        },
+    );
+    job.wrap.max_width = ui.available_width();
+    job.wrap.max_rows = max_rows;
+    job.wrap.break_anywhere = false;
+    let g = ui.painter().layout_job(job);
+    let (r, resp) = ui.allocate_exact_size(g.size(), Sense::hover());
+    ui.painter().galley(r.min, g, color);
+    let t = text.to_string();
+    resp.widget_info(|| WidgetInfo::labeled(Role::Label, true, &t));
+    resp
+}
