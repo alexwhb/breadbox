@@ -33,6 +33,11 @@ reviews and integrates between phases. Agents update **only their own section** 
   (sketchbook in `toolchain/sketchbook`) and every subprocess has a time limit; a stuck
   arduino-cli shows "arduino-cli: no answer" + Retry. See `### closeout-a`.
 
+- (closeout-b → closeout-a) `bb-firmware/src/toolchain.rs` `build_ctags`: `runs(&bin,
+  ["--version"])` right after `std::fs::copy` can fail with `ETXTBSY` when another thread forks
+  at that moment (seen once in `native_install` under load, green alone) — retry the probe a
+  few times on `ETXTBSY` (or copy to a temp name and rename).
+
 ## Status
 
 ### lead
@@ -1124,9 +1129,22 @@ found. Contracts: ARCHITECTURE §5b, §6, §8.
     (`--check` green); `packs::plugin_part_with_a_subckt_model_regulates_on_the_bench_and_in_pro`
     (5.036 V on the bench = Pro `.op` to 1 mV, in the `.cir` export, dropout warning).
     PLUGIN-SDK §7.1 documents parts with their own SPICE models.
-- Verification (`CARGO_TARGET_DIR=target/closeout-b`): `cargo fmt --all --check` (+ plugins),
-  `cargo clippy --workspace --all-targets -D warnings`, plugin wasm clippy + `build-plugins.sh
-  --check` green; `cargo test --workspace` totals below.
+- Verification (`CARGO_TARGET_DIR=target/closeout-b`, at `5f8dd0b`, while `closeout-a` ran its
+  own test-all — load average 25–45): `scripts/test-all.sh --quick` **ALL GREEN** — fmt
+  (workspace + plugins), clippy `-D warnings`, `cargo test --workspace` **753 passed, 0 failed,
+  10 ignored** (36 e2e scenarios), plugin wasm clippy, `build-plugins.sh --check`; the release
+  perf stage **ALL GREEN** too: MCU-3 22.9×, SIM-4 engine 16.5×, SPICE-5 13.0 ms, Workbench
+  frame 0.71 ms, PLAT-4 first frame 210 ms, SIM-4 with the GUI 15.6× (max) / 1.00× (paced),
+  esp32-weather smoke ok.
+- Flaky under that load, root causes: my `radio_panel.rs` clicked a checkbox before
+  `scroll_to_me`'s animation settled (kittest clicks by position) → a `click()` helper that
+  scrolls, waits, re-queries (`5f8dd0b`); `breadbox` `staging_lock_is_exclusive_until_dropped`
+  — a process another test thread forks at that instant shares the locked file description
+  until its exec, so the lock is not free the moment the guard drops → the test waits for the
+  release (`c6c03ec`); `bb-firmware` `native_install::installs_native_gcc_with_brew_and_builds_ctags`
+  failed once ("the freshly built ctags does not run", 6/6 green alone) — same fork race:
+  `std::fs::copy` then an immediate exec can hit `ETXTBSY` while a concurrently forked child
+  holds the new file's write descriptor; left to `closeout-a` (request above).
 
 Changes outside "my" areas (all for the items above): `bb-firmware/src/host/board.rs` +
 `hostcore/HardwareSerial.cpp` (UART stop / pins / reset), `bb-circuit` (`Op::Radios`,
