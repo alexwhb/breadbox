@@ -4,7 +4,7 @@
   "art": "dmm.bench.svg",
   "elements": [
     {"type": "display", "id": "lcd", "rect": [8, 10, 64, 34], "digits": 4, "style": "lcd",
-     "units": ["mV", "V", "Ω", "kΩ", "MΩ", "A", "mA", "Hz"],
+     "units": ["mV", "V", "Ω", "kΩ", "MΩ", "nF", "µF", "mF", "A", "mA", "Hz"],
      "annunciators": ["AUTO", "MANU", "AC", "DC", "HOLD", "MAX", "MIN", "AVG", "·)))", "⊣⊢", "LEAD", "FUSE"],
      "bar": 31},
     {"type": "button", "id": "hold", "rect": [8, 50, 18, 8], "label": "HOLD"},
@@ -17,7 +17,7 @@
       {"value": "mv", "label": "mV", "angle": -45},
       {"value": "ohm", "label": "Ω", "angle": -15},
       {"value": "continuity", "label": "·)))", "angle": 15},
-      {"value": "diode", "label": "⊣⊢", "angle": 45},
+      {"value": "cap", "label": "⊣⊢", "angle": 45},
       {"value": "a", "label": "A", "angle": 75},
       {"value": "ma", "label": "mA", "angle": 105},
       {"value": "hz", "label": "Hz", "angle": 135}

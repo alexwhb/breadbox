@@ -22,7 +22,8 @@ enum Mode {
     MilliV,
     Ohm,
     Continuity,
-    Diode,
+    /// Capacitance (⊣⊢): times the RC charge through the ohms source.
+    Cap,
     Amp,
     MilliAmp,
     Hz,
@@ -36,7 +37,7 @@ const DIAL: [Mode; 10] = [
     Mode::MilliV,
     Mode::Ohm,
     Mode::Continuity,
-    Mode::Diode,
+    Mode::Cap,
     Mode::Amp,
     Mode::MilliAmp,
     Mode::Hz,
@@ -79,7 +80,19 @@ const OHM_RANGES: [Range; 6] = [
     r(60e6, 1e-6, 2, "MΩ", 1e8),
 ];
 const CONT_RANGES: [Range; 1] = [r(600.0, 1.0, 1, "Ω", 1e3)];
-const DIODE_RANGES: [Range; 1] = [r(3.0, 1.0, 3, "V", 2.2e3)];
+/// Capacitance ranges: the ohms source's resistor makes τ ≈ 55 ms at full scale.
+const CAP_RANGES: [Range; 6] = [
+    r(60e-9, 1e9, 2, "nF", 1e6),
+    r(600e-9, 1e9, 1, "nF", 1e5),
+    r(6e-6, 1e6, 3, "µF", 1e4),
+    r(60e-6, 1e6, 2, "µF", 1e3),
+    r(600e-6, 1e6, 1, "µF", 1e2),
+    r(6e-3, 1e3, 3, "mF", 1e1),
+];
+/// Charge voltage of the capacitance test.
+const CAP_V: f64 = 1.0;
+/// The meter's own input capacitance (part template), subtracted from the reading.
+const C_IN: f64 = 100e-12;
 const A_RANGES: [Range; 2] = [r(6.0, 1.0, 3, "A", 0.0), r(10.0, 1.0, 2, "A", 0.0)];
 const MA_RANGES: [Range; 2] = [r(0.06, 1e3, 2, "mA", 0.0), r(0.6, 1e3, 1, "mA", 0.0)];
 const HZ_RANGES: [Range; 1] = [r(1e6, 1.0, 1, "Hz", 0.0)];
@@ -90,7 +103,7 @@ fn ranges(m: Mode) -> &'static [Range] {
         Mode::MilliV => &MV_RANGES,
         Mode::Ohm => &OHM_RANGES,
         Mode::Continuity => &CONT_RANGES,
-        Mode::Diode => &DIODE_RANGES,
+        Mode::Cap => &CAP_RANGES,
         Mode::Amp => &A_RANGES,
         Mode::MilliAmp => &MA_RANGES,
         Mode::Hz => &HZ_RANGES,
@@ -146,6 +159,15 @@ struct Dmm {
     /// Last conversion's mean and total RMS of V(VΩ − COM).
     v_mean: f64,
     v_rms: f64,
+    /// Capacitance test: discharge (since) → charge (from t0) → crossing → value.
+    cap_phase: CapPhase,
+    cap_value: Option<f64>,
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum CapPhase {
+    Discharge { since: f64 },
+    Charge { t0: f64 },
 }
 
 fn spec_str(cfg: &Config, key: &str) -> Option<String> {
@@ -176,7 +198,15 @@ impl Dmm {
     fn apply_circuit(&self, ctx: &Ctx) {
         let (v, rref) = match self.mode {
             Mode::Ohm | Mode::Continuity => (1.0, self.cur().map(|r| r.rref).unwrap_or(1e3)),
-            Mode::Diode => (3.0, 2.2e3),
+            // the capacitance test charges / discharges through the range resistor; the
+            // source voltage is switched by the test itself (`cap_step`)
+            Mode::Cap => (
+                match self.cap_phase {
+                    CapPhase::Charge { .. } => CAP_V,
+                    CapPhase::Discharge { .. } => 0.0,
+                },
+                self.cur().map(|r| r.rref).unwrap_or(1e4),
+            ),
             _ => (0.0, 1e12),
         };
         ctx.set_ext("vohm", v);
@@ -199,6 +229,8 @@ impl Dmm {
         self.shown = None;
         self.settle_until = ctx.now() + self.autorange_s;
         self.rises.clear();
+        self.cap_phase = CapPhase::Discharge { since: ctx.now() };
+        self.cap_value = None;
         self.apply_circuit(ctx);
         self.last = Dmm::integrals(ctx);
         if self.mode == Mode::Hz {
@@ -215,7 +247,47 @@ impl Dmm {
                 self.text.clear();
             }
             self.settle_until = ctx.now() + self.autorange_s;
+            self.cap_phase = CapPhase::Discharge { since: ctx.now() };
+            self.cap_value = None;
             self.apply_circuit(ctx);
+        }
+    }
+
+    /// Thevenin resistance seen by the capacitor (range resistor ∥ input) and the voltage it
+    /// charges towards.
+    fn cap_source(&self) -> (f64, f64) {
+        let rref = self.cur().map(|r| r.rref).unwrap_or(1e4);
+        (
+            rref * self.rin / (rref + self.rin),
+            CAP_V * self.rin / (rref + self.rin),
+        )
+    }
+
+    /// One step of the capacitance test (at each conversion): once the capacitor is
+    /// discharged, switch the source on and watch for 63.2 % of the final voltage; no
+    /// crossing within 8 τ of full scale = over range.
+    fn cap_step(&mut self, ctx: &Ctx) {
+        let full = self.cur().map(|r| r.full).unwrap_or(6e-6);
+        let (r_th, v_inf) = self.cap_source();
+        let tau_full = r_th * (full + C_IN);
+        let now = ctx.now();
+        match self.cap_phase {
+            CapPhase::Discharge { since } => {
+                let v = ctx.pin_voltage(self.vo).abs();
+                if v < 0.002 * v_inf || now - since > 12.0 * tau_full {
+                    self.cap_phase = CapPhase::Charge { t0: now };
+                    let thr = (1.0 - (-1.0f64).exp()) * v_inf;
+                    ctx.watch(self.vo, 0.5 * thr, thr);
+                    self.apply_circuit(ctx);
+                }
+            }
+            CapPhase::Charge { t0 } => {
+                if now - t0 > 8.0 * tau_full {
+                    self.cap_value = Some(f64::INFINITY);
+                    self.cap_phase = CapPhase::Discharge { since: now };
+                    self.apply_circuit(ctx);
+                }
+            }
         }
     }
 
@@ -268,12 +340,9 @@ impl Dmm {
                     (vmean / i_x).max(0.0)
                 }
             }
-            Mode::Diode => {
-                if vmean > 2.95 {
-                    f64::INFINITY
-                } else {
-                    vmean
-                }
+            Mode::Cap => {
+                self.cap_step(ctx);
+                return self.cap_value.take();
             }
             Mode::Amp => d.q_a / d.t,
             Mode::MilliAmp => d.q_ma / d.t,
@@ -352,7 +421,13 @@ impl Dmm {
             return;
         }
         self.acc.push(v);
-        if self.acc.len() as u32 >= DISPLAY_EVERY || self.shown.is_none() {
+        // a capacitance reading is one whole charge cycle: show each one
+        let every = if self.mode == Mode::Cap {
+            1
+        } else {
+            DISPLAY_EVERY
+        };
+        if self.acc.len() as u32 >= every || self.shown.is_none() {
             let finite: Vec<f64> = self.acc.iter().copied().filter(|x| x.is_finite()).collect();
             let mean = if finite.len() < self.acc.len() {
                 f64::INFINITY
@@ -403,7 +478,7 @@ impl Dmm {
             Mode::AcV => a.push("AC".into()),
             Mode::DcV | Mode::MilliV | Mode::Amp | Mode::MilliAmp => a.push("DC".into()),
             Mode::Continuity => a.push("·)))".into()),
-            Mode::Diode => a.push("⊣⊢".into()),
+            Mode::Cap => a.push("⊣⊢".into()),
             _ => {}
         }
         if self.hold {
@@ -462,7 +537,7 @@ impl Dmm {
             let full = Dmm::format(r.full * 0.99999, r);
             p.readouts
                 .push(("Range".into(), format!("{full} {}", r.unit)));
-            if matches!(self.mode, Mode::Ohm | Mode::Continuity) {
+            if matches!(self.mode, Mode::Ohm | Mode::Continuity | Mode::Cap) {
                 p.readouts.push((
                     "Test current".into(),
                     format!("{:.0} µA", 1.0 / r.rref * 1e6),
@@ -532,7 +607,7 @@ impl Part for Dmm {
                     "mv",
                     "ohm",
                     "continuity",
-                    "diode",
+                    "cap",
                     "a",
                     "ma",
                     "hz",
@@ -570,6 +645,8 @@ impl Part for Dmm {
             alert: false,
             v_mean: 0.0,
             v_rms: 0.0,
+            cap_phase: CapPhase::Discharge { since: 0.0 },
+            cap_value: None,
         })
     }
 
@@ -603,6 +680,19 @@ impl Part for Dmm {
     }
 
     fn on_edge(&mut self, ctx: &Ctx, pin: usize, high: bool) {
+        if pin == self.vo
+            && high
+            && self.mode == Mode::Cap
+            && let CapPhase::Charge { t0 } = self.cap_phase
+        {
+            // the crossing of 63.2 % of the final voltage is one time constant
+            let (r_th, _) = self.cap_source();
+            let c = (ctx.now() - t0) / r_th - C_IN;
+            self.cap_value = Some(c.max(0.0));
+            self.cap_phase = CapPhase::Discharge { since: ctx.now() };
+            self.apply_circuit(ctx);
+            return;
+        }
         if pin == self.vo && high && self.mode == Mode::Hz {
             self.rises.push(ctx.now());
             if self.rises.len() > 20_000 {

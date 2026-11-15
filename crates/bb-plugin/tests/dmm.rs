@@ -361,3 +361,46 @@ fn dmm_ohms_continuity_and_series_current() {
     assert_eq!(reading(&b, "dmm1", "fuse_ma"), 1.0);
     assert_eq!(display(&mut b, "dmm1").0, "FUSE");
 }
+
+/// ⊣⊢ capacitance (PLUG-5): the meter times the RC charge of the capacitor through its range
+/// resistor and auto-ranges from 60 nF up to the right range.
+#[test]
+fn dmm_capacitance_mode_measures_and_autoranges() {
+    let h = host();
+    for (farads, unit, shown, tol) in [
+        (100e-9, "nF", 100e-9 * 1e9, 0.02),
+        (4.7e-6, "µF", 4.7, 0.02),
+        (47e-6, "µF", 47.0, 0.02),
+    ] {
+        let lib = h.library();
+        let mut bb = BenchBuilder::new(&lib, "dmm-cap", Mode::Playground);
+        let m = bb.offboard(
+            "dmm_handheld",
+            "DMM1",
+            30.0,
+            0.0,
+            &[("mode", PropValue::Text("cap".into()))],
+        );
+        let c = bb.offboard(
+            "capacitor",
+            "C1",
+            40.0,
+            0.0,
+            &[("capacitance", PropValue::Num(farads))],
+        );
+        bb.wire((&m, "VO"), (&c, "1"), "red");
+        bb.wire((&m, "COM"), (&c, "2"), "black");
+        let mut b = Bench::new(bb.finish(), lib, h.bench_options()).unwrap();
+        b.run_until(SimTime::from_secs(6)).unwrap();
+        let v = reading(&b, "dmm1", "value");
+        assert!(
+            (v / farads - 1.0).abs() < tol,
+            "{farads} F read as {v} F"
+        );
+        let (text, u, ann) = display(&mut b, "dmm1");
+        assert_eq!(u, unit, "{text} {u}");
+        let x: f64 = text.parse().unwrap();
+        assert!((x / shown - 1.0).abs() < tol, "{text} {u}");
+        assert!(ann.iter().any(|a| a == "⊣⊢"), "{ann:?}");
+    }
+}

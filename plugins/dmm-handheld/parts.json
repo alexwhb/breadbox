@@ -32,7 +32,7 @@
             "value": "continuity"
           },
           {
-            "value": "diode"
+            "value": "cap"
           },
           {
             "value": "a"
@@ -60,7 +60,7 @@
         "$(el:R:ohm) $(n:src) $(VO) {$(ext:rohm)}",
         "$(el:R:a) $(A) $(COM) {$(ext:ra)}",
         "$(el:R:ma) $(MA) $(COM) {$(ext:rma)}",
-        "$(el:R:leak) $(COM) $(gnd) 1e12"
+        "$(el:R:leak) $(COM) $(gnd) 1e9"
       ],
       "ext": [
         {
