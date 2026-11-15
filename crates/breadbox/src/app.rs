@@ -689,11 +689,15 @@ impl BreadboxApp {
                     if let Some(dest) = platform::save_folder("Save project as", &suggested) {
                         match p.save_as(&dest) {
                             Ok(mut np) => {
-                                // in-memory circuit edits go with the copy
-                                if let Some(doc) = &self.ctx.circuit
-                                    && let Err(e) = doc.project().save(&np.dir)
-                                {
-                                    log::warn!("save copy: {e}");
+                                // in-memory circuit edits go with the copy (prebuilt images
+                                // from outside the folder are copied in and re-pointed)
+                                let saved = self.ctx.circuit.as_ref().map(|doc| {
+                                    let mut c = doc.project().clone();
+                                    project::localize_firmware(&mut c, &doc.dir, &np.dir)
+                                        .and_then(|_| c.save(&np.dir).map_err(Into::into))
+                                });
+                                if let Some(Err(e)) = saved {
+                                    log::warn!("save copy: {e:#}");
                                 } else if let Ok(fresh) = Project::load(&np.dir) {
                                     np = fresh;
                                 }
