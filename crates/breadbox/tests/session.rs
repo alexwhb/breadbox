@@ -133,6 +133,7 @@ fn session_1_playground_led_blinks_from_my_own_sketch() {
         "Breadboard",
         canvas.center() + egui::vec2(canvas.width() * 0.18, 0.0),
     );
+    screenshot(&mut h, "session-2-breadboard");
     // the breadboard runs off the canvas: Zoom → Fit to view
     let z = h
         .query_all_by_label_contains("Zoom ")
@@ -439,5 +440,117 @@ fn session_2_pro_rc_low_pass_shows_its_corner() {
             .is_ok_and(|t| t.contains("R1 in out 1k") && t.contains(".ac "))),
         "netlist saved: {:?}",
         std::fs::read_to_string(&file)
+    );
+}
+
+/// Screen position of a pin in the open lesson's bench (the lesson keeps its own circuit
+/// document; geometry comes from the lesson's bench file + the lesson canvas's view).
+fn lesson_pin(h: &H, bench: &bb_circuit::Project, part: &str, pin: &str) -> egui::Pos2 {
+    let lib = bb_circuit::Library::builtin();
+    let p = bench.part(part).expect("part");
+    let leads = bb_circuit::Project::bench_leads(lib.get(&p.part).unwrap(), p).unwrap();
+    let (_, x, y) = leads.iter().find(|(n, _, _)| n == pin).unwrap();
+    view(h).to_screen(*x, *y)
+}
+
+fn next_enabled(h: &H, label: &str) -> bool {
+    h.query_all_by_label(label)
+        .next()
+        .is_some_and(|n| !n.accesskit_node().is_disabled())
+}
+
+fn next(h: &mut H, label: &str) {
+    assert!(
+        wait_for(h, 60.0, |h| next_enabled(h, label)),
+        "{label} never enabled"
+    );
+    h.get_by_label(label).click();
+    h.run_steps(4);
+}
+
+#[test]
+fn session_3_first_lesson_closes_and_breaks_a_loop() {
+    projects();
+    let progress = PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("session-progress-{}.json", std::process::id()));
+    let _ = std::fs::remove_file(&progress);
+    let mut h = app_harness(breadbox::AppOptions {
+        progress_path: Some(progress.clone()),
+        ..breadbox::AppOptions::test()
+    });
+    // Home → Open lessons → Track 1, lesson 1
+    h.get_by_label("Open lessons").click();
+    h.run_steps(4);
+    assert_eq!(h.state().ctx.route, Route::Lessons);
+    h.get_by_label("Lesson 1: What is a circuit?").click();
+    h.run_steps(5);
+    assert!(has_label(&h, "A loop for the current"));
+    screenshot(&mut h, "session-8-lesson");
+    next(&mut h, "Next: close the loop");
+    // build: a jumper from the supply's VBUS to hole a5 (column 5, R1's top lead)
+    let bench = bb_circuit::Project::from_json(
+        &std::fs::read_to_string(repo().join("lessons/1-electricity/what-is-a-circuit.bench.json"))
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(wait_for(&mut h, 10.0, |h| h
+        .state()
+        .ctx
+        .egui
+        .data(|d| d.get_temp::<breadbox::canvas::pen::View>(egui::Id::unique("bench-view")))
+        .is_some()));
+    let a = lesson_pin(&h, &bench, "ps1", "VBUS");
+    let b = lesson_pin(&h, &bench, "bb1", "a5");
+    press_drag(&mut h, a, b);
+    next(&mut h, "Next: break the loop");
+    // break it: select the black jumper (column 10 → GND rail) and delete it
+    let (p0, p1) = {
+        let lib = bb_circuit::Library::builtin();
+        let bb = bench.part("bb1").unwrap();
+        let leads = bb_circuit::Project::bench_leads(lib.get(&bb.part).unwrap(), bb).unwrap();
+        let at = |n: &str| {
+            let (_, x, y) = leads.iter().find(|(m, _, _)| m == n).unwrap();
+            (*x, *y)
+        };
+        (at("a10"), at("t-8"))
+    };
+    let c = breadbox::canvas::bench::wire_curve(p0, p1);
+    // the bezier's midpoint
+    let mid = (
+        0.125 * c[0].0 + 0.375 * c[1].0 + 0.375 * c[2].0 + 0.125 * c[3].0,
+        0.125 * c[0].1 + 0.375 * c[1].1 + 0.375 * c[2].1 + 0.125 * c[3].1,
+    );
+    let m = view(&h).to_screen(mid.0, mid.1);
+    h.hover_at(m);
+    h.run_steps(1);
+    for pressed in [true, false] {
+        h.event(egui::Event::PointerButton {
+            pos: m,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        });
+        h.run_steps(1);
+    }
+    h.key_press(egui::Key::Backspace);
+    h.run_steps(3);
+    next(&mut h, "Next: what makes a circuit?");
+    // the quiz
+    h.get_by_label("A closed loop from + through the LED back to −")
+        .click();
+    h.run_steps(3);
+    screenshot(&mut h, "session-9-quiz");
+    next(&mut h, "Finish lesson");
+    assert!(
+        wait_for(&mut h, 10.0, |h| has_label(
+            h,
+            "Lesson 1: What is a circuit? (done)"
+        )),
+        "lesson 1 marked done in the track nav"
+    );
+    let saved = std::fs::read_to_string(&progress).unwrap_or_default();
+    assert!(
+        saved.contains("what-is-a-circuit"),
+        "progress saved: {saved}"
     );
 }

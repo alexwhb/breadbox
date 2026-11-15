@@ -354,7 +354,15 @@ impl LessonsScreen {
                             let chosen = ans == Some(i);
                             let right = chosen && i == q.answer;
                             let w = ui.available_width();
-                            let (r, resp) = ui.allocate_exact_size(vec2(w, 36.0), Sense::click());
+                            // long answers wrap inside the option (min one 36 px line)
+                            let galley = ui.painter().layout(
+                                o.clone(),
+                                font::ui(13.0),
+                                p.text_dim,
+                                (w - 24.0).max(40.0),
+                            );
+                            let hgt = (galley.size().y + 18.0).max(36.0);
+                            let (r, resp) = ui.allocate_exact_size(vec2(w, hgt), Sense::click());
                             let (fill, stroke) = if right {
                                 (
                                     Color32::from_rgb(0x1C, 0x2A, 0x1F),
@@ -374,11 +382,9 @@ impl LessonsScreen {
                                 Stroke::new(1.0, stroke),
                                 StrokeKind::Inside,
                             );
-                            ui.painter().text(
-                                pos2(r.left() + 12.0, r.center().y),
-                                Align2::LEFT_CENTER,
-                                o,
-                                font::ui(13.0),
+                            ui.painter().galley(
+                                pos2(r.left() + 12.0, r.center().y - galley.size().y / 2.0),
+                                galley,
                                 p.text_dim,
                             );
                             let oo = o.clone();
