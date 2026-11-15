@@ -568,7 +568,8 @@ pub fn default_projects_dir() -> PathBuf {
 /// that says what to do, an RC low-pass to start from, and `.op`.
 pub fn starter_netlist(name: &str) -> String {
     format!(
-        "* {name} — type a SPICE netlist; it is saved with the project.\n\
+        "* {name} — type a SPICE netlist: it is saved with the project and builds the\n\
+         * schematic (Schematic tab) as you type.\n\
          * Analyses on the right add / switch dot-cards (.tran, .dc, .ac, .mc, .noise, .op).\n\
          *\n\
          * For example, an RC low-pass (fc = 1 / (2 pi R C) = 1 kHz):\n\
