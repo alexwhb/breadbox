@@ -319,3 +319,97 @@ fn an_unwired_uart_hears_nothing_and_a_reset_reopens_it() {
         "{l:#?}"
     );
 }
+
+/// MCU-6 `WiFiServer`: an ESP32 serves HTTP on port 80; a virtual client station joins SIM-AP,
+/// connects to the board's DHCP address, sends a request and reads the answer to the close.
+#[test]
+fn esp32_wifiserver_answers_a_virtual_client() {
+    use bb_radio::geo::Pos;
+    use bb_radio::net::NetEvent;
+    use std::net::{Ipv4Addr, SocketAddrV4};
+    let lib = lib();
+    let Some(mut b) = esp32_bench(&lib, "wifi_server", |_, _| {}) else {
+        return;
+    };
+    let ip = |b: &Bench| {
+        lines(b, "u1").iter().find_map(|l| {
+            l.strip_prefix("ip=")
+                .and_then(|x| x.parse::<Ipv4Addr>().ok())
+        })
+    };
+    while ip(&b).is_none() && b.time() < SimTime::from_secs(10) {
+        b.run_for(SimTime::from_ms(50)).unwrap();
+    }
+    let server = ip(&b).expect("the ESP32 joined and printed its IP");
+    // the virtual client: a station on the same AP
+    let client = {
+        let net = &mut b.radio().unwrap().space.net;
+        let s = net.add_station("client", Pos::new(1.0, 1.0));
+        let now = net.now();
+        net.join(s, "SIM-AP", Some("breadbox"), now).unwrap();
+        s
+    };
+    let mut events: Vec<NetEvent> = Vec::new();
+    let wait = |b: &mut Bench, events: &mut Vec<NetEvent>, f: &dyn Fn(&NetEvent) -> bool| {
+        let end = b.time() + SimTime::from_secs(10);
+        loop {
+            b.run_for(SimTime::from_ms(5)).unwrap();
+            events.extend(b.radio().unwrap().space.net.take_events(client));
+            if events.iter().any(f) || b.time() >= end {
+                return events.iter().any(f);
+            }
+        }
+    };
+    assert!(
+        wait(&mut b, &mut events, &|e| matches!(
+            e,
+            NetEvent::GotIp { .. }
+        )),
+        "{events:?}"
+    );
+    let sock = {
+        let now = b.time();
+        let net = &mut b.radio().unwrap().space.net;
+        net.tcp_connect(client, SocketAddrV4::new(server, 80), now)
+            .unwrap()
+    };
+    assert!(
+        wait(&mut b, &mut events, &|e| matches!(
+            e,
+            NetEvent::TcpConnected { .. }
+        )),
+        "{events:?}"
+    );
+    {
+        let now = b.time();
+        let net = &mut b.radio().unwrap().space.net;
+        net.tcp_send(sock, b"GET /hello HTTP/1.0\r\nHost: esp32.sim\r\n\r\n", now)
+            .unwrap();
+    }
+    assert!(
+        wait(&mut b, &mut events, &|e| matches!(
+            e,
+            NetEvent::TcpClosed { .. }
+        )),
+        "{events:?}"
+    );
+    let body: Vec<u8> = events
+        .iter()
+        .filter_map(|e| match e {
+            NetEvent::TcpData { sock: s, data } if *s == sock => Some(data.clone()),
+            _ => None,
+        })
+        .flatten()
+        .collect();
+    let body = String::from_utf8_lossy(&body);
+    assert!(body.starts_with("HTTP/1.0 200 OK\r\n"), "{body:?}");
+    assert!(
+        body.ends_with("\r\n\r\nhello from esp32, hit 1\n"),
+        "{body:?}"
+    );
+    let l = lines(&b, "u1");
+    assert!(
+        l.contains(&"served GET /hello HTTP/1.0".to_string()),
+        "{l:#?}"
+    );
+}
