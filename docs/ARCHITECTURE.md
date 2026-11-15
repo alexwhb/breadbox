@@ -135,8 +135,16 @@ pub trait Device: Send {
   `motion(pos,range,window)` (PIR), `magnetic_field(pos)` (hall), `noise_enabled`.
   `WorldMut`: `set_var`, `water(pot, ml)`, `set_heat_source`, `set_light_source`.
 - Built-in behaviours live in `bb_sim::devices` behind a `DeviceRegistry` (behaviour id →
-  factory); plugins and the radio glue register or replace factories (e.g. `esp01`, `hm10`,
-  `hc05`, which default to a small AT responder in `bb_sim::devices::AtStub`).
+  factory); plugins register theirs (`bb_plugin::PluginHost`). `esp01`, `hm10`, `hc05` and
+  `rylr896` are `bb_sim::devices::RadioModule`s bridging their UART pins to the bench's
+  `RadioService` (§6c); without a radio service they fall back to `AtStub`.
+- Additive hooks (all defaulted): `DeviceCtx::service(name) -> Option<&mut dyn Any>` (the
+  bench's services, e.g. `"radio"`), `DeviceCtx::capture(pin, period)` / `samples(pin, from,
+  to)` (waveform recording for instruments: every change on digital nets, at least every
+  `period` on analog nets — the scheduler syncs that often while a capture is active),
+  `Device::panel() -> Option<Value>` (live instrument panel → `PartTelemetry.panel`),
+  `Device::i2c_transfer(ctx, addr, write, read)` / `spi_transfer(ctx, mosi)` (transaction-level
+  buses for API-level boards).
 - UART devices use `bb_sim::devices::UartPort`: it decodes the MCU's TX waveform from edge
   timestamps (`bb_radio::uart` decoder) and drives RX with exact bit timing.
 
@@ -483,7 +491,24 @@ step(limit):                         // MCUs lead, the analog circuit lags
   ERC/DRC summary, stats); bounded channels for serial lines, events and audio. The UI never
   blocks on the sim; slow consumers drop the oldest stream items.
 - Services survive a full reset because `BenchOptions::services` holds factories
-  (`Arc<dyn Fn(&Project) -> Box<dyn Service>>`), not instances.
+  (`Arc<dyn Fn(&Project) -> Box<dyn Service>>`), not instances. The default options hold the
+  radio service (`bb_sim::radio::service_factory()`). `Service::take_device_wakes()` lets a
+  service wake a device (`(part, time, token)`); `Service::take_notes()` returns serial
+  annotations (`ServiceNote`), emitted as `SimEvent`s from the radio's designator and shown in
+  the serial monitor of the MCU(s) sharing a signal net with it. `BenchOptions::world_models`
+  adds `bb_world::WorldModel`s (world-model plugins).
+- Integration of tracked element currents/energies uses the sample at the *end* of each
+  interval (inputs change at sync points; capacitive nodes settle after the re-solve), and an
+  MCU drive change on an analog net forces the next sync one quantum later. The analog
+  session's max step is 10× the sync quantum (10 µs by default).
+- Rebuilds keep pending device wake-ups (remapped to the new device list).
+- `Bench::what_if_ext(name, value, nets) -> (with, changed)`: DC operating point of the frozen
+  circuit with one ext variable changed (instrument loading callouts).
+- API-level boards run with the whole bench at hand: `analogRead` from the solution, Wire →
+  devices on the SDA net (`i2c_transfer`), SPI → devices on the SCK net (`spi_transfer`),
+  Serial1/2 → real UART waveforms on their pins (TX idles high from `begin()`, RX decoded and
+  injected at the stop-bit time; ESP32 `Serial1/2` = UART1 (9/10) / UART2 (16/17), Pico
+  `Serial1/2` = UART0 (GP0/1) / UART1 (GP8/9); pin remapping in `begin()` is ignored).
 
 ## 6b. Radios (`bb-radio`)
 
@@ -539,20 +564,74 @@ Example sketches live in `examples/<project>/firmware/<MCU ref>/<sketch>/` with 
 (`default_fqbn`); `scripts/build-test-firmware.sh` compiles the AVR ones into
 `examples/fixtures/<sketch>.<board>.{hex,elf}` (host-board sketches are compiled at run time).
 
+## 6c. Radios on the bench (`bb_sim::radio`)
+
+- `RadioService` (service `"radio"`) owns the bench's `RadioSpace`, built by
+  `RadioService::for_project` from `project.radios` = `ProjectRadios { RadioSettings (flattened),
+  bench_pos }` (default: `SIM-AP` at the origin, one interior wall at x = 1.5 m, bench at
+  (3.2, 0) → `-54 dBm (3.2 m, 1 wall)`). `ProjectRadios::store(&mut project)` writes it back;
+  `Command::Radio` keeps the engine's project in sync.
+- Modules: `RadioModule` devices `attach(part, ModuleKind)` on start (the modem survives
+  rebuilds); RX bytes go to `uart_rx` at their stop-bit time (framing errors dropped), modem
+  frames come back through `take_frames` (and a `TOKEN_RADIO_TX` wake when the space produced
+  them while stepping). EN/RST have 10 k pull-ups (unconnected = enabled); HC-05 KEY, HM-10 /
+  HC-05 STATE (high while the phone is connected) are modelled.
+- Host boards get a radio on their first Wi-Fi/BLE request. Extensions (`RadioExtension`, radio
+  plugins) run after every radio step with `&mut RadioSpace`; `service_factory_with(setup)`
+  applies radio-pack hooks.
+- UI: `Telemetry.radio: Option<RadioTelemetry>` (cards, last 200 packet-log rows with
+  `time_label/dir/text/dropped/proto`, conditions, APs, `has_ble`/`has_lora`, phone
+  `{scan, connected, services, log, terminal}`, MQTT explorer rows, LAN bridge config/status,
+  bench_pos); `Command::Radio(RadioCommand)` (conditions, APs, LAN bridge, bench position,
+  settings, explorer subscribe/unsubscribe/publish, clear log, `Phone(PhoneCommand)`);
+  `Command::ExportPacketLog { format, reply }`; `RadioService::uart_transcript(part)` (UART spy).
+
 ## 7. Plugin runtime (`bb-plugin`)
 
-- Manifest (`plugin.json`): see SPEC `PLUG-1`; JSON Schema in `docs/plugin.schema.json`.
-- Sandbox: wasmtime `Engine` with fuel + epoch deadline, `StoreLimits` memory cap, no WASI by
-  default (WASI only with `fs:project` permission, preopened to the project folder).
-- ABI: core-wasm exports (`bb_abi_version`, `bb_alloc`, `bb_init(cfg_ptr,len)`, `bb_on_wake`,
-  `bb_on_edge`, `bb_on_tick`, `bb_visual`, `bb_instrument_read`, `bb_generator_eval(t)`,
-  `bb_analysis_run`, `bb_world_step`) and host imports in module `bb` (`now`, `pin_voltage`,
-  `set_drive`, `set_ext`, `wake_at`, `watch`, `world_get`, `world_set`, `emit`, `log`, `solve_op`
-  …) — each import checks the declared permission. Messages bigger than scalars are JSON in
-  guest memory. Exact ABI lives in `docs/PLUGIN-SDK.md`.
-- Adapters turn a loaded plugin into `bb_core::Device` (parts, instruments), a generator
-  (custom source), a world model, or an analysis — registered into `bb-sim`/`bb-circuit` the
-  same way built-ins are.
+The ABI and every import are specified in `docs/PLUGIN-SDK.md`; the manifest schema is
+`docs/plugin.schema.json` (kept in sync by `bb-plugin/tests/schema.rs`).
+
+- **Manifest** (`manifest.rs`): `Manifest { id, version, name, kind[], api, summary,
+  description, provides { instrument, probes, model, view3d, view2d, panel, parts, boards[],
+  world_model, generator, analysis, radio, theme, lessons }, spice { load, library }, specs,
+  highlights[], permissions[], entry, assets[], min_breadbox, limits }`; `validate(root)` checks
+  ids, semver, ABI, kinds vs contents, safe relative paths + existence, and the permissions the
+  contents imply (`spice.load` → `inject:load`/`drive:pins`, world models → `world:*`, radio
+  packs → `radio:space`, generators → `drive:pins`).
+- **Registry** (`registry.rs`): bundled dir (`catalog.json`: order, preinstalled, planned),
+  user dir (`~/Library/Application Support/Breadbox/plugins`, `state.json`), local folders.
+  `catalog()`, `install_package(bytes, granted, allow_downgrade)`, `install_bundled`,
+  `load_local`, `uninstall`, `set_enabled`, `grant`, `check_changes()` (hot reload),
+  `compiled(id)`. Packages (`package.rs`): `inspect`, `unpack` (zip-slip safe, limits), `pack`.
+- **Sandbox** (`sandbox.rs`): one wasmtime `Engine` (fuel + epoch interruption, 1 ms ticker
+  thread); `Compiled` checks exports (`memory`, `bb_abi_version`, `bb_alloc`) and imports (`bb.*`
+  only; WASI preview 1 only with `fs:project`, preopened to the project folder); `Sandbox` = one
+  `Store` with `StoreLimits` (memory cap, trap on grow failure), fresh fuel + epoch deadline per
+  call. During a call the host state holds a raw pointer to the caller's context
+  (`DeviceCtx`, `WorldMut`, `RadioSpace`) — set before the synchronous call, cleared after.
+  Traps → `PluginError::{Faulted, Violation}`; the adapter stops that instance only.
+- **Adapters**: `device::WasmDevice` (parts/instruments; hooks → exports; pulls visual /
+  readings / panel pushed by the guest), `world::WasmWorldModel` (`bb_world::WorldModel`),
+  `radio::WasmRadioExtension` (`bb_sim::radio::RadioExtension`), `generator::part_json`
+  (samples `bb_generator_eval` into a periodic `table()` B-source part),
+  `analysis::run` (+ `run_netlist` behind `bb_spice_run`), `board::part_json` (declarative AVR
+  variant → part with `mcu` pin mapping), `theme::Theme`.
+- **Host** (`host.rs`): `PluginHost::new(&mut Registry, project_dir)` /
+  `from_dirs(dirs, project_dir)` → `library()` (built-in + plugin parts; plugin art as
+  `plugin://<id>/<file>`, `asset_path(url)`), `device_registry()`, `bench_options()` /
+  `apply(&mut opts)` (registry, radio service with pack hooks, world models),
+  `instruments()`, `panel_for_part(def)`, `themes()`, `lesson_dirs()`, `analyses()`,
+  `run_analysis(id, netlist, options)`, `errors`. `loading_callout(&mut bench, part)` computes
+  the instrument load's effect on the probed node (ext `rin`) from `Bench::what_if_ext`.
+- **Instrument panels** (`panel.rs`): static `Panel { size, color, art, elements: [display |
+  button | rotary | knob | switch | jack | led | screen | label] }` + live `PanelState {
+  displays, leds, screens { traces, markers, header, cursors }, controls, readouts }`. Controls
+  → `UserInput::Value { key: control id, value }`. Drawing on screens needs `ui:panel`.
+- **First-party plugins** (`plugins/`, Rust → wasm via `scripts/build-plugins.sh`, `.wasm`
+  committed): `community.dmm-handheld`, `breadbox.scope-4ch`, `breadbox.logic-analyzer`,
+  `breadbox.bench-psu`, `breadbox.function-generator`, `breadbox.soil-weather`,
+  `breadbox.lora-gateway`; SDK examples in `plugins/examples/` (template part, sawtooth
+  generator, sensitivity analysis, Pro Mini board, Solarized theme).
 
 ## 8. App (`breadbox`)
 

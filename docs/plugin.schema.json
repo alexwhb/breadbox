@@ -1,0 +1,633 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://breadbox.app/schemas/plugin.schema.json",
+  "title": "Breadbox plugin manifest (plugin.json)",
+  "description": "PLUG-1. Validated by bb_plugin::Manifest::validate, which also checks files exist, permissions cover what the plugin provides and versions are compatible.",
+  "type": "object",
+  "required": [
+    "id",
+    "version",
+    "kind"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^(?!\\.)[a-z0-9._-]*\\.[a-z0-9._-]*[a-z0-9_-]$",
+      "maxLength": 100,
+      "description": "Reverse-DNS-style id, e.g. community.dmm-handheld."
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$",
+      "description": "Semantic version."
+    },
+    "name": {
+      "type": "string",
+      "description": "Display name (defaults to provides.instrument or the id)."
+    },
+    "kind": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "instrument",
+          "part",
+          "board",
+          "radio",
+          "world-model",
+          "generator",
+          "analysis",
+          "theme",
+          "lesson-pack"
+        ]
+      }
+    },
+    "api": {
+      "type": "integer",
+      "const": 1,
+      "default": 1,
+      "description": "Plugin ABI version."
+    },
+    "summary": {
+      "type": "string",
+      "description": "One line for catalog cards."
+    },
+    "description": {
+      "type": "string"
+    },
+    "author": {
+      "type": "string"
+    },
+    "license": {
+      "type": "string"
+    },
+    "category": {
+      "enum": [
+        "instruments",
+        "parts-boards",
+        "radios-networks",
+        "world-models",
+        "solvers-analyses",
+        "views-themes",
+        "lessons"
+      ]
+    },
+    "provides": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "instrument": {
+          "type": "string"
+        },
+        "probes": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "model": {
+          "allOf": [
+            {
+              "type": "string",
+              "pattern": "^(?!/)(?!.*\\.\\.)[^\\\\]+$",
+              "description": "Path relative to the plugin folder (no `..`, no absolute paths)."
+            },
+            {
+              "pattern": "\\.wasm$"
+            }
+          ],
+          "description": "WebAssembly module (core wasm, plugin ABI 1)."
+        },
+        "view3d": {
+          "allOf": [
+            {
+              "type": "string",
+              "pattern": "^(?!/)(?!.*\\.\\.)[^\\\\]+$",
+              "description": "Path relative to the plugin folder (no `..`, no absolute paths)."
+            }
+          ],
+          "description": "Bench art (svg/png)."
+        },
+        "view2d": {
+          "allOf": [
+            {
+              "type": "string",
+              "pattern": "^(?!/)(?!.*\\.\\.)[^\\\\]+$",
+              "description": "Path relative to the plugin folder (no `..`, no absolute paths)."
+            }
+          ],
+          "description": "Schematic symbol (svg)."
+        },
+        "panel": {
+          "allOf": [
+            {
+              "type": "string",
+              "pattern": "^(?!/)(?!.*\\.\\.)[^\\\\]+$",
+              "description": "Path relative to the plugin folder (no `..`, no absolute paths)."
+            }
+          ],
+          "description": "Instrument panel description (bb_plugin::panel::Panel)."
+        },
+        "parts": {
+          "allOf": [
+            {
+              "type": "string",
+              "pattern": "^(?!/)(?!.*\\.\\.)[^\\\\]+$",
+              "description": "Path relative to the plugin folder (no `..`, no absolute paths)."
+            }
+          ],
+          "description": "Part definitions in the bb-circuit schema (ARCHITECTURE §3b): a list or {\"parts\": [...]}."
+        },
+        "boards": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "base",
+              "pins"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "base": {
+                "enum": [
+                  "uno",
+                  "nano",
+                  "mega"
+                ]
+              },
+              "description": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "pins": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "vcc_pin": {
+                "type": "string",
+                "default": "VCC"
+              },
+              "rows": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "art": {
+                "type": "string",
+                "pattern": "^(?!/)(?!.*\\.\\.)[^\\\\]+$",
+                "description": "Path relative to the plugin folder (no `..`, no absolute paths)."
+              }
+            }
+          }
+        },
+        "world_model": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "replaces": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "evaporation"
+                ]
+              }
+            },
+            "vars": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "generator": {
+          "type": "object",
+          "required": [
+            "name",
+            "period"
+          ],
+          "properties": {
+            "part": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "period": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "points": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 4096,
+              "default": 256
+            },
+            "r_out": {
+              "type": "number",
+              "default": 50
+            }
+          }
+        },
+        "analysis": {
+          "type": "object",
+          "required": [
+            "name"
+          ],
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "options": {
+              "type": "object"
+            }
+          }
+        },
+        "radio": {
+          "type": "object",
+          "properties": {
+            "lora": {
+              "type": "boolean"
+            },
+            "gateway": {
+              "type": "object",
+              "description": "bb_radio::lora::Gateway"
+            },
+            "extension": {
+              "type": "boolean"
+            }
+          }
+        },
+        "theme": {
+          "type": "string",
+          "pattern": "^(?!/)(?!.*\\.\\.)[^\\\\]+$",
+          "description": "Path relative to the plugin folder (no `..`, no absolute paths)."
+        },
+        "lessons": {
+          "type": "string",
+          "pattern": "^(?!/)(?!.*\\.\\.)[^\\\\]+$",
+          "description": "Path relative to the plugin folder (no `..`, no absolute paths)."
+        }
+      }
+    },
+    "spice": {
+      "type": "object",
+      "properties": {
+        "load": {
+          "type": "string",
+          "description": "The load the plugin puts on the circuit, for people (needs inject:load, or drive:pins for a source's output impedance)."
+        },
+        "library": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "specs": {
+      "type": "object",
+      "description": "Machine-readable specs (passed to the model in bb_init)."
+    },
+    "highlights": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "label",
+          "value"
+        ],
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "permissions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "read:nets",
+          "inject:load",
+          "drive:pins",
+          "world:read",
+          "world:write",
+          "radio:space",
+          "ui:panel",
+          "fs:project",
+          "net:lan"
+        ]
+      }
+    },
+    "entry": {
+      "allOf": [
+        {
+          "type": "string",
+          "pattern": "^(?!/)(?!.*\\.\\.)[^\\\\]+$",
+          "description": "Path relative to the plugin folder (no `..`, no absolute paths)."
+        },
+        {
+          "pattern": "\\.wasm$"
+        }
+      ],
+      "description": "WebAssembly module (core wasm, plugin ABI 1)."
+    },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(?!/)(?!.*\\.\\.)[^\\\\]+$",
+        "description": "Path relative to the plugin folder (no `..`, no absolute paths)."
+      }
+    },
+    "min_breadbox": {
+      "type": "string"
+    },
+    "limits": {
+      "type": "object",
+      "properties": {
+        "fuel_per_call": {
+          "type": "integer",
+          "minimum": 1000
+        },
+        "memory_mb": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 256
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "contains": {
+              "const": "instrument"
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "provides": {
+            "required": [
+              "parts"
+            ]
+          }
+        },
+        "anyOf": [
+          {
+            "properties": {
+              "provides": {
+                "required": [
+                  "model"
+                ]
+              }
+            }
+          },
+          {
+            "required": [
+              "entry"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "contains": {
+              "const": "part"
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "provides": {
+            "required": [
+              "parts"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "contains": {
+              "const": "board"
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "provides": {
+            "required": [
+              "boards"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "contains": {
+              "const": "theme"
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "provides": {
+            "required": [
+              "theme"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "contains": {
+              "const": "lesson-pack"
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "provides": {
+            "required": [
+              "lessons"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "contains": {
+              "const": "analysis"
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "provides": {
+            "required": [
+              "analysis"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "contains": {
+              "const": "world-model"
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "permissions": {
+            "contains": {
+              "enum": [
+                "world:read",
+                "world:write"
+              ]
+            }
+          }
+        }
+      }
+    }
+  ],
+  "examples": [
+    {
+      "id": "community.dmm-handheld",
+      "version": "1.4.0",
+      "name": "Handheld DMM",
+      "kind": [
+        "instrument"
+      ],
+      "summary": "6000-count handheld multimeter that loads the circuit like the real thing.",
+      "description": "Clip the probes onto any two nodes on the bench. The meter behaves like the real thing: it loads the circuit with its input impedance, auto-ranges with a settling delay, shows last-digit flicker from noise, and reads true-RMS on AC.",
+      "author": "Breadbox",
+      "license": "MIT",
+      "provides": {
+        "instrument": "Handheld DMM",
+        "probes": 2,
+        "model": "./dmm.wasm",
+        "view3d": "./dmm.bench.svg",
+        "view2d": "./dmm.symbol.svg",
+        "parts": "./parts.json",
+        "panel": "./panel.json"
+      },
+      "spice": {
+        "load": "R 10Meg ∥ C 100p"
+      },
+      "specs": {
+        "counts": 6000,
+        "dcv_ranges": [
+          "600m",
+          "6",
+          "60",
+          "600"
+        ],
+        "dcv_accuracy": "0.05% + 1",
+        "autorange_ms": 350,
+        "input": "10 MΩ ∥ 100 pF",
+        "burden_10a": "0.03 V/A",
+        "modes": [
+          "V⎓",
+          "V~",
+          "mV",
+          "Ω",
+          "·)))",
+          "⊣⊢",
+          "A",
+          "mA",
+          "Hz"
+        ]
+      },
+      "highlights": [
+        {
+          "label": "Display",
+          "value": "6000 counts"
+        },
+        {
+          "label": "DC V accuracy",
+          "value": "±(0.05% + 1)"
+        },
+        {
+          "label": "Input impedance",
+          "value": "10 MΩ ∥ 100 pF"
+        },
+        {
+          "label": "Burden (10 A)",
+          "value": "0.03 V/A"
+        }
+      ],
+      "permissions": [
+        "read:nets",
+        "inject:load"
+      ],
+      "assets": [
+        "./dmm.bench.svg",
+        "./dmm.symbol.svg"
+      ]
+    }
+  ]
+}
