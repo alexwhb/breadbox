@@ -164,36 +164,21 @@ impl LoadedLesson {
     }
 }
 
-/// `examples/` (repository or `Breadbox.app/Contents/Resources/examples`).
+/// `examples/`: `$BREADBOX_EXAMPLES`, else the app resources (`Breadbox.app/Contents/Resources`
+/// or the repository, see [`bb_core::paths`]).
 pub fn examples_dir() -> PathBuf {
     if let Ok(d) = std::env::var("BREADBOX_EXAMPLES") {
         return PathBuf::from(d);
     }
-    if let Ok(exe) = std::env::current_exe()
-        && let Some(dir) = exe.parent()
-    {
-        let res = dir.join("../Resources/examples");
-        if res.is_dir() {
-            return res;
-        }
-    }
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples")
+    bb_core::paths::resource_path("examples")
 }
 
-/// `lessons/` (repository or app resources).
+/// `lessons/`: `$BREADBOX_LESSONS`, else the app resources.
 pub fn lessons_dir() -> PathBuf {
     if let Ok(d) = std::env::var("BREADBOX_LESSONS") {
         return PathBuf::from(d);
     }
-    if let Ok(exe) = std::env::current_exe()
-        && let Some(dir) = exe.parent()
-    {
-        let res = dir.join("../Resources/lessons");
-        if res.is_dir() {
-            return res;
-        }
-    }
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../lessons")
+    bb_core::paths::resource_path("lessons")
 }
 
 /// Parses lesson TOML.

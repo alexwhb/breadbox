@@ -147,7 +147,17 @@ pub enum Command {
     RunAnalyses,
     ExportCir,
     About,
+    /// Help → the guide (the Help window on its first topic).
     OpenDocs,
+    /// Help → a document in the Help window.
+    Help(crate::widgets::help::HelpTopic),
+    /// File → Import Project Bundle (`.breadbox.zip`, `PRJ-5`).
+    ImportBundle,
+    /// Edit → Cut / Copy / Paste / Select All (text fields, the bench's parts).
+    Cut,
+    Copy,
+    Paste,
+    SelectAll,
 }
 
 /// How far Simulate → Step advances the paused bench.
@@ -181,6 +191,12 @@ pub trait Screen {
     /// Write pending edits now (the app is quitting, `APP-5`): debounced autosaves must not
     /// lose the last keystrokes.
     fn flush(&mut self, _app: &mut AppCtx) {}
+    /// Called when another screen replaces this one (pause private work, e.g. a lesson bench).
+    fn on_leave(&mut self, _app: &mut AppCtx) {}
+    /// The concrete screen (tests and cross-screen glue downcast through this).
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        None
+    }
     /// Per-screen state persisted with the app (window/screen restore, `APP-5`).
     fn save_state(&self) -> Option<serde_json::Value> {
         None

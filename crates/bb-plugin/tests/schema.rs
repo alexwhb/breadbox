@@ -102,7 +102,7 @@ fn the_design_manifest_is_the_schema_example() {
     assert_eq!(dmm["kind"], serde_json::json!(["instrument"]));
     assert_eq!(dmm["provides"]["instrument"], "Handheld DMM");
     assert_eq!(dmm["provides"]["probes"], 2);
-    assert_eq!(dmm["spice"]["load"], "R 10Meg ∥ C 100p");
+    assert_eq!(dmm["spice"]["load"], "R 10Meg ‖ C 100p");
     assert_eq!(dmm["specs"]["counts"], 6000);
     assert_eq!(
         dmm["specs"]["dcv_ranges"],

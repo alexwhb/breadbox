@@ -282,19 +282,13 @@ impl BuildOutput {
     }
 }
 
-/// Cache directory for builds: `~/Library/Caches/Breadbox/builds`.
+/// Cache directory for builds: `$BREADBOX_BUILD_CACHE`, else
+/// `~/Library/Caches/Breadbox/builds` ([`bb_core::paths::caches`]).
 pub fn build_cache_root() -> PathBuf {
     if let Some(d) = std::env::var_os("BREADBOX_BUILD_CACHE") {
         return PathBuf::from(d);
     }
-    let home = std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("."));
-    if cfg!(target_os = "macos") {
-        home.join("Library/Caches/Breadbox/builds")
-    } else {
-        home.join(".cache/breadbox/builds")
-    }
+    bb_core::paths::caches().join("builds")
 }
 
 fn fnv(s: &str) -> u64 {

@@ -1,11 +1,17 @@
-//! `breadbox --smoke <project | example name> [--seconds N] [--speed max|<factor>]
-//! [--headless] [--warmup S]` — a measurable start-up + run path for `scripts/test-all.sh`
-//! (`PLAT-4`, `SIM-4`): the real [`BreadboxApp`] opens the project on the Workbench, runs its
-//! bench with the GUI drawing every frame, and the process prints one line
+//! `breadbox --smoke <project | example name | lesson:<id>> [--seconds N] [--speed max|<factor>]
+//! [--headless] [--warmup S] [--place <plugin id>]` — a measurable start-up + run path for
+//! `scripts/test-all.sh` and `scripts/check-bundle.sh` (`PLAT-4`, `SIM-4`): the real
+//! [`BreadboxApp`] opens the project on the Workbench (or the lesson on the Lessons screen, with
+//! its own bench), runs its bench with the GUI drawing every frame, and the process prints
+//! one line
 //!
 //! ```text
 //! SMOKE project=garden-node mode=window first_frame_ms=412 sim_s=10.00 wall_s=0.61 realtime=16.4 frames=37 frame_ms_avg=1.2 frame_ms_max=6.3 status=ok
 //! ```
+//!
+//! `--place <plugin id>` puts the plugin's instrument on the bench first (like "Place on
+//! bench"); instruments with a display add `instruments=DMM1:1.882V` before `status=` and the
+//! run fails if a placed instrument never shows a reading.
 //!
 //! and exits non-zero when the bench reports an error, a part is damaged, the ERC has errors
 //! or the run does not finish in time. With `--headless` (or without a display) the same app
@@ -15,7 +21,8 @@
 
 use crate::app::{AppOptions, BreadboxApp, PersistedState};
 use crate::bench::SimSpeed;
-use crate::router::Route;
+use crate::router::{Route, ScreenSlot};
+use crate::screens::lessons::LessonsScreen;
 use eframe::egui;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -24,7 +31,12 @@ use std::time::{Duration, Instant};
 /// Parsed `--smoke` arguments.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SmokeArgs {
+    /// The project folder (empty for a lesson).
     pub project: PathBuf,
+    /// `lesson:<id>`: run that lesson's own bench on the Lessons screen instead.
+    pub lesson: Option<String>,
+    /// A plugin whose instrument is placed on the bench before the run.
+    pub place: Option<String>,
     /// Simulated seconds measured after the warm-up.
     pub seconds: f64,
     /// Simulated seconds before the measurement starts (boot, Wi-Fi join).
@@ -45,9 +57,15 @@ impl SmokeArgs {
         let project = it
             .next()
             .filter(|p| !p.starts_with("--"))
-            .ok_or("usage: breadbox --smoke <project folder | example name> [--seconds N] [--speed max|<factor>] [--headless] [--warmup S]")?;
+            .ok_or("usage: breadbox --smoke <project folder | example name | lesson:<id>> [--seconds N] [--speed max|<factor>] [--headless] [--warmup S] [--place <plugin id>]")?;
+        let lesson = project.strip_prefix("lesson:").map(str::to_string);
         let mut a = SmokeArgs {
-            project: resolve_project(project)?,
+            project: match &lesson {
+                Some(_) => PathBuf::new(),
+                None => resolve_project(project)?,
+            },
+            lesson,
+            place: None,
             seconds: 5.0,
             warmup: 1.0,
             speed: SimSpeed::Max,
@@ -71,6 +89,7 @@ impl SmokeArgs {
                     };
                 }
                 "--headless" => a.headless = true,
+                "--place" => a.place = Some(value()?),
                 other => return Err(format!("unknown smoke option {other}")),
             }
         }
@@ -117,6 +136,8 @@ pub struct SmokeReport {
     pub frames: u64,
     pub frame_ms_avg: f64,
     pub frame_ms_max: f64,
+    /// Instrument displays at the end of the run: (reference, reading).
+    pub instruments: Vec<(String, String)>,
     pub errors: Vec<String>,
 }
 
@@ -127,8 +148,18 @@ impl SmokeReport {
 
     /// The one-line summary `scripts/test-all.sh` parses.
     pub fn line(&self) -> String {
+        let instruments = if self.instruments.is_empty() {
+            String::new()
+        } else {
+            let v: Vec<String> = self
+                .instruments
+                .iter()
+                .map(|(r, t)| format!("{r}:{}", t.replace(' ', "")))
+                .collect();
+            format!(" instruments={}", v.join(","))
+        };
         format!(
-            "SMOKE project={} mode={} first_frame_ms={:.0} sim_s={:.2} wall_s={:.2} realtime={:.2} frames={} frame_ms_avg={:.2} frame_ms_max={:.2} status={}",
+            "SMOKE project={} mode={} first_frame_ms={:.0} sim_s={:.2} wall_s={:.2} realtime={:.2} frames={} frame_ms_avg={:.2} frame_ms_max={:.2}{instruments} status={}",
             self.project,
             self.mode,
             self.first_frame_ms,
@@ -159,21 +190,26 @@ struct Driver {
     deadline: Instant,
     report: SmokeReport,
     done: bool,
+    /// Reference of the instrument `--place` put on the bench.
+    placed: Option<String>,
 }
 
 impl Driver {
     fn new(args: SmokeArgs, mode: &str) -> Driver {
         // generous: debug builds, slow CI machines; the realtime figure is the real gate
         let budget = 120.0 + (args.seconds + args.warmup) * 20.0;
-        let project = args
-            .project
-            .file_name()
-            .map(|n| {
-                n.to_string_lossy()
-                    .trim_end_matches(".breadbox")
-                    .to_string()
-            })
-            .unwrap_or_default();
+        let project = match &args.lesson {
+            Some(id) => format!("lesson:{id}"),
+            None => args
+                .project
+                .file_name()
+                .map(|n| {
+                    n.to_string_lossy()
+                        .trim_end_matches(".breadbox")
+                        .to_string()
+                })
+                .unwrap_or_default(),
+        };
         Driver {
             started: Instant::now(),
             opened: false,
@@ -188,6 +224,7 @@ impl Driver {
                 ..Default::default()
             },
             done: false,
+            placed: None,
             args,
         }
     }
@@ -204,13 +241,56 @@ impl Driver {
             .elapsed()
             .as_secs_f64()
             * 1e3;
+        if let Some(id) = self.args.lesson.clone() {
+            app.ctx.navigate(Route::Lessons);
+            let Some(lessons) = lessons_screen(app) else {
+                self.fail("no Lessons screen".into());
+                return;
+            };
+            // `open_lesson` needs the screen and the app context at once
+            let mut screen = std::mem::take(lessons);
+            screen.open_lesson(&mut app.ctx, &id);
+            let error = screen.error.clone();
+            let bench = screen.run.as_ref().map(|r| r.bench.is_some());
+            if let Some(l) = lessons_screen(app) {
+                *l = screen;
+            }
+            match (error, bench) {
+                (Some(e), _) => self.fail(e),
+                (None, Some(true)) => {}
+                (None, Some(false)) => self.fail(format!("lesson {id} has no bench (Pro)")),
+                (None, None) => self.fail(format!("lesson {id} did not open")),
+            }
+            return;
+        }
         app.open_path(&self.args.project.clone());
         if app.ctx.project.is_none() {
             self.fail("the project did not open".into());
             return;
         }
         app.ctx.navigate(Route::Workbench);
+        if let Some(plugin) = self.args.place.clone() {
+            match place_plugin(app, &plugin) {
+                Ok(reference) => self.placed = Some(reference),
+                Err(e) => {
+                    self.fail(format!("place {plugin}: {e}"));
+                    return;
+                }
+            }
+        }
         app.ctx.bench_link().set_running(true);
+    }
+
+    /// The running bench: (host builds pending, latest telemetry).
+    fn bench(&self, app: &mut BreadboxApp) -> (bool, Option<Arc<bb_sim::Telemetry>>) {
+        if self.args.lesson.is_some() {
+            let tel = lessons_screen(app)
+                .and_then(|l| l.run.as_ref())
+                .and_then(|r| r.telemetry());
+            return (false, tel);
+        }
+        let pending = app.ctx.sim().is_some_and(|s| s.host_build_pending());
+        (pending, app.ctx.sim().and_then(|s| s.telemetry()))
     }
 
     /// After the app drew a frame that took `dt`.
@@ -218,8 +298,8 @@ impl Driver {
         if self.done {
             return;
         }
-        let pending = app.ctx.sim().is_some_and(|s| s.host_build_pending());
-        let Some(tel) = app.ctx.sim().and_then(|s| s.telemetry()) else {
+        let (pending, tel) = self.bench(app);
+        let Some(tel) = tel else {
             if Instant::now() > self.deadline {
                 self.fail("the bench never started".into());
             }
@@ -260,6 +340,30 @@ impl Driver {
                     if let bb_core::Health::Damaged { reason } = &p.visual.health {
                         r.errors.push(format!("{} damaged: {reason}", p.reference));
                     }
+                    if let Some(d) = p
+                        .panel
+                        .as_ref()
+                        .and_then(bb_plugin::panel::PanelState::from_json)
+                        .and_then(|s| s.displays.into_values().next())
+                    {
+                        r.instruments
+                            .push((p.reference.clone(), format!("{} {}", d.text, d.unit)));
+                    }
+                }
+                if let Some(placed) = &self.placed {
+                    let reading = r.instruments.iter().find(|(rf, _)| rf == placed);
+                    let shows = reading.is_some_and(|(_, t)| {
+                        t.trim()
+                            .split(' ')
+                            .next()
+                            .is_some_and(|v| v.parse::<f64>().is_ok())
+                    });
+                    if !shows {
+                        r.errors.push(format!(
+                            "{placed} shows no reading ({})",
+                            reading.map(|(_, t)| t.as_str()).unwrap_or("no panel")
+                        ));
+                    }
                 }
                 for e in &tel.erc {
                     if e.severity == bb_circuit::erc::ErcSeverity::Error {
@@ -281,6 +385,31 @@ impl Driver {
     }
 }
 
+fn lessons_screen(app: &mut BreadboxApp) -> Option<&mut LessonsScreen> {
+    app.screens
+        .get_mut(ScreenSlot::Lessons)?
+        .as_any_mut()?
+        .downcast_mut::<LessonsScreen>()
+}
+
+/// "Place on bench" without the UI: the plugin's first part on the open circuit. Returns the
+/// new part's reference (`DMM1`).
+fn place_plugin(app: &mut BreadboxApp, plugin: &str) -> Result<String, String> {
+    let host = app.ctx.plugins.host();
+    let def = host
+        .parts_of(plugin)
+        .first()
+        .cloned()
+        .ok_or("not installed, or it has no part")?;
+    let lib = app.ctx.plugins.library();
+    let doc = app.ctx.circuit.as_mut().ok_or("no circuit")?;
+    if doc.lib.get(&def).is_none() {
+        doc.set_library(lib);
+    }
+    let r = crate::screens::plugins::place::place(doc, &def)?;
+    Ok(r.reference)
+}
+
 fn app_options(speed: SimSpeed) -> AppOptions {
     AppOptions {
         load_persisted: false,
@@ -288,6 +417,11 @@ fn app_options(speed: SimSpeed) -> AppOptions {
         detect_toolchain: false,
         sim_speed: speed,
         audio: false,
+        // opening a lesson saves its progress: keep the user's file out of it
+        progress_path: Some(std::env::temp_dir().join(format!(
+            "breadbox-smoke-progress-{}.json",
+            std::process::id()
+        ))),
         ..AppOptions::default()
     }
 }
@@ -359,10 +493,15 @@ pub fn run_windowed(args: SmokeArgs) -> Option<SmokeReport> {
 /// Runs a smoke test without a window: the app draws into an egui context at ~60 Hz (layout
 /// and tessellation on the CPU).
 pub fn run_headless(args: SmokeArgs) -> SmokeReport {
+    let opts = app_options(args.speed);
+    run_headless_with(args, opts)
+}
+
+/// [`run_headless`] with explicit app options (tests: temporary plugin + progress folders).
+pub fn run_headless_with(args: SmokeArgs, opts: AppOptions) -> SmokeReport {
     crate::STARTED.get_or_init(Instant::now);
     let ctx = egui::Context::default();
-    let mut app =
-        BreadboxApp::with_context(&ctx, app_options(args.speed), PersistedState::default());
+    let mut app = BreadboxApp::with_context(&ctx, opts, PersistedState::default());
     let mut d = Driver::new(args, "headless");
     let frame = Duration::from_millis(16);
     let raw = || egui::RawInput {
@@ -426,6 +565,7 @@ mod tests {
         .unwrap()
         .unwrap();
         assert!(a.project.ends_with("examples/garden-node"));
+        assert_eq!((a.lesson.as_deref(), a.place.as_deref()), (None, None));
         assert_eq!(a.seconds, 3.0);
         assert_eq!(a.speed, SimSpeed::RealTime(1.0));
         assert!(a.headless);
@@ -439,6 +579,89 @@ mod tests {
                 .unwrap()
                 .is_err()
         );
+    }
+
+    #[test]
+    fn parses_lesson_and_place_options() {
+        let a = SmokeArgs::parse(&s(&["breadbox", "--smoke", "lesson:ohms-law-led"]))
+            .unwrap()
+            .unwrap();
+        assert_eq!(a.lesson.as_deref(), Some("ohms-law-led"));
+        assert_eq!(a.project, PathBuf::new());
+        let a = SmokeArgs::parse(&s(&[
+            "breadbox",
+            "--smoke",
+            "garden-node",
+            "--place",
+            "community.dmm-handheld",
+        ]))
+        .unwrap()
+        .unwrap();
+        assert_eq!(a.place.as_deref(), Some("community.dmm-handheld"));
+        assert!(
+            SmokeArgs::parse(&s(&["breadbox", "--smoke", "blink", "--place"]))
+                .unwrap()
+                .is_err()
+        );
+    }
+
+    fn test_options() -> AppOptions {
+        let t = AppOptions::test();
+        AppOptions {
+            plugin_dir: t.plugin_dir,
+            progress_path: t.progress_path,
+            ..app_options(SimSpeed::Max)
+        }
+    }
+
+    #[test]
+    fn headless_smoke_runs_a_lesson_bench_with_its_meter() {
+        let a = SmokeArgs::parse(&s(&[
+            "breadbox",
+            "--smoke",
+            "lesson:ohms-law-led",
+            "--seconds",
+            "0.5",
+            "--warmup",
+            "0.2",
+            "--headless",
+        ]))
+        .unwrap()
+        .unwrap();
+        let r = run_headless_with(a, test_options());
+        assert!(r.ok(), "{}", r.line());
+        assert!(r.line().starts_with("SMOKE project=lesson:ohms-law-led"));
+        // the lesson's meter is the Handheld DMM plugin
+        assert!(!r.instruments.is_empty(), "{}", r.line());
+    }
+
+    #[test]
+    fn headless_smoke_places_the_plugin_dmm_on_garden_node() {
+        let a = SmokeArgs::parse(&s(&[
+            "breadbox",
+            "--smoke",
+            "garden-node",
+            "--place",
+            "community.dmm-handheld",
+            "--seconds",
+            "0.5",
+            "--warmup",
+            "0.5",
+            "--headless",
+        ]))
+        .unwrap()
+        .unwrap();
+        let r = run_headless_with(a, test_options());
+        assert!(r.ok(), "{}", r.line());
+        // DMM1 took over the built-in meter's probes: A0 = the soil sensor ≈ 1.88 V
+        let (_, reading) = r
+            .instruments
+            .iter()
+            .find(|(rf, _)| rf.starts_with("DMM"))
+            .unwrap_or_else(|| panic!("{}", r.line()));
+        let v: f64 = reading.split(' ').next().unwrap().parse().unwrap();
+        assert!((v - 1.88).abs() < 0.1, "{}", r.line());
+        assert!(r.line().contains(" instruments=DMM"), "{}", r.line());
     }
 
     #[test]

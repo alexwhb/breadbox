@@ -16,20 +16,20 @@
     "parts": "./parts.json",
     "panel": "./panel.json"
   },
-  "spice": { "load": "R 10Meg ∥ C 100p" },
+  "spice": { "load": "R 10Meg ‖ C 100p" },
   "specs": {
     "counts": 6000,
     "dcv_ranges": ["600m", "6", "60", "600"],
     "dcv_accuracy": "0.05% + 1",
     "autorange_ms": 350,
-    "input": "10 MΩ ∥ 100 pF",
+    "input": "10 MΩ ‖ 100 pF",
     "burden_10a": "0.03 V/A",
     "modes": ["V⎓", "V~", "mV", "Ω", "·)))", "⊣⊢", "A", "mA", "Hz"]
   },
   "highlights": [
     { "label": "Display", "value": "6000 counts" },
     { "label": "DC V accuracy", "value": "±(0.05% + 1)" },
-    { "label": "Input impedance", "value": "10 MΩ ∥ 100 pF" },
+    { "label": "Input impedance", "value": "10 MΩ ‖ 100 pF" },
     { "label": "Burden (10 A)", "value": "0.03 V/A" }
   ],
   "permissions": ["read:nets", "inject:load"],

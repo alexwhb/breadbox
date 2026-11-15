@@ -122,16 +122,11 @@ fn matches_search(e: &CatalogEntry, q: &str) -> bool {
     .any(|s| s.to_ascii_lowercase().contains(&q))
 }
 
-/// `docs/PLUGIN-SDK.md` from the app resources or the repository.
+/// `docs/PLUGIN-SDK.md` from the app resources (the bundle, or the repository in development).
 fn sdk_doc(app: &AppCtx) -> String {
-    let mut candidates = Vec::new();
-    if let Some(root) = &app.resources.root {
-        candidates.push(root.join("docs/PLUGIN-SDK.md"));
-    }
-    candidates.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../docs/PLUGIN-SDK.md"));
-    candidates
-        .iter()
-        .find_map(|p| std::fs::read_to_string(p).ok())
+    app.resources
+        .file("docs/PLUGIN-SDK.md")
+        .and_then(|p| std::fs::read_to_string(p).ok())
         .unwrap_or_else(|| "# Plugin SDK\n\nThe SDK reference (`docs/PLUGIN-SDK.md`) is not bundled with this build.".into())
 }
 
@@ -858,8 +853,20 @@ impl PluginsScreen {
             .id_salt("plugin-json")
             .auto_shrink([false, false])
             .show(&mut c, |ui| {
-                // no bundled font has ⎓: show it the way JSON may spell it
-                let text = text.replace('⎓', "\\u2393");
+                // characters the code font can't draw are shown the way JSON may spell
+                // them (`⎓` → `\u2393`) instead of as tofu boxes
+                let mono = crate::theme::font::mono(12.0);
+                let text: String = ui.ctx().fonts_mut(|f| {
+                    text.chars()
+                        .map(|c| {
+                            if c.is_ascii() || f.has_glyph(&mono, c) {
+                                c.to_string()
+                            } else {
+                                format!("\\u{:04x}", c as u32)
+                            }
+                        })
+                        .collect()
+                });
                 let job = markdown::json_job(text.trim_end(), p);
                 let resp = ui.add(egui::Label::new(job).extend());
                 resp.widget_info(|| {
@@ -1007,6 +1014,7 @@ impl PluginsScreen {
             .auto_shrink([false, false])
             .show(&mut c, |ui| {
                 ui.set_max_width(820.0);
+                let text = markdown::displayable(ui.ctx(), &text);
                 markdown::show(ui, &text);
             });
     }

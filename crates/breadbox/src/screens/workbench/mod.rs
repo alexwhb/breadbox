@@ -812,6 +812,10 @@ impl Screen for WorkbenchScreen {
         }
     }
 
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
+    }
+
     fn save_state(&self) -> Option<serde_json::Value> {
         serde_json::to_value(&self.state).ok()
     }

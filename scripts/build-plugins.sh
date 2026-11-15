@@ -8,14 +8,18 @@
 #   scripts/build-plugins.sh --check    # rebuild into a scratch dir and verify the committed
 #                                       # .wasm files are byte-identical (scripts/test-all.sh)
 #
-# Paths are remapped (`$HOME` → `~`, the plugins folder → `.`) so the modules carry no
-# machine-specific paths and rebuild identically anywhere with the same toolchain.
+# Paths are remapped (the checkout → `/breadbox`, `$HOME` → `~`) so the modules carry no
+# machine- or checkout-specific paths and rebuild identically from any clone or worktree with
+# the same toolchain.
 set -euo pipefail
 cd "$(dirname "$0")/../plugins"
 export PATH="$HOME/.cargo/bin:$PATH"
 rustup target list --installed 2>/dev/null | grep -q wasm32-unknown-unknown \
   || rustup target add wasm32-unknown-unknown
-export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$PWD=. --remap-path-prefix=$HOME=~"
+repo_root="$(cd .. && pwd)"
+# rustc applies the last matching mapping: the checkout wins over $HOME (path dependencies
+# such as crates/bb-plugin-sdk are passed to rustc as absolute paths)
+export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$HOME=~ --remap-path-prefix=$repo_root=/breadbox"
 
 check=0
 dirs=()

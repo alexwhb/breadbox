@@ -1,7 +1,7 @@
 //! arduino-cli discovery, installation and library management.
 //!
-//! Search order (`MCU-4`): `$BREADBOX_ARDUINO_CLI`, `PATH`, Homebrew (`/opt/homebrew/bin`,
-//! `/usr/local/bin`), then Breadbox's own install in
+//! Search order (`MCU-4`): `$BREADBOX_ARDUINO_CLI` (when set, `PATH` and Homebrew are skipped),
+//! `PATH`, Homebrew (`/opt/homebrew/bin`, `/usr/local/bin`), then Breadbox's own install in
 //! `~/Library/Application Support/Breadbox/toolchain/`. The app-local install uses its own
 //! `arduino-cli.yaml` so it never touches the user's Arduino15 folder.
 //!
@@ -62,11 +62,16 @@ pub struct DetectOptions {
 }
 
 impl Default for DetectOptions {
+    /// `$BREADBOX_ARDUINO_CLI` pins the arduino-cli to use: `PATH` and Homebrew are then not
+    /// searched (Breadbox's own install in [`Toolchain::app_dir`] still is), so pointing it at
+    /// a missing file simulates a first run on a Mac without a toolchain.
     fn default() -> Self {
+        let explicit = std::env::var_os("BREADBOX_ARDUINO_CLI").map(PathBuf::from);
+        let search = explicit.is_none();
         DetectOptions {
-            explicit: std::env::var_os("BREADBOX_ARDUINO_CLI").map(PathBuf::from),
-            search_path: true,
-            search_homebrew: true,
+            explicit,
+            search_path: search,
+            search_homebrew: search,
             app_dir: Toolchain::app_dir(),
         }
     }
@@ -106,12 +111,6 @@ pub struct InstalledLibrary {
     pub install_dir: PathBuf,
 }
 
-fn home() -> PathBuf {
-    std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("."))
-}
-
 /// Runs a binary with `--version`-like args and returns stdout if it executes.
 fn runs(bin: &Path, args: &[&str]) -> Option<String> {
     let out = Command::new(bin)
@@ -134,19 +133,13 @@ fn gcc_version(bin_dir: &Path) -> Option<String> {
 }
 
 impl Toolchain {
-    /// `~/Library/Application Support/Breadbox/toolchain` (or the XDG data dir elsewhere).
+    /// `$BREADBOX_TOOLCHAIN_DIR`, else `~/Library/Application Support/Breadbox/toolchain`
+    /// ([`bb_core::paths::app_support`]; the XDG data dir elsewhere).
     pub fn app_dir() -> PathBuf {
         if let Some(d) = std::env::var_os("BREADBOX_TOOLCHAIN_DIR") {
             return PathBuf::from(d);
         }
-        if cfg!(target_os = "macos") {
-            home().join("Library/Application Support/Breadbox/toolchain")
-        } else {
-            std::env::var_os("XDG_DATA_HOME")
-                .map(PathBuf::from)
-                .unwrap_or_else(|| home().join(".local/share"))
-                .join("breadbox/toolchain")
-        }
+        bb_core::paths::app_support().join("toolchain")
     }
 
     /// Finds a working arduino-cli with default options.
@@ -792,8 +785,12 @@ fn find_native_gcc_in(native: &Path, prefixes: &[PathBuf]) -> Option<PathBuf> {
     None
 }
 
-/// arduino-cli release archive for this machine.
+/// arduino-cli release archive for this machine (`$BREADBOX_ARDUINO_CLI_URL` overrides it).
 pub fn download_url() -> String {
+    // a mirror, or a local archive (`file://…`) for offline installs and tests
+    if let Ok(u) = std::env::var("BREADBOX_ARDUINO_CLI_URL") {
+        return u;
+    }
     let asset = match (std::env::consts::OS, std::env::consts::ARCH) {
         ("macos", "aarch64") => "macOS_ARM64.tar.gz",
         ("macos", _) => "macOS_64bit.tar.gz",

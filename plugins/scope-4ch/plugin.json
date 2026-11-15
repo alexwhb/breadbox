@@ -15,7 +15,7 @@
     "parts": "./parts.json",
     "panel": "./panel.json"
   },
-  "spice": { "load": "per channel: R 10Meg ∥ C 12p (10×) or R 1Meg ∥ C 100p (1×)" },
+  "spice": { "load": "per channel: R 10Meg ‖ C 12p (10×) or R 1Meg ‖ C 100p (1×)" },
   "specs": {
     "channels": 4,
     "bandwidth": "set by the simulation step",

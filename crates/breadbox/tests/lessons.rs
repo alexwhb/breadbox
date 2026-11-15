@@ -8,7 +8,8 @@
 mod common;
 
 use breadbox::BreadboxApp;
-use breadbox::router::Route;
+use breadbox::router::{Route, ScreenSlot};
+use breadbox::screens::lessons::LessonsScreen;
 use common::*;
 use eframe::egui;
 use egui_kittest::Harness;
@@ -321,4 +322,47 @@ fn make_your_own_lesson_from_the_bench_appears_in_lessons() {
     assert!(has_label(&h, "Your track · My lessons"));
     assert!(has_label_containing(&h, "Lesson 1: Blink check"));
     assert!(has_label(&h, "Look at the circuit"));
+}
+
+/// The open lesson's bench: (running, sim seconds).
+fn lesson_bench(h: &mut H) -> Option<(bool, f64)> {
+    let s = h
+        .state_mut()
+        .screens
+        .get_mut(ScreenSlot::Lessons)?
+        .as_any_mut()?
+        .downcast_mut::<LessonsScreen>()?;
+    let run = s.run.as_ref()?;
+    let t = run.telemetry().map(|t| t.time.as_secs_f64()).unwrap_or(0.0);
+    Some((run.is_running(), t))
+}
+
+#[test]
+fn lesson_bench_pauses_behind_other_screens_and_resumes() {
+    let mut h = harness();
+    go(&mut h, Route::Lessons);
+    assert!(
+        wait_for(&mut h, 30.0, |h| lesson_bench(h)
+            .is_some_and(|(on, t)| on && t > 0.05)),
+        "the lesson bench never ran: {:?}",
+        lesson_bench(&mut h)
+    );
+    // another screen: the lesson bench pauses and its clock stops
+    go(&mut h, Route::Plugins);
+    let (on, _) = lesson_bench(&mut h).expect("lesson stays open");
+    assert!(!on, "the lesson bench kept running behind Plugins");
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    h.run_steps(2);
+    let (_, t1) = lesson_bench(&mut h).unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(400));
+    h.run_steps(2);
+    let (_, t2) = lesson_bench(&mut h).unwrap();
+    assert_eq!(t1, t2, "sim time advanced while paused");
+    // back on Lessons: it runs again
+    go(&mut h, Route::Lessons);
+    assert!(
+        wait_for(&mut h, 30.0, |h| lesson_bench(h)
+            .is_some_and(|(on, t)| on && t > t2)),
+        "the lesson bench did not resume"
+    );
 }

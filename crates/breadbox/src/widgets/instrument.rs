@@ -30,8 +30,95 @@ fn rgb(h: u32) -> Color32 {
     Color32::from_rgb((h >> 16) as u8, (h >> 8) as u8, h as u8)
 }
 
-/// Paints text that may contain `⎓` (no bundled font has the DC sign): it is drawn as the
-/// symbol itself (a solid line over a dashed one). Other text goes straight to the painter.
+/// Symbols plugin panels use that no bundled font has: [`ptext`] draws them as shapes and
+/// [`glyph_safe`] spells them out for plain UI text (`tests/glyphs.rs` checks the rest).
+pub const SHAPED_SYMBOLS: &[(char, &str)] = &[
+    ('⎓', "DC"),
+    ('∿', "sine"),
+    ('⊓', "square"),
+    ('⋀', "triangle"),
+    ('⎍', "pulse"),
+];
+
+fn shaped(c: char) -> bool {
+    SHAPED_SYMBOLS.iter().any(|(s, _)| *s == c)
+}
+
+/// Width of a shaped symbol at `size`.
+fn symbol_width(c: char, size: f32) -> f32 {
+    if c == '⎓' { size * 0.62 } else { size * 0.9 }
+}
+
+/// Draws a shaped symbol in the box starting at `x` (text line centred on `cy`).
+fn paint_symbol(painter: &egui::Painter, c: char, x: f32, cy: f32, size: f32, color: Color32) {
+    let w = symbol_width(c, size);
+    let l = x + w * 0.1;
+    let r = x + w * 0.9;
+    let sw = (size * 0.09).max(1.0);
+    let stroke = Stroke::new(sw, color);
+    let a = size * 0.24; // waveform amplitude
+    let line = |pts: Vec<Pos2>| painter.add(egui::Shape::line(pts, stroke));
+    match c {
+        '⎓' => {
+            painter.line_segment(
+                [pos2(l, cy - size * 0.12), pos2(r, cy - size * 0.12)],
+                stroke,
+            );
+            let dash = (r - l) / 5.0;
+            for k in [0.0, 2.0, 4.0] {
+                let d = l + dash * k;
+                painter.line_segment(
+                    [pos2(d, cy + size * 0.12), pos2(d + dash, cy + size * 0.12)],
+                    stroke,
+                );
+            }
+        }
+        '∿' => {
+            let pts = (0..=24)
+                .map(|i| {
+                    let t = i as f32 / 24.0;
+                    pos2(l + (r - l) * t, cy - a * (t * std::f32::consts::TAU).sin())
+                })
+                .collect();
+            line(pts);
+        }
+        '⊓' => {
+            let m = (l + r) / 2.0;
+            line(vec![
+                pos2(l, cy + a),
+                pos2(l, cy - a),
+                pos2(m, cy - a),
+                pos2(m, cy + a),
+                pos2(r, cy + a),
+                pos2(r, cy - a),
+            ]);
+        }
+        '⋀' => {
+            let q = (r - l) / 4.0;
+            line(vec![
+                pos2(l, cy),
+                pos2(l + q, cy - a),
+                pos2(l + 3.0 * q, cy + a),
+                pos2(r, cy),
+            ]);
+        }
+        _ => {
+            // '⎍' a narrow pulse
+            let p0 = l + (r - l) * 0.35;
+            let p1 = l + (r - l) * 0.6;
+            line(vec![
+                pos2(l, cy + a),
+                pos2(p0, cy + a),
+                pos2(p0, cy - a),
+                pos2(p1, cy - a),
+                pos2(p1, cy + a),
+                pos2(r, cy + a),
+            ]);
+        }
+    }
+}
+
+/// `painter.text` that also draws the [`SHAPED_SYMBOLS`] (`V⎓`, waveform icons) as shapes.
 pub fn ptext(
     painter: &egui::Painter,
     pos: Pos2,
@@ -41,56 +128,62 @@ pub fn ptext(
     color: Color32,
 ) -> Rect {
     let text = text.to_string();
-    if !text.contains('⎓') {
+    if !text.chars().any(shaped) {
         return painter.text(pos, align, text, font, color);
     }
-    let parts: Vec<&str> = text.split('⎓').collect();
-    let galleys: Vec<_> = parts
-        .iter()
-        .map(|t| painter.layout_no_wrap(t.to_string(), font.clone(), color))
+    // runs of text and single symbols
+    let mut runs: Vec<Result<String, char>> = Vec::new();
+    for c in text.chars() {
+        match (shaped(c), runs.last_mut()) {
+            (true, _) => runs.push(Err(c)),
+            (false, Some(Ok(t))) => t.push(c),
+            (false, _) => runs.push(Ok(c.to_string())),
+        }
+    }
+    let laid: Vec<Result<std::sync::Arc<egui::Galley>, char>> = runs
+        .into_iter()
+        .map(|r| r.map(|t| painter.layout_no_wrap(t, font.clone(), color)))
         .collect();
-    let sym_w = font.size * 0.62;
-    let h = galleys.iter().map(|g| g.size().y).fold(font.size, f32::max);
-    let w: f32 = galleys.iter().map(|g| g.size().x).sum::<f32>() + sym_w * (parts.len() - 1) as f32;
+    let h = laid
+        .iter()
+        .filter_map(|g| g.as_ref().ok().map(|g| g.size().y))
+        .fold(font.size, f32::max);
+    let w: f32 = laid
+        .iter()
+        .map(|g| match g {
+            Ok(g) => g.size().x,
+            Err(c) => symbol_width(*c, font.size),
+        })
+        .sum();
     let rect = align.anchor_size(pos, vec2(w, h));
     let mut x = rect.left();
-    for (i, g) in galleys.into_iter().enumerate() {
-        let gw = g.size().x;
-        painter.galley(pos2(x, rect.top()), g, color);
-        x += gw;
-        if i + 1 < parts.len() {
-            let cy = rect.center().y;
-            let l = x + sym_w * 0.1;
-            let r = x + sym_w * 0.9;
-            let sw = (font.size * 0.09).max(1.0);
-            painter.line_segment(
-                [
-                    pos2(l, cy - font.size * 0.12),
-                    pos2(r, cy - font.size * 0.12),
-                ],
-                Stroke::new(sw, color),
-            );
-            let dash = (r - l) / 5.0;
-            for k in [0.0, 2.0, 4.0] {
-                let a = l + dash * k;
-                painter.line_segment(
-                    [
-                        pos2(a, cy + font.size * 0.12),
-                        pos2(a + dash, cy + font.size * 0.12),
-                    ],
-                    Stroke::new(sw, color),
-                );
+    for g in laid {
+        match g {
+            Ok(g) => {
+                let gw = g.size().x;
+                painter.galley(pos2(x, rect.top()), g, color);
+                x += gw;
             }
-            x += sym_w;
+            Err(c) => {
+                paint_symbol(painter, c, x, rect.center().y, font.size, color);
+                x += symbol_width(c, font.size);
+            }
         }
     }
     rect
 }
 
-/// Text from plugin data shown in the UI fonts: `⎓` (missing from every bundled font)
-/// becomes `DC`.
+/// Look-alikes [`glyph_safe`] swaps in for characters Inter lacks (third-party plugin text).
+pub const GLYPH_SUBSTITUTES: &[(char, &str)] = &[('∥', "‖"), ('▯', "□")];
+
+/// Text from plugin data shown in the UI fonts: the [`SHAPED_SYMBOLS`] are spelled out
+/// (`V⎓` → `V DC`, `∿` → `sine`) and [`GLYPH_SUBSTITUTES`] swapped in (`∥` → `‖`).
 pub fn glyph_safe(s: &str) -> String {
-    s.replace("V⎓", "V DC").replace('⎓', "DC")
+    let mut out = s.replace("V⎓", "V DC");
+    for (c, word) in SHAPED_SYMBOLS.iter().chain(GLYPH_SUBSTITUTES) {
+        out = out.replace(*c, word);
+    }
+    out
 }
 
 /// A panel placed on screen.
@@ -982,6 +1075,39 @@ mod tests {
         let p = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../plugins/dmm-handheld/panel.json");
         serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn symbols_without_glyphs_are_spelled_out_or_drawn() {
+        assert_eq!(
+            glyph_safe("V⎓ · ∿ ⊓ ⋀ ⎍ · 10 MΩ ∥ 100 pF"),
+            "V DC · sine square triangle pulse · 10 MΩ ‖ 100 pF"
+        );
+        // ptext lays a shaped symbol out between its text runs
+        let ctx = egui::Context::default();
+        crate::theme::install(&ctx);
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let painter = ui.painter();
+            let f = font::mono(12.0);
+            let plain = ptext(
+                painter,
+                pos2(0.0, 0.0),
+                Align2::LEFT_TOP,
+                "AB",
+                f.clone(),
+                Color32::WHITE,
+            );
+            let with = ptext(
+                painter,
+                pos2(0.0, 0.0),
+                Align2::LEFT_TOP,
+                "A∿B",
+                f.clone(),
+                Color32::WHITE,
+            );
+            assert!((with.width() - plain.width() - symbol_width('∿', 12.0)).abs() < 0.5);
+        });
+        out.textures_delta.clear();
     }
 
     #[test]

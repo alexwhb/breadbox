@@ -2,6 +2,7 @@
 
 pub mod code_editor;
 pub mod controls;
+pub mod help;
 pub mod highlight;
 pub mod icons;
 pub mod instrument;

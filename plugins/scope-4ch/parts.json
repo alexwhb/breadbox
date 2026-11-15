@@ -82,11 +82,11 @@
     "inspector": [
       {
         "label": "Inputs",
-        "value": "4 × 1 MΩ ∥ 15 pF (+ probe)"
+        "value": "4 × 1 MΩ ‖ 15 pF (+ probe)"
       },
       {
         "label": "Probes",
-        "value": "10×: 10 MΩ ∥ 12 pF · 1×: 1 MΩ ∥ 100 pF"
+        "value": "10×: 10 MΩ ‖ 12 pF · 1×: 1 MΩ ‖ 100 pF"
       },
       {
         "label": "Ground clip",
