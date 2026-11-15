@@ -891,8 +891,8 @@ comments them out as `*off .ac …`. Export `.cir` is `Netlist::to_spice_text()`
 inlined (ngspice-runnable); each plot exports CSV / PNG / SVG.
 
 **Tests** (`TEST-5`): `cargo test -p breadbox` — unit tests in modules, `tests/gui.rs` (the app
-driven by AccessKit labels through `egui_kittest` + wgpu; saves `docs/screenshots/*.png` at
-1440×900), `tests/widgets.rs` (widget behaviour + `tests/snapshots/widget-gallery.png`
+driven by AccessKit labels through `egui_kittest` + wgpu; renders 1440×900 screenshots into
+the test scratch dir, or refreshes `docs/screenshots/*.png` with `BREADBOX_UPDATE_SCREENSHOTS=1`), `tests/widgets.rs` (widget behaviour + `tests/snapshots/widget-gallery.png`
 snapshot; `UPDATE_SNAPSHOTS=1` to refresh), `tests/workbench.rs` (the Workbench on the real
 co-simulation: run + serial, World slider, palette drag-and-drop, wire drawing + ratsnest,
 inspector edits, undo/redo, LED burnout, upload on the live bench, ESP32 host board, virtual

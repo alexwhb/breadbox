@@ -47,13 +47,26 @@ pub fn repo() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-/// Renders and saves `docs/screenshots/<name>.png` (1440×900).
+/// Where screenshots go: `docs/screenshots/` with `BREADBOX_UPDATE_SCREENSHOTS=1` (refreshing
+/// the committed images), otherwise the test's scratch dir so a test run leaves the working
+/// tree clean (live-bench renders differ from run to run).
+pub fn screenshot_dir() -> PathBuf {
+    if std::env::var_os("BREADBOX_UPDATE_SCREENSHOTS").is_some_and(|v| v == "1") {
+        repo().join("docs/screenshots")
+    } else {
+        let d = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("screenshots");
+        let _ = std::fs::create_dir_all(&d);
+        d
+    }
+}
+
+/// Renders and saves `<screenshot_dir>/<name>.png` (1440×900).
 pub fn screenshot(h: &mut Harness<'static, BreadboxApp>, name: &str) {
     h.remove_cursor();
     h.run_steps(2);
     match h.render() {
         Ok(img) => {
-            let path = repo().join("docs/screenshots").join(format!("{name}.png"));
+            let path = screenshot_dir().join(format!("{name}.png"));
             img.save(&path).expect("save screenshot");
         }
         Err(e) => panic!("render failed: {e}"),

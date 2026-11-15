@@ -1,6 +1,6 @@
 //! Workbench GUI end-to-end tests (`TEST-5`, `WB-*`): the real app with the co-simulation
 //! bench (`SimBench`), driven through AccessKit labels and pointer events with
-//! `egui_kittest`. Saves `docs/screenshots/workbench*.png`.
+//! `egui_kittest`. Saves `docs/screenshots/workbench*.png` with `BREADBOX_UPDATE_SCREENSHOTS=1`.
 
 mod common;
 
