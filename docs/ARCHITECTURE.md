@@ -233,6 +233,13 @@ is a snapshot). Time is counted in oscillator cycles (`cycle()`); `time()` conve
   `lib_search/lib_install/lib_list`. On Apple Silicon without Rosetta the bundled x86_64
   avr-gcc/ctags cannot run: `NativeOverrides` (native avr-gcc from Homebrew `osx-cross`, native
   Arduino ctags under `toolchain/native/`) are passed as build properties automatically.
+  `Toolchain::install` makes that case automatic: after the core it calls
+  `install_native_tools_with(&NativeInstallOptions { brew, brew_prefixes, ctags_url, app_dir },
+  progress)` when `needs_native_tools()` — `brew install osx-cross/avr/avr-gcc@8` (merged into
+  `toolchain/native/avr-gcc/bin` with avr-binutils) and `build_ctags(CTAGS_SOURCE_URL, …)`
+  (download, patch for current SDKs, `configure && make`). Without Homebrew it fails with
+  `FirmwareError::NativeTools` explaining the Rosetta / Homebrew options. With Rosetta nothing
+  changes.
 - `Toolchain::compile(sketch_dir, &CompileOptions { fqbn, debug, build_dir, warnings,
   properties }) -> BuildOutput { success, elf, hex, size: Option<SizeReport>, diagnostics,
   log, build_dir, duration, banner }`. Per-sketch cache dir under
@@ -255,7 +262,7 @@ is a snapshot). Time is counted in oscillator cycles (`cycle()`); `time()` conve
 - `Board::{all, by_id, by_fqbn}`: UNO R3 / Nano / Mega 2560 — FQBN, MCU, Arduino pin ↔ port/bit,
   ADC channel, PWM timer/channel/frequency, attachInterrupt number, bus pins, LED_BUILTIN,
   serial ports, header layouts.
-- `HostBoard::spawn(...)` for ESP32/Pico API-level emulation (`MCU-6`) is phase 3.
+- ESP32 DevKit / Raspberry Pi Pico API-level emulation (`MCU-6`): see §5b.
 
 Co-simulation recipe (`bb-sim`): run each MCU to the quantum end; on `PinChange` read the
 events (exact cycles) and update the analog drives at those times; after solving, push the
@@ -263,6 +270,61 @@ resolved logic levels with `set_pin_input` (Schmitt thresholds are the co-sim's 
 comparator voltages with `set_pin_voltage`; schedule device-generated edges you already know
 (UART bits) with `schedule_pin_input`; answer `AdcSampleNeeded` by advancing the analog side to
 `cycle`. Hand every stop to the MCU's `Debugger` (if attached); `Pause` = stop calling `run`.
+
+## 5b. Host-emulated boards (`bb-firmware::host`, `MCU-6`)
+
+ESP32 DevKit v1 and Raspberry Pi Pico sketches compile natively (system `clang++`, or
+`$BREADBOX_CXX`) against Breadbox's Arduino-compatible core in `crates/bb-firmware/hostcore/`
+(embedded in the binary via `host::compile::HOSTCORE`, materialised once under the build cache)
+and run as a **child process in lock-step with simulated time**.
+
+- Build: `compile_host(sketch_dir, HostKind::{Esp32DevKit, Pico}, build_dir) -> HostBuild {
+  success, exe, diagnostics, log, duration, cached }`. Arduino preprocessing: `.ino` tabs
+  concatenated (main first), prototypes generated before the first function definition
+  (`find_prototypes`, default arguments stripped), `#line` directives so `Diagnostic { tab, line,
+  column }` point at the user's tabs; `.cpp/.c` tabs compiled, `.h` tabs on the include path.
+  The host core is compiled once per board kind and cached (`hostcore-<hash>/obj-<kind>`).
+  Board defines: `BB_HOST_ESP32` / `BB_HOST_PICO` + the usual `ESP32`, `ARDUINO_ARCH_*`.
+- Core coverage: `Arduino.h` (pins, time, GPIO, `analogRead` 12-bit default on both boards +
+  `analogReadResolution`, `analogWrite` / LEDC 2.x channel API and 3.x pin API, `tone`,
+  `attachInterrupt(Arg)`, `pulseIn`, `shiftIn/Out`, `random` seeded from the board seed, `map`,
+  `ESP.restart()`, FreeRTOS `vTaskDelay`), `String`, `Print`/`Stream`, `Serial`/`Serial1`/`Serial2`,
+  `Wire`, `SPI`, `WiFi.h` (`WiFiClass`, `WiFiClient`, `WiFiServer`, `WiFiUDP`), `HTTPClient`,
+  `PubSubClient` (real MQTT 3.1.1 bytes over the simulated TCP), ESP32 BLE Arduino subset
+  (`BLEDevice/BLEServer/BLEService/BLECharacteristic/BLEAdvertising/BLE2902`, callbacks),
+  `Preferences` (file-backed NVS), `configTime`/`getLocalTime` (real NTP packets), `DHT.h`
+  (Adafruit-compatible, real single-wire protocol on the pin).
+- Protocol (`host::protocol`, mirrored by `hostcore/bb_host.h`): child→parent `[u32 len][u8
+  type][payload]`; parent→child replies `[u32 len][u64 now_us][u8 n][n irq pins][payload]`.
+  One-way messages (pin mode/write, PWM, serial output, IRQ setup, logs) are buffered by the child
+  and stamped by the parent's board clock; requests (time, reads, sleeps, pin waits, I²C/SPI,
+  services) block the child until answered. Interrupt pins ride on every reply; ISRs run inside
+  the child before the call returns.
+- Time model: the child only runs between replies. Each message costs simulated time (time/status
+  polls 0.25–1 µs, escalating in long busy-wait loops so `while (millis() < t) {}` advances;
+  `analogRead` 10 µs ESP32 / 2 µs Pico; I²C/SPI by bit time; radio services 20 µs); `delay` /
+  `delayMicroseconds` / `WAIT_PIN` block until the board clock reaches the deadline, an attached
+  interrupt fires, or (async mode, enabled by BLE) every `poll_interval` (10 ms) so callbacks run.
+- `HostBoard::spawn(exe, HostConfig { kind, seed, nvs_path, poll_interval, stop_on_output,
+  hang_timeout })`; `run(until, &mut dyn HostIo) -> HostStop::{ReachedTime, Output, Panic,
+  Exited { code, stderr }, Hung}` never lets the board clock pass `until` while the child waits
+  (it may overshoot by one message cost while the child computes). `stop_on_output` returns after
+  each pin/PWM change so a device (DHT22) can schedule its answer before the sketch samples.
+  Inputs pushed: `set_pin_input(gpio, Some(level)|None)`, `schedule_pin_input(gpio, level, at)`,
+  `set_pin_voltage(gpio, v)`, `serial_inject(port, bytes)`. Outputs: `take_events() ->
+  [HostEvent::{Pin { time, pin, state: HostPinState::{Input{pull}, Output{high}, OpenDrain{low}}
+  }, Pwm { time, pin, duty, freq_hz }, Log, Restarted}]`, `take_serial(port) -> [(t, byte)]`
+  (paced at the configured baud), `pin_state`, `stderr`. `reset(Some(new_exe))` = re-flash
+  (NVS kept). `ESP.restart()` respawns the process.
+- `HostIo` (pulled, at the exact board time): `analog_read(pin, t) -> Option<volts>`,
+  `i2c_write/i2c_read(bus, addr, …)`, `spi_transfer(bus, bytes)`, and
+  **`service(channel, request, t) -> reply`** — opaque Wi-Fi/socket (channel 1) and BLE (channel
+  2) requests whose byte format is owned by `bb_radio::host`. bb-firmware does not depend on
+  bb-radio; the co-sim forwards: `fn service(..) { radio.host_service(device, ch, req, t) }`.
+- Catalogue: `HostKind::spec() -> HostBoardSpec { pins: [HostPin { gpio, name, adc: (unit,
+  ch), input_only, touch, dac, pwm, functions }], adc_bits, adc_default_bits, pwm_channels,
+  pwm_default_bits/freq, led_builtin, sda/scl/mosi/miso/sck/ss, serial, wifi, ble, headers,
+  emulation: "API-level" }` for ESP32 DevKit v1 (30-pin DOIT) and Pico (40-pin).
 
 ## 6. Co-simulation scheduler (`bb-sim`)
 
@@ -285,6 +347,60 @@ loop (on sim thread):
   for serial/radio/log streams. UI never blocks on the sim.
 - Bench rebuild on circuit edits: incremental where possible (param edits), otherwise rebuild
   the analog session and keep MCU/world/radio state.
+
+## 6b. Radios (`bb-radio`)
+
+Pure state machines over bytes and `SimTime` (the LAN bridge's socket thread is the only
+thread; nothing reads the wall clock). One `bb_radio::RadioSpace` per bench holds everything:
+
+- `net: Network` — APs (default `SIM-AP` / WPA2 `breadbox` / ch 6, 16 dBm), stations, floor-plan
+  `geometry` (walls) → RSSI via log-distance path loss, association + real DHCP DORA (pool from
+  `.42`, lease 3600 s, renewals), DNS (`<host>.sim`, `broker.sim`, common public names alias the
+  gateway), TCP (handshake, retransmission with RTO/Karn, reassembly, FIN/RST), UDP, ICMP, gateway
+  services (MQTT broker `10.0.0.1:1883`, HTTP test server `:80`, NTP from sim time, echo `:7`),
+  fault injector `NetConditions { latency_ms, jitter_ms, loss_pct, drop_ap_at_s, ap_down_s }`,
+  `log()` → `PacketLog` (`to_pcapng`, `to_csv`), `broker_mut()` (virtual clients),
+  `take_broker_events()`.
+- `ble: BleSpace` — GATT peripherals + the virtual phone (`scan`, `connect(id, pin)`,
+  `discover`, `read/write/subscribe(handle)`, `terminal_open/send`, `take_phone_events`).
+- `lora: LoraSpace` — medium (terrain, region duty cycle, collisions/capture) + gateway → MQTT
+  (`lora/<net>/<addr>/up`, downlinks on `…/down`).
+- Modules: `add_esp01(label, pos, EspAtConfig)`, `add_hm10`, `add_hc05`, `add_rylr896`,
+  `add_host_radio(label, pos)` (ESP32 Wi-Fi + BLE) → `DeviceId`; `power(id, on, t)`,
+  `set_pin(id, ModulePin::{Reset, Enable, Key}, high, t)`, `set_position(id, pos)`.
+
+**What bb-sim calls.**
+
+1. Time: `advance(t)` whenever the bench reaches `t`, and include `next_wake()` in the
+   scheduler's `t_target` (radio timers, packet arrivals, module latencies).
+2. UART modules (`UartWire`, one per module ↔ MCU pair):
+   `wire.mcu_edge(t, high)` for every MCU TX-pin level change (from `take_pin_events`, exact
+   cycles); include `wire.next_decision()` in `t_target` (the stop-bit sample of the byte on the
+   wire) so the module receives the byte at its exact time; then `wire.pump(&mut space, t)`;
+   `space.advance(t)`; and schedule `wire.module_edges(&mut space)` on the MCU's RX pin with
+   `avr.schedule_pin_input(rx, Some(level), avr.cycle_at(t))` (always ≥ now: modules answer
+   ≥ 60 µs after the byte; the core's one-instruction overshoot is absorbed). The decoder follows
+   the module's baud (`uart_config(id)`), including ESP-01 boot garbage at 74 880 baud and
+   `AT+UART_CUR` switches. Pure helpers: `uart::{UartDecoder, UartEncoder, UartFrame,
+   UartConfig}`.
+3. Host boards: `HostIo::service` → `space.host_service(id, channel, request, t)`; the reply
+   goes back to the child unchanged (format in `bb_radio::host`).
+4. Serial monitor: `take_annotations() -> [Annotation { time, device, label, kind:
+   AnnotationKind::{Wifi, Mqtt, Net, Ble, Lora}, text }]`; `line()` renders `wifi: AT+CWJAP=
+   "SIM-AP" → OK rssi=-54 dBm ip=10.0.0.42` / `mqtt: PUB garden/pot1 {…} (40 B)`. Route by
+   `device` to the MCU wired to that module (toggle per kind in the UI).
+5. UI (`RF-7`): `cards() -> [RadioCard { title, status, rows }]` (e.g. `RSSI -54 dBm (3.2 m,
+   1 wall)`, `IP 10.0.0.42 / DHCP`, `Broker mqtt://10.0.0.1 (built-in)`), `log_rows()` (Wi-Fi +
+   BLE + LoRa, time ordered; `LogEntry::{time_label(), dir.label(), text()}` gives the design's
+   `01.870 tx DHCP REQUEST 10.0.0.42` and amber `!` drop rows), `net.set_conditions(…)`,
+   `explorer_subscribe/publish/take`, `set_lan_bridge(Some(BridgeConfig::new(host, port)))` +
+   `lan_bridge_status()`, the phone API on `ble`.
+6. Persistence: `settings() / apply_settings(&RadioSettings)` (serde) for `project.json`
+   `radios`; module flash state (`EspAt::config.flash`) for per-part settings.
+
+Example sketches live in `examples/<project>/firmware/<MCU ref>/<sketch>/` with a `sketch.yaml`
+(`default_fqbn`); `scripts/build-test-firmware.sh` compiles the AVR ones into
+`examples/fixtures/<sketch>.<board>.{hex,elf}` (host-board sketches are compiled at run time).
 
 ## 7. Plugin runtime (`bb-plugin`)
 

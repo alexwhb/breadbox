@@ -161,3 +161,80 @@ Notes / deviations:
   --ignored` (TEST-6 / SPICE-5 / SPICE-7 budgets).
 - Debug helpers: `cargo run -p bb-spice --example spice -- file.cir`, `--example refdiff --
   <ref> <vector> <level>`, `--example dcdiff -- <ref>`, `--example export_cir -- file.cir`.
+
+### radio
+Phase 2 — `bb-radio`, example firmware, ESP32/Pico host emulation, native toolchain installer.
+Everything below runs in `cargo test -p bb-radio -p bb-firmware -p bb-avr` (clippy `-D warnings`
++ fmt clean). The end-to-end tests run **real compiled firmware**: AVR sketches built by
+arduino-cli/avr-gcc (fixtures in `examples/fixtures/`), ESP32/Pico sketches built by clang++
+against `hostcore/` at test time.
+
+- `RF-1` **done** — APs (`SIM-AP`/`breadbox`/ch 6), stations, WPA2 password check, scan,
+  log-distance path loss + walls → RSSI (default bench reads the design's `-54 dBm (3.2 m, 1
+  wall)`), sensitivity limit, weak-signal loss.
+- `RF-2` **done** — real DHCP DORA + renewals (pool from 10.0.0.42, lease 3600 s), DNS (`*.sim`,
+  `broker.sim`, station hostnames), TCP (handshake, RTO/Karn retransmission, reassembly,
+  FIN/RST, station↔station + listeners), UDP, ICMP ping, NTP from sim time, HTTP test server
+  (httpbin-style routes), echo; MQTT 3.1.1 broker on 10.0.0.1:1883 parsing the firmware's bytes
+  (QoS 0/1 + inbound QoS 2 handshake, retained, `+`/`#`, keep-alive ×1.5, LWT, persistent
+  sessions + queued QoS 1, takeover, auth, virtual clients).
+- `RF-3` **done** — latency ± jitter, loss %, "drop the AP at t" (stations disconnect, links die,
+  broker notices via keep-alive → will; auto-reconnect when the AP returns); LAN bridge
+  (`set_lan_bridge`) — blocking I/O on its own thread, channels only, loop prevention, reconnect
+  with back-off; tested against a loopback TCP MQTT broker + a "dashboard" client.
+- `RF-4` **done** — packet log rows (time, tx/rx/!, radio, protocol-aware summary: `DHCP REQUEST
+  10.0.0.42`, `MQTT CONNECT client=garden-node`, `PUBLISH garden/pot1 · 40 B · QoS 0`, `dropped
+  by fault injector (loss 2%)`), pcap-ng with synthetic Ethernet/IPv4/TCP/UDP/ICMP frames
+  (checksums valid), CSV; BLE/LoRa rows; merged `log_rows()`.
+- `RF-5` **done** — ESP-01 ESP-AT modem: ROM boot log at 74 880 baud then `ready`, echo,
+  `busy p...`/`busy s...`, every listed command (+ CIPSERVER, CIPDOMAIN, CWAUTOCONN, UART_DEF,
+  MQTTCONNCFG/MQTTUNSUB/MQTTCLEAN), `+IPD`, `>`/`Recv n bytes`/`SEND OK` on ACK, UDP, SNTP,
+  ESP-AT MQTT client (`+MQTTSUBRECV`), flash settings (default baud, saved AP + auto-connect).
+- `RF-6` **done** — HM-10 (HMSoft AT without line endings, NOTI, BAUD on reset, FFE0/FFE1
+  transparent UART, 20-byte notifications), HC-05 (KEY → AT mode at 38400, SPP data mode, PIN),
+  GATT model, virtual phone (scan + RSSI, connect, discover, read/write/notify, terminal for
+  HM-10 / Nordic UART / SPP); ESP32 native BLE via `MCU-6` appears to the same phone.
+- `RF-7` **API ready** (UI is phase 4): `cards()`, `log_rows()`, conditions, BLE phone API,
+  `explorer_subscribe/publish/take`, bridge status, `settings()/apply_settings()` (serde).
+- `RF-8` **done** — structured `Annotation { device, kind, text }` (`wifi: AT+CWJAP="SIM-AP" →
+  OK rssi=-54 dBm ip=10.0.0.42`, `mqtt: PUB garden/pot1 {"m":41,"lux":180,"t":21} (40 B)`,
+  ble/lora/net lines), filterable by kind.
+- LoRa — medium (terrain classes, Semtech airtime, EU868 duty cycle, half duplex, SNR
+  sensitivity per SF, collisions + 6 dB capture), RYLR896 AT modem, multi-SF gateway ↔ MQTT.
+- `bb_radio::uart` — `UartDecoder`/`UartEncoder` (any format, framing/parity errors, glitch
+  rejection, `next_decision()` for exact co-sim stops) + `UartWire` (module ↔ MCU pins).
+- `MCU-6` **done** (engine) — `hostcore/` Arduino core (see ARCHITECTURE §5b), `compile_host`
+  (clang++, prototypes, `#line`-mapped diagnostics, cached core), `HostBoard` lock-step runner
+  (sleeps, interrupts, pin waits, busy-wait progress, async BLE polling, restart, NVS),
+  `HostBoardSpec` for ESP32 DevKit v1 + Pico. 12 s of esp32-weather sim time ≈ 0.2 s wall.
+- `PRJ-2` **sketches done** — garden-node, blink, night-light, thermometer (TMP36 + 16×2 LCD),
+  ble-button (HM-10), servo-sweep, esp32-weather (ESP32 + DHT22 + PubSubClient), plus pico-blink;
+  555-astable / rc-filter-bode / op-amp-amplifier are circuit-only (no firmware; bb-circuit
+  projects). project.json files come with bb-circuit.
+- `PRJ-3` **firmware done** — garden-node (`garden-node.ino`, `wifi_at.h`, `mqtt_lite.h`, lines
+  1–31 as in the design editor; `Serial.printf` via a tiny `PrintfSerial` wrapper) compiles with
+  avr-gcc (10,288 B), joins SIM-AP, gets 10.0.0.42, publishes `{"m":…,"lux":…,"t":…}` (t from the
+  ATmega328P's internal temperature sensor) once per second (long-run rate), prints
+  `soil_raw=… moisture=…% light_raw=… led_pwm=…` every ~0.5 s tracking A0/A1.
+- `MCU-4` installer — `Toolchain::install` on Rosetta-less Apple Silicon now installs avr-gcc@8
+  via Homebrew and builds Arduino ctags from source automatically (progress + clear errors);
+  Rosetta path unchanged.
+- Tests: bb-radio 55 (21 unit + net 10, espat 6, garden_node 3, ble 4, lora 3, bridge 2, esp32 2,
+  examples 4); bb-firmware +10 (host 3, native_install 2 + 1 ignored network build, catalogue +
+  prototype unit tests); bb-avr unchanged (76).
+
+Deviations / notes:
+- Pins follow the design's schematic, not the brief: garden-node `SoftwareSerial esp(3, 2)` =
+  RX D3 ← ESP TX, TX D2 → ESP RX (schematic labels "D2 SW_TX", "D3 SW_RX").
+- garden-node's loop is `delay(500)` + work, so publishes come every ~1.1 s with `every()`
+  catching up (long-run 1/s); the boot banner line of the design's serial log is not printed
+  (it would shift the editor's line numbers; line 30 is still the `Serial.printf`).
+- Pico `analogRead` defaults to 12 bits as SPEC says (arduino-pico defaults to 10).
+- ESP-AT strings follow ESP-AT 2.2 with v1.7 forms where Arduino libraries parse them
+  (`+CWJAP:n` + `FAIL`, `+CWLAP:(…)`); `SEND OK` waits for the TCP ACK (NonOS behaviour).
+- TCP has no window/congestion control; a FIN closes both directions. LoRa EU duty cycle is
+  enforced per transmission (T_off = T_air·(100/d − 1)); the RYLR896 reports it as `+ERR=10`.
+- Host boards: one process per board; no TLS (`https://` URLs fail), HTTP bodies need
+  Content-Length or connection close; I²C master only; FreeRTOS tasks not emulated.
+- §3 of ARCHITECTURE mentions a `UartPins` helper in bb-sim — `bb_radio::UartWire` provides it
+  (documented in §6b).
