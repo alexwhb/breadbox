@@ -135,7 +135,7 @@ optional = true                       # behind a toggle …
 toggle_label = "Do the math myself"
 toggle_note = "Optional. The meter waits for your prediction."
 meter = "dmm1"                        # instrument hidden until the prediction is right
-correct_text = "Nailed it. The meter agrees: {mA} mA."
+correct_text = "Nailed it. The meter agrees: {meter} mA."
 default_hint = "Not quite. Take 5.0 − 2.0 first, divide by R1, then × 1000 for mA."
 working = ["V(R1) = 5.0 − 2.0 = 3.0 V", "I = 3.0 V ÷ {R:g} Ω", "I = {amps:.5t} A = {mA} mA"]
 
@@ -148,6 +148,9 @@ Variables available to `answer`, hint conditions and templates: the step's `vars
 value (`var`), `guess` (the student's number), `meter` (the instrument reading in the step's
 unit: × 1000 for `mA`), `answer`, and `mA` / `amps` (= `answer` and `answer / 1000`). With a
 toggle the meter stays hidden ("----") until the prediction is right or the working is shown.
+`correct_text` should quote `{meter}` (what the instrument really shows, e.g. 13.4 mA through
+the meter's burden) rather than `{mA}` / `{answer}` (the formula's value); without a bench the
+answer stands in for the reading.
 
 ### `measure`: an instrument reading
 

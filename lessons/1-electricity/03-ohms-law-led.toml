@@ -93,7 +93,7 @@ optional = true
 toggle_label = "Do the math myself"
 toggle_note = "Optional. The meter waits for your prediction."
 meter = "dmm1"
-correct_text = "Nailed it. The meter agrees: {mA} mA."
+correct_text = "Nailed it. The meter agrees: {meter} mA."
 default_hint = "Not quite. Take 5.0 − 2.0 first, divide by R1, then × 1000 for mA."
 working = [
     "V(R1) = 5.0 − 2.0 = 3.0 V",
