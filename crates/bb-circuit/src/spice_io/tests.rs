@@ -90,3 +90,136 @@ fn rc_filter_example_runs_ac_and_has_the_right_corner() {
         best.1
     );
 }
+
+const RC: &str = "* RC low-pass
+V1 in 0 DC 0 AC 1
+R1 in out 1k
+C1 out 0 159n
+.ac dec 20 10 100k
+.end
+";
+
+#[test]
+fn a_typed_netlist_builds_the_circuit_and_keeps_placements_on_later_edits() {
+    let lib = Library::builtin();
+    let empty = Project::new("typed", Mode::Pro);
+    assert!(is_netlist_circuit(&empty));
+    let p = netlist_to_circuit(RC, &empty, &lib).unwrap();
+    assert_eq!(p.name, "typed");
+    let refs = |p: &Project| {
+        let mut v: Vec<String> = p
+            .parts
+            .iter()
+            .filter(|x| x.part != "gnd")
+            .map(|x| format!("{}:{}", x.reference, x.part))
+            .collect();
+        v.sort();
+        v
+    };
+    assert_eq!(
+        refs(&p),
+        ["C1:capacitor", "R1:resistor", "V1:vsource"].map(String::from)
+    );
+    assert!(p.spice.directives.contains(".ac dec 20 10 100k"));
+    assert!(is_netlist_circuit(&p));
+    let conn = Connectivity::compute(&p, &lib);
+    let r1 = p.part_by_ref("R1").unwrap().id.clone();
+    let c1 = p.part_by_ref("C1").unwrap().id.clone();
+    assert!(conn.connected((&r1, "2"), (&c1, "1")));
+    assert!(conn.ratsnest_schematic.is_empty());
+    // the user moves R1 in the schematic, then edits its value and adds R2 in the netlist
+    let mut moved = p.clone();
+    let at = Placement::at(60.0, 40.0);
+    moved
+        .parts
+        .iter_mut()
+        .find(|x| x.id == r1)
+        .unwrap()
+        .schematic = Some(at);
+    let edited = RC
+        .replace("R1 in out 1k", "R1 in out 2k")
+        .replace(".ac", "R2 out 0 100k\n.ac");
+    let q = netlist_to_circuit(&edited, &moved, &lib).unwrap();
+    let r1q = q.part_by_ref("R1").unwrap();
+    assert_eq!(r1q.id, r1, "same part");
+    assert_eq!(r1q.schematic, Some(at), "kept where the user put it");
+    assert_eq!(r1q.props["resistance"], PropValue::Num(2000.0));
+    assert!(q.part_by_ref("R2").is_some());
+    let conn = Connectivity::compute(&q, &lib);
+    // R1's labels moved with it: still wired to C1
+    assert!(conn.connected((&r1, "2"), (&c1, "1")));
+    assert!(conn.ratsnest_schematic.is_empty());
+    // the circuit solves like the text
+    let nl = pro_netlist(&q, &lib).unwrap();
+    let res = nl.run().unwrap();
+    assert!(res.plot(bb_spice::PlotKind::Ac).is_some());
+}
+
+#[test]
+fn what_the_circuit_cannot_hold_is_reported_not_lost() {
+    let lib = Library::builtin();
+    let empty = Project::new("typed", Mode::Pro);
+    // half typed: a parse error, not a detach
+    assert!(matches!(
+        netlist_to_circuit("* t\nR1 in\n.end\n", &empty, &lib),
+        Err(SpiceIoError::Parse(_))
+    ));
+    // an include the netlister cannot resolve
+    let inc = RC.replace(".ac", ".include models/missing.lib\n.ac");
+    assert!(matches!(
+        netlist_to_circuit(&inc, &empty, &lib),
+        Err(SpiceIoError::Unrepresentable(_)) | Err(SpiceIoError::Parse(_))
+    ));
+    // a subcircuit instance with more nodes than a generic SPICE part has pins (16)
+    let big = RC.replace(
+        ".ac",
+        "X9 n1 n2 n3 n4 n5 n6 n7 n8 n9 n10 n11 n12 n13 n14 n15 n16 n17 big\n\
+         .subckt big a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13 a14 a15 a16 a17\n\
+         R1 a1 a17 1k\n.ends big\n.ac",
+    );
+    assert!(matches!(
+        netlist_to_circuit(&big, &empty, &lib),
+        Err(SpiceIoError::Unrepresentable(m)) if m.contains("X9")
+    ));
+    // extra element parameters stay on a SPICE card instead of being dropped
+    let tc = RC.replace("R1 in out 1k", "R1 in out 1k tc1=0.004");
+    let p = netlist_to_circuit(&tc, &empty, &lib).unwrap();
+    let r1 = p.part_by_ref("R1").unwrap();
+    assert_eq!(r1.part, "spice_card");
+    assert!(
+        matches!(&r1.props["card"], PropValue::Text(t) if t.contains("tc1=0.004")),
+        "{:?}",
+        r1.props
+    );
+    // boards and breadboard wiring are not a netlist circuit
+    let garden = Project::load(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../examples/garden-node"
+    ))
+    .unwrap();
+    assert!(!is_netlist_circuit(&garden));
+}
+
+#[test]
+fn replacing_the_circuit_is_one_undo_step() {
+    let lib = Library::builtin();
+    let mut ed = crate::edit::Editor::new(Project::new("typed", Mode::Pro));
+    let a = netlist_to_circuit(RC, &ed.project, &lib).unwrap();
+    assert!(ed.replace_circuit("Netlist", &a));
+    assert!(!ed.replace_circuit("Netlist", &a), "no change, no step");
+    let b = netlist_to_circuit(&RC.replace("1k", "2k"), &ed.project, &lib).unwrap();
+    assert!(ed.replace_circuit("Netlist", &b));
+    let r1 = |ed: &crate::edit::Editor| {
+        ed.project.part_by_ref("R1").unwrap().props["resistance"].clone()
+    };
+    assert_eq!(r1(&ed), PropValue::Num(2000.0));
+    assert!(ed.undo());
+    assert_eq!(r1(&ed), PropValue::Num(1000.0));
+    assert_eq!(ed.project.parts, a.parts);
+    assert_eq!(ed.project.schematic.labels, a.schematic.labels);
+    assert!(ed.undo());
+    assert!(ed.project.parts.is_empty() && ed.project.schematic.labels.is_empty());
+    assert!(ed.project.spice.directives.is_empty());
+    assert!(ed.redo() && ed.redo());
+    assert_eq!(r1(&ed), PropValue::Num(2000.0));
+}

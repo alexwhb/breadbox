@@ -694,6 +694,104 @@ impl Editor {
         self.commit(tx);
     }
 
+    /// Replaces the circuit — parts, wires, schematic wires and net labels, probes, Pro
+    /// directives — with `next`'s as one undoable transaction (a netlist typed in Pro rebuilding
+    /// its schematic, `PRO-2`). Objects are matched by id, so unchanged ones produce no op.
+    /// Returns whether anything changed.
+    pub fn replace_circuit(&mut self, label: &str, next: &Project) -> bool {
+        fn diff<T: Clone + PartialEq>(
+            old: &[T],
+            new: &[T],
+            id: impl Fn(&T) -> &str,
+            op: impl Fn(Option<T>, Option<T>) -> Op,
+            ops: &mut Vec<Op>,
+        ) {
+            for o in old {
+                match new.iter().find(|n| id(n) == id(o)) {
+                    Some(n) if n == o => {}
+                    Some(n) => ops.push(op(Some(o.clone()), Some(n.clone()))),
+                    None => ops.push(op(Some(o.clone()), None)),
+                }
+            }
+            for n in new {
+                if !old.iter().any(|o| id(o) == id(n)) {
+                    ops.push(op(None, Some(n.clone())));
+                }
+            }
+        }
+        let p = &self.project;
+        let mut ops = Vec::new();
+        // probes and wires go before the parts they touch, so undo restores parts first
+        diff(
+            &p.probes,
+            &next.probes,
+            |x| &x.id,
+            |before, after| Op::Probe {
+                before,
+                after,
+                index: None,
+            },
+            &mut ops,
+        );
+        diff(
+            &p.wires,
+            &next.wires,
+            |x| &x.id,
+            |before, after| Op::Wire {
+                before,
+                after,
+                index: None,
+            },
+            &mut ops,
+        );
+        diff(
+            &p.schematic.wires,
+            &next.schematic.wires,
+            |x| &x.id,
+            |before, after| Op::SchWire {
+                before,
+                after,
+                index: None,
+            },
+            &mut ops,
+        );
+        diff(
+            &p.schematic.labels,
+            &next.schematic.labels,
+            |x| &x.id,
+            |before, after| Op::Label {
+                before,
+                after,
+                index: None,
+            },
+            &mut ops,
+        );
+        diff(
+            &p.parts,
+            &next.parts,
+            |x| &x.id,
+            |before, after| Op::Part {
+                before,
+                after,
+                index: None,
+            },
+            &mut ops,
+        );
+        if p.spice.directives != next.spice.directives {
+            ops.push(Op::Directives {
+                before: p.spice.directives.clone(),
+                after: next.spice.directives.clone(),
+            });
+        }
+        if ops.is_empty() {
+            return false;
+        }
+        let mut tx = Transaction::new(label);
+        tx.ops = ops;
+        self.commit(tx);
+        true
+    }
+
     /// Replaces the project's radio settings (`project.radios`) as one undoable change named
     /// `label` ("Move the bench", "Network conditions", "LAN bridge").
     pub fn set_radios(&mut self, label: &str, radios: serde_json::Value) {

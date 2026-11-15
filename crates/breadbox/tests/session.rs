@@ -367,7 +367,7 @@ fn session_2_pro_rc_low_pass_shows_its_corner() {
         has_label(&h, "rc-lowpass.cir"),
         "netlist file of the new project"
     );
-    assert!(has_label(&h, "editable · autosaved"));
+    assert!(has_label(&h, "autosaved · builds the schematic"));
     screenshot(&mut h, "session-6-new-pro");
     // type the netlist over whatever the editor shows
     let editor = h.get_by_role(egui::accesskit::Role::MultilineTextInput);
@@ -441,6 +441,212 @@ fn session_2_pro_rc_low_pass_shows_its_corner() {
         "netlist saved: {:?}",
         std::fs::read_to_string(&file)
     );
+}
+
+/// Replaces the netlist editor's text by typing.
+fn type_netlist(h: &mut H, text: &str) {
+    h.get_by_role(egui::accesskit::Role::MultilineTextInput)
+        .focus();
+    h.run_steps(1);
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+    h.run_steps(1);
+    h.get_by_role(egui::accesskit::Role::MultilineTextInput)
+        .type_text(text);
+    h.run_steps(3);
+}
+
+/// Designators of the circuit's parts (ground symbols left out), sorted.
+fn designators(h: &H) -> Vec<String> {
+    let mut v: Vec<String> = doc(h)
+        .project()
+        .parts
+        .iter()
+        .filter(|p| p.part != "gnd")
+        .map(|p| p.reference.clone())
+        .collect();
+    v.sort();
+    v
+}
+
+/// The Bode card's −3 dB corner (kHz) after Run analyses.
+fn run_for_corner(h: &mut H) -> f64 {
+    assert!(wait_for(h, 30.0, |h| has_label(h, "Run analyses")));
+    // drop the previous result's title so the new one is read
+    h.get_by_label("Run analyses").click();
+    h.run_steps(2);
+    assert!(
+        wait_for(h, 60.0, |h| has_label(h, "Run analyses")
+            && has_label_containing(h, "−3 dB at ")),
+        "no corner on the Bode card"
+    );
+    let title = h
+        .query_all_by_label_contains("−3 dB at ")
+        .filter_map(|n| {
+            let a = n.accesskit_node();
+            a.label().or_else(|| a.value())
+        })
+        .next()
+        .unwrap();
+    let v = title.rsplit("−3 dB at ").next().unwrap();
+    if let Some(hz) = v.strip_suffix(" Hz") {
+        hz.parse::<f64>().unwrap() / 1e3
+    } else {
+        v.trim_end_matches(" kHz")
+            .parse()
+            .unwrap_or_else(|_| panic!("{title}"))
+    }
+}
+
+/// PRO-2: a netlist typed into a new Pro project builds the circuit and its auto-placed
+/// schematic; later edits keep it in sync (both ways), and only what the circuit cannot hold
+/// detaches the netlist until Re-sync.
+#[test]
+fn session_2b_typed_netlist_builds_the_schematic_and_stays_in_sync() {
+    projects();
+    let mut h = harness();
+    click_first(&h, "New Pro project");
+    h.run_steps(3);
+    h.get_by_label("Project name").type_text("typed-rc");
+    h.run_steps(1);
+    h.get_by_label("Create project").click();
+    h.run_steps(5);
+    assert_eq!(h.state().ctx.route, Route::Pro(ProTab::Analysis));
+    assert!(
+        doc(&h).project().parts.is_empty(),
+        "a new Pro project is empty"
+    );
+    // an RC low-pass with its AC sweep
+    let rc =
+        "* RC low-pass\nV1 in 0 DC 0 AC 1\nR1 in out 1k\nC1 out 0 159n\n.ac dec 20 10 100k\n.end\n";
+    type_netlist(&mut h, rc);
+    assert!(
+        wait_for(&mut h, 10.0, |h| designators(h) == ["C1", "R1", "V1"]),
+        "the circuit: {:?}",
+        designators(&h)
+    );
+    assert!(has_label(&h, "autosaved · builds the schematic"));
+    {
+        let d = doc(&h);
+        let p = d.project();
+        assert_eq!(p.part_by_ref("R1").unwrap().part, "resistor");
+        assert_eq!(p.part_by_ref("C1").unwrap().part, "capacitor");
+        assert!(p.spice.directives.contains(".ac dec 20 10 100k"));
+        assert!(p.parts.iter().all(|x| x.schematic.is_some()), "auto-placed");
+        assert_eq!(d.editor.undo_label(), Some("Netlist"));
+    }
+    {
+        let p = doc(&h).project();
+        let (r, c) = (
+            p.part_by_ref("R1").unwrap().id.clone(),
+            p.part_by_ref("C1").unwrap().id.clone(),
+        );
+        assert!(connected(&h, (&r, "2"), (&c, "1")), "R1 → C1 through OUT");
+    }
+    // Run analyses → the Bode corner of what was typed
+    let khz = run_for_corner(&mut h);
+    assert!((khz - 1.0).abs() < 0.03, "corner {khz} kHz");
+
+    // the Schematic tab draws the three parts
+    h.state_mut().ctx.navigate(Route::Pro(ProTab::Schematic));
+    h.run_steps(5);
+    assert!(has_label(&h, "Schematic canvas"));
+    let sheet = h
+        .state()
+        .ctx
+        .egui
+        .data(|d| {
+            d.get_temp::<std::sync::Arc<breadbox::canvas::schematic::Sheet>>(egui::Id::unique(
+                "schematic-sheet",
+            ))
+        })
+        .expect("schematic sheet");
+    for r in ["R1", "C1", "V1"] {
+        let id = doc(&h).project().part_by_ref(r).unwrap().id.clone();
+        assert!(
+            sheet.anchors.iter().filter(|a| a.0 == id).count() >= 2,
+            "{r} on the sheet"
+        );
+    }
+    screenshot(&mut h, "pro-typed-netlist-schematic");
+
+    // netlist → circuit: R1 1k → 2k moves the corner to 500 Hz (R1 keeps its symbol)
+    let r1_at = doc(&h).project().part_by_ref("R1").unwrap().schematic;
+    h.state_mut().ctx.navigate(Route::Pro(ProTab::Analysis));
+    h.run_steps(4);
+    type_netlist(&mut h, &rc.replace("R1 in out 1k", "R1 in out 2k"));
+    assert!(
+        wait_for(&mut h, 10.0, |h| doc(h)
+            .project()
+            .part_by_ref("R1")
+            .is_some_and(
+                |p| p.props.get("resistance") == Some(&bb_circuit::PropValue::Num(2000.0))
+            )),
+        "R1 follows the netlist"
+    );
+    assert_eq!(
+        doc(&h).project().part_by_ref("R1").unwrap().schematic,
+        r1_at
+    );
+    let khz = run_for_corner(&mut h);
+    assert!((khz - 0.5).abs() < 0.02, "corner {khz} kHz");
+
+    // circuit → netlist: an edit made elsewhere (the Inspector, the Schematic tab) rewrites it
+    {
+        let d = h.state_mut().ctx.circuit.as_mut().unwrap();
+        let lib = d.lib.clone();
+        let id = d.project().part_by_ref("C1").unwrap().id.clone();
+        d.editor
+            .set_prop(&lib, &id, "capacitance", bb_circuit::PropValue::Num(318e-9))
+            .unwrap();
+        d.touched();
+    }
+    assert!(
+        wait_for(&mut h, 10.0, |h| editor_text(h).contains("3.18e-7")),
+        "the netlist follows the circuit:\n{}",
+        editor_text(&h)
+    );
+    assert!(designators(&h) == ["C1", "R1", "V1"]);
+
+    // something the schematic cannot hold (a 17-pin subcircuit instance): detached
+    let mut big = editor_text(&h);
+    let at = big.to_ascii_lowercase().rfind("\n.end").unwrap();
+    big.insert_str(
+        at + 1,
+        "X9 n1 n2 n3 n4 n5 n6 n7 n8 n9 n10 n11 n12 n13 n14 n15 n16 n17 big\n\
+         .subckt big a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13 a14 a15 a16 a17\n\
+         R1 a1 a17 1k\n.ends big\n",
+    );
+    type_netlist(&mut h, &big);
+    assert!(
+        wait_for(&mut h, 10.0, |h| has_label(
+            h,
+            "detached from the schematic"
+        )),
+        "detached label"
+    );
+    assert!(designators(&h) == ["C1", "R1", "V1"], "the circuit is kept");
+    // Re-sync: the netlist is rewritten from the schematic
+    h.get_by_label("Re-sync").click();
+    h.run_steps(3);
+    assert!(has_label(&h, "autosaved · builds the schematic"));
+    assert!(!editor_text(&h).contains("X9"), "{}", editor_text(&h));
+    assert!(editor_text(&h).to_ascii_lowercase().contains("r1 in out"));
+
+    // saved: reopening the project shows the circuit and its netlist
+    let dir = h.state().ctx.project.as_ref().unwrap().dir.clone();
+    h.state_mut().flush();
+    drop(h);
+    let p = bb_circuit::Project::load(&dir).unwrap();
+    let mut refs: Vec<&str> = p
+        .parts
+        .iter()
+        .filter(|x| x.part != "gnd")
+        .map(|x| x.reference.as_str())
+        .collect();
+    refs.sort();
+    assert_eq!(refs, ["C1", "R1", "V1"]);
+    let file = std::fs::read_to_string(dir.join("analyses/typed-rc.cir")).unwrap();
+    assert!(file.to_ascii_lowercase().contains("r1 in out"), "{file}");
 }
 
 /// Screen position of a pin in the open lesson's bench (the lesson keeps its own circuit

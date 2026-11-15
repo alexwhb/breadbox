@@ -42,6 +42,27 @@ pub enum NetlistSource {
     Detached,
 }
 
+/// The project's own file netlist building its circuit (`PRO-2`): a new Pro project's
+/// `analyses/<name>.cir` — or one whose circuit is netlist-only — maps every edit that parses
+/// into parts, net labels and directives with an auto-placed schematic; edits made to the
+/// circuit elsewhere (Schematic tab, undo there) rewrite the text.
+#[derive(Debug, Clone, Default)]
+struct FileDrive {
+    /// Text the circuit was last built from (or loaded / regenerated with).
+    text: String,
+    /// The circuit's own netlist at that point (an external edit changes it).
+    circuit: String,
+    /// Document generation at that point.
+    generation: u64,
+    /// Why the text is not in the circuit (`None` = in sync).
+    detached: Option<String>,
+}
+
+/// Label shown next to the netlist's name.
+const LABEL_FILE: &str = "editable · autosaved";
+const LABEL_DRIVES: &str = "autosaved · builds the schematic";
+const LABEL_DETACHED: &str = "detached from the schematic";
+
 /// Export menu choices.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ExportKind {
@@ -74,6 +95,8 @@ pub struct AnalysisScreen {
     synced_gen: Option<u64>,
     /// The synced text as generated (edits are compared against it).
     synced_text: String,
+    /// The file netlist builds the circuit (new Pro projects).
+    drive: Option<FileDrive>,
 }
 
 impl Default for AnalysisScreen {
@@ -102,6 +125,7 @@ impl Default for AnalysisScreen {
             runs_started: 0,
             synced_gen: None,
             synced_text: String::new(),
+            drive: None,
         }
     }
 }
@@ -119,7 +143,8 @@ impl AnalysisScreen {
         doc.path = Some(path.clone());
         self.doc = doc;
         self.source = NetlistSource::File(path);
-        self.source_label = "editable · autosaved".into();
+        self.source_label = LABEL_FILE.into();
+        self.drive = None;
         self.profile = Profile::default();
         self.result = None;
         self.error = None;
@@ -226,12 +251,142 @@ impl AnalysisScreen {
                     doc.touched();
                 }
             }
-            _ => {}
+            NetlistSource::File(_) => self.drive_tick(app),
+            NetlistSource::Demo => {}
         }
+    }
+
+    /// The circuit's own netlist (what a regenerated file netlist says).
+    fn circuit_text(doc: &crate::circuit::CircuitDoc) -> String {
+        if doc.project().parts.is_empty() {
+            return String::new();
+        }
+        sync::synced_netlist(doc, None).unwrap_or_default()
+    }
+
+    /// Lets the project's file netlist build the circuit when the circuit is netlist-only
+    /// (empty for a new Pro project). A file netlist with elements over an empty circuit (a
+    /// project typed before this existed) builds it right away.
+    fn attach_file(&mut self, app: &mut AppCtx) {
+        self.drive = None;
+        let Some(doc) = app.circuit.as_ref() else {
+            return;
+        };
+        if !bb_circuit::spice_io::is_netlist_circuit(doc.project()) {
+            return;
+        }
+        let empty = doc.project().parts.is_empty();
+        self.drive = Some(FileDrive {
+            // an empty circuit and a netlist with elements: map it on the first tick
+            text: if empty {
+                String::new()
+            } else {
+                self.doc.text.clone()
+            },
+            circuit: Self::circuit_text(doc),
+            generation: doc.generation(),
+            detached: None,
+        });
+        self.source_label = LABEL_DRIVES.into();
+    }
+
+    /// File netlist ⇄ circuit (`PRO-2`): edits that parse become the circuit (one undo step
+    /// each, placements kept); a netlist the circuit cannot hold is detached until the next
+    /// edit or Re-sync; circuit edits made elsewhere rewrite the text.
+    fn drive_tick(&mut self, app: &mut AppCtx) {
+        let Some(dr) = self.drive.as_mut() else {
+            return;
+        };
+        let Some(doc) = app.circuit.as_mut() else {
+            return;
+        };
+        if self.doc.text != dr.text {
+            let idle = self
+                .last_edit
+                .is_none_or(|t| t.elapsed() > Duration::from_millis(700));
+            if !idle {
+                app.egui.request_repaint_after(Duration::from_millis(720));
+                return;
+            }
+            let text = self.doc.text.clone();
+            dr.text = text.clone();
+            let empty_text =
+                bb_spice::Netlist::parse(&text).is_ok_and(|n| n.top.elements.is_empty());
+            if empty_text && doc.project().parts.is_empty() {
+                // the starter netlist (comments + `.op`): nothing to build yet
+                return;
+            }
+            match bb_circuit::spice_io::netlist_to_circuit(&text, doc.project(), &doc.lib) {
+                Ok(next) => {
+                    if doc.editor.replace_circuit("Netlist", &next) {
+                        doc.touched();
+                    }
+                    dr.detached = None;
+                }
+                // half typed: the parse check shows where; the circuit keeps its last state
+                Err(bb_circuit::spice_io::SpiceIoError::Parse(_)) => return,
+                Err(e) => dr.detached = Some(e.to_string()),
+            }
+            dr.generation = doc.generation();
+            dr.circuit = Self::circuit_text(doc);
+        } else if doc.generation() != dr.generation {
+            dr.generation = doc.generation();
+            if !bb_circuit::spice_io::is_netlist_circuit(doc.project()) {
+                // a board or breadboard wiring joined: the netlist is plain text again
+                self.drive = None;
+                self.source_label = LABEL_FILE.into();
+                return;
+            }
+            let now = Self::circuit_text(doc);
+            if now == dr.circuit {
+                return;
+            }
+            dr.circuit = now.clone();
+            if now.is_empty() {
+                // undone back to nothing: keep the text (the next edit builds it again)
+                return;
+            }
+            // the Schematic tab (or its undo) changed the circuit: the netlist follows
+            self.doc.text = now.clone();
+            self.doc.version += 1;
+            self.doc.dirty = true;
+            self.last_edit = Some(Instant::now());
+            dr.text = now;
+            dr.detached = None;
+        } else {
+            return;
+        }
+        self.source_label = if dr.detached.is_some() {
+            LABEL_DETACHED
+        } else {
+            LABEL_DRIVES
+        }
+        .into();
+    }
+
+    /// The file netlist is detached from the circuit (Re-sync rewrites it from the circuit).
+    fn file_detached(&self) -> Option<&str> {
+        self.drive.as_ref().and_then(|d| d.detached.as_deref())
     }
 
     /// Drops a detached netlist and regenerates it from the schematic.
     pub fn resync(&mut self, app: &mut AppCtx) {
+        if matches!(self.source, NetlistSource::File(_)) {
+            let (Some(dr), Some(doc)) = (self.drive.as_mut(), app.circuit.as_ref()) else {
+                return;
+            };
+            let now = Self::circuit_text(doc);
+            self.doc.text = now.clone();
+            self.doc.version += 1;
+            self.doc.dirty = true;
+            self.last_edit = Some(Instant::now());
+            dr.text = now.clone();
+            dr.circuit = now;
+            dr.generation = doc.generation();
+            dr.detached = None;
+            self.source_label = LABEL_DRIVES.into();
+            return;
+        }
         if let Some(doc) = app.circuit.as_mut() {
             doc.detached_netlist = None;
             doc.touched();
@@ -572,6 +727,8 @@ impl Screen for AnalysisScreen {
             Some(f) => {
                 if self.load_file(f.clone()).is_err() {
                     self.load_demo();
+                } else {
+                    self.attach_file(app);
                 }
             }
             None => {
@@ -777,8 +934,18 @@ impl AnalysisScreen {
                         Err(e) => app.toasts.error(format!("{e}")),
                     }
                 }
-                if self.source == NetlistSource::Detached
-                    && Btn::mini("Re-sync").icon(Icon::Refresh).show(ui).clicked()
+                let tip = match self.file_detached() {
+                    Some(w) => format!(
+                        "Not in the schematic: {w}. Re-sync rewrites the netlist from the schematic."
+                    ),
+                    None => "Rewrite the netlist from the schematic".into(),
+                };
+                if (self.source == NetlistSource::Detached || self.file_detached().is_some())
+                    && Btn::mini("Re-sync")
+                        .icon(Icon::Refresh)
+                        .tooltip(&tip)
+                        .show(ui)
+                        .clicked()
                 {
                     self.resync(app);
                     self.start_run(app);
