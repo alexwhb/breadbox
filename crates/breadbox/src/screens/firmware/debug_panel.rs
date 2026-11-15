@@ -930,7 +930,8 @@ pub fn debug_view(ui: &mut Ui, vm: Option<&DebugViewModel>) {
                             .color(p.text_muted),
                     );
                     egui::Grid::new("regs")
-                        .spacing(vec2(10.0, 2.0))
+                        .min_col_width(14.0)
+                        .spacing(vec2(8.0, 2.0))
                         .show(ui, |ui| {
                             for (i, v) in r.r.iter().enumerate() {
                                 ui.label(

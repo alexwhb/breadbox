@@ -1335,20 +1335,39 @@ fn add_ble_hat(app: &mut AppCtx) {
             .info("Open a project with a board first, then add the BLE hat.");
         return;
     };
-    match radio_panel::add_ble_hat(doc) {
-        Ok(r) => {
-            app.toasts.success(format!(
-                "Added {} · HM-10 BLE next to {} ({}) — the virtual phone sees HMSoft",
-                r.reference, r.board, r.wiring
+    // the bench is not running yet but the circuit already has a BLE module: just run it
+    let existing = doc
+        .project()
+        .parts
+        .iter()
+        .find(|p| p.part == "hm10" || p.part == "hc05")
+        .map(|p| p.reference.clone());
+    let added = match existing {
+        Some(r) => {
+            app.toasts.info(format!(
+                "{r} is already a BLE radio on this bench — running it so the virtual phone can scan"
             ));
-            if app.project.is_some() {
-                let link = app.bench_link();
-                if !link.is_running() {
-                    link.set_running(true);
-                }
-            }
+            true
         }
-        Err(e) => app.toasts.warn(e),
+        None => match radio_panel::add_ble_hat(doc) {
+            Ok(r) => {
+                app.toasts.success(format!(
+                    "Added {} · HM-10 BLE next to {} ({}) — the virtual phone sees HMSoft",
+                    r.reference, r.board, r.wiring
+                ));
+                true
+            }
+            Err(e) => {
+                app.toasts.warn(e);
+                false
+            }
+        },
+    };
+    if added && app.project.is_some() {
+        let link = app.bench_link();
+        if !link.is_running() {
+            link.set_running(true);
+        }
     }
 }
 
