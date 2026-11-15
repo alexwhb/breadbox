@@ -24,6 +24,12 @@ reviews and integrates between phases. Agents update **only their own section** 
 - ~~(sim → plugins/radio glue) Replace the `esp01` / `hm10` / `hc05` factories …~~ **done** (plugins): `bb_sim::devices::RadioModule` bridges ESP-01 / HM-10 / HC-05 / RYLR896 pins to the real modems; `BenchOptions::default().services` holds `bb_sim::radio::service_factory()` (RadioService from `project.radios`); host boards get a radio on first use. See `### plugins`.
 - ~~(sim → plugins) Wasm parts plug in as `DeviceRegistry::register` + `Library::add_json` …~~ **done** (plugins): `bb_plugin::PluginHost` does exactly that; plugin instruments load the circuit through their part's SPICE template (ext-controlled elements, `inject:load`), `Bench::add_load` stays for non-part probe leads.
 
+- (audit → bundle) Toolchain detection runs `arduino-cli core list` with no timeout. An
+  `arduino-cli` started from a `Breadbox.app` launch was found hung for 15+ min in `open()` (most
+  likely a macOS privacy prompt for `~/Documents/Arduino`, which arduino-cli touches as its
+  sketchbook), so detection never settles. The first-run toolchain flow should time out these
+  calls (and/or point arduino-cli's `directories.user` away from `~/Documents`).
+
 ## Status
 
 ### lead
@@ -776,3 +782,75 @@ Open notes:
   inside SPEC-6's 1 nA; the `.cir` comparison skips nodes that move with gmin.
 - The `sim` section's note "the Pro-mode 555 has no oscillating SPICE macro-model" is resolved
   (`1fc3ac8`).
+
+### audit
+Independent spec audit + fixes (lead's phase-5 `qa` role, minus the `bundle` agent's items).
+Full table: **`docs/SPEC-AUDIT.md`** (every requirement, before → after, evidence, tests).
+Done / partial / missing: **73 / 26 / 1 before → 97 / 2 / 1 after** (left: `PLAT-1` by design,
+`WORLD-6` needs a product decision, `PLAT-3` is the bundle agent's branch). One helper
+(`audit-dbg`, worktree branch `audit-dbg-radio`, merged in `065d993`) did MCU-5 and RF-1/3/4/7.
+
+Flaky tests — root causes fixed in product code:
+- `radio_tools.rs::phone_scans_connects_subscribes_and_gets_the_button_notify`: the HM-10
+  checked the CCCD when its UART buffer flushed, but the phone's subscribe only lands at the
+  next 30 ms connection event; a button pressed < ~10 ms (sim time) after tapping Notify — a
+  starved engine thread at Max speed, or a paused bench — lost its notification. Phone packets
+  now use the master slot of a connection event and notifications the slave slot after it, and
+  `notify()` honours a CCCD already queued for that event; phone log row "notifications on ·
+  FFE1", "Turning on…" toggle (`05b3af0`; regression tests in bb-radio and e2e).
+- `gui.rs::verify_blink_then_a_compile_error_lands_in_the_editor` (found by the 5× stress loop):
+  every build of a sketch shared one staging folder keyed only by the sketch path, so the
+  parallel blink debug build (or a second Breadbox instance) re-staged the clean sketch while
+  arduino-cli compiled the broken one. Release / debug stage separately under an exclusive
+  `StagingLock` (`95f43c0`; regression test fails 2/3 without the fix).
+- 5 rounds of every GUI test file + the e2e crate under extra CPU load (load average up to
+  ~250 while other agents built): no other flakes; the final loop is below.
+
+Gaps closed (✚ = also a bug fix):
+- `SIM-1/3` Workbench simulation menu: Step one quantum / 1 ms, Reset bench, Reset MCU only ·
+  Ux, Seed, Sync quantum (undoable `Op::Settings`, restarts the bench); Simulate menu items
+  (`b5cb94b`).
+- `PRJ-4` Home → Import .cir…, File → Import .cir Netlist…, opening a `.cir` (`b5cb94b`).
+- `PLUG-2` sandbox violations / engine errors → error toasts on every screen (were visible only
+  in the Firmware output); bounded event backlog (`bf211f0`).
+- ✚ `APP-5` edits younger than the 1.2 s autosave were lost on quit and on switching projects;
+  `Screen::flush` / `BreadboxApp::flush` from eframe `save` (`bf211f0`).
+- `PRO-3` / `SPICE-3` all seven analysis cards; `.meas` / `.tf` results table (`e73fd12`).
+- ✚ `WORLD-4` draggable hand / person / wall / magnet on the bench + World panel Objects; the
+  palette's Hand tile used to drop an inert picture the sensors never read (`8024f00`).
+- `WORLD-5` "Program the world": validated expression scripts, keyframe timelines with
+  interpolation / repeat / preview; pushed to the running bench incl. undo (`8024f00`).
+- `WORLD-1` scheduled watering ("Water automatically", exact at any time-warp) (`688635c`).
+- ✚ `PLUG-5` the DMM's ⊣⊢ position (capacitor symbol) ran a diode test — now capacitance,
+  60 nF–6 mF by RC timing; COM leaks to ground through 1 GΩ so a loose capacitor no longer
+  floats with the meter (`3444a0e`).
+- `MCU-5` Debug tab Memory (SRAM / Flash / EEPROM hex, pointers, changed bytes, Go to) + I/O
+  registers; `RF-1` floor plan with draggable bench + live RSSI; `RF-3` jitter + editable AP-drop
+  time; `RF-4` pcap-ng / CSV export; `RF-7` Add BLE hat wires an HM-10 (helper, `ca6e46d` …
+  `afdb968`).
+- New-user session (`tests/session.rs`, `docs/screenshots/session-*.png`) — friction fixed:
+  ✚ new-project name field appended to the suggestion and collided on reuse (`00766c6`);
+  ✚ a new Pro project edited the garden-node *demo* netlist, never saved (`cfd36a3`);
+  the Bode card now reads + marks the −3 dB corner (`cfd36a3`); ✚ quiz answers overflowed
+  (`d327ed9`).
+- Test depth (engine sweep): SIM-6 pin over-current + reversed electrolytic, MCU-6 LEDC /
+  analogWrite / micros, RF-8 annotation toggle, SPICE `mil` / `.dc oct` / `.step dec|oct`, ESP-AT
+  ATE1, parts behaviour (LED colours, Zener / Schottky, MOSFETs, op-amp followers, 74HC
+  gates, NTC) (`634cc72` … `5ee4fe1`).
+
+Deliberately left / open:
+- `PLAT-1`: OS-specific toolchain code lives in `bb-firmware::toolchain` (the library cannot use
+  the app's `platform` module). `WORLD-6`: the toggle switches sensor noise; AVR ADC readings are
+  always 10-bit integers, so "quantization off" needs a product decision.
+- Serial2 looped back to the *same* ESP32's RX2 does not echo (external Serial2 ↔ HC-05 works) —
+  worth a look in `bb_sim::HostMcu` (UART decoder fed by the board's own TX edges).
+- Radio placement is not undoable (no `Op` for `project.radios`); network conditions are not
+  saved with the project. Typing a netlist into an empty Pro project does not build a schematic
+  (Import .cir does).
+- Test depth still thin (listed per row in SPEC-AUDIT): scope pulse trigger / coupling, logic
+  analyzer I²C / SPI / 1-Wire decoders, function-generator waveforms, WiFiServer, LCD 8-bit, a
+  plugin part with a `.subckt`.
+- Changes outside "my" files were all for the audited behaviour: `bb-radio` (BLE timing),
+  `bb-world` (objects, scripts check, watering), `bb-circuit` (`Op::Settings`),
+  `plugins/dmm-handheld` (+ rebuilt wasm), docs.
+
