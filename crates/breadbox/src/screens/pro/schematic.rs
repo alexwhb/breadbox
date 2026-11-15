@@ -16,6 +16,64 @@ pub struct ProSchematicScreen {
     pub canvas: SchematicCanvas,
     share: ShareState,
     seen_project: Option<u64>,
+    label_name: String,
+}
+
+/// "Net label" (`WB-7`): name a label in a small popup, then the next click on a pin or a
+/// schematic wire drops it (same name anywhere = same net). While armed the button cancels.
+pub fn net_label_control(
+    ui: &mut Ui,
+    canvas: &mut SchematicCanvas,
+    doc: &mut crate::circuit::CircuitDoc,
+    name: &mut String,
+) {
+    if canvas.label_tool.is_some() {
+        if Btn::mini("Cancel label").show(ui).clicked() {
+            canvas.label_tool = None;
+        }
+        return;
+    }
+    let r = Btn::mini("Net label").show(ui);
+    if r.clicked() && name.trim().is_empty() {
+        *name = SchematicCanvas::suggest_label(doc);
+    }
+    egui::Popup::menu(&r)
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+        .show(|ui| {
+            ui.set_min_width(220.0);
+            ui.label(
+                egui::RichText::new("Same name anywhere = same net")
+                    .font(font::ui(11.5))
+                    .color(pal(ui).text_muted),
+            );
+            ui.add_space(4.0);
+            let te = ui.add(
+                egui::TextEdit::singleline(name)
+                    .font(font::mono(12.5))
+                    .hint_text("NET1")
+                    .desired_width(f32::INFINITY),
+            );
+            te.widget_info(|| {
+                egui::WidgetInfo::labeled(egui::Role::TextInput, true, "Net label name")
+            });
+            let enter = te.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+            ui.add_space(4.0);
+            let place = Btn::amber("Place on a pin or wire")
+                .full_width()
+                .show(ui)
+                .clicked();
+            let clean: String = name
+                .trim()
+                .chars()
+                .map(|c| if c.is_whitespace() { '_' } else { c })
+                .collect();
+            if (place || enter) && !clean.is_empty() {
+                canvas.label_tool = Some(clean);
+                canvas.selected_label = None;
+                name.clear();
+                ui.close();
+            }
+        });
 }
 
 impl Screen for ProSchematicScreen {
@@ -170,6 +228,7 @@ impl Screen for ProSchematicScreen {
                     self.canvas.fit();
                 }
                 if let Some(doc) = app.circuit.as_mut() {
+                    net_label_control(ui, &mut self.canvas, doc, &mut self.label_name);
                     let mut iec = doc.project().schematic.iec;
                     if widgets::mini_segmented(
                         ui,
@@ -182,8 +241,12 @@ impl Screen for ProSchematicScreen {
                         doc.touched();
                     }
                 }
+                let hint = match &self.canvas.label_tool {
+                    Some(n) => format!("click a pin or wire to drop {n} · Esc cancels"),
+                    None => "drag from a pin to draw a wire · R rotates".into(),
+                };
                 ui.label(
-                    egui::RichText::new("drag from a pin to draw a wire · R rotates")
+                    egui::RichText::new(hint)
                         .font(font::ui(11.0))
                         .color(p.text_faint),
                 );

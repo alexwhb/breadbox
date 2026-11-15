@@ -1,5 +1,6 @@
 //! GUI end-to-end tests (`TEST-5`): drive the real app through AccessKit labels with
-//! `egui_kittest` and save 1440×900 screenshots of each screen to `docs/screenshots/`.
+//! `egui_kittest` and save 1440×900 screenshots of each screen (to `docs/screenshots/` with
+//! `BREADBOX_UPDATE_SCREENSHOTS=1`).
 
 mod common;
 

@@ -91,14 +91,15 @@ pub fn breadboard(p: &Pen, cx: &ArtCtx) {
     }
     // label
     let tie = if cols >= 60 { "830" } else { "400" };
+    // moulded into the centre channel, clear of the holes
     p.text_at(
         w - 1.0,
-        h - 0.25,
+        9.5,
         &format!("{} · {tie} tie-points", cx.part.reference),
-        0.75,
+        0.55,
         font::mono,
-        rgb(0x7A7264),
-        Align2::RIGHT_BOTTOM,
+        rgb(0x9A917F),
+        Align2::RIGHT_CENTER,
     );
 }
 

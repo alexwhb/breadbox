@@ -22,7 +22,7 @@ fn mounting_hole(p: &Pen, x: f64, y: f64) {
 }
 
 /// Labels for wired pins (or all pins when zoomed in).
-fn pin_labels(p: &Pen, cx: &ArtCtx, row_y: f64, below: bool) {
+fn pin_labels(p: &Pen, cx: &ArtCtx, row_y: f64, below: bool, size: f64) {
     let all = p.view.scale >= 13.0;
     if p.view.scale < 7.0 {
         return;
@@ -34,13 +34,12 @@ fn pin_labels(p: &Pen, cx: &ArtCtx, row_y: f64, below: bool) {
         if !all && !cx.wired.iter().any(|w| w == &l.pin) {
             continue;
         }
-        let name = cx
-            .def
-            .pin(&l.pin)
-            .map(|d| d.label().to_string())
-            .unwrap_or_else(|| l.pin.clone());
-        let y = if below { l.y + 1.0 } else { l.y - 1.0 };
-        p.text(l.x, y, &name, 0.62, font::mono_medium, rgb(0xCFE3EC));
+        // the silkscreen name is the header name (`VP`, not its `GPIO36` function)
+        let name = l.pin.split('.').next().unwrap_or(&l.pin);
+        // vertical silkscreen, like the real boards: hanging below a top header, rising
+        // above a bottom one
+        let y = if below { l.y + 0.75 } else { l.y - 0.75 };
+        p.text_up(l.x, y, name, size, font::mono_medium, rgb(0xCFE3EC), !below);
     }
 }
 
@@ -142,7 +141,12 @@ pub fn uno(p: &Pen, cx: &ArtCtx, mega: bool) {
     p.rect(WRect::new(6.6, 1.8, 8.4, 3.6), 0.2, rgb(0xB8BDC4));
     p.circle(7.5, 2.7, 0.55, rgb(0x8E2A22));
     // crystal
-    p.rect(WRect::new(9.2, 10.6, 12.6, 11.9), 0.6, rgb(0xC8CDD3));
+    let xtal = if mega {
+        WRect::new(14.6, 12.6, 18.0, 13.9)
+    } else {
+        WRect::new(9.2, 10.6, 12.6, 11.9)
+    };
+    p.rect(xtal, 0.6, rgb(0xC8CDD3));
     // regulator + caps
     p.rect(WRect::new(5.6, 13.2, 8.0, 15.0), 0.1, rgb(0x1A1A1A));
     p.circle(6.0, 10.2, 0.85, rgb(0x2A2A2A));
@@ -158,7 +162,7 @@ pub fn uno(p: &Pen, cx: &ArtCtx, mega: bool) {
     }
     // name
     let name = if mega { "MEGA 2560" } else { "UNO R3" };
-    let (nx, ny) = if mega { (12.0, 9.0) } else { (17.6, 8.6) };
+    let (nx, ny) = if mega { (13.2, 9.0) } else { (17.6, 8.6) };
     p.text(nx, ny, name, 2.1, font::brand, rgb(0xEAF3F7));
     p.text(
         nx,
@@ -169,10 +173,11 @@ pub fn uno(p: &Pen, cx: &ArtCtx, mega: bool) {
         with_alpha(rgb(0xCFE3EC), 0.7),
     );
     // status LEDs: ON, L, TX, RX
-    board_led(p, 25.3, 9.2, rgb(0x5CFF8A), if power { 1.0 } else { 0.0 });
+    let (ox, oy) = if mega { (33.0, 6.0) } else { (25.3, 9.2) };
+    board_led(p, ox, oy, rgb(0x5CFF8A), if power { 1.0 } else { 0.0 });
     p.text_at(
-        24.5,
-        9.2,
+        ox - 0.8,
+        oy,
         "ON",
         0.55,
         font::mono,
@@ -197,7 +202,7 @@ pub fn uno(p: &Pen, cx: &ArtCtx, mega: bool) {
     let cap = rgb(0xCFE3EC);
     p.text_at(
         8.0,
-        2.5,
+        3.9,
         "DIGITAL (PWM~)",
         0.62,
         font::mono,
@@ -206,7 +211,7 @@ pub fn uno(p: &Pen, cx: &ArtCtx, mega: bool) {
     );
     p.text_at(
         10.0,
-        18.5,
+        16.9,
         "POWER",
         0.62,
         font::mono,
@@ -215,7 +220,7 @@ pub fn uno(p: &Pen, cx: &ArtCtx, mega: bool) {
     );
     p.text_at(
         19.0,
-        18.5,
+        16.9,
         "ANALOG IN",
         0.62,
         font::mono,
@@ -223,8 +228,8 @@ pub fn uno(p: &Pen, cx: &ArtCtx, mega: bool) {
         Align2::LEFT_CENTER,
     );
     headers(p, cx, true);
-    pin_labels(p, cx, 1.0, true);
-    pin_labels(p, cx, 20.0, false);
+    pin_labels(p, cx, 1.0, true, 0.55);
+    pin_labels(p, cx, 20.0, false, 0.55);
 }
 
 pub fn nano(p: &Pen, cx: &ArtCtx) {
@@ -247,8 +252,8 @@ pub fn nano(p: &Pen, cx: &ArtCtx) {
     for ld in &cx.def.bench.leads {
         header_pin(p, ld.x, ld.y);
     }
-    pin_labels(p, cx, 0.0, true);
-    pin_labels(p, cx, 6.0, false);
+    pin_labels(p, cx, 0.0, true, 0.55);
+    pin_labels(p, cx, 6.0, false, 0.55);
 }
 
 pub fn esp32(p: &Pen, cx: &ArtCtx) {
@@ -257,16 +262,16 @@ pub fn esp32(p: &Pen, cx: &ArtCtx) {
     p.shadow(body, 0.6, 12.0, 7.0, 0.6);
     p.grad(body, 0.6, rgb(0x262626), rgb(0x141414));
     // module shield + antenna
-    let shield = WRect::new(9.6, 1.4, 15.6, 8.6);
+    let shield = WRect::new(9.6, 2.2, 15.6, 7.8);
     p.shadow(shield, 0.2, 4.0, 2.0, 0.4);
     p.grad(shield, 0.2, rgb(0xC9CED4), rgb(0x8E949B));
-    p.text(12.6, 4.4, "ESP32", 0.95, font::mono_medium, rgb(0x2C3135));
+    p.text(12.6, 4.4, "ESP32", 0.9, font::mono_medium, rgb(0x2C3135));
     p.text(12.6, 5.8, "WROOM-32", 0.6, font::mono, rgb(0x3A4045));
-    let ant = WRect::new(15.6, 1.4, 18.4, 8.6);
+    let ant = WRect::new(15.6, 2.2, 18.4, 7.8);
     p.rect(ant, 0.15, rgb(0x1C1C1C));
     let mut zig = Vec::new();
-    for i in 0..7 {
-        let y = 2.2 + i as f64 * 0.95;
+    for i in 0..6 {
+        let y = 2.7 + i as f64 * 0.9;
         zig.push((16.0, y));
         zig.push((18.0, y));
     }
@@ -279,7 +284,7 @@ pub fn esp32(p: &Pen, cx: &ArtCtx) {
         rgb(0x9DA3AB),
     );
     for (x, lab) in [(3.2, "EN"), (3.2, "BOOT")] {
-        let y = if lab == "EN" { 2.6 } else { 7.4 };
+        let y = if lab == "EN" { 3.1 } else { 6.9 };
         p.rect(
             WRect::new(x - 0.7, y - 0.6, x + 0.7, y + 0.6),
             0.15,
@@ -309,8 +314,8 @@ pub fn esp32(p: &Pen, cx: &ArtCtx) {
     for ld in &cx.def.bench.leads {
         header_pin(p, ld.x, ld.y);
     }
-    pin_labels(p, cx, 0.0, true);
-    pin_labels(p, cx, 10.0, false);
+    pin_labels(p, cx, 0.0, true, 0.5);
+    pin_labels(p, cx, 10.0, false, 0.5);
 }
 
 pub fn pico(p: &Pen, cx: &ArtCtx) {
@@ -325,24 +330,24 @@ pub fn pico(p: &Pen, cx: &ArtCtx) {
     }
     let usb = WRect::new(-1.8, 2.3, 0.8, 4.7);
     p.grad(usb, 0.15, rgb(0xD4D8DD), rgb(0x9DA3AB));
-    let chip = WRect::new(7.8, 2.0, 11.0, 5.2);
+    let chip = WRect::new(7.8, 1.7, 11.0, 4.9);
     p.shadow(chip, 0.1, 3.0, 2.0, 0.45);
     p.rect(chip, 0.1, rgb(0x191919));
-    p.text(9.4, 3.6, "RP2040", 0.55, font::mono, rgb(0x9AA6AE));
-    p.rect(WRect::new(3.2, 1.6, 4.8, 3.0), 0.2, rgb(0xEDEDED));
+    p.text(9.4, 3.3, "RP2040", 0.55, font::mono, rgb(0x9AA6AE));
+    p.rect(WRect::new(3.2, 1.8, 4.6, 3.0), 0.2, rgb(0xEDEDED));
     p.text_at(
-        2.0,
-        5.4,
+        4.9,
+        2.4,
         "BOOTSEL",
         0.45,
         font::mono,
         silk(),
         Align2::LEFT_CENTER,
     );
-    board_led(p, 2.0, 1.6, rgb(0x5CFF8A), if power { l } else { 0.0 });
+    board_led(p, 1.5, 3.4, rgb(0x5CFF8A), if power { l } else { 0.0 });
     p.text(14.8, 3.5, "Raspberry Pi Pico", 0.62, font::medium, silk());
-    pin_labels(p, cx, 0.0, true);
-    pin_labels(p, cx, 7.0, false);
+    pin_labels(p, cx, 0.0, true, 0.45);
+    pin_labels(p, cx, 7.0, false, 0.45);
 }
 
 /// ESP-01 (ESP8266): the 2×4 header at the left, antenna top-left, chip on the right.
@@ -391,7 +396,7 @@ pub fn bt_module(p: &Pen, cx: &ArtCtx) {
     let body = WRect::new(-0.7, -h + 0.4, 5.7, 0.6);
     p.shadow(body, 0.3, 9.0, 5.0, 0.55);
     p.grad(body, 0.3, rgb(0x2457B8), rgb(0x1A3F8A));
-    let module = WRect::new(0.2, -h + 1.0, 4.8, -2.0);
+    let module = WRect::new(0.2, -h + 1.0, 4.8, -2.6);
     p.shadow(module, 0.1, 3.0, 2.0, 0.4);
     p.grad(module, 0.1, rgb(0x2F7D3A), rgb(0x225E2C));
     let mut zig = Vec::new();
@@ -422,9 +427,9 @@ pub fn bt_module(p: &Pen, cx: &ArtCtx) {
     } else {
         0.0
     };
-    board_led(p, 4.6, -1.2, rgb(0x4A8BFF), blink);
+    board_led(p, 4.3, -h + 2.2, rgb(0x4A8BFF), blink);
     for ld in &cx.def.bench.leads {
         header_pin(p, ld.x, ld.y);
     }
-    pin_labels(p, cx, 0.0, false);
+    pin_labels(p, cx, 0.0, false, 0.5);
 }

@@ -68,18 +68,22 @@ pub fn dht(pen: &Pen, cx: &ArtCtx) {
             pen.rect(WRect::xywh(x - 0.22, y - 0.16, 0.44, 0.32), 0.05, hole);
         }
     }
-    if let Some(Look::Readout { text }) = cx.look()
-        && pen.view.scale >= 6.0
-    {
-        pen.text_at(
-            mx,
-            base - h - 0.3,
-            text,
-            0.62,
-            font::mono,
-            rgb(0xF7C77A),
-            Align2::CENTER_BOTTOM,
-        );
+    match cx.look() {
+        // a live reading (an unpowered sensor reports only dashes: show its name instead)
+        Some(Look::Readout { text })
+            if pen.view.scale >= 6.0 && text.chars().any(|c| c.is_ascii_digit()) =>
+        {
+            pen.text_at(
+                mx,
+                base - h - 0.3,
+                text,
+                0.62,
+                font::mono,
+                rgb(0xF7C77A),
+                Align2::CENTER_BOTTOM,
+            );
+        }
+        _ => passives::above_label(pen, cx, mx, base - h - 0.2, &cx.part.reference),
     }
 }
 
@@ -324,9 +328,22 @@ pub fn lcd(p: &Pen, cx: &ArtCtx) {
         }
     }
     if i2c {
-        let back = WRect::new(-0.6, -1.6, 4.4, 0.6);
+        // the backpack's header and edge peek out below the glass: chip name above the
+        // pins, the blue contrast trimmer beside it
+        let back = WRect::new(-0.6, -2.3, 5.6, 0.6);
+        p.shadow(back, 0.1, 3.0, 2.0, 0.4);
         p.rect(back, 0.1, rgb(0x161616));
-        p.text(1.9, -0.5, "PCF8574", 0.45, font::mono, rgb(0x9AA6AE));
+        p.text_at(
+            -0.2,
+            -1.5,
+            "PCF8574 I²C",
+            0.42,
+            font::mono,
+            rgb(0x9AA6AE),
+            Align2::LEFT_CENTER,
+        );
+        p.rect(WRect::new(4.0, -1.0, 5.2, 0.2), 0.1, rgb(0x2D6BC4));
+        p.circle(4.6, -0.4, 0.35, rgb(0xEDEDED));
     }
     pins_row(p, cx);
 }
@@ -878,7 +895,7 @@ pub fn mini_scope(p: &Pen, cx: &ArtCtx) {
     for (l, c, name) in [
         (0usize, rgb(0xF2D03B), "CH1"),
         (1, rgb(0x4CC3F0), "CH2"),
-        (2, rgb(0x6E6E6E), "⏚"),
+        (2, rgb(0x6E6E6E), "GND"),
     ] {
         if let Some(ld) = cx.def.bench.leads.get(l) {
             p.circle(ld.x, ld.y, 0.42, rgb(0x0A0A0A));
@@ -905,7 +922,7 @@ pub fn mini_scope(p: &Pen, cx: &ArtCtx) {
 }
 
 /// Handheld DMM (built-in placeholder until plugin panels render it): LCD with the live
-/// reading, rotary dial at V⎓, VΩ / COM jacks where the probe leads attach.
+/// reading, rotary dial at DC volts, VΩ / COM jacks where the probe leads attach.
 pub fn dmm(p: &Pen, cx: &ArtCtx) {
     let body = WRect::new(-1.0, -1.0, 12.0, 15.6);
     p.shadow(body, 1.3, 16.0, 8.0, 0.6);
@@ -972,21 +989,26 @@ pub fn dmm(p: &Pen, cx: &ArtCtx) {
     );
     for (lab, ang, col) in [
         ("OFF", -90.0f64, rgb(0xC7C7C7)),
-        ("V⎓", -140.0, rgb(0xF2A33A)),
+        ("V", -140.0, rgb(0xF2A33A)),
         ("V~", -190.0, rgb(0xC7C7C7)),
         ("Ω", -40.0, rgb(0xC7C7C7)),
         ("A", 10.0, rgb(0xC7C7C7)),
         ("Hz", 55.0, rgb(0xC7C7C7)),
     ] {
         let r = ang.to_radians();
-        p.text(
-            c.0 + r.cos() * 3.7,
-            c.1 + r.sin() * 3.7,
-            lab,
-            0.5,
-            font::mono,
-            col,
-        );
+        let (x, y) = (c.0 + r.cos() * 3.7, c.1 + r.sin() * 3.7);
+        if ang == -140.0 {
+            // V with the DC mark (solid over dashed) drawn — fonts lack U+2393
+            p.text(x - 0.2, y, lab, 0.5, font::mono, col);
+            let w = p.px(0.05, 0.7);
+            p.line((x + 0.06, y - 0.1), (x + 0.6, y - 0.1), w, col);
+            for k in 0..3 {
+                let x0 = x + 0.06 + k as f64 * 0.2;
+                p.line((x0, y + 0.06), (x0 + 0.12, y + 0.06), w, col);
+            }
+        } else {
+            p.text(x, y, lab, 0.5, font::mono, col);
+        }
     }
     // jacks (the leads) + 10A
     for (i, ld) in cx.def.bench.leads.iter().enumerate() {

@@ -1,0 +1,28 @@
+[package]
+name = "breadbox-e2e"
+description = "Headless end-to-end scenarios (TEST-4): the whole stack driven through the entry points the app uses."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+bb-core = { workspace = true }
+bb-spice = { workspace = true }
+bb-avr = { workspace = true }
+bb-firmware = { workspace = true }
+bb-circuit = { workspace = true }
+bb-world = { workspace = true }
+bb-radio = { workspace = true }
+bb-sim = { workspace = true }
+bb-plugin = { workspace = true }
+serde_json = { workspace = true }
+crossbeam-channel = "0.5"
+
+[dev-dependencies]
+bb-lessons = { workspace = true }
+breadbox = { path = "../../crates/breadbox" }

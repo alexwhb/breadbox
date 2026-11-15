@@ -395,10 +395,13 @@ fn widget_gallery_snapshot() {
         );
     h.run();
     let img = h.render().expect("render");
-    img.save(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/screenshots/widgets.png"),
-    )
-    .unwrap();
+    if std::env::var_os("BREADBOX_UPDATE_SCREENSHOTS").is_some_and(|v| v == "1") {
+        img.save(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../docs/screenshots/widgets.png"),
+        )
+        .unwrap();
+    }
     h.snapshot("widget-gallery");
 }
 

@@ -1496,6 +1496,9 @@ pub struct SchematicCanvas {
     sheet: Option<(u64, std::sync::Arc<Sheet>)>,
     refit: bool,
     pub hover_net: Option<String>,
+    /// Armed net-label tool: the next click on a pin or schematic wire drops this name.
+    pub label_tool: Option<String>,
+    pub selected_label: Option<String>,
 }
 
 impl Default for SchematicCanvas {
@@ -1512,6 +1515,8 @@ impl Default for SchematicCanvas {
             sheet: None,
             refit: false,
             hover_net: None,
+            label_tool: None,
+            selected_label: None,
         }
     }
 }
@@ -1574,6 +1579,10 @@ impl SchematicCanvas {
         );
         resp.widget_info(|| {
             egui::WidgetInfo::labeled(egui::Role::Canvas, true, "Schematic canvas")
+        });
+        ui.ctx().data_mut(|d| {
+            d.insert_temp(Id::unique("schematic-view"), self.view);
+            d.insert_temp(Id::unique("schematic-sheet"), sheet.clone());
         });
         let mut clicked_part = None;
         // view input
@@ -1707,10 +1716,26 @@ impl SchematicCanvas {
         }
         if resp.clicked()
             && let Some((x, y)) = world
+            && let Some(name) = self.label_tool.clone()
+        {
+            // the armed label tool: drop the label where it connects, then disarm
+            if let Some((lx, ly)) = label_snap(&sheet, (x, y)) {
+                let id = doc.editor.add_label(&name, lx, ly);
+                doc.touched();
+                self.label_tool = None;
+                self.selected.clear();
+                self.selected_wire = None;
+                self.selected_label = Some(id);
+            }
+        } else if resp.clicked()
+            && let Some((x, y)) = world
         {
             self.selected.clear();
             self.selected_wire = None;
-            if let Some(id) = self.part_at(doc, (x, y)) {
+            self.selected_label = None;
+            if let Some(id) = self.label_at(doc, (x, y)) {
+                self.selected_label = Some(id);
+            } else if let Some(id) = self.part_at(doc, (x, y)) {
                 self.selected.insert(id.clone());
                 clicked_part = Some(id);
             } else if let Some(s) = sheet.segments.iter().find(|s| {
@@ -1724,13 +1749,37 @@ impl SchematicCanvas {
         }
         // keys
         if resp.contains_pointer() && !ui.ctx().egui_wants_keyboard_input() {
-            let (r, del) = ui.input_mut(|i| {
+            let (r, del, esc) = ui.input_mut(|i| {
                 (
                     i.consume_key(egui::Modifiers::NONE, egui::Key::R),
                     i.consume_key(egui::Modifiers::NONE, egui::Key::Delete)
                         || i.consume_key(egui::Modifiers::NONE, egui::Key::Backspace),
+                    i.consume_key(egui::Modifiers::NONE, egui::Key::Escape),
                 )
             });
+            if esc {
+                self.label_tool = None;
+                self.selected_label = None;
+            }
+            if del
+                && let Some(l) = self.selected_label.take()
+                && let Some(before) = doc
+                    .project()
+                    .schematic
+                    .labels
+                    .iter()
+                    .find(|x| x.id == l)
+                    .cloned()
+            {
+                let mut tx = bb_circuit::edit::Transaction::new("Delete net label");
+                tx.ops.push(bb_circuit::edit::Op::Label {
+                    before: Some(before),
+                    after: None,
+                    index: None,
+                });
+                doc.editor.commit(tx);
+                doc.touched();
+            }
             if r {
                 for id in self.selected.clone() {
                     if let Some(at) = doc.project().part(&id).and_then(|p| p.schematic) {
@@ -1843,6 +1892,51 @@ impl SchematicCanvas {
                 ),
             ));
         }
+        let accent = egui::Color32::from_rgba_unmultiplied(199, 122, 18, 140);
+        if let Some(l) = &self.selected_label
+            && let Some(nl) = doc.project().schematic.labels.iter().find(|x| &x.id == l)
+        {
+            let b = label_box(nl);
+            painter.rect_stroke(
+                Rect::from_two_pos(
+                    self.view.to_screen(b.x0, b.y0),
+                    self.view.to_screen(b.x1, b.y1),
+                ),
+                3.0,
+                Stroke::new(2.0, accent),
+                egui::StrokeKind::Outside,
+            );
+        }
+        // armed label tool: a ghost where it would land
+        if let Some(name) = &self.label_tool
+            && let Some(q) = world
+            && resp.hovered()
+        {
+            let font = crate::theme::font::mono_medium(self.view.len(0.8).max(9.0));
+            match label_snap(&sheet, q) {
+                Some((lx, ly)) => {
+                    let at = self.view.to_screen(lx, ly);
+                    painter.circle_filled(at, 4.0, accent);
+                    painter.text(
+                        at + vec2(self.view.len(0.3), -self.view.len(0.2)),
+                        Align2::LEFT_BOTTOM,
+                        name,
+                        font,
+                        rgb(0xC77A12),
+                    );
+                }
+                None => {
+                    let at = self.view.to_screen(q.0, q.1);
+                    painter.text(
+                        at + vec2(12.0, -6.0),
+                        Align2::LEFT_BOTTOM,
+                        format!("{name} — click a pin or wire"),
+                        crate::theme::font::mono(11.0),
+                        egui::Color32::from_rgba_unmultiplied(199, 122, 18, 170),
+                    );
+                }
+            }
+        }
         // hover tooltip with the live net value
         if let Some(net) = &self.hover_net
             && resp.hovered()
@@ -1858,6 +1952,33 @@ impl SchematicCanvas {
             });
         }
         clicked_part
+    }
+
+    /// A free net-label name (`NET1`, `NET2`, …) not used by a label or net yet.
+    pub fn suggest_label(doc: &mut CircuitDoc) -> String {
+        let conn = doc.connectivity();
+        let taken = |n: &str| {
+            doc.project()
+                .schematic
+                .labels
+                .iter()
+                .any(|l| l.name.eq_ignore_ascii_case(n))
+                || conn.nets.iter().any(|x| x.name.eq_ignore_ascii_case(n))
+        };
+        (1..)
+            .map(|i| format!("NET{i}"))
+            .find(|n| !taken(n))
+            .unwrap_or_default()
+    }
+
+    fn label_at(&self, doc: &CircuitDoc, q: (f64, f64)) -> Option<String> {
+        doc.project()
+            .schematic
+            .labels
+            .iter()
+            .rev()
+            .find(|l| label_box(l).contains(q.0, q.1))
+            .map(|l| l.id.clone())
     }
 
     fn part_at(&self, doc: &CircuitDoc, q: (f64, f64)) -> Option<String> {
@@ -1876,6 +1997,45 @@ impl SchematicCanvas {
         }
         None
     }
+}
+
+/// World box of a placed net label (its name sits up-right of the connection point).
+fn label_box(l: &bb_circuit::project::NetLabel) -> WRect {
+    let w = 0.5 * l.name.chars().count() as f64;
+    WRect::new(l.x - 0.35, l.y - 1.2, l.x + 0.45 + w, l.y + 0.35)
+}
+
+/// Where a net label dropped at `q` attaches: a pin anchor, or a point on a schematic wire
+/// (the two places connectivity reads labels from).
+pub fn label_snap(sheet: &Sheet, q: (f64, f64)) -> Option<(f64, f64)> {
+    if let Some(a) = sheet
+        .anchors
+        .iter()
+        .filter(|a| (a.2 - q.0).abs() < 0.7 && (a.3 - q.1).abs() < 0.7)
+        .min_by(|a, b| {
+            let da = (a.2 - q.0).hypot(a.3 - q.1);
+            let db = (b.2 - q.0).hypot(b.3 - q.1);
+            da.total_cmp(&db)
+        })
+    {
+        return Some((a.2, a.3));
+    }
+    for s in sheet.segments.iter().filter(|s| s.explicit) {
+        for w in s.pts.windows(2) {
+            if bb_circuit::geometry::point_segment_distance(q, w[0], w[1]) < 0.5 {
+                // project onto the (orthogonal) segment, on the 0.5 grid when it stays on it
+                let (a, b) = (w[0], w[1]);
+                let p = if (a.1 - b.1).abs() < 1e-6 {
+                    (q.0.clamp(a.0.min(b.0), a.0.max(b.0)), a.1)
+                } else {
+                    (a.0, q.1.clamp(a.1.min(b.1), a.1.max(b.1)))
+                };
+                let g = ((p.0 * 2.0).round() / 2.0, (p.1 * 2.0).round() / 2.0);
+                return Some(if on_segment(g, a, b) { g } else { p });
+            }
+        }
+    }
+    None
 }
 
 fn zoom_about(v: &mut View, at: Pos2, factor: f32) {

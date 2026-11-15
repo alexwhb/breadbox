@@ -1,6 +1,6 @@
 //! Workbench GUI end-to-end tests (`TEST-5`, `WB-*`): the real app with the co-simulation
 //! bench (`SimBench`), driven through AccessKit labels and pointer events with
-//! `egui_kittest`. Saves `docs/screenshots/workbench*.png`.
+//! `egui_kittest`. Saves `docs/screenshots/workbench*.png` with `BREADBOX_UPDATE_SCREENSHOTS=1`.
 
 mod common;
 
@@ -737,4 +737,185 @@ fn crate_bounds(
     let leads = bb_circuit::Project::bench_leads(def, p).unwrap();
     let b = breadbox::canvas::scene::world_bounds(def, &p.bench.as_ref().unwrap().at, &leads);
     (b.x0, b.y0, b.x1, b.y1)
+}
+
+/// Every library part on one bench (art QA): `docs/screenshots/workbench-parts.png`.
+#[test]
+fn every_part_has_bench_art() {
+    let tmp = std::env::temp_dir().join(format!("bb-parts-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&tmp);
+    std::fs::create_dir_all(&tmp).unwrap();
+    let lib = bb_circuit::Library::builtin();
+    let mut p = bb_circuit::Project::new("parts", bb_circuit::project::Mode::Playground);
+    let mut ed = bb_circuit::Editor::new(p.clone());
+    let mut parts: Vec<_> = lib.parts().filter(|d| !d.bench.hidden).cloned().collect();
+    parts.sort_by_key(|d| (breadbox::canvas::art::layer(d), d.id.clone()));
+    let (mut x, mut y, mut row_h) = (0.0f64, 0.0f64, 0.0f64);
+    for d in &parts {
+        let b = breadbox::canvas::art::local_bounds(d);
+        let (w, h) = (b.w() + 3.0, b.h() + 4.0);
+        if x + w > 150.0 {
+            x = 0.0;
+            y += row_h;
+            row_h = 0.0;
+        }
+        ed.add_part(&lib, &d.id, (x - b.x0).round(), (y - b.y0).round())
+            .unwrap();
+        x += w;
+        row_h = row_h.max(h);
+    }
+    p = ed.project.clone();
+    p.save(&tmp).unwrap();
+    let mut h = harness();
+    h.state_mut().open_path(&tmp);
+    h.run_steps(4);
+    assert_eq!(doc(&h).project().parts.len(), parts.len());
+    h.get_by_label("Run").click();
+    h.run_steps(30);
+    // fit everything and render
+    h.state_mut()
+        .ctx
+        .navigate(breadbox::router::Route::Workbench);
+    h.run_steps(4);
+    screenshot(&mut h, "workbench-parts");
+    // zoomed tiles for close inspection (target dir, not committed)
+    let canvas = h.get_by_label("Bench canvas").rect();
+    let v = view(&h);
+    let target = 18.0f32; // points per 0.1"
+    h.hover_at(canvas.center());
+    h.run_steps(1);
+    h.event(egui::Event::Zoom(target / v.scale));
+    h.run_steps(2);
+    let v = view(&h);
+    let (tw, th) = (
+        (canvas.width() / v.scale) as f64 - 2.0,
+        (canvas.height() / v.scale) as f64 - 2.0,
+    );
+    let ext = {
+        let d = doc(&h);
+        let mut e = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
+        for p in &d.project().parts {
+            let b = crate_bounds(d, p);
+            e = (e.0.min(b.0), e.1.min(b.1), e.2.max(b.2), e.3.max(b.3));
+        }
+        e
+    };
+    let out = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("parts-qa");
+    let _ = std::fs::create_dir_all(&out);
+    let mut n = 0;
+    let mut ty = ext.1;
+    while ty < ext.3 {
+        let mut tx = ext.0;
+        while tx < ext.2 {
+            // pan so the tile's top-left sits at the canvas top-left
+            let v = view(&h);
+            let at = v.to_screen(tx - 1.0, ty - 1.0);
+            h.event(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: canvas.min - at,
+                modifiers: egui::Modifiers::NONE,
+                phase: egui::TouchPhase::Move,
+                source: egui::MouseWheelSource::Trackpad,
+            });
+            h.run_steps(8);
+            h.remove_cursor();
+            h.run_steps(2);
+            if let Ok(img) = h.render() {
+                let crop = image::imageops::crop_imm(
+                    &img,
+                    canvas.min.x as u32,
+                    canvas.min.y as u32,
+                    canvas.width() as u32,
+                    canvas.height() as u32,
+                )
+                .to_image();
+                let _ = crop.save(out.join(format!("tile-{n:02}.png")));
+            }
+            h.hover_at(canvas.center());
+            h.run_steps(1);
+            n += 1;
+            tx += tw;
+        }
+        ty += th;
+    }
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+fn sch_anchor(h: &H, part: &str, pin: &str) -> egui::Pos2 {
+    let (v, sheet) = h.state().ctx.egui.data(|d| {
+        (
+            d.get_temp::<View>(egui::Id::unique("schematic-view"))
+                .expect("schematic view"),
+            d.get_temp::<std::sync::Arc<breadbox::canvas::schematic::Sheet>>(egui::Id::unique(
+                "schematic-sheet",
+            ))
+            .expect("sheet"),
+        )
+    });
+    let a = sheet
+        .anchors
+        .iter()
+        .find(|a| a.0 == part && a.1 == pin)
+        .unwrap_or_else(|| panic!("anchor {part}.{pin}"));
+    v.to_screen(a.2, a.3)
+}
+
+/// Places a net label named `name` on a pin through the toolbar popup.
+fn place_label(h: &mut H, name: &str, part: &str, pin: &str) {
+    h.get_by_label("Net label").click();
+    h.run_steps(3);
+    h.get_by_label("Net label name").focus();
+    h.run_steps(1);
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+    h.get_by_label("Net label name").type_text(name);
+    h.run_steps(1);
+    h.get_by_label("Place on a pin or wire").click();
+    h.run_steps(3);
+    assert!(has_label_containing(h, &format!("drop {name}")));
+    let at = sch_anchor(h, part, pin);
+    click_at(h, at);
+}
+
+/// Schematic net labels (`WB-7`): two labels with one name join their nets on the bench
+/// netlist too; a label selects, deletes and comes back with undo.
+#[test]
+fn schematic_net_labels_join_nets() {
+    let mut h = harness();
+    open_example(&mut h, "garden-node");
+    h.state_mut().ctx.navigate(breadbox::router::Route::Pro(
+        breadbox::router::ProTab::Schematic,
+    ));
+    h.run_steps(5);
+    let net = |h: &mut H, pin: &str| {
+        let d = h.state_mut().ctx.circuit.as_mut().unwrap();
+        let c = d.connectivity();
+        c.net_of("u1", pin).map(|n| c.net(n).name.clone())
+    };
+    assert_ne!(net(&mut h, "D9"), net(&mut h, "D8"));
+    place_label(&mut h, "LEDS", "u1", "D9");
+    assert_eq!(doc(&h).project().schematic.labels.len(), 1);
+    place_label(&mut h, "LEDS", "u1", "D8");
+    let labels = &doc(&h).project().schematic.labels;
+    assert_eq!(labels.len(), 2);
+    assert!(labels.iter().all(|l| l.name == "LEDS"));
+    assert_eq!(net(&mut h, "D9"), net(&mut h, "D8"), "same label, same net");
+    if let Ok(img) = h.render() {
+        let _ = img.save(std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("labels.png"));
+    }
+    // select the second label by its name and delete it; undo brings it back
+    let at = sch_anchor(&h, "u1", "D8");
+    let v = h
+        .state()
+        .ctx
+        .egui
+        .data(|d| d.get_temp::<View>(egui::Id::unique("schematic-view")))
+        .unwrap();
+    click_at(&mut h, at + egui::vec2(v.len(1.0), -v.len(0.6)));
+    h.key_press(egui::Key::Delete);
+    h.run_steps(3);
+    assert_eq!(doc(&h).project().schematic.labels.len(), 1);
+    assert_ne!(net(&mut h, "D9"), net(&mut h, "D8"));
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Z);
+    h.run_steps(3);
+    assert_eq!(doc(&h).project().schematic.labels.len(), 2);
 }

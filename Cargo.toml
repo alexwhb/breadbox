@@ -12,6 +12,7 @@ members = [
     "crates/bb-plugin",
     "crates/bb-lessons",
     "crates/breadbox",
+    "tests/e2e",
 ]
 # bb-plugin-sdk is the guest-side crate compiled to wasm32; it is built separately.
 exclude = ["crates/bb-plugin-sdk", "plugins"]

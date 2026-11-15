@@ -769,6 +769,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "breadbox-e2e"
+version = "0.1.0"
+dependencies = [
+ "bb-avr",
+ "bb-circuit",
+ "bb-core",
+ "bb-firmware",
+ "bb-lessons",
+ "bb-plugin",
+ "bb-radio",
+ "bb-sim",
+ "bb-spice",
+ "bb-world",
+ "breadbox",
+ "crossbeam-channel",
+ "serde_json",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.20.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -123,7 +123,7 @@ fn axial_frame(cx: &ArtCtx) -> Option<(P2, P2, P2, P2, f64)> {
     Some((a, b, mid, dir, len))
 }
 
-fn above_label(pen: &Pen, cx: &ArtCtx, x: f64, y: f64, text: &str) {
+pub(super) fn above_label(pen: &Pen, cx: &ArtCtx, x: f64, y: f64, text: &str) {
     if pen.view.scale < 5.0 {
         return;
     }
@@ -661,8 +661,27 @@ pub fn buzzer(pen: &Pen, cx: &ArtCtx) {
 
 pub fn source(pen: &Pen, cx: &ArtCtx) {
     let (mx, base) = stand(cx, 0.6);
-    legs_to(pen, cx, base, 1.0);
-    let body = WRect::new(mx - 1.7, base - 2.4, mx + 1.7, base);
+    // a SPICE card's row of up to 16 nodes: a SIP-style body over all of them
+    let span = cx.leads.iter().map(|l| l.1).fold(f64::MIN, f64::max)
+        - cx.leads.iter().map(|l| l.1).fold(f64::MAX, f64::min);
+    let body = if cx.def.bench.art == "spice_box" && span > 2.5 {
+        let used = cx.prop_f64("nodes").unwrap_or(4.0) as usize;
+        for (i, (_, x, y)) in cx.leads.iter().enumerate() {
+            let a = if i < used { 1.0 } else { 0.35 };
+            let mut p2 = pen.clone();
+            p2.alpha *= a;
+            leg(&p2, (*x, *y), (*x, base));
+        }
+        WRect::new(
+            mx - span / 2.0 - 0.6,
+            base - 2.4,
+            mx + span / 2.0 + 0.6,
+            base,
+        )
+    } else {
+        legs_to(pen, cx, base, 1.0);
+        WRect::new(mx - 1.7, base - 2.4, mx + 1.7, base)
+    };
     pen.shadow(body, 0.3, 5.0, 3.0, 0.5);
     pen.grad(body, 0.3, rgb(0x2A2A2A), rgb(0x161616));
     let label = if cx.def.bench.art == "spice_box" {
@@ -864,7 +883,15 @@ pub fn ws2812(pen: &Pen, cx: &ArtCtx) {
             0.1,
             rgb(0xF6F6F0),
         );
-        pen.circle(x, y0 - 1.4, 0.35, lit(rgb(0x2A2A2A), lighten(c, 0.3), lvl));
+        // unlit: the pale lens of a 5050 package with its die showing
+        pen.circle(x, y0 - 1.4, 0.38, lit(rgb(0xDCD6C2), lighten(c, 0.3), lvl));
+        if lvl < 0.3 {
+            pen.rect(
+                WRect::new(x - 0.12, y0 - 1.52, x + 0.12, y0 - 1.28),
+                0.02,
+                rgb(0x6B6658),
+            );
+        }
         if lvl > 0.05 {
             pen.glow(x, y0 - 1.4, 1.6 + 1.5 * lvl as f64, c, 0.8 * lvl);
         }
