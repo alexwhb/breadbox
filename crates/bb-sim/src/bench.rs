@@ -405,10 +405,7 @@ impl Bench {
     /// MCU/device state. `ic` carries node voltages from a previous session (rebuilds).
     fn wire_up(&mut self, ic: Option<HashMap<String, f64>>) -> Result<(), SimError> {
         let built = &self.built;
-        let has_analog = built
-            .net_kind
-            .iter()
-            .any(|k| matches!(k, NetKind::Analog(n) if n != "0"));
+        let has_analog = !built.netlist.top.elements.is_empty();
         let mut session = None;
         if has_analog {
             let mut nl = built.netlist.clone();
