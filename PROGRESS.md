@@ -804,7 +804,16 @@ Flaky tests — root causes fixed in product code:
   arduino-cli compiled the broken one. Release / debug stage separately under an exclusive
   `StagingLock` (`95f43c0`; regression test fails 2/3 without the fix).
 - 5 rounds of every GUI test file + the e2e crate under extra CPU load (load average up to
-  ~250 while other agents built): no other flakes; the final loop is below.
+  ~250 while other agents built): only the staging race above. Final verification, after all
+  fixes: 5 more rounds of gui / lessons / pcb / plugins / radio_tools / widgets / workbench +
+  e2e (36 scenarios) and 5 rounds of the new audit / session / debug_memory / radio_panel
+  files, all green.
+
+`scripts/test-all.sh` (CARGO_TARGET_DIR=target/audit), two consecutive runs at `3f484fc`:
+**ALL GREEN** both times — fmt, clippy, `cargo test --workspace` (690 passed, 0 failed,
+9 ignored perf; 118–123 s), plugin wasm clippy + byte-identical rebuild, perf gates: MCU-3
+23.7–24.0×, SIM-4 engine 16.5–16.7×, SPICE-5 12.5–13.1 ms, Workbench frame 0.68 ms, PLAT-4
+first frame 133–200 ms, SIM-4 with the GUI 15.9–16.0× (max) / 1.00× (paced).
 
 Gaps closed (✚ = also a bug fix):
 - `SIM-1/3` Workbench simulation menu: Step one quantum / 1 ms, Reset bench, Reset MCU only ·
