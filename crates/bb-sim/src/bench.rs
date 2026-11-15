@@ -361,6 +361,11 @@ impl Bench {
         }
         bench.instruments = Instruments::from_project(&bench.project);
         bench.wire_up(None)?;
+        // initial operating point first, so devices see real supply voltages in on_start
+        bench.commit_analog(SimTime::ZERO)?;
+        for mi in 0..bench.mcus.len() {
+            bench.update_vcc(mi);
+        }
         // devices start (initial drives / watches / ticks) at t = 0
         for i in 0..bench.devices.len() {
             bench.with_device(i, SimTime::ZERO, |d, ctx| d.on_start(ctx));
@@ -672,6 +677,13 @@ impl Bench {
     /// Voltage of a part pin's net now (`None` if the pin is unknown).
     pub fn pin_voltage(&self, part: &str, pin: &str) -> Option<f64> {
         let n = self.built.connectivity.net_of(part, pin)?;
+        if matches!(self.nets[n.0].kind, NetKind::Isolated)
+            && let Some(di) = self.devices.iter().position(|d| d.spec.part == part)
+            && let Some(pi) = self.devices[di].spec.pins.iter().position(|p| p.pin == pin)
+        {
+            // an unconnected output: its open-circuit voltage
+            return Some(self.device_pin_voltage(di, pi));
+        }
         Some(self.net_voltage(n))
     }
 
@@ -875,6 +887,7 @@ impl Bench {
         let n = &mut self.nets[net.0];
         let v = bb_core::resolve_drives(n.drives.iter().map(|(_, d)| d), 1e-12);
         n.voltage = v;
+
         for l in n.listeners.iter_mut() {
             let now_high = net_target_level(v, l.lo, l.hi, l.high);
             if now_high != l.high {

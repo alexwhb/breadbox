@@ -468,9 +468,9 @@ impl Device for Ds18b20 {
                 ctx.wake_at(now + SimTime::from_us(120), T_RELEASE);
             }
             T_RELEASE => {
+                // keep `fell`: the master may be holding the line for a reset pulse
                 ctx.set_drive(self.dq, PinDrive::HighZ);
                 self.own_low = false;
-                self.fell = None;
             }
             T_SAMPLE => {
                 let bit = ctx.pin_voltage(self.dq) > 1.5;
