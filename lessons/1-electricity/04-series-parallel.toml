@@ -1,0 +1,120 @@
+id = "series-parallel"
+track = "electricity"
+order = 4
+title = "Series & parallel"
+summary = "Two resistors end to end add up; side by side they make less. Predict both, then measure with the ohmmeter."
+minutes = 10
+
+[bench]
+project = "series-parallel.bench.json"
+
+[[steps]]
+kind = "explain"
+title = "Two ways to combine"
+body = """
+**In series** (end to end) the current has to push through both resistors, so their resistances add.
+
+**In parallel** (side by side) the current gets two paths at once, so the combination resists *less* than either one alone.
+
+The bench has R1 = 1 kΩ and R2 = 2.2 kΩ in series, with nothing powered. An ohmmeter supplies its own tiny test current, so only measure resistance with the power off."""
+formula = "Series: R = R1 + R2    Parallel: R = R1 × R2 ÷ (R1 + R2)"
+
+[[steps]]
+kind = "predict"
+title = "In series"
+body = "Turn the meter's dial to **Ω**. Its leads are on the two outer ends, so it measures R1 and R2 together."
+checks = [
+    { type = "prediction" },
+    { type = "reading", part = "dmm1", key = "value", min = 3100, max = 3300 },
+]
+solution = [
+    { do = "control", part = "dmm1", key = "dial", value = 4 },
+    { do = "run", seconds = 1.5 },
+    { do = "predict" },
+]
+
+[steps.vars]
+R1 = 1000.0
+R2 = 2200.0
+
+[steps.predict]
+prompt = "What will the ohmmeter read across R1 and R2 in series?"
+unit = "Ω"
+answer = "R1 + R2"
+meter = "dmm1"
+correct_text = "Yes: 1000 Ω + 2200 Ω = {answer:g} Ω. In series, resistances add."
+default_hint = "In series, add them: R1 + R2."
+working = ["R = R1 + R2", "R = 1000 Ω + 2200 Ω = 3200 Ω"]
+
+[[steps.predict.hints]]
+when = "abs(guess - R1 * R2 / (R1 + R2)) <= 0.05 * R1 * R2 / (R1 + R2)"
+text = "That's the parallel formula. In series the current goes through both, so they add."
+
+[[steps.predict.hints]]
+when = "abs(guess - (R1 + R2) / 1000) <= 0.05 * (R1 + R2) / 1000"
+text = "Right number in kΩ. The box wants ohms: × 1000."
+
+[[steps]]
+kind = "build"
+title = "Make it parallel"
+body = """
+Rewire so both resistors sit between the same two points:
+
+1. Move the meter's black lead from column 13 to column 9.
+2. Add a jumper from column 13 back to column 5.
+
+Now R1 runs from column 5 to 9, and R2 runs from column 9 to 13, which is now joined to column 5. Both bridge the same two points."""
+hints = ["Columns 5 and 13 joined + meter across 5 and 9 = R1 and R2 side by side."]
+checks = [
+    { type = "connected", a = "r2.2", b = "r1.1" },
+    { type = "connected", a = "dmm1.COM", b = "r1.2" },
+    { type = "reading", part = "dmm1", key = "value", min = 650, max = 725 },
+]
+solution = [
+    { do = "unwire", a = "dmm1.COM", b = "bb1.a13" },
+    { do = "wire", a = "dmm1.COM", b = "bb1.a9", color = "black" },
+    { do = "wire", a = "bb1.b13", b = "bb1.b5", color = "green" },
+    { do = "run", seconds = 1.5 },
+]
+
+[steps.measure]
+part = "dmm1"
+unit = "Ω"
+
+[[steps]]
+kind = "predict"
+title = "In parallel"
+body = "Two paths means more current for the same push, so less resistance. How much less?"
+checks = [{ type = "prediction" }]
+solution = [{ do = "predict" }]
+
+[steps.vars]
+R1 = 1000.0
+R2 = 2200.0
+
+[steps.predict]
+prompt = "What does the meter read with R1 and R2 in parallel?"
+unit = "Ω"
+answer = "R1 * R2 / (R1 + R2)"
+meter = "dmm1"
+correct_text = "Right: 1000 × 2200 ÷ 3200 ≈ {answer:.0} Ω, less than the smaller resistor."
+default_hint = "Product over sum: R1 × R2 ÷ (R1 + R2)."
+working = ["R = R1 × R2 ÷ (R1 + R2)", "R = 2 200 000 ÷ 3200 ≈ 688 Ω"]
+
+[[steps.predict.hints]]
+when = "abs(guess - (R1 + R2)) <= 0.05 * (R1 + R2)"
+text = "That's the series total. In parallel the result is smaller than either resistor."
+
+[[steps]]
+kind = "quiz"
+title = "One more in parallel"
+
+[steps.quiz]
+question = "You add a third resistor in parallel with the other two. The total resistance…"
+options = ["goes up", "goes down", "stays the same", "becomes zero"]
+answer = 1
+explain = "Every extra parallel path lets more current through, so the total resistance always drops."
+
+[[steps.solution]]
+do = "quiz"
+answer = 1

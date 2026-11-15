@@ -1,0 +1,111 @@
+id = "serial-monitor"
+track = "microcontrollers"
+order = 4
+title = "Talking over serial"
+summary = "Read a knob on A0 and print the number to the Serial Monitor. Turn the knob and watch the numbers follow."
+minutes = 10
+
+[bench]
+project = "serial-monitor.bench.json"
+
+[[steps]]
+kind = "explain"
+title = "printf debugging, Arduino style"
+body = """
+`Serial.begin(9600)` opens the USB serial link at 9600 baud; `Serial.println()` sends a line to the Serial Monitor. It's the quickest way to see what your sketch is thinking.
+
+The knob (a potentiometer) is a voltage divider you can turn: its wiper on **A0** moves from 0 V to 5 V."""
+
+[[steps.callouts]]
+part = "pot1"
+title = "POT1"
+text = "the wiper goes to A0"
+
+[[steps]]
+kind = "code"
+title = "Upload and listen"
+body = "The sketch reads A0 five times a second and prints `A0 = <reading>`."
+run = 1.0
+checks = [
+    { type = "firmware", mcu = "u1" },
+    { type = "serial_contains", mcu = "u1", text = "A0 = " },
+]
+solution = [{ do = "firmware", mcu = "u1" }]
+
+[steps.code]
+mcu = "u1"
+image = "firmware/serial_pot.uno.hex"
+starter = """
+void setup() {
+  Serial.begin(9600);
+}
+
+void loop() {
+  int value = analogRead(A0);
+  // print "A0 = " and the value, then wait 200 ms
+}
+"""
+solution = """
+void setup() {
+  Serial.begin(9600);
+  Serial.println("ready");
+}
+
+void loop() {
+  int value = analogRead(A0);
+  Serial.print("A0 = ");
+  Serial.println(value);
+  delay(200);
+}
+"""
+
+[[steps]]
+kind = "experiment"
+title = "All the way up"
+body = "Turn the knob fully clockwise: the wiper reaches 5 V and A0 reads the top of the scale."
+checks = [{ type = "serial_contains", mcu = "u1", text = "A0 = 1023" }]
+solution = [
+    { do = "position", part = "pot1", value = 1.0 },
+    { do = "run", seconds = 0.6 },
+]
+
+[[steps]]
+kind = "predict"
+title = "Halfway"
+body = "Set the knob to the middle again."
+checks = [{ type = "prediction" }]
+solution = [
+    { do = "position", part = "pot1", value = 0.5 },
+    { do = "run", seconds = 0.6 },
+    { do = "predict" },
+]
+
+[steps.vars]
+pos = 0.5
+
+[steps.predict]
+prompt = "With the wiper at 2.5 V, what number will A0 print?"
+unit = ""
+answer = "1023 * pos"
+correct_text = "Right: half of 1023 is about {answer:i}."
+default_hint = "0 V reads 0 and 5 V reads 1023; 2.5 V is halfway."
+working = ["A0 = 2.5 V ÷ 5 V × 1023", "A0 ≈ 512"]
+
+[[steps]]
+kind = "quiz"
+title = "Baud rates"
+
+[steps.quiz]
+question = "The Serial Monitor shows garbage characters. What's the most likely cause?"
+options = [
+    "The knob is broken",
+    "The monitor's baud rate doesn't match Serial.begin()",
+    "A0 is not connected",
+    "The sketch is too long",
+]
+answer = 1
+explain = "Both ends must agree on the speed. Set the monitor to the same baud as Serial.begin(9600)."
+
+[[steps.solution]]
+do = "quiz"
+answer = 1

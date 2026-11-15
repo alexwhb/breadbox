@@ -1,0 +1,124 @@
+id = "voltage-dividers"
+track = "electricity"
+order = 5
+title = "Voltage dividers"
+summary = "Two resistors split a voltage in proportion. Predict the middle voltage for four values of R2, then load it down."
+minutes = 12
+
+[bench]
+project = "voltage-dividers.bench.json"
+
+[[steps]]
+kind = "explain"
+title = "Splitting a voltage"
+body = """
+The same current flows through R1 and R2, so each one takes a share of the 5 V in proportion to its resistance. The voltage in the middle, across R2, is the *output* of the divider.
+
+Dividers are everywhere: knobs, light sensors and level shifters all work this way."""
+formula = "V(out) = 5 V × R2 ÷ (R1 + R2)"
+
+[[steps.callouts]]
+part = "dmm1"
+title = "Meter across R2"
+text = "red lead in the middle, black on GND"
+
+[[steps]]
+kind = "experiment"
+title = "Change R2, predict the middle"
+body = "R1 stays at 10 kΩ. Pick R2, predict the meter, and check. Three values pass the checkpoint."
+solution = [
+    { do = "choose", index = 0 },
+    { do = "run", seconds = 1.0 },
+    { do = "predict" },
+    { do = "record" },
+    { do = "choose", index = 1 },
+    { do = "run", seconds = 1.0 },
+    { do = "predict" },
+    { do = "record" },
+    { do = "choose", index = 3 },
+    { do = "run", seconds = 1.0 },
+    { do = "predict" },
+    { do = "record" },
+]
+
+[steps.choice]
+label = "Pick R2"
+part = "r2"
+prop = "resistance"
+var = "R"
+default = 2
+options = [
+    { label = "1kΩ", value = 1000 },
+    { label = "4.7kΩ", value = 4700 },
+    { label = "10kΩ", value = 10000 },
+    { label = "22kΩ", value = 22000 },
+]
+
+[steps.predict]
+prompt = "What will the meter read with R2 = {choice}?"
+unit = "V"
+answer = "5 * R / (10000 + R)"
+optional = true
+toggle_label = "Do the math myself"
+toggle_note = "Optional. The meter waits for your prediction."
+meter = "dmm1"
+correct_text = "Right. The meter agrees: {answer} V."
+default_hint = "V(out) = 5 × R2 ÷ (R1 + R2), with R1 = 10 kΩ."
+working = [
+    "V(out) = 5 V × {R:g} ÷ (10000 + {R:g})",
+    "V(out) = {answer} V",
+]
+
+[[steps.predict.hints]]
+when = "abs(guess - 5 * 10000 / (10000 + R)) <= 0.05 * 5 * 10000 / (10000 + R)"
+text = "That's the voltage across R1, the top resistor. The meter is across R2."
+
+[steps.table]
+title = "Your measurements"
+columns = ["R2", "you said", "meter"]
+min_rows = 3
+passed = "Checkpoint passed"
+remaining = "Try {n} more value{s}"
+
+[[steps]]
+kind = "build"
+title = "Load it down"
+body = """
+Set R2 back to 10 kΩ, then hang a 10 kΩ *load* R3 across it, from the middle (column 9) to GND, the way a sensor input or another circuit would.
+
+The load sits in parallel with R2, so the bottom half now behaves like 5 kΩ and the output sags."""
+checks = [
+    { type = "part", def = "resistor", id = "r3", props = { resistance = 10000.0 } },
+    { type = "connected", a = "r3.1", b = "r2.1" },
+    { type = "reading", part = "dmm1", key = "value", min = 1.55, max = 1.78 },
+]
+solution = [
+    { do = "set_prop", part = "r2", prop = "resistance", value = 10000 },
+    { do = "add_part", def = "resistor", ref = "R3", props = { resistance = 10000.0 }, at = [40.0, 20.0] },
+    { do = "wire", a = "r3.1", b = "bb1.d9", color = "green" },
+    { do = "wire", a = "r3.2", b = "bb1.t-20", color = "black" },
+    { do = "run", seconds = 1.0 },
+]
+
+[steps.measure]
+part = "dmm1"
+unit = "V"
+
+[[steps]]
+kind = "quiz"
+title = "Why it sagged"
+
+[steps.quiz]
+question = "The output dropped from 2.5 V to about 1.67 V. Why?"
+options = [
+    "R3 used up some of the supply's voltage",
+    "R3 in parallel with R2 lowered the bottom resistance to 5 kΩ",
+    "The meter changed range",
+    "Current through R1 went down",
+]
+answer = 1
+explain = "10 kΩ ∥ 10 kΩ = 5 kΩ, so V(out) = 5 × 5k ÷ 15k ≈ 1.67 V. Dividers only hold their value into loads much bigger than R2. The meter's 10 MΩ input is why measuring barely disturbs it."
+
+[[steps.solution]]
+do = "quiz"
+answer = 1

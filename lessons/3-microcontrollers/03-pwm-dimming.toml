@@ -1,0 +1,100 @@
+id = "pwm-dimming"
+track = "microcontrollers"
+order = 3
+title = "PWM: dimming an LED"
+summary = "analogWrite switches a pin 490 times a second; the share of time it is on sets the brightness and the average voltage."
+minutes = 12
+
+[bench]
+project = "pwm-dimming.bench.json"
+
+[[steps]]
+kind = "explain"
+title = "Fast switching, slow eyes"
+body = """
+A digital pin can only be 0 V or 5 V. To get "in between", **PWM** (pulse-width modulation) switches it on and off very fast and varies the share of time it is on: the *duty cycle*.
+
+`analogWrite(9, value)` takes 0–255: 0 is always off, 255 always on, 64 is on about a quarter of the time. On D9 the UNO switches at about 490 Hz."""
+formula = "duty = value ÷ 255"
+
+[[steps]]
+kind = "code"
+title = "A quarter brightness"
+body = "Upload the sketch: `analogWrite(9, 64)` once in `setup()`. The hardware keeps the PWM running on its own."
+run = 1.0
+checks = [
+    { type = "firmware", mcu = "u1" },
+    { type = "pin_frequency", mcu = "u1", pin = "D9", hz = 490.0, tolerance = 0.05 },
+    { type = "pin_duty", mcu = "u1", pin = "D9", min = 0.22, max = 0.28 },
+]
+solution = [{ do = "firmware", mcu = "u1" }]
+
+[steps.code]
+mcu = "u1"
+image = "firmware/dim.uno.hex"
+starter = """
+const int LED = 9;  // a PWM pin (~)
+
+void setup() {
+  pinMode(LED, OUTPUT);
+  // analogWrite(LED, ...);  a quarter of 255
+}
+
+void loop() {
+}
+"""
+solution = """
+const int LED = 9;
+
+void setup() {
+  pinMode(LED, OUTPUT);
+  analogWrite(LED, 64);
+}
+
+void loop() {
+}
+"""
+
+[[steps]]
+kind = "predict"
+title = "What a voltmeter sees"
+body = "A DC voltmeter is too slow to follow 490 Hz: it shows the *average* of the pulses."
+checks = [
+    { type = "prediction" },
+    { type = "reading", part = "dmm1", key = "value", min = 1.1, max = 1.35 },
+]
+solution = [
+    { do = "run", seconds = 1.0 },
+    { do = "predict" },
+]
+
+[steps.vars]
+value = 64.0
+
+[steps.predict]
+prompt = "What will the meter read on D9 with analogWrite(9, 64)?"
+unit = "V"
+answer = "5 * value / 255"
+meter = "dmm1"
+correct_text = "Right: 5 V × 64 ÷ 255 ≈ {answer} V. The meter shows {meter} V (the pin sags a little under the LED's load)."
+default_hint = "Average = 5 V × duty, and duty = 64 ÷ 255."
+working = ["duty = 64 ÷ 255 ≈ 0.25", "V(avg) = 5 V × 0.25 ≈ 1.25 V"]
+
+[[steps]]
+kind = "quiz"
+title = "Full scale"
+
+[steps.quiz]
+question = "What does analogWrite(9, 255) do?"
+options = [
+    "Switches at 255 Hz",
+    "Keeps D9 HIGH all the time",
+    "Outputs 2.55 V",
+    "Turns D9 into an input",
+]
+answer = 1
+explain = "255 is a 100 % duty cycle: the pin never switches off."
+
+[[steps.solution]]
+do = "quiz"
+answer = 1

@@ -1,0 +1,5 @@
+id = "microcontrollers"
+title = "Microcontrollers from zero"
+label = "Track 3 · Microcontrollers from zero"
+order = 3
+description = "Power pins, digital outputs, PWM and the Serial Monitor on an Arduino UNO, with every claim checked on the pins."

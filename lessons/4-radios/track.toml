@@ -1,0 +1,5 @@
+id = "radios"
+title = "Radios & IoT"
+label = "Track 4 · Radios & IoT"
+order = 4
+description = "Bluetooth to a phone, Wi-Fi to an MQTT broker, LoRa through a gateway: build connected devices and watch every packet."

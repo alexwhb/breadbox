@@ -1,0 +1,62 @@
+id = "lora"
+track = "radios"
+order = 4
+title = "LoRa: long range, tiny packets"
+summary = "An ESP32 sends sensor packets through a RYLR896 LoRa module to a gateway that forwards them to MQTT, and a downlink comes back."
+minutes = 15
+
+[bench]
+project = "lora.bench.json"
+
+[[steps]]
+kind = "explain"
+title = "Kilometres, not metres"
+body = """
+LoRa trades speed for range: a few hundred bytes per second, but kilometres of reach on very little power. Nodes don't join Wi-Fi; they shout short packets that a **gateway** picks up and forwards to the internet, here to the bench's MQTT broker.
+
+The RYLR896 module takes AT commands on a serial port. This sketch sets its address (7), then sends `t=21.5,h=40` every two seconds with `AT+SEND`. The LoRa gateway pack also decodes the payload into JSON."""
+
+[[steps.callouts]]
+part = "u2"
+title = "U2 RYLR896"
+text = "LoRa 868/915 MHz, AT commands on Serial2"
+
+[[steps]]
+kind = "measure"
+title = "Uplink"
+body = "Run the bench. Each packet appears on **lora/0/7/up** (network 0, address 7) with its signal strength, and decoded on **lora/0/7/decoded**."
+checks = [
+    { type = "serial_contains", mcu = "u1", text = "lora node ready" },
+    { type = "mqtt", topic = "lora/0/7/up", contains = "t=21.5,h=40" },
+    { type = "mqtt", topic = "lora/0/7/decoded", contains = "21.5" },
+]
+solution = [{ do = "run", seconds = 5.0 }]
+
+[[steps]]
+kind = "experiment"
+title = "Downlink"
+body = "Publish `led on` to **lora/0/7/down**. The gateway queues it and sends it to the node, which prints what it receives."
+checks = [{ type = "serial_contains", mcu = "u1", text = "led on" }]
+solution = [
+    { do = "publish", topic = "lora/0/7/down", payload = "led on" },
+    { do = "run", seconds = 3.0 },
+]
+
+[[steps]]
+kind = "quiz"
+title = "Airtime"
+
+[steps.quiz]
+question = "Why does a LoRa node send `t=21.5,h=40` instead of a full JSON document?"
+options = [
+    "JSON is not allowed on radios",
+    "Every byte costs airtime and battery; short packets go further and collide less",
+    "The gateway can't forward JSON",
+    "MQTT requires it",
+]
+answer = 1
+explain = "LoRa's low data rate makes every byte expensive. Keep packets tiny and let the gateway or the cloud decode them."
+
+[[steps.solution]]
+do = "quiz"
+answer = 1

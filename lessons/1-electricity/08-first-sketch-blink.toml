@@ -1,0 +1,85 @@
+id = "first-sketch-blink"
+track = "electricity"
+order = 8
+title = "Your first sketch: blink"
+summary = "Let a microcontroller flip the LED on and off: wire D13, upload blink, and measure the rhythm."
+minutes = 12
+
+[bench]
+project = "first-sketch-blink.bench.json"
+
+[[steps]]
+kind = "explain"
+title = "Meet the UNO"
+body = """
+An Arduino UNO is a tiny computer whose pins can be switched between 0 V and 5 V by a program, a *sketch*. Each pin can drive about 20 mA, enough for an LED and its resistor.
+
+The resistor and LED are already on the breadboard. The LED's cathode goes to the UNO's GND."""
+
+[[steps.callouts]]
+part = "u1"
+title = "D13"
+text = "the pin the blink sketch switches"
+
+[[steps]]
+kind = "build"
+title = "Wire D13 to the resistor"
+body = "Add a jumper from the UNO's **D13** to the top of R1 (column 5)."
+checks = [{ type = "connected", a = "u1.D13", b = "r1.1" }]
+solution = [{ do = "wire", a = "u1.D13", b = "bb1.a5", color = "orange" }]
+
+[[steps]]
+kind = "code"
+title = "Upload blink"
+body = """
+`setup()` runs once and makes D13 an output. `loop()` runs forever: HIGH, wait a second, LOW, wait a second.
+
+Fill in the two `delay()` calls and upload. The LED blinks once every two seconds: 0.5 Hz."""
+run = 4.5
+checks = [
+    { type = "firmware", mcu = "u1" },
+    { type = "pin_frequency", mcu = "u1", pin = "D13", hz = 0.5, tolerance = 0.15 },
+]
+solution = [{ do = "firmware", mcu = "u1" }]
+
+[steps.code]
+mcu = "u1"
+image = "firmware/blink.uno.hex"
+starter = """
+void setup() {
+  pinMode(LED_BUILTIN, OUTPUT);   // D13
+}
+
+void loop() {
+  digitalWrite(LED_BUILTIN, HIGH);
+  // wait one second here
+  digitalWrite(LED_BUILTIN, LOW);
+  // and here
+}
+"""
+solution = """
+void setup() {
+  pinMode(LED_BUILTIN, OUTPUT);
+}
+
+void loop() {
+  digitalWrite(LED_BUILTIN, HIGH);
+  delay(1000);
+  digitalWrite(LED_BUILTIN, LOW);
+  delay(1000);
+}
+"""
+
+[[steps]]
+kind = "quiz"
+title = "Reading the rhythm"
+
+[steps.quiz]
+question = "You change both delays to delay(250). How often does the LED blink?"
+options = ["Once every 2 s", "Once a second", "Twice a second", "Four times a second"]
+answer = 2
+explain = "250 ms on + 250 ms off = 500 ms per blink: 2 Hz."
+
+[[steps.solution]]
+do = "quiz"
+answer = 2

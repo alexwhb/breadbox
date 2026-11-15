@@ -1,0 +1,109 @@
+id = "digital-outputs"
+track = "microcontrollers"
+order = 2
+title = "Digital outputs"
+summary = "digitalWrite and delay: make an LED on D8 blink five times a second and measure it."
+minutes = 10
+
+[bench]
+project = "digital-outputs.bench.json"
+
+[[steps]]
+kind = "explain"
+title = "HIGH, LOW, wait"
+body = """
+`pinMode(8, OUTPUT)` turns D8 into an output. `digitalWrite(8, HIGH)` connects it to 5 V, `LOW` to 0 V. `delay(ms)` waits.
+
+A blink is just HIGH, wait, LOW, wait, forever. The waits set the rhythm."""
+
+[[steps]]
+kind = "code"
+title = "Blink five times a second"
+body = "On for 100 ms, off for 100 ms: 200 ms per blink, five blinks per second. Fill in the delays and upload."
+run = 2.0
+checks = [
+    { type = "firmware", mcu = "u1" },
+    { type = "pin_frequency", mcu = "u1", pin = "D8", hz = 5.0, tolerance = 0.1 },
+]
+solution = [{ do = "firmware", mcu = "u1" }]
+
+[steps.code]
+mcu = "u1"
+image = "firmware/fast_blink.uno.hex"
+starter = """
+const int LED = 8;
+
+void setup() {
+  pinMode(LED, OUTPUT);
+}
+
+void loop() {
+  digitalWrite(LED, HIGH);
+  delay(1000);   // shorter!
+  digitalWrite(LED, LOW);
+  delay(1000);   // and here
+}
+"""
+solution = """
+const int LED = 8;
+
+void setup() {
+  pinMode(LED, OUTPUT);
+}
+
+void loop() {
+  digitalWrite(LED, HIGH);
+  delay(100);
+  digitalWrite(LED, LOW);
+  delay(100);
+}
+"""
+
+[[steps]]
+kind = "measure"
+title = "Half on, half off"
+body = "Equal on and off times mean the pin is HIGH half of the time: a 50 % *duty cycle*."
+checks = [{ type = "pin_duty", mcu = "u1", pin = "D8", min = 0.45, max = 0.55 }]
+solution = [{ do = "run", seconds = 1.0 }]
+
+[[steps]]
+kind = "predict"
+title = "Faster still"
+body = "Frequency is how many full on-off cycles fit in a second."
+checks = [{ type = "prediction" }]
+solution = [{ do = "predict" }]
+
+[steps.vars]
+on = 50.0
+off = 50.0
+
+[steps.predict]
+prompt = "You change both delays to 50 ms. How many blinks per second?"
+unit = "Hz"
+answer = "1000 / (on + off)"
+correct_text = "Right: one blink takes 100 ms, so {answer:g} per second."
+default_hint = "One blink = on time + off time. Blinks per second = 1000 ms ÷ that."
+working = ["period = 50 ms + 50 ms = 100 ms", "f = 1000 ms ÷ 100 ms = 10 Hz"]
+
+[[steps.predict.hints]]
+when = "abs(guess - 1000 / on) <= 0.05 * 1000 / on"
+text = "A blink is on *and* off: add both delays for the period."
+
+[[steps]]
+kind = "quiz"
+title = "Too fast to see"
+
+[steps.quiz]
+question = "With delay(5) for on and off (100 Hz), what do your eyes see?"
+options = [
+    "A very fast blink",
+    "An LED that looks steadily on, a bit dimmer",
+    "Nothing at all",
+    "The LED alternates colour",
+]
+answer = 1
+explain = "Above about 60 Hz the eye averages the flicker. That's the idea behind PWM, next lesson."
+
+[[steps.solution]]
+do = "quiz"
+answer = 1

@@ -1,0 +1,347 @@
+{
+  "format": "breadbox/1",
+  "name": "A night light that thinks",
+  "mode": "playground",
+  "description": "An LDR on A0 measures the room; after dark the UNO dims an LED up through a 2N2222 on D9 — the darker, the brighter.",
+  "parts": [
+    {
+      "id": "u1",
+      "ref": "U1",
+      "part": "uno",
+      "bench": {
+        "x": 0.0,
+        "y": 4.0
+      },
+      "schematic": {
+        "x": 18.0,
+        "y": 21.5
+      },
+      "firmware": {
+        "sketch": "sketches/night-light",
+        "image": "firmware/night-light.uno.hex"
+      }
+    },
+    {
+      "id": "bb1",
+      "ref": "BB1",
+      "part": "breadboard_830",
+      "bench": {
+        "x": 32.0,
+        "y": 2.0
+      }
+    },
+    {
+      "id": "ldr1",
+      "ref": "LDR1",
+      "part": "ldr",
+      "bench": {
+        "x": 35.0,
+        "y": 7.0,
+        "leads": {
+          "1": [
+            0.0,
+            0.0
+          ],
+          "2": [
+            3.0,
+            0.0
+          ]
+        }
+      },
+      "schematic": {
+        "x": 32.0,
+        "y": 14.0
+      }
+    },
+    {
+      "id": "r1",
+      "ref": "R1",
+      "part": "resistor",
+      "props": {
+        "resistance": 10000.0
+      },
+      "bench": {
+        "x": 38.0,
+        "y": 8.0,
+        "leads": {
+          "1": [
+            0.0,
+            0.0
+          ],
+          "2": [
+            4.0,
+            0.0
+          ]
+        }
+      },
+      "schematic": {
+        "x": 44.0,
+        "y": 14.0
+      }
+    },
+    {
+      "id": "q1",
+      "ref": "Q1",
+      "part": "npn",
+      "bench": {
+        "x": 85.0,
+        "y": 10.0
+      },
+      "schematic": {
+        "x": 56.0,
+        "y": 16.0
+      }
+    },
+    {
+      "id": "r2",
+      "ref": "R2",
+      "part": "resistor",
+      "props": {
+        "resistance": 1000.0
+      },
+      "bench": {
+        "x": 86.0,
+        "y": 7.0,
+        "leads": {
+          "1": [
+            0.0,
+            0.0
+          ],
+          "2": [
+            5.0,
+            0.0
+          ]
+        }
+      },
+      "schematic": {
+        "x": 68.0,
+        "y": 14.0
+      }
+    },
+    {
+      "id": "d1",
+      "ref": "D1",
+      "part": "led",
+      "props": {
+        "color": "white"
+      },
+      "bench": {
+        "x": 90.0,
+        "y": 9.0,
+        "leads": {
+          "a": [
+            0.0,
+            0.0
+          ],
+          "k": [
+            -3.0,
+            0.0
+          ]
+        }
+      },
+      "schematic": {
+        "x": 80.0,
+        "y": 14.0
+      }
+    },
+    {
+      "id": "r3",
+      "ref": "R3",
+      "part": "resistor",
+      "props": {
+        "resistance": 220.0
+      },
+      "bench": {
+        "x": 90.0,
+        "y": 6.0,
+        "leads": {
+          "1": [
+            0.0,
+            0.0
+          ],
+          "2": [
+            5.0,
+            0.0
+          ]
+        }
+      },
+      "schematic": {
+        "x": 92.0,
+        "y": 14.0
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "a": {
+        "part": "u1",
+        "pin": "5V"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "t+1"
+      },
+      "color": "red"
+    },
+    {
+      "id": "w2",
+      "a": {
+        "part": "u1",
+        "pin": "GND"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "t-1"
+      },
+      "color": "black"
+    },
+    {
+      "id": "w3",
+      "a": {
+        "part": "bb1",
+        "pin": "a3"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "t+3"
+      },
+      "color": "red"
+    },
+    {
+      "id": "w4",
+      "a": {
+        "part": "bb1",
+        "pin": "a10"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "t-8"
+      },
+      "color": "black"
+    },
+    {
+      "id": "w5",
+      "a": {
+        "part": "bb1",
+        "pin": "d6"
+      },
+      "b": {
+        "part": "u1",
+        "pin": "A0"
+      },
+      "color": "yellow"
+    },
+    {
+      "id": "w6",
+      "a": {
+        "part": "bb1",
+        "pin": "a53"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "t-42"
+      },
+      "color": "black"
+    },
+    {
+      "id": "w7",
+      "a": {
+        "part": "u1",
+        "pin": "D9"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "a59"
+      },
+      "color": "orange"
+    },
+    {
+      "id": "w8",
+      "a": {
+        "part": "bb1",
+        "pin": "b63"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "t+49"
+      },
+      "color": "red"
+    }
+  ],
+  "schematic": {},
+  "pcb": {},
+  "world": {
+    "seed": 1,
+    "time_warp": 1.0,
+    "noise": false,
+    "air": {
+      "temp_c": 21.0,
+      "rh": 45.0,
+      "pressure_pa": 101325.0,
+      "diurnal": false,
+      "temp_swing_c": 5.0,
+      "rh_swing": 15.0
+    },
+    "light": {
+      "mode": "manual",
+      "ambient_lux": 300.0,
+      "location": {
+        "name": "Ashland, OR",
+        "lat": 42.1946,
+        "lon": -122.7095,
+        "utc_offset_h": -8.0
+      },
+      "start": {
+        "year": 2026,
+        "month": 6,
+        "day": 21,
+        "hour": 8.0
+      },
+      "cloud_cover": 0.2,
+      "indoor_fraction": 0.01,
+      "indoor": true
+    },
+    "pots": [],
+    "objects": [],
+    "timelines": [],
+    "scripts": [],
+    "vars": {}
+  },
+  "probes": [
+    {
+      "id": "probe1",
+      "label": "Light sensor → A0",
+      "target": {
+        "part": "u1",
+        "pin": "A0"
+      },
+      "quantity": "voltage",
+      "pinned": [
+        36.0,
+        0.0
+      ]
+    },
+    {
+      "id": "probe2",
+      "label": "LED drive · D9",
+      "target": {
+        "part": "u1",
+        "pin": "D9"
+      },
+      "quantity": "duty",
+      "pinned": [
+        36.0,
+        6.0
+      ]
+    }
+  ],
+  "instruments": [],
+  "spice": {},
+  "settings": {
+    "seed": 1,
+    "sync_quantum_us": 1.0,
+    "speed": 1.0,
+    "stop_after_s": 0.0
+  }
+}

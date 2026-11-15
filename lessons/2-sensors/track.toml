@@ -1,0 +1,5 @@
+id = "sensors"
+title = "Sensors & the real world"
+label = "Track 2 · Sensors & the real world"
+order = 2
+description = "Turn light and temperature into voltages, read them with a meter, then let an UNO act on them."

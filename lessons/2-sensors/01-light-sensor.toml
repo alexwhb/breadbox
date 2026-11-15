@@ -1,0 +1,86 @@
+id = "light-sensor"
+track = "sensors"
+order = 1
+title = "Seeing light with an LDR"
+summary = "A light-dependent resistor in a divider turns brightness into a voltage. Dim the room and predict the meter."
+minutes = 10
+
+[bench]
+project = "light-sensor.bench.json"
+
+[[steps]]
+kind = "explain"
+title = "A resistor that sees"
+body = """
+An LDR (light-dependent resistor) is a few kΩ in a bright room and over 100 kΩ in the dark.
+
+On its own that's just a changing resistance. Put it under a fixed 10 kΩ resistor and you have a voltage divider whose middle voltage *rises as the light falls*, something a meter or a microcontroller can read."""
+formula = "V(out) = 5 V × R(LDR) ÷ (10 kΩ + R(LDR))"
+
+[[steps.callouts]]
+part = "ldr1"
+title = "LDR1"
+text = "the bottom half of the divider"
+
+[[steps]]
+kind = "measure"
+title = "A bright room"
+body = "Set the room to 500 lux (a well-lit desk) in the World panel. The LDR is only a few kΩ, so the middle sits low."
+checks = [{ type = "reading", part = "dmm1", key = "value", min = 1.0, max = 2.2 }]
+solution = [
+    { do = "world", key = "light.ambient_lux", value = 500 },
+    { do = "run", seconds = 1.0 },
+]
+
+[steps.measure]
+part = "dmm1"
+unit = "V"
+
+[[steps]]
+kind = "predict"
+title = "Dusk"
+body = "Now dim the room to 5 lux. At that light level this LDR measures about 113 kΩ."
+checks = [
+    { type = "prediction" },
+    { type = "reading", part = "dmm1", key = "value", min = 4.2, max = 4.95 },
+]
+solution = [
+    { do = "world", key = "light.ambient_lux", value = 5 },
+    { do = "run", seconds = 1.0 },
+    { do = "predict" },
+]
+
+[steps.vars]
+Rl = 113000.0
+
+[steps.predict]
+prompt = "What will the meter read at 5 lux?"
+unit = "V"
+answer = "5 * Rl / (10000 + Rl)"
+meter = "dmm1"
+correct_text = "Right: 5 × 113k ÷ 123k ≈ {answer} V. The meter shows {meter} V."
+default_hint = "It's a divider: 5 V × R(LDR) ÷ (10 kΩ + R(LDR))."
+working = ["V(out) = 5 V × 113 000 ÷ (10 000 + 113 000)", "V(out) ≈ 4.59 V"]
+
+[[steps.predict.hints]]
+when = "abs(guess - 5 * 10000 / (10000 + Rl)) <= 0.05 * 5 * 10000 / (10000 + Rl)"
+text = "That's the voltage across the 10 kΩ on top. The meter is across the LDR."
+
+[[steps]]
+kind = "quiz"
+title = "Flip it"
+
+[steps.quiz]
+question = "You swap the LDR and the 10 kΩ resistor (LDR on top). What happens in the dark?"
+options = [
+    "The output still rises",
+    "The output falls toward 0 V",
+    "Nothing changes",
+    "The LDR overheats",
+]
+answer = 1
+explain = "Now the large dark resistance is on top and takes most of the 5 V, so the middle drops. Same divider, opposite sense."
+
+[[steps.solution]]
+do = "quiz"
+answer = 1

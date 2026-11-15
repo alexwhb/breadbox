@@ -1,0 +1,88 @@
+id = "ble-button"
+track = "radios"
+order = 1
+title = "Bluetooth: a button on your phone"
+summary = "An UNO with an HM-10 BLE module sends button presses to the virtual phone, and takes commands back."
+minutes = 12
+
+[bench]
+project = "ble-button.bench.json"
+
+[[steps]]
+kind = "explain"
+title = "A serial cable without the cable"
+body = """
+The HM-10 is a Bluetooth Low Energy module that behaves like a wireless serial port: bytes the UNO writes to it (through `SoftwareSerial` on D10/D11) arrive on a connected phone, and the other way round.
+
+Before a phone connects, the UNO configures it with **AT commands**: a name to advertise and connection notifications. The two resistors divide the UNO's 5 V TX down to the module's 3.3 V input."""
+
+[[steps.callouts]]
+part = "u2"
+title = "U2 HM-10"
+text = "BLE: advertises as “bb-button”"
+
+[[steps]]
+kind = "measure"
+title = "Power up"
+body = "Run the bench. In the Serial Monitor the sketch sends its AT commands and reports **ble-button ready**."
+checks = [
+    { type = "serial_contains", mcu = "u1", text = "AT+NAMEbb-button -> OK" },
+    { type = "serial_contains", mcu = "u1", text = "ble-button ready" },
+]
+solution = [{ do = "run", seconds = 2.0 }]
+
+[[steps]]
+kind = "experiment"
+title = "Connect the phone"
+body = "Open the virtual phone, scan, and tap **bb-button**. The module tells the UNO `OK+CONN`. Then open the phone's **Terminal** to see what the UNO sends."
+checks = [{ type = "serial_contains", mcu = "u1", text = "phone connected" }]
+solution = [
+    { do = "phone_connect", name = "bb-button" },
+    { do = "run", seconds = 1.0 },
+    { do = "phone_terminal" },
+    { do = "run", seconds = 0.3 },
+]
+
+[[steps]]
+kind = "experiment"
+title = "Press the button"
+body = "Press SW1. The sketch counts the press and, because a phone is connected, sends it over the air."
+checks = [
+    { type = "serial_contains", mcu = "u1", text = "pressed #1" },
+    { type = "phone", contains = "pressed #1" },
+]
+solution = [
+    { do = "press", part = "sw1", on = true },
+    { do = "run", seconds = 0.2 },
+    { do = "press", part = "sw1", on = false },
+    { do = "run", seconds = 0.5 },
+]
+
+[[steps]]
+kind = "experiment"
+title = "Talk back"
+body = "In the phone's Bluetooth terminal, send `?`. The sketch answers with its press count."
+checks = [{ type = "phone", contains = "presses=1" }]
+solution = [
+    { do = "phone_send", text = "?\n" },
+    { do = "run", seconds = 1.0 },
+]
+
+[[steps]]
+kind = "quiz"
+title = "Range"
+
+[steps.quiz]
+question = "Why does the UNO only send the press when `connected` is true?"
+options = [
+    "BLE can't transmit at all without a connection",
+    "Bytes written with no phone connected would be taken as AT commands by the HM-10",
+    "To save the button",
+    "The UNO can't count while disconnected",
+]
+answer = 1
+explain = "While disconnected, the HM-10 is in command mode: anything starting with AT is a command, and stray text is ignored or misread."
+
+[[steps.solution]]
+do = "quiz"
+answer = 1

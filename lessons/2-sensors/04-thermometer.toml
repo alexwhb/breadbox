@@ -1,0 +1,82 @@
+id = "thermometer"
+track = "sensors"
+order = 4
+title = "A thermometer that talks"
+summary = "An UNO turns a TMP36's voltage into degrees, prints them and shows them on a 16×2 LCD."
+minutes = 12
+
+[bench]
+project = "thermometer.bench.json"
+
+[bench.world]
+"air.temp_c" = 25.0
+
+[[steps]]
+kind = "explain"
+title = "From volts to degrees"
+body = """
+The sketch reads A0 eight times and averages away the noise, then converts:
+
+`volts = reading × 5.0 ÷ 1024`, then `°C = (volts − 0.5) × 100`
+
+It prints the temperature to the Serial Monitor every second and writes it to the LCD with the minimum and maximum it has seen."""
+
+[[steps.callouts]]
+part = "lcd1"
+title = "LCD1 16×2"
+text = "RS on D12, E on D11, data on D5–D2"
+
+[[steps]]
+kind = "measure"
+title = "It's talking"
+body = "Run the bench and watch the Serial Monitor: one line per second, ending in \" C\"."
+checks = [
+    { type = "serial_contains", mcu = "u1", text = " C" },
+    { type = "voltage", a = "u2.VOUT", min = 0.73, max = 0.77 },
+]
+solution = [{ do = "run", seconds = 2.5 }]
+
+[[steps]]
+kind = "predict"
+title = "Count to degrees"
+body = "Do the sketch's conversion by hand."
+checks = [{ type = "prediction" }]
+solution = [{ do = "predict" }]
+
+[steps.vars]
+N = 154.0
+
+[steps.predict]
+prompt = "The ADC reads 154. What temperature will the sketch print?"
+unit = "°C"
+answer = "(N * 5 / 1024 - 0.5) * 100"
+correct_text = "Right: 154 × 5 ÷ 1024 = 0.752 V, so (0.752 − 0.5) × 100 ≈ {answer:.1} °C."
+default_hint = "First volts = 154 × 5 ÷ 1024, then (volts − 0.5) × 100."
+working = ["V = 154 × 5 V ÷ 1024 ≈ 0.752 V", "T = (0.752 − 0.5) × 100 ≈ 25.2 °C"]
+
+[[steps]]
+kind = "experiment"
+title = "A hot day"
+body = "Raise the room to 35 °C. The sensor follows within a few seconds, and so do the Serial Monitor and the LCD."
+checks = [
+    { type = "voltage", a = "u2.VOUT", min = 0.83, max = 0.87 },
+    { type = "serial_contains", mcu = "u1", text = "34." },
+]
+solution = [
+    { do = "world", key = "air.temp_c", value = 35 },
+    { do = "run", seconds = 6.0 },
+]
+
+[[steps]]
+kind = "quiz"
+title = "Resolution"
+
+[steps.quiz]
+question = "One ADC count is 5 V ÷ 1024 ≈ 4.9 mV. How many °C is that for a TMP36?"
+options = ["About 0.05 °C", "About 0.5 °C", "About 5 °C", "Exactly 1 °C"]
+answer = 1
+explain = "4.9 mV ÷ 10 mV/°C ≈ 0.49 °C per count. Averaging eight readings smooths out the noise but can't beat the step size."
+
+[[steps.solution]]
+do = "quiz"
+answer = 1

@@ -1,0 +1,5 @@
+id = "spice"
+title = "Pro: SPICE analysis"
+label = "Track 5 · Pro: SPICE analysis"
+order = 5
+description = "Operating points, transients, AC sweeps and op-amps in Pro mode, where every check runs a real SPICE analysis of your schematic."

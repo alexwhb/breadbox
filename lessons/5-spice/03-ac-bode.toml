@@ -1,0 +1,76 @@
+id = "ac-bode"
+track = "spice"
+order = 3
+title = "AC sweep: the −3 dB point"
+summary = "Sweep the RC low-pass with .ac, find its corner frequency, check the −20 dB/decade slope, and move the corner."
+minutes = 12
+
+[bench]
+project = "ac-bode.bench.json"
+
+[[steps]]
+kind = "explain"
+title = "Frequency, not time"
+body = """
+**.ac** asks: for a small sine at each frequency, how big is the output compared with the input? V1 has `AC 1`, so V(OUT) *is* the gain. On a Bode plot it's shown in decibels: 20·log₁₀(gain).
+
+An RC low-pass passes low frequencies and attenuates high ones. At the **corner frequency** the output is 1/√2 of the input: −3 dB."""
+formula = "f(c) = 1 ÷ (2π × R × C)"
+
+[[steps]]
+kind = "predict"
+title = "Where's the corner?"
+checks = [
+    { type = "prediction" },
+    { type = "spice", analysis = ".ac dec 50 10 100k", vector = "v(out)", at = 1591.5, stat = "mag_db", min = -3.4, max = -2.6 },
+]
+solution = [{ do = "predict" }]
+
+[steps.vars]
+R = 1000.0
+C = 1e-7
+
+[steps.predict]
+prompt = "R1 = 1 kΩ, C1 = 100 nF. At what frequency is the output down 3 dB?"
+unit = "Hz"
+answer = "1 / (2 * pi * R * C)"
+correct_text = "Right: 1 ÷ (2π × 1k × 100n) ≈ {answer:.0} Hz. The sweep shows −3 dB there."
+default_hint = "f(c) = 1 ÷ (2π R C): 2π × 1000 × 1e-7 = 6.28e-4."
+working = ["f(c) = 1 ÷ (2π × 1000 Ω × 1e-7 F)", "f(c) = 1 ÷ 6.283e-4 ≈ 1592 Hz"]
+
+[[steps.predict.hints]]
+when = "abs(guess - 1 / (R * C)) <= 0.05 / (R * C)"
+text = "That's 1 ÷ RC in radians per second. Divide by 2π for hertz."
+
+[[steps]]
+kind = "measure"
+title = "A decade later"
+body = "Ten times the corner frequency, a first-order filter is 20 dB down (a tenth of the input). Read V(OUT) at 15.9 kHz."
+checks = [
+    { type = "spice", analysis = ".ac dec 50 10 100k", vector = "v(out)", at = 15915.0, stat = "mag_db", min = -21.0, max = -19.0 },
+    { type = "spice", analysis = ".ac dec 50 10 100k", vector = "v(out)", at = 1591.5, stat = "phase_deg", min = -47.0, max = -43.0 },
+]
+solution = []
+
+[[steps]]
+kind = "experiment"
+title = "Move the corner"
+body = "Make C1 ten times smaller, 10 nF. The corner moves up a decade, to about 15.9 kHz."
+checks = [
+    { type = "spice", analysis = ".ac dec 50 10 100k", vector = "v(out)", at = 15915.0, stat = "mag_db", min = -3.4, max = -2.6 },
+]
+solution = [{ do = "set_prop", part = "c1", prop = "capacitance", value = 1e-8 }]
+
+[[steps]]
+kind = "quiz"
+title = "The slope"
+
+[steps.quiz]
+question = "Far above the corner, how does a first-order RC low-pass roll off?"
+options = ["−6 dB per decade", "−20 dB per decade", "−40 dB per decade", "It doesn't, it's flat"]
+answer = 1
+explain = "One capacitor = one pole = −20 dB/decade (−6 dB/octave). Two RC stages would give −40."
+
+[[steps.solution]]
+do = "quiz"
+answer = 1

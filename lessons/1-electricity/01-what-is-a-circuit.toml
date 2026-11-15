@@ -1,0 +1,72 @@
+id = "what-is-a-circuit"
+track = "electricity"
+order = 1
+title = "What is a circuit?"
+summary = "Current only flows around a closed loop. Close one, then break it."
+minutes = 6
+
+[bench]
+project = "what-is-a-circuit.bench.json"
+
+[[steps]]
+kind = "explain"
+title = "A loop for the current"
+body = """
+Electricity needs a complete path: out of the supply's **+**, through the parts, and back into its **−** (GND). That loop is a *circuit*.
+
+On the bench: a USB supply, a 220 Ω resistor R1 and a red LED D1. The LED's short leg already goes to the GND rail, but nothing connects the supply's + to R1 yet, so no current flows and the LED stays dark."""
+
+[[steps.callouts]]
+part = "d1"
+title = "LED"
+text = "lights only while current flows through it"
+
+[[steps]]
+kind = "build"
+title = "Close the loop"
+body = "Add a red jumper from the supply's **VBUS (+5 V)** to the top of R1 (column 5 on the breadboard). The moment the loop closes, D1 lights."
+hints = [
+    "Every hole in a breadboard column (a–e) is connected. R1's top lead is in column 5.",
+    "Drag from the supply's VBUS pin to hole a5.",
+]
+checks = [
+    { type = "connected", a = "ps1.VBUS", b = "r1.1" },
+    { type = "led_lit", part = "d1" },
+]
+solution = [
+    { do = "wire", a = "ps1.VBUS", b = "bb1.a5", color = "red" },
+    { do = "run", seconds = 0.3 },
+]
+
+[[steps]]
+kind = "build"
+title = "Break the loop"
+body = "Now remove the black jumper from column 10 to the GND rail. The loop is open again: the current has nowhere to return to, and D1 goes dark, even though the supply is still on."
+checks = [
+    { type = "not_connected", a = "d1.k", b = "ps1.GND" },
+    { type = "led_off", part = "d1" },
+]
+solution = [
+    { do = "unwire", a = "bb1.a10", b = "bb1.t-8" },
+    { do = "run", seconds = 0.3 },
+]
+
+[[steps]]
+kind = "quiz"
+title = "What makes a circuit?"
+body = "One question to lock it in."
+
+[steps.quiz]
+question = "Which of these lights the LED?"
+options = [
+    "A supply and an LED near each other",
+    "A closed loop from + through the LED back to −",
+    "A wire from + to the LED, with the other leg left free",
+    "Turning the supply up to 12 V",
+]
+answer = 1
+explain = "Current flows only around a complete loop. Break it anywhere and it stops everywhere."
+
+[[steps.solution]]
+do = "quiz"
+answer = 1

@@ -1,0 +1,81 @@
+id = "opamp-gain"
+track = "spice"
+order = 4
+title = "Op-amp gain"
+summary = "A non-inverting TL072 amplifier: predict its gain from two resistors, confirm it with .ac and .tran, then push it into clipping."
+minutes = 15
+
+[bench]
+project = "opamp-gain.bench.json"
+
+[[steps]]
+kind = "explain"
+title = "Feedback sets the gain"
+body = """
+An op-amp has enormous open-loop gain. With negative feedback through R2 and R1 it settles where its two inputs are equal, and the gain is set by the resistors alone.
+
+Here a 0.5 V, 1 kHz sine drives the + input; R2 = 10 kΩ from OUT to FB and R1 = 1 kΩ from FB to ground. The TL072 runs on ±12 V."""
+formula = "gain = 1 + R2 ÷ R1"
+
+[[steps]]
+kind = "predict"
+title = "Predict the gain"
+checks = [
+    { type = "prediction" },
+    { type = "spice", analysis = ".ac dec 10 100 10k", vector = "v(out)", at = 1000.0, stat = "mag_db", min = 20.4, max = 21.2 },
+]
+solution = [{ do = "predict" }]
+
+[steps.vars]
+R1 = 1000.0
+R2 = 10000.0
+
+[steps.predict]
+prompt = "What voltage gain (V/V) does the amplifier have?"
+unit = "×"
+answer = "1 + R2 / R1"
+correct_text = "Right: 1 + 10k ÷ 1k = {answer:g}, about 20.8 dB on the Bode plot."
+default_hint = "Non-inverting: 1 + R2 ÷ R1."
+working = ["gain = 1 + 10 000 ÷ 1000", "gain = 11 (20·log₁₀ 11 ≈ 20.8 dB)"]
+
+[[steps.predict.hints]]
+when = "abs(guess - R2 / R1) <= 0.05 * R2 / R1"
+text = "That's the inverting amplifier's gain. The non-inverting one adds 1."
+
+[[steps]]
+kind = "measure"
+title = "See it in time"
+body = "Run `.tran 10u 5m`: the 0.5 V sine comes out 11 times bigger, peaking near 5.5 V."
+checks = [
+    { type = "spice", analysis = ".tran 10u 5m", vector = "v(out)", stat = "max", min = 5.2, max = 5.8 },
+]
+solution = []
+
+[[steps]]
+kind = "experiment"
+title = "Too much gain"
+body = "Make R2 47 kΩ. The gain becomes 48, which would need ±24 V; the output can't swing past its ±12 V supplies and the peaks flatten. That's **clipping**."
+checks = [
+    { type = "spice", analysis = ".tran 10u 5m", vector = "v(out)", stat = "max", min = 9.0, max = 12.0 },
+    { type = "spice", analysis = ".ac dec 10 100 10k", vector = "v(out)", at = 1000.0, stat = "mag_db", min = 33.0, max = 34.0 },
+]
+solution = [{ do = "set_prop", part = "r2", prop = "resistance", value = 47000 }]
+
+[[steps]]
+kind = "quiz"
+title = "Small-signal vs real"
+
+[steps.quiz]
+question = "Why does .ac still report about 33.6 dB (48×) even though the .tran output clips?"
+options = [
+    "The .ac analysis is broken",
+    ".ac linearises the circuit around its operating point, so it never sees the supply limits",
+    "The supplies are only on in .tran",
+    "dB hides clipping",
+]
+answer = 1
+explain = "AC analysis is small-signal: a tiny sine around the bias point. Large-signal limits like clipping only show up in a transient."
+
+[[steps.solution]]
+do = "quiz"
+answer = 1

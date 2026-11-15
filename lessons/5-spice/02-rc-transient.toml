@@ -1,0 +1,74 @@
+id = "rc-transient"
+track = "spice"
+order = 2
+title = "Transient: an RC step"
+summary = "Use .tran to watch a capacitor charge after a 5 V step, read the curve at one and five time constants, then double R."
+minutes = 12
+
+[bench]
+project = "rc-transient.bench.json"
+
+[[steps]]
+kind = "explain"
+title = "Time in SPICE"
+body = """
+**.tran** simulates the circuit over time. `.tran 1u 1m` means: report every 1 µs, stop at 1 ms.
+
+V1 is a `PULSE(0 5 0 1u 1u 5m 10m)` source: it jumps from 0 to 5 V at t = 0 (in 1 µs) and stays there for 5 ms. R1 = 1 kΩ charges C1 = 100 nF, and the output is the capacitor voltage."""
+formula = "V(OUT) = 5 V × (1 − e^(−t ÷ τ)),  τ = R × C"
+
+[[steps]]
+kind = "predict"
+title = "The time constant"
+checks = [{ type = "prediction" }]
+solution = [{ do = "predict" }]
+
+[steps.vars]
+R = 1000.0
+C = 1e-7
+
+[steps.predict]
+prompt = "R1 = 1 kΩ, C1 = 100 nF. How many microseconds is τ?"
+unit = "µs"
+answer = "R * C * 1e6"
+correct_text = "Right: 1000 Ω × 100 nF = 100 µs."
+default_hint = "τ = R × C in seconds; × 1 000 000 for µs. 100 nF = 1e-7 F."
+working = ["τ = 1000 Ω × 1e-7 F = 1e-4 s", "τ = 100 µs"]
+
+[[steps]]
+kind = "measure"
+title = "Read the curve"
+body = "Run `.tran 1u 1m` and put the cursor on V(OUT) at t = τ and t = 5τ."
+checks = [
+    { type = "spice", analysis = ".tran 1u 1m", vector = "v(out)", at = 101e-6, min = 3.0, max = 3.3 },
+    { type = "spice", analysis = ".tran 1u 1m", vector = "v(out)", at = 501e-6, min = 4.9, max = 5.0 },
+]
+solution = []
+
+[[steps]]
+kind = "experiment"
+title = "Double R"
+body = "Make R1 2 kΩ. τ doubles to 200 µs, so at 100 µs the capacitor has only reached 1 − e^(−0.5) ≈ 39 % of 5 V."
+checks = [
+    { type = "spice", analysis = ".tran 1u 1m", vector = "v(out)", at = 101e-6, min = 1.85, max = 2.1 },
+]
+solution = [{ do = "set_prop", part = "r1", prop = "resistance", value = 2000 }]
+
+[[steps]]
+kind = "quiz"
+title = "Time step"
+
+[steps.quiz]
+question = "Why not run `.tran 100u 1m` to make it faster?"
+options = [
+    "It would be slower",
+    "Reporting only every 100 µs (one τ) would show a jagged curve and miss detail",
+    "SPICE doesn't allow it",
+    "The capacitor would charge faster",
+]
+answer = 1
+explain = "The step sets how often results are reported (and caps the solver's step). Pick it well below the fastest time constant you care about."
+
+[[steps.solution]]
+do = "quiz"
+answer = 1

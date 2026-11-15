@@ -1,0 +1,91 @@
+id = "capacitors-time"
+track = "electricity"
+order = 6
+title = "Capacitors & time"
+summary = "A capacitor fills like a bucket through a resistor. Predict the time constant, then watch it charge to 63 % and beyond."
+minutes = 10
+
+[bench]
+project = "capacitors-time.bench.json"
+
+[[steps]]
+kind = "explain"
+title = "Charging takes time"
+body = """
+A capacitor stores charge. Charged through a resistor, it fills quickly at first and then more and more slowly, because the fuller it gets, the less voltage is left to push current through R.
+
+The **time constant** τ (tau) sets the pace: after one τ the capacitor is at 63 % of the supply, and after five it is essentially full."""
+formula = "τ = R × C"
+
+[[steps.callouts]]
+part = "c1"
+title = "C1 100 µF"
+text = "electrolytic: the stripe (−) goes to GND"
+
+[[steps]]
+kind = "predict"
+title = "How long is one τ?"
+body = "R1 is 10 kΩ and C1 is 100 µF."
+checks = [{ type = "prediction" }]
+solution = [{ do = "predict" }]
+
+[steps.vars]
+R = 10000.0
+C = 0.0001
+
+[steps.predict]
+prompt = "How many seconds is one time constant?"
+unit = "s"
+answer = "R * C"
+correct_text = "Exactly: 10 000 Ω × 0.0001 F = {answer:g} s."
+default_hint = "Multiply ohms by farads: 10 000 × 0.0001."
+working = ["τ = R × C = 10 000 Ω × 100 µF", "100 µF = 0.0001 F", "τ = 1 s"]
+
+[[steps.predict.hints]]
+when = "abs(guess - R * C * 1e6) <= 0.05 * R * C * 1e6"
+text = "Careful with the µ: 100 µF is 0.0001 F, not 100 F."
+
+[[steps]]
+kind = "build"
+title = "Charge it"
+body = "Wire the top of R1 (column 5) to the **+** rail. The meter starts climbing at once. One second later it should be near 63 % of 5 V."
+checks = [
+    { type = "connected", a = "r1.1", b = "ps1.VBUS" },
+    { type = "voltage", a = "c1.plus", min = 2.85, max = 3.45 },
+]
+solution = [
+    { do = "wire", a = "bb1.a5", b = "bb1.t+3", color = "red" },
+    { do = "run", seconds = 1.0 },
+]
+
+[steps.measure]
+part = "dmm1"
+unit = "V"
+
+[[steps]]
+kind = "measure"
+title = "Five τ later"
+body = "Let it run for another four seconds: five time constants in total."
+checks = [
+    { type = "voltage", a = "c1.plus", min = 4.9, max = 5.05 },
+    { type = "reading", part = "dmm1", key = "value", min = 4.85, max = 5.05 },
+]
+solution = [{ do = "run", seconds = 4.0 }]
+
+[steps.measure]
+part = "dmm1"
+unit = "V"
+
+[[steps]]
+kind = "quiz"
+title = "Bigger bucket"
+
+[steps.quiz]
+question = "You swap C1 for 470 µF and keep R1 = 10 kΩ. How long until it is about 63 % full?"
+options = ["0.47 s", "1 s", "4.7 s", "47 s"]
+answer = 2
+explain = "τ = 10 000 Ω × 0.00047 F = 4.7 s. Bigger capacitor or bigger resistor: slower."
+
+[[steps.solution]]
+do = "quiz"
+answer = 2

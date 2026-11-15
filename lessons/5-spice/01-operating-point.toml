@@ -1,0 +1,80 @@
+id = "operating-point"
+track = "spice"
+order = 1
+title = "The operating point"
+summary = "Run .op on a divider: SPICE solves every node voltage at DC. Predict V(OUT), then change R2 and run it again."
+minutes = 10
+
+[bench]
+project = "operating-point.bench.json"
+
+[[steps]]
+kind = "explain"
+title = "Schematics and netlists"
+body = """
+In Pro mode the circuit is a schematic. Breadbox turns it into a **netlist** (one line per part, nodes named by your net labels) and hands it to the SPICE engine.
+
+The simplest analysis is **.op**, the *operating point*: every capacitor treated as open, every inductor as a short, and every node voltage solved at DC. Here: V1 = 5 V into R1 = 10 kΩ over R2 = 4.7 kΩ, with the middle labelled **OUT**."""
+
+[[steps.callouts]]
+part = "r2"
+title = "R2"
+text = "V(OUT) is the voltage across it"
+
+[[steps]]
+kind = "predict"
+title = "Predict V(OUT)"
+body = "Then run `.op` and compare with SPICE."
+checks = [
+    { type = "prediction" },
+    { type = "spice", analysis = ".op", vector = "v(out)", min = 1.55, max = 1.65 },
+]
+solution = [{ do = "predict" }]
+
+[steps.vars]
+R1 = 10000.0
+R2 = 4700.0
+
+[steps.predict]
+prompt = "What will .op report for V(OUT)?"
+unit = "V"
+answer = "5 * R2 / (R1 + R2)"
+correct_text = "Right: 5 × 4.7k ÷ 14.7k ≈ {answer} V."
+default_hint = "A divider: 5 V × R2 ÷ (R1 + R2)."
+working = ["V(OUT) = 5 V × 4700 ÷ 14 700", "V(OUT) ≈ 1.60 V"]
+
+[[steps]]
+kind = "build"
+title = "Change R2 and re-run"
+body = "Set R2 to 10 kΩ in the inspector. Equal resistors split the 5 V in half."
+checks = [
+    { type = "prop", part = "r2", prop = "resistance", min = 9900, max = 10100 },
+    { type = "spice", analysis = ".op", vector = "v(out)", min = 2.45, max = 2.55 },
+]
+solution = [{ do = "set_prop", part = "r2", prop = "resistance", value = 10000 }]
+
+[[steps]]
+kind = "measure"
+title = "The current, too"
+body = "`.op` also reports the current through every voltage source. SPICE counts current flowing *into* the + terminal as positive, so a source delivering power shows a negative current."
+checks = [{ type = "spice", analysis = ".op", vector = "i(v1)", min = -0.00026, max = -0.00024 }]
+solution = []
+
+[[steps]]
+kind = "quiz"
+title = "What .op ignores"
+
+[steps.quiz]
+question = "You add a 100 µF capacitor from OUT to ground. What does .op report for V(OUT)?"
+options = [
+    "0 V, the capacitor shorts it",
+    "The same 2.5 V: at DC a capacitor is an open circuit",
+    "5 V",
+    ".op fails with a capacitor",
+]
+answer = 1
+explain = "The operating point is the steady state: no current flows into a charged capacitor, so it changes nothing at DC. Its effect only shows up in .tran and .ac."
+
+[[steps.solution]]
+do = "quiz"
+answer = 1

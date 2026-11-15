@@ -1,0 +1,156 @@
+{
+  "format": "breadbox/1",
+  "name": "What is a circuit?",
+  "mode": "playground",
+  "description": "A USB supply, a resistor and an LED — one wire short of a circuit.",
+  "parts": [
+    {
+      "id": "ps1",
+      "ref": "PS1",
+      "part": "usb_power",
+      "bench": {
+        "x": 0.0,
+        "y": 4.0
+      },
+      "schematic": {
+        "x": 14.5,
+        "y": 16.0
+      }
+    },
+    {
+      "id": "bb1",
+      "ref": "BB1",
+      "part": "breadboard_400",
+      "bench": {
+        "x": 16.0,
+        "y": 2.0
+      }
+    },
+    {
+      "id": "r1",
+      "ref": "R1",
+      "part": "resistor",
+      "props": {
+        "resistance": 220.0
+      },
+      "bench": {
+        "x": 21.0,
+        "y": 8.0,
+        "leads": {
+          "1": [
+            0.0,
+            0.0
+          ],
+          "2": [
+            4.0,
+            0.0
+          ]
+        }
+      },
+      "schematic": {
+        "x": 25.0,
+        "y": 14.0
+      }
+    },
+    {
+      "id": "d1",
+      "ref": "D1",
+      "part": "led",
+      "props": {
+        "color": "red"
+      },
+      "bench": {
+        "x": 25.0,
+        "y": 9.0,
+        "leads": {
+          "a": [
+            0.0,
+            0.0
+          ],
+          "k": [
+            1.0,
+            0.0
+          ]
+        }
+      },
+      "schematic": {
+        "x": 37.0,
+        "y": 14.0
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "a": {
+        "part": "ps1",
+        "pin": "GND"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "t-1"
+      },
+      "color": "black"
+    },
+    {
+      "id": "w2",
+      "a": {
+        "part": "bb1",
+        "pin": "a10"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "t-8"
+      },
+      "color": "black"
+    }
+  ],
+  "schematic": {},
+  "pcb": {},
+  "world": {
+    "seed": 1,
+    "time_warp": 1.0,
+    "noise": true,
+    "air": {
+      "temp_c": 21.0,
+      "rh": 45.0,
+      "pressure_pa": 101325.0,
+      "diurnal": false,
+      "temp_swing_c": 5.0,
+      "rh_swing": 15.0
+    },
+    "light": {
+      "mode": "manual",
+      "ambient_lux": 180.0,
+      "location": {
+        "name": "Ashland, OR",
+        "lat": 42.1946,
+        "lon": -122.7095,
+        "utc_offset_h": -8.0
+      },
+      "start": {
+        "year": 2026,
+        "month": 6,
+        "day": 21,
+        "hour": 8.0
+      },
+      "cloud_cover": 0.2,
+      "indoor_fraction": 0.01,
+      "indoor": true
+    },
+    "pots": [],
+    "objects": [],
+    "timelines": [],
+    "scripts": [],
+    "vars": {}
+  },
+  "probes": [],
+  "instruments": [],
+  "spice": {},
+  "settings": {
+    "seed": 1,
+    "sync_quantum_us": 1.0,
+    "speed": 1.0,
+    "stop_after_s": 0.0
+  }
+}

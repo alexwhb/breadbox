@@ -1,0 +1,5 @@
+id = "electricity"
+title = "Electricity you can see"
+label = "Track 1 · Electricity you can see"
+order = 1
+description = "Circuits, volts, amps and ohms, LEDs, dividers, capacitors and buttons, ending with your first sketch. Every number you predict, you then measure."

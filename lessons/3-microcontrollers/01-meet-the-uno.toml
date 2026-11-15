@@ -1,0 +1,70 @@
+id = "meet-the-uno"
+track = "microcontrollers"
+order = 1
+title = "Meet the UNO"
+summary = "Find the UNO's power pins with a meter: 5 V, 3.3 V and ground."
+minutes = 8
+
+[bench]
+project = "meet-the-uno.bench.json"
+
+[[steps]]
+kind = "explain"
+title = "A tour of the headers"
+body = """
+- **D0–D13**: digital pins. Each is an output (0 V or 5 V) or an input, chosen by your sketch. The ones marked **~** can also do PWM.
+- **A0–A5**: analog inputs that read any voltage from 0 to 5 V.
+- **5V, 3V3, GND**: power for your circuits, from USB or the barrel jack.
+
+The meter's leads are clipped to **5V** and **GND**."""
+
+[[steps.callouts]]
+part = "u1"
+title = "Power header"
+text = "5V, 3V3 and GND power whatever you build"
+
+[[steps]]
+kind = "measure"
+title = "The 5 V pin"
+body = "Turn the dial to **V⎓**."
+checks = [{ type = "reading", part = "dmm1", key = "value", min = 4.75, max = 5.1 }]
+solution = [
+    { do = "control", part = "dmm1", key = "dial", value = 2 },
+    { do = "run", seconds = 1.0 },
+]
+
+[steps.measure]
+part = "dmm1"
+unit = "V"
+
+[[steps]]
+kind = "build"
+title = "The 3.3 V pin"
+body = "Move the red lead from **5V** to **3V3**. Many sensors and radio modules want 3.3 V; the UNO has a small regulator for them."
+checks = [
+    { type = "connected", a = "dmm1.VO", b = "u1.3V3" },
+    { type = "reading", part = "dmm1", key = "value", min = 3.2, max = 3.4 },
+]
+solution = [
+    { do = "unwire", a = "dmm1.VO", b = "u1.5V" },
+    { do = "wire", a = "dmm1.VO", b = "u1.3V3", color = "orange" },
+    { do = "run", seconds = 1.0 },
+]
+
+[steps.measure]
+part = "dmm1"
+unit = "V"
+
+[[steps]]
+kind = "quiz"
+title = "Which pins read voltages?"
+
+[steps.quiz]
+question = "A sensor outputs anything from 0 to 5 V. Which pins can measure it?"
+options = ["D0–D13", "A0–A5", "5V and 3V3", "Only D13"]
+answer = 1
+explain = "The analog inputs A0–A5 feed the UNO's 10-bit converter: 0–5 V becomes 0–1023."
+
+[[steps.solution]]
+do = "quiz"
+answer = 1

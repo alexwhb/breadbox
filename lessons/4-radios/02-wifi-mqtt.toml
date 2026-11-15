@@ -1,0 +1,63 @@
+id = "wifi-mqtt"
+track = "radios"
+order = 2
+title = "Wi-Fi and MQTT"
+summary = "A garden node joins Wi-Fi through an ESP-01 and publishes soil moisture to an MQTT broker every second."
+minutes = 15
+
+[bench]
+project = "wifi-mqtt.bench.json"
+
+[[steps]]
+kind = "explain"
+title = "Publish and subscribe"
+body = """
+The UNO has no radio; it drives an **ESP-01** Wi-Fi module with AT commands over a serial link: join the access point, open a TCP connection to the broker, then send MQTT packets.
+
+**MQTT** is publish/subscribe: the node *publishes* readings to a topic (`garden/pot1`); anything that *subscribed* to that topic, like a dashboard or the MQTT explorer in the Radios panel, gets them. The bench has its own access point (SIM-AP) and broker."""
+
+[[steps.callouts]]
+part = "u2"
+title = "U2 ESP-01"
+text = "Wi-Fi over AT commands on D2/D3"
+
+[[steps]]
+kind = "measure"
+title = "Online"
+body = "Run the bench and open the Radios panel. After the join and the TCP handshake, a message arrives on **garden/pot1** every second."
+checks = [{ type = "mqtt", topic = "garden/pot1", contains = "\"m\":" }]
+solution = [{ do = "run", seconds = 8.0 }]
+
+[[steps]]
+kind = "experiment"
+title = "Dry soil"
+body = "Dry the pot out in the World panel (moisture 10 %). The probe's voltage rises, the moisture % drops below 30, and the red *water me* LED comes on."
+checks = [{ type = "led_lit", part = "d2" }]
+solution = [
+    { do = "world", key = "pot1.vwc", value = 10 },
+    { do = "run", seconds = 3.0 },
+]
+
+[[steps]]
+kind = "experiment"
+title = "Water it"
+body = "Water the pot back up to 45 %. The LED goes out with the next reading."
+checks = [{ type = "led_off", part = "d2" }]
+solution = [
+    { do = "world", key = "pot1.vwc", value = 45 },
+    { do = "run", seconds = 3.0 },
+]
+
+[[steps]]
+kind = "quiz"
+title = "Topic filters"
+
+[steps.quiz]
+question = "A dashboard wants garden/pot1 and garden/pot2 but not garden/pump/state. Which filter?"
+options = ["garden/#", "garden/+", "garden/pot", "#"]
+answer = 1
+explain = "`+` matches exactly one level (pot1, pot2); `#` matches everything below, including garden/pump/state."
+
+[[steps.solution]]
+do = "quiz"
+answer = 1

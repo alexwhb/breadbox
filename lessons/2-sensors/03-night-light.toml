@@ -1,0 +1,86 @@
+id = "night-light"
+track = "sensors"
+order = 3
+title = "A night light that thinks"
+summary = "An UNO reads an LDR divider on A0 and fades an LED up through a transistor as the room gets dark."
+minutes = 12
+
+[bench]
+project = "night-light.bench.json"
+warmup = 0.5
+
+[bench.world]
+"light.ambient_lux" = 1000.0
+
+[[steps]]
+kind = "explain"
+title = "Sensor, decision, action"
+body = """
+The LDR divider puts a voltage on **A0**; `analogRead()` turns 0–5 V into a number from 0 to 1023. In the dark the LDR's resistance rises, so A0 *drops*.
+
+The sketch compares that number with two thresholds: below 300 it starts fading the LED in, and at 100 or below it's fully on. The UNO's pin can't light a big LED directly, so D9 drives a 2N2222 transistor that switches the LED's current."""
+
+[[steps.callouts]]
+part = "q1"
+title = "Q1 2N2222"
+text = "a small base current from D9 switches the LED's larger current"
+
+[[steps]]
+kind = "measure"
+title = "Daylight"
+body = "At 1000 lux the LDR is only a few kΩ and A0 reads around 800. Well above the threshold, so the LED stays off."
+checks = [
+    { type = "led_off", part = "d1" },
+    { type = "serial_contains", mcu = "u1", text = "led=0" },
+]
+solution = [{ do = "run", seconds = 1.0 }]
+
+[[steps]]
+kind = "experiment"
+title = "Night falls"
+body = "Dim the room to 5 lux. A0 drops below 100 and the sketch drives D9 at full power."
+checks = [
+    { type = "led_lit", part = "d1" },
+    { type = "serial_contains", mcu = "u1", text = "led=255" },
+]
+solution = [
+    { do = "world", key = "light.ambient_lux", value = 5 },
+    { do = "run", seconds = 1.5 },
+]
+
+[[steps]]
+kind = "predict"
+title = "Where it switches"
+body = "`analogRead()` maps 0–5 V onto 0–1023: one count is 5 V ÷ 1024."
+checks = [{ type = "prediction" }]
+solution = [{ do = "predict" }]
+
+[steps.vars]
+N = 300.0
+
+[steps.predict]
+prompt = "The LED starts to come on below a reading of 300. What voltage on A0 is that?"
+unit = "V"
+answer = "N * 5 / 1024"
+correct_text = "Right: 300 × 5 V ÷ 1024 ≈ {answer} V."
+default_hint = "Volts = count × 5 V ÷ 1024."
+working = ["V = 300 × 5 V ÷ 1024", "V ≈ 1.46 V"]
+
+[[steps]]
+kind = "quiz"
+title = "Why a transistor?"
+
+[steps.quiz]
+question = "Why does D9 drive a transistor instead of the LED directly?"
+options = [
+    "PWM only works through transistors",
+    "A pin can supply only about 20 mA; the transistor lets a small base current switch a bigger load",
+    "The LED needs 9 V",
+    "To make the LED blink",
+]
+answer = 1
+explain = "The transistor is a current amplifier: a few mA into the base controls the collector current from the 5 V supply."
+
+[[steps.solution]]
+do = "quiz"
+answer = 1

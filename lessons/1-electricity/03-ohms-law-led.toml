@@ -1,0 +1,177 @@
+id = "ohms-law-led"
+track = "electricity"
+order = 3
+title = "Ohm's law with an LED"
+summary = "Predict the current through an LED for five resistors, check each against the meter, then find out why every LED needs one."
+minutes = 12
+
+[bench]
+project = "ohms-law-led.bench.json"
+
+# ------------------------------------------------------------------ 1
+[[steps]]
+kind = "explain"
+title = "Meet the circuit"
+body = """
+Follow the loop: 5 V from the USB supply, through R1, through the red LED D1, **through the meter**, and back to GND.
+
+The meter's dial is on **mA** and it sits in the loop, so every bit of current that lights the LED also flows through the meter."""
+
+[[steps.callouts]]
+part = "dmm1"
+title = "Meter is wired in series"
+text = "current must flow through it to be measured"
+
+# ------------------------------------------------------------------ 2
+[[steps]]
+kind = "measure"
+title = "Read the current"
+body = "With R1 = 220 Ω the LED is lit. Read the meter: that's the current through R1, D1 and the meter. It's the same everywhere in a series loop."
+checks = [
+    { type = "reading", part = "dmm1", key = "value", min = 0.011, max = 0.0145 },
+    { type = "led_lit", part = "d1" },
+]
+solution = [{ do = "run", seconds = 1.0 }]
+
+[steps.measure]
+part = "dmm1"
+scale = 1000
+unit = "mA"
+
+# ------------------------------------------------------------------ 3 (the design's step)
+[[steps]]
+kind = "experiment"
+title = "Change the resistor, watch the current"
+body = "A red LED uses up about 2.0 V. Whatever is left of the 5 V lands on the resistor, and the resistor decides how much current flows."
+formula = "I = (5.0 V − 2.0 V) ÷ R"
+damage_title = "Pop. That LED is gone."
+damage_text = "With no resistor, only the LED's own ~6 Ω limits the current: about 3.0 V ÷ 6 Ω ≈ 500 mA, 25× its 20 mA rating. This is exactly why every LED gets a resistor. Good thing it's a sim."
+repair_label = "Repair LED & pick a resistor"
+next_label = "Next: break it on purpose"
+checks = [{ type = "healthy", part = "d1" }]
+solution = [
+    { do = "choose", index = 0 },
+    { do = "run", seconds = 1.0 },
+    { do = "predict" },
+    { do = "record" },
+    { do = "choose", index = 1 },
+    { do = "run", seconds = 1.0 },
+    { do = "predict" },
+    { do = "record" },
+    { do = "choose", index = 3 },
+    { do = "run", seconds = 1.0 },
+    { do = "predict" },
+    { do = "record" },
+]
+
+[[steps.callouts]]
+part = "dmm1"
+title = "Meter is wired in series"
+text = "current must flow through it to be measured"
+
+[steps.choice]
+label = "Pick R1"
+part = "r1"
+prop = "resistance"
+var = "R"
+default = 1
+options = [
+    { label = "100Ω", value = 100 },
+    { label = "220Ω", value = 220 },
+    { label = "470Ω", value = 470 },
+    { label = "1kΩ", value = 1000 },
+    { label = "10kΩ", value = 10000 },
+    { label = "None", value = 0, bypass = true },
+]
+
+[steps.predict]
+prompt = "What current do you expect with {choice}?"
+unit = "mA"
+answer = "(5.0 - 2.0) / R * 1000"
+tolerance = 0.05
+optional = true
+toggle_label = "Do the math myself"
+toggle_note = "Optional. The meter waits for your prediction."
+meter = "dmm1"
+correct_text = "Nailed it. The meter agrees: {mA} mA."
+default_hint = "Not quite. Take 5.0 − 2.0 first, divide by R1, then × 1000 for mA."
+working = [
+    "V(R1) = 5.0 − 2.0 = 3.0 V",
+    "I = 3.0 V ÷ {R:g} Ω",
+    "I = {amps:.5t} A = {mA} mA",
+]
+
+[[steps.predict.hints]]
+when = "abs(guess - 5000 / R) <= 0.05 * 5000 / R"
+text = "Looks like you used the full 5 V. The LED takes ~2.0 V first, so only 3.0 V is left across R1."
+
+[[steps.predict.hints]]
+when = "abs(guess - answer / 1000) <= 0.05 * answer / 1000"
+text = "Right number, wrong unit: that’s amps. Multiply by 1000 to get mA."
+
+[[steps.predict.hints]]
+when = "abs(guess - answer * 1000) <= 0.05 * answer * 1000"
+text = "Off by 1000. Volts ÷ ohms gives amps; you’re one step from mA."
+
+[steps.table]
+title = "Your measurements"
+columns = ["R1", "you said", "meter"]
+min_rows = 3
+passed = "Checkpoint passed"
+remaining = "Try {n} more value{s}"
+
+# ------------------------------------------------------------------ 4
+[[steps]]
+kind = "break"
+title = "Break it on purpose"
+body = "Pick **None**: R1 is replaced by a plain wire, so nothing but the LED itself limits the current. Before you click, guess what happens."
+damage_title = "Pop. That LED is gone."
+damage_text = "With no resistor, only the LED's own ~6 Ω limits the current: about 3.0 V ÷ 6 Ω ≈ 500 mA, 25× its 20 mA rating. This is exactly why every LED gets a resistor. Good thing it's a sim."
+repair_label = "Repair LED & pick a resistor"
+checks = [{ type = "damaged", part = "d1" }]
+solution = [
+    { do = "choose", index = 5 },
+    { do = "run", seconds = 0.5 },
+]
+
+[steps.choice]
+label = "Pick R1"
+part = "r1"
+prop = "resistance"
+var = "R"
+default = 1
+options = [
+    { label = "100Ω", value = 100 },
+    { label = "220Ω", value = 220 },
+    { label = "470Ω", value = 470 },
+    { label = "1kΩ", value = 1000 },
+    { label = "10kΩ", value = 10000 },
+    { label = "None", value = 0, bypass = true },
+]
+
+# ------------------------------------------------------------------ 5
+[[steps]]
+kind = "quiz"
+title = "Why every LED gets a resistor"
+body = "Repair the LED (R1 goes back to 220 Ω), then one last question."
+checks = [
+    { type = "healthy", part = "d1" },
+    { type = "led_lit", part = "d1" },
+]
+solution = [
+    { do = "set_prop", part = "r1", prop = "resistance", value = 220 },
+    { do = "repair" },
+    { do = "run", seconds = 0.5 },
+    { do = "quiz", answer = 2 },
+]
+
+[steps.quiz]
+question = "A red LED is rated for 20 mA. Which resistor keeps it safe on 5 V?"
+options = [
+    "None: LEDs limit their own current",
+    "47 Ω (about 64 mA)",
+    "220 Ω (about 14 mA)",
+    "10 Ω (about 300 mA)",
+]
+answer = 2
+explain = "(5.0 − 2.0) V ÷ 220 Ω ≈ 13.6 mA: bright, and safely under the 20 mA rating."

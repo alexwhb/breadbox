@@ -1,0 +1,105 @@
+id = "volts-amps-ohms"
+track = "electricity"
+order = 2
+title = "Volts, amps, ohms"
+summary = "Measure a voltage across a part and the current through it, then connect them with Ohm's law."
+minutes = 10
+
+[bench]
+project = "volts-amps-ohms.bench.json"
+
+[[steps]]
+kind = "explain"
+title = "Push, flow, resist"
+body = """
+- **Volts (V)**: how hard the supply pushes. Measured *across* a part, between two points.
+- **Amps (A)**: how much charge flows each second. Measured *through* a part, so the meter has to sit in the path.
+- **Ohms (Ω)**: how much a part resists the flow.
+
+The three are tied together by Ohm's law."""
+formula = "V = I × R"
+
+[[steps]]
+kind = "measure"
+title = "Measure the voltage"
+body = "Turn the meter's dial to **V⎓** (DC volts). Its red lead is on the top of R1 and its black lead is on GND, so it shows the supply's push across R1."
+checks = [{ type = "reading", part = "dmm1", key = "value", min = 4.85, max = 5.05 }]
+solution = [
+    { do = "control", part = "dmm1", key = "dial", value = 2 },
+    { do = "run", seconds = 1.0 },
+]
+
+[steps.measure]
+part = "dmm1"
+unit = "V"
+
+[[steps]]
+kind = "build"
+title = "Put the meter in the current's path"
+body = """
+Current is measured *through* a part, so the meter has to become part of the loop:
+
+1. Remove the black jumper from R1's bottom (column 9) to the GND rail.
+2. Wire column 9 to the meter's **mA** jack. The meter's COM is already on GND.
+3. Turn the dial to **mA**."""
+hints = ["The current now flows R1 → mA jack → through the meter → COM → GND."]
+checks = [
+    { type = "connected", a = "r1.2", b = "dmm1.MA" },
+    { type = "not_connected", a = "r1.2", b = "ps1.GND" },
+    { type = "reading", part = "dmm1", key = "value", min = 0.0045, max = 0.0052 },
+]
+solution = [
+    { do = "unwire", a = "bb1.b9", b = "bb1.t-8" },
+    { do = "wire", a = "bb1.b9", b = "dmm1.MA", color = "yellow" },
+    { do = "control", part = "dmm1", key = "dial", value = 8 },
+    { do = "run", seconds = 1.0 },
+]
+
+[steps.measure]
+part = "dmm1"
+scale = 1000
+unit = "mA"
+
+[[steps]]
+kind = "predict"
+title = "Ohm's law, first try"
+body = "Rearranged, Ohm's law tells you the current: divide the volts by the ohms."
+formula = "I = V ÷ R"
+checks = [{ type = "prediction" }]
+solution = [{ do = "predict" }]
+
+[steps.vars]
+V = 5.0
+R = 1000.0
+
+[steps.predict]
+prompt = "5 V across 1 kΩ. How many mA flow?"
+unit = "mA"
+answer = "V / R * 1000"
+meter = "dmm1"
+correct_text = "Right: 5 V ÷ 1000 Ω = 0.005 A = {answer:g} mA. The meter reads {meter} mA."
+default_hint = "Divide 5 by 1000 to get amps, then × 1000 for mA."
+working = ["I = 5 V ÷ 1000 Ω", "I = 0.005 A = 5 mA"]
+
+[[steps.predict.hints]]
+when = "abs(guess - V / R) <= 0.05 * V / R"
+text = "Right number, wrong unit: that’s amps. Multiply by 1000 to get mA."
+
+[[steps]]
+kind = "quiz"
+title = "Which setting, which leads?"
+
+[steps.quiz]
+question = "You want the current through a part. How do you connect the meter?"
+options = [
+    "Dial on V⎓, leads across the part",
+    "Dial on mA, meter in series so the current flows through it",
+    "Dial on Ω, with the power on",
+    "Dial on Hz, leads across the supply",
+]
+answer = 1
+explain = "Amps are measured through a part: break the loop and let the meter close it."
+
+[[steps.solution]]
+do = "quiz"
+answer = 1

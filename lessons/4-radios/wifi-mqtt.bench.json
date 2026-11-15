@@ -1,0 +1,619 @@
+{
+  "format": "breadbox/1",
+  "name": "Wi-Fi and MQTT",
+  "mode": "playground",
+  "description": "UNO + ESP-01 garden monitor: soil moisture, light level, a night LED and MQTT.",
+  "parts": [
+    {
+      "id": "u1",
+      "ref": "U1",
+      "part": "uno",
+      "bench": {
+        "x": 0.0,
+        "y": 4.0
+      },
+      "schematic": {
+        "x": 40.0,
+        "y": 30.0
+      },
+      "firmware": {
+        "sketch": "sketches/garden-node",
+        "image": "firmware/garden-node.uno.hex"
+      }
+    },
+    {
+      "id": "bb1",
+      "ref": "BB1",
+      "part": "breadboard_830",
+      "bench": {
+        "x": 32.0,
+        "y": 2.0
+      }
+    },
+    {
+      "id": "ldr1",
+      "ref": "LDR1",
+      "part": "ldr",
+      "bench": {
+        "x": 35.0,
+        "y": 7.0,
+        "leads": {
+          "1": [
+            0.0,
+            0.0
+          ],
+          "2": [
+            3.0,
+            0.0
+          ]
+        }
+      },
+      "schematic": {
+        "x": 31.0,
+        "y": 21.0,
+        "rot": 90.0
+      }
+    },
+    {
+      "id": "r1",
+      "ref": "R1",
+      "part": "resistor",
+      "props": {
+        "resistance": 10000.0
+      },
+      "bench": {
+        "x": 38.0,
+        "y": 8.0,
+        "leads": {
+          "1": [
+            0.0,
+            0.0
+          ],
+          "2": [
+            4.0,
+            0.0
+          ]
+        }
+      },
+      "schematic": {
+        "x": 31.0,
+        "y": 31.0,
+        "rot": 90.0
+      }
+    },
+    {
+      "id": "r2",
+      "ref": "R2",
+      "part": "resistor",
+      "props": {
+        "resistance": 220.0
+      },
+      "bench": {
+        "x": 50.0,
+        "y": 8.0,
+        "leads": {
+          "1": [
+            0.0,
+            0.0
+          ],
+          "2": [
+            4.0,
+            0.0
+          ]
+        }
+      },
+      "schematic": {
+        "x": 52.0,
+        "y": 34.5
+      }
+    },
+    {
+      "id": "d1",
+      "ref": "D1",
+      "part": "led",
+      "props": {
+        "color": "amber"
+      },
+      "bench": {
+        "x": 54.0,
+        "y": 9.0,
+        "leads": {
+          "a": [
+            0.0,
+            0.0
+          ],
+          "k": [
+            1.0,
+            0.0
+          ]
+        }
+      },
+      "schematic": {
+        "x": 58.0,
+        "y": 37.5,
+        "rot": 90.0
+      }
+    },
+    {
+      "id": "r3",
+      "ref": "R3",
+      "part": "resistor",
+      "props": {
+        "resistance": 330.0
+      },
+      "bench": {
+        "x": 60.0,
+        "y": 8.0,
+        "leads": {
+          "1": [
+            0.0,
+            0.0
+          ],
+          "2": [
+            4.0,
+            0.0
+          ]
+        }
+      },
+      "schematic": {
+        "x": 52.0,
+        "y": 44.0
+      }
+    },
+    {
+      "id": "d2",
+      "ref": "D2",
+      "part": "led",
+      "props": {
+        "color": "red"
+      },
+      "bench": {
+        "x": 64.0,
+        "y": 9.0,
+        "leads": {
+          "a": [
+            0.0,
+            0.0
+          ],
+          "k": [
+            1.0,
+            0.0
+          ]
+        }
+      },
+      "schematic": {
+        "x": 58.0,
+        "y": 47.0,
+        "rot": 90.0
+      }
+    },
+    {
+      "id": "u2",
+      "ref": "U2",
+      "part": "esp01",
+      "props": {
+        "baud": 9600.0
+      },
+      "bench": {
+        "x": 84.0,
+        "y": 9.5
+      },
+      "schematic": {
+        "x": 72.0,
+        "y": 30.0
+      }
+    },
+    {
+      "id": "pot1",
+      "ref": "POT1",
+      "part": "pot_of_soil",
+      "props": {
+        "pot": "pot1"
+      },
+      "bench": {
+        "x": 60.0,
+        "y": 25.0
+      }
+    },
+    {
+      "id": "j1",
+      "ref": "J1",
+      "part": "capsoil",
+      "bench": {
+        "x": 67.0,
+        "y": 23.0
+      },
+      "schematic": {
+        "x": 22.0,
+        "y": 25.5
+      },
+      "attach": {
+        "pot": "pot1"
+      }
+    },
+    {
+      "id": "scope1",
+      "ref": "SCOPE1",
+      "part": "mini_scope",
+      "bench": {
+        "x": 2.0,
+        "y": -12.0
+      }
+    },
+    {
+      "id": "dmm1",
+      "ref": "DMM1",
+      "part": "dmm",
+      "bench": {
+        "x": 82.0,
+        "y": 24.0
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "a": {
+        "part": "u1",
+        "pin": "5V"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "t+1"
+      },
+      "color": "red"
+    },
+    {
+      "id": "w2",
+      "a": {
+        "part": "u1",
+        "pin": "GND"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "t-1"
+      },
+      "color": "black"
+    },
+    {
+      "id": "w3",
+      "a": {
+        "part": "bb1",
+        "pin": "a3"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "t+3"
+      },
+      "color": "red"
+    },
+    {
+      "id": "w4",
+      "a": {
+        "part": "bb1",
+        "pin": "a10"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "t-8"
+      },
+      "color": "black"
+    },
+    {
+      "id": "w5",
+      "a": {
+        "part": "bb1",
+        "pin": "d6"
+      },
+      "b": {
+        "part": "u1",
+        "pin": "A1"
+      },
+      "color": "green"
+    },
+    {
+      "id": "w6",
+      "a": {
+        "part": "u1",
+        "pin": "D9"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "a18"
+      },
+      "color": "orange"
+    },
+    {
+      "id": "w7",
+      "a": {
+        "part": "bb1",
+        "pin": "a23"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "t-18"
+      },
+      "color": "black"
+    },
+    {
+      "id": "w8",
+      "a": {
+        "part": "u1",
+        "pin": "D8"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "a28"
+      },
+      "color": "purple"
+    },
+    {
+      "id": "w9",
+      "a": {
+        "part": "bb1",
+        "pin": "a33"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "t-26"
+      },
+      "color": "black"
+    },
+    {
+      "id": "w10",
+      "a": {
+        "part": "u1",
+        "pin": "3V3"
+      },
+      "b": {
+        "part": "u2",
+        "pin": "VCC"
+      },
+      "color": "red"
+    },
+    {
+      "id": "w11",
+      "a": {
+        "part": "u2",
+        "pin": "EN"
+      },
+      "b": {
+        "part": "u2",
+        "pin": "VCC"
+      },
+      "color": "red"
+    },
+    {
+      "id": "w12",
+      "a": {
+        "part": "u2",
+        "pin": "GND"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "t-45"
+      },
+      "color": "black"
+    },
+    {
+      "id": "w13",
+      "a": {
+        "part": "u1",
+        "pin": "D2"
+      },
+      "b": {
+        "part": "u2",
+        "pin": "RX"
+      },
+      "color": "yellow"
+    },
+    {
+      "id": "w14",
+      "a": {
+        "part": "u2",
+        "pin": "TX"
+      },
+      "b": {
+        "part": "u1",
+        "pin": "D3"
+      },
+      "color": "blue"
+    },
+    {
+      "id": "w15",
+      "a": {
+        "part": "j1",
+        "pin": "VCC"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "t+30"
+      },
+      "color": "red"
+    },
+    {
+      "id": "w16",
+      "a": {
+        "part": "j1",
+        "pin": "GND"
+      },
+      "b": {
+        "part": "bb1",
+        "pin": "t-30"
+      },
+      "color": "black"
+    },
+    {
+      "id": "w17",
+      "a": {
+        "part": "j1",
+        "pin": "AOUT"
+      },
+      "b": {
+        "part": "u1",
+        "pin": "A0"
+      },
+      "color": "yellow"
+    }
+  ],
+  "schematic": {},
+  "pcb": {},
+  "world": {
+    "seed": 1,
+    "time_warp": 1.0,
+    "noise": true,
+    "air": {
+      "temp_c": 21.0,
+      "rh": 45.0,
+      "pressure_pa": 101325.0,
+      "diurnal": false,
+      "temp_swing_c": 5.0,
+      "rh_swing": 15.0
+    },
+    "light": {
+      "mode": "manual",
+      "ambient_lux": 180.0,
+      "location": {
+        "name": "Ashland, OR",
+        "lat": 42.1946,
+        "lon": -122.7095,
+        "utc_offset_h": -8.0
+      },
+      "start": {
+        "year": 2026,
+        "month": 6,
+        "day": 21,
+        "hour": 8.0
+      },
+      "cloud_cover": 0.2,
+      "indoor_fraction": 0.01,
+      "indoor": true
+    },
+    "pots": [
+      {
+        "id": "pot1",
+        "name": "Pot 1",
+        "indoor": true,
+        "vwc": 42.0,
+        "field_capacity": 45.0,
+        "saturation": 60.0,
+        "soil_volume_ml": 1000.0,
+        "evaporation": true,
+        "evaporation_scale": 1.0,
+        "drainage_per_h": 0.8,
+        "pos": {
+          "x": 0.2,
+          "y": 0.16
+        }
+      }
+    ],
+    "objects": [],
+    "timelines": [],
+    "scripts": [],
+    "vars": {}
+  },
+  "probes": [
+    {
+      "id": "probe1",
+      "label": "Night LED · D9",
+      "target": {
+        "part": "u1",
+        "pin": "D9"
+      },
+      "quantity": "duty",
+      "pinned": [
+        50.0,
+        4.5
+      ]
+    },
+    {
+      "id": "probe2",
+      "label": "Water LED · D8",
+      "target": {
+        "part": "u1",
+        "pin": "D8"
+      },
+      "quantity": "logic",
+      "pinned": [
+        70.0,
+        4.5
+      ]
+    },
+    {
+      "id": "probe3",
+      "label": "Light sensor → A1",
+      "target": {
+        "part": "u1",
+        "pin": "A1"
+      },
+      "quantity": "voltage",
+      "pinned": [
+        44.0,
+        16.0
+      ]
+    },
+    {
+      "id": "probe4",
+      "label": "Soil sensor → A0",
+      "target": {
+        "part": "j1",
+        "pin": "AOUT"
+      },
+      "quantity": "voltage",
+      "pinned": [
+        52.0,
+        24.5
+      ]
+    }
+  ],
+  "instruments": [
+    {
+      "id": "mini_scope1",
+      "kind": "mini_scope",
+      "part": "scope1",
+      "probes": {
+        "ch1": {
+          "part": "u1",
+          "pin": "D9"
+        }
+      },
+      "settings": {
+        "timebase": 0.001,
+        "trigger": {
+          "edge": "rising",
+          "level": 2.5,
+          "mode": "auto",
+          "source": "ch1"
+        },
+        "vdiv": 2.0
+      }
+    },
+    {
+      "id": "dmm2",
+      "kind": "dmm",
+      "part": "dmm1",
+      "probes": {
+        "com": {
+          "part": "bb1",
+          "pin": "t-1"
+        },
+        "plus": {
+          "part": "j1",
+          "pin": "AOUT"
+        }
+      },
+      "settings": {
+        "mode": "dc_v"
+      }
+    }
+  ],
+  "spice": {
+    "directives": ".tran 0 10m 0 1u\n.dc lux 1 10k dec 40\n.step param R1v list 4.7k 10k 22k\n.mc 100 tol=5% seed=7\n.op\n"
+  },
+  "settings": {
+    "seed": 1,
+    "sync_quantum_us": 1.0,
+    "speed": 1.0,
+    "stop_after_s": 0.0
+  }
+}

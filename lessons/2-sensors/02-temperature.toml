@@ -1,0 +1,109 @@
+id = "temperature"
+track = "sensors"
+order = 2
+title = "Measuring temperature"
+summary = "A TMP36 outputs 10 mV per degree. Predict its voltage, warm the room, and read a temperature backwards."
+minutes = 10
+
+[bench]
+project = "temperature.bench.json"
+warmup = 3.0
+
+[bench.world]
+"air.temp_c" = 25.0
+
+[[steps]]
+kind = "explain"
+title = "Ten millivolts per degree"
+body = """
+The TMP36 is a three-pin temperature sensor: power on **+Vs**, ground on **GND**, and a voltage on **VOUT** that rises 10 mV for every °C, starting from 0.5 V at 0 °C (so it can show freezing temperatures too)."""
+formula = "V(out) = 0.5 V + 0.01 V/°C × T"
+
+[[steps.callouts]]
+part = "u1"
+title = "TMP36"
+text = "flat side facing you: +Vs, VOUT, GND"
+
+[[steps]]
+kind = "predict"
+title = "Room temperature"
+body = "The room is at 25 °C."
+checks = [
+    { type = "prediction" },
+    { type = "reading", part = "dmm1", key = "value", min = 0.73, max = 0.77 },
+]
+solution = [
+    { do = "run", seconds = 1.0 },
+    { do = "predict" },
+]
+
+[steps.vars]
+T = 25.0
+
+[steps.predict]
+prompt = "What will the meter read at 25 °C?"
+unit = "V"
+answer = "0.5 + 0.01 * T"
+meter = "dmm1"
+correct_text = "Right: 0.5 V + 25 × 10 mV = {answer} V."
+default_hint = "Start at 0.5 V and add 10 mV (0.01 V) per degree."
+working = ["V = 0.5 V + 0.01 V × 25", "V = 0.75 V"]
+
+[[steps.predict.hints]]
+when = "abs(guess - 0.01 * T) <= 0.05 * 0.01 * T"
+text = "Don't forget the 0.5 V offset at 0 °C."
+
+[[steps]]
+kind = "measure"
+title = "Warm it up"
+body = "Turn the room up to 40 °C in the World panel and give the sensor a few seconds to catch up."
+checks = [{ type = "reading", part = "dmm1", key = "value", min = 0.88, max = 0.92 }]
+solution = [
+    { do = "world", key = "air.temp_c", value = 40 },
+    { do = "run", seconds = 4.0 },
+]
+
+[steps.measure]
+part = "dmm1"
+unit = "V"
+
+[[steps]]
+kind = "predict"
+title = "Read it backwards"
+body = "This is what a microcontroller does with the number: undo the formula."
+checks = [{ type = "prediction" }]
+solution = [{ do = "predict" }]
+
+[steps.vars]
+V = 0.62
+
+[steps.predict]
+prompt = "The meter shows 0.62 V. What temperature is it?"
+unit = "°C"
+answer = "(V - 0.5) * 100"
+correct_text = "Right: (0.62 − 0.5) × 100 = {answer:g} °C."
+default_hint = "Subtract the 0.5 V offset, then divide by 0.01 V per degree."
+working = ["T = (V − 0.5 V) ÷ 0.01 V/°C", "T = 0.12 ÷ 0.01 = 12 °C"]
+
+[[steps.predict.hints]]
+when = "abs(guess - V * 100) <= 0.05 * V * 100"
+text = "Take the 0.5 V offset off first."
+
+[[steps]]
+kind = "quiz"
+title = "Below zero"
+
+[steps.quiz]
+question = "Why does the TMP36 output 0.5 V at 0 °C instead of 0 V?"
+options = [
+    "To save power",
+    "So temperatures below freezing are still a positive voltage",
+    "Because the sensor is broken",
+    "To make the math harder",
+]
+answer = 1
+explain = "With the offset, −40 °C is 0.1 V. A single-supply circuit can't output a negative voltage."
+
+[[steps.solution]]
+do = "quiz"
+answer = 1

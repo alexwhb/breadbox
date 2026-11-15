@@ -1,0 +1,72 @@
+id = "esp32-weather"
+track = "radios"
+order = 3
+title = "An ESP32 weather station"
+summary = "An ESP32 with built-in Wi-Fi publishes DHT22 readings as JSON, and obeys commands sent from the MQTT explorer."
+minutes = 15
+
+[bench]
+project = "esp32-weather.bench.json"
+
+[[steps]]
+kind = "explain"
+title = "Wi-Fi on the chip"
+body = """
+The ESP32 has Wi-Fi built in, so the sketch uses the `WiFi` and `PubSubClient` libraries directly: join, connect to the broker, then publish `{"t":…,"h":…}` to **weather/esp32** every two seconds.
+
+It also *subscribes* to **weather/cmd**, so messages sent there switch its on-board LED."""
+
+[[steps.callouts]]
+part = "u2"
+title = "U2 DHT22"
+text = "temperature + humidity on one data pin (GPIO4)"
+
+[[steps]]
+kind = "measure"
+title = "First readings"
+body = "Run the bench: the Serial Monitor shows the join and the broker connection, then a reading every two seconds."
+checks = [
+    { type = "serial_contains", mcu = "u1", text = "MQTT: connected" },
+    { type = "mqtt", topic = "weather/esp32", contains = "\"t\":" },
+    { type = "mqtt", topic = "weather/status", contains = "online" },
+]
+solution = [{ do = "run", seconds = 6.0 }]
+
+[[steps]]
+kind = "experiment"
+title = "A heat wave"
+body = "Set the air to 31 °C in the World panel. The next message carries the new temperature."
+checks = [{ type = "mqtt", topic = "weather/esp32", contains = "\"t\":31" }]
+solution = [
+    { do = "world", key = "air.temp_c", value = 31 },
+    { do = "run", seconds = 5.0 },
+]
+
+[[steps]]
+kind = "experiment"
+title = "Send a command"
+body = "In the MQTT explorer, publish `led on` to **weather/cmd**. The ESP32 receives it and prints it."
+checks = [{ type = "serial_contains", mcu = "u1", text = "MQTT: weather/cmd = led on" }]
+solution = [
+    { do = "publish", topic = "weather/cmd", payload = "led on" },
+    { do = "run", seconds = 1.0 },
+]
+
+[[steps]]
+kind = "quiz"
+title = "Last will"
+
+[steps.quiz]
+question = "The sketch connects with a *last will* of “offline” on weather/status. When does the broker publish it?"
+options = [
+    "Every two seconds",
+    "When the ESP32 drops off without disconnecting cleanly",
+    "When the temperature is invalid",
+    "Never, it's just a comment",
+]
+answer = 1
+explain = "The broker holds the will and publishes it if the client vanishes: dashboards learn the station is down."
+
+[[steps.solution]]
+do = "quiz"
+answer = 1
