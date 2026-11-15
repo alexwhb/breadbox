@@ -123,6 +123,15 @@ pub struct Avr {
     pub(crate) last_reset: ResetCause,
     pub(crate) reset_count: u64,
     pub(crate) fault_reported_sp: bool,
+    /// Changes whenever program memory changes (see [`Avr::flash_generation`]).
+    pub(crate) flash_gen: u64,
+}
+
+/// Source of [`Avr::flash_generation`] values: unique across every instance in the process.
+static FLASH_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+fn next_flash_generation() -> u64 {
+    FLASH_GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
 impl std::fmt::Debug for Avr {
@@ -192,6 +201,7 @@ impl Avr {
             last_reset: ResetCause::PowerOn,
             reset_count: 0,
             fault_reported_sp: false,
+            flash_gen: next_flash_generation(),
             cfg,
         };
         avr.reset_internal(ResetCause::PowerOn, true);
@@ -280,6 +290,7 @@ impl Avr {
     }
 
     pub(crate) fn redecode_all(&mut self) {
+        self.flash_gen = next_flash_generation();
         let n = self.flash.len();
         for i in 0..n {
             let w2 = self.flash[(i + 1) % n];
@@ -288,6 +299,7 @@ impl Avr {
     }
 
     pub(crate) fn redecode_range(&mut self, word_lo: usize, word_hi: usize) {
+        self.flash_gen = next_flash_generation();
         let n = self.flash.len();
         let lo = word_lo.saturating_sub(1);
         for i in lo..word_hi.min(n) {
@@ -1017,6 +1029,12 @@ impl Avr {
         } else {
             (w >> 8) as u8
         }
+    }
+    /// Identifies the current flash contents: a new value (unique in the process) after every
+    /// flash, program load or self-programming page write, so a debugger UI can cache a copy
+    /// of program memory and refetch it only when this changes.
+    pub fn flash_generation(&self) -> u64 {
+        self.flash_gen
     }
     pub fn flash_word(&self, byte_addr: u32) -> u16 {
         self.flash[((byte_addr / 2) as usize) % self.flash.len()]

@@ -117,6 +117,11 @@ pub struct SimBench {
     dbg_tx: Sender<DebugViewModel>,
     dbg_rx: Receiver<DebugViewModel>,
     last_debug_refresh: Instant,
+    /// Flash cache + last-pause snapshots for the Memory / I/O views.
+    mem: MemoryHistory,
+    /// Target whose Memory / I/O view is visible, and when the UI last said so.
+    watch: Option<(String, Instant)>,
+    last_mem_refresh: Instant,
     events: Vec<BenchEvent>,
     /// Recent raw simulator events (damage, sounds, logs) for the Workbench.
     recent: Vec<SimEvent>,
@@ -196,6 +201,9 @@ impl SimBench {
             dbg_tx,
             dbg_rx,
             last_debug_refresh: Instant::now(),
+            mem: MemoryHistory::default(),
+            watch: None,
+            last_mem_refresh: Instant::now() - Duration::from_secs(10),
             events: Vec::new(),
             recent: Vec::new(),
             audio: spec.audio.then(AudioOut::new),
@@ -497,8 +505,21 @@ impl SimBench {
             .or_else(|| self.part_id(target))
     }
 
-    /// Asks the engine thread for a fresh debugger view of `target`.
+    /// Is the Memory / I/O view of `target` on screen (the UI said so in the last second)?
+    fn watching(&self, target: &str) -> bool {
+        self.watch
+            .as_ref()
+            .is_some_and(|(t, at)| t == target && at.elapsed() < Duration::from_secs(1))
+    }
+
+    /// Asks the engine thread for a fresh debugger view of `target` (with a memory snapshot
+    /// when the bench is stopped or the Memory / I/O view watches it).
     fn request_debug(&mut self, target: &str) {
+        let with_memory = !self.running || self.watching(target);
+        self.request_debug_with(target, with_memory);
+    }
+
+    fn request_debug_with(&mut self, target: &str, with_memory: bool) {
         let Some(part) = self.mcu_part(target) else {
             return;
         };
@@ -508,14 +529,18 @@ impl SimBench {
         let tx = Mutex::new(self.dbg_tx.clone());
         let target = target.to_string();
         let running = self.running;
+        let memory = with_memory.then(|| self.mem.known_flash_gen(&target));
         h.send(Command::With(BenchFn(Arc::new(move |b| {
             let paused = b.paused().map(str::to_string);
-            let vm = debug_vm(b, &part, &target, &st, &specs, running, paused);
+            let vm = debug_vm(b, &part, &target, &st, &specs, running, paused, memory);
             if let Ok(t) = tx.lock() {
                 let _ = t.send(vm);
             }
         }))));
         self.last_debug_refresh = Instant::now();
+        if with_memory {
+            self.last_mem_refresh = Instant::now();
+        }
         self.kick();
     }
 
@@ -981,6 +1006,7 @@ impl BenchLink for SimBench {
                 retain: false,
             },
             RadioCommand::MqttSubscribe(f) => R::ExplorerSubscribe(f),
+            RadioCommand::SetBenchPos { x, y } => R::SetBenchPos(bb_radio::geo::Pos::new(x, y)),
             RadioCommand::Phone(a) => {
                 use bb_sim::radio::PhoneCommand as P;
                 R::Phone(match a {
@@ -1074,7 +1100,8 @@ impl BenchLink for SimBench {
                         reason: pause_reason(why),
                     });
                 }
-                refresh.push(m.reference.clone());
+                // every pause gets a memory snapshot ("changed since the previous pause")
+                refresh.push((m.reference.clone(), m.paused.is_some()));
             } else if st.has_debugger
                 && self.running
                 && self.last_debug_refresh.elapsed() > Duration::from_millis(500)
@@ -1083,13 +1110,35 @@ impl BenchLink for SimBench {
                     .get(&m.reference)
                     .is_some_and(|b| !b.is_empty())
             {
-                refresh.push(m.reference.clone());
+                refresh.push((m.reference.clone(), false));
             }
         }
-        for r in refresh {
-            self.request_debug(&r);
+        // the Memory / I/O view: ~4 snapshots a second while running, one when stopped
+        if let Some((t, _)) = self.watch.clone()
+            && self.watching(&t)
+            && !refresh.iter().any(|(r, _)| *r == t)
+        {
+            let has_memory = self.debug.get(&t).is_some_and(|v| v.memory.is_some());
+            let every = if self.running {
+                Duration::from_millis(250)
+            } else {
+                Duration::from_secs(2)
+            };
+            if (self.running || !has_memory) && self.last_mem_refresh.elapsed() > every {
+                refresh.push((t, true));
+            }
         }
-        while let Ok(vm) = self.dbg_rx.try_recv() {
+        for (r, mem) in refresh {
+            let mem = mem || !self.running || self.watching(&r);
+            self.request_debug_with(&r, mem);
+        }
+        while let Ok(mut vm) = self.dbg_rx.try_recv() {
+            if vm.memory.is_some() {
+                self.mem.apply(&mut vm);
+            } else if let Some(old) = self.debug.get(&vm.target) {
+                // a refresh without a snapshot keeps the last one
+                vm.memory = old.memory.clone();
+            }
             self.debug.insert(vm.target.clone(), vm);
         }
         // keep the run state of debug views current without waiting for the engine
@@ -1116,6 +1165,15 @@ impl BenchLink for SimBench {
 
     fn as_sim(&mut self) -> Option<&mut SimBench> {
         Some(self)
+    }
+
+    fn watch_memory(&mut self, target: &str) {
+        let fresh = !self.watching(target);
+        self.watch = Some((target.to_string(), Instant::now()));
+        if fresh {
+            // show something at once (the poll keeps it fresh)
+            self.last_mem_refresh = Instant::now() - Duration::from_secs(10);
+        }
     }
 }
 
@@ -1269,6 +1327,33 @@ pub fn radio_model(r: &bb_sim::RadioTelemetry) -> RadioPanelModel {
             .iter()
             .map(|m| (m.topic.clone(), m.payload.clone()))
             .collect(),
+        placement: Some(PlacementView {
+            bench: (r.bench_pos.x, r.bench_pos.y),
+            aps: r
+                .access_points
+                .iter()
+                .zip(&r.bench_links)
+                .map(|(a, l)| ApPlacement {
+                    ssid: a.ssid.clone(),
+                    channel: a.channel,
+                    x: a.pos.x,
+                    y: a.pos.y,
+                    distance_m: l.distance_m,
+                    walls: l.walls,
+                    rssi_dbm: l.rssi_dbm,
+                })
+                .collect(),
+            walls: r
+                .walls
+                .iter()
+                .map(|w| WallView {
+                    a: (w.a.x, w.a.y),
+                    b: (w.b.x, w.b.y),
+                    loss_db: w.loss_db,
+                    label: w.label.clone(),
+                })
+                .collect(),
+        }),
     }
 }
 
@@ -1358,7 +1443,9 @@ fn var_view(v: bb_firmware::VarValue) -> VarView {
     }
 }
 
-/// Builds the debugger view of one MCU on the engine thread.
+/// Builds the debugger view of one MCU on the engine thread. `memory` = `Some(cached flash
+/// generation)` adds a [`MemoryView`].
+#[allow(clippy::too_many_arguments)]
 fn debug_vm(
     b: &mut bb_sim::Bench,
     part: &str,
@@ -1367,6 +1454,7 @@ fn debug_vm(
     specs: &[BreakpointSpec],
     running: bool,
     bench_paused: Option<String>,
+    memory: Option<Option<u64>>,
 ) -> DebugViewModel {
     let mut vm = DebugViewModel {
         target: target.to_string(),
@@ -1401,6 +1489,9 @@ fn debug_vm(
         pc: avr.pc(),
         cycle: avr.cycle(),
     };
+    if let Some(known) = memory {
+        vm.memory = Some(memory_snapshot(avr, known));
+    }
     match slot.as_ref() {
         Some(dbg) => {
             vm.breakpoints = specs

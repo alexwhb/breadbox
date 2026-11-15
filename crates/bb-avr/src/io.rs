@@ -302,6 +302,104 @@ fn names_for(v: &'static Variant) -> Vec<(&'static str, u16)> {
         .collect()
 }
 
+/// A named I/O register of an AVR part, for the debugger's I/O register view.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct IoRegister {
+    /// Datasheet name: `"PORTB"`, `"TCCR1A"`, `"UDR0"`.
+    pub name: &'static str,
+    /// Data-space address (`PORTB` = `0x25`; extended I/O such as `PORTH` = `0x102`).
+    pub addr: u16,
+    /// Peripheral it belongs to: `"Port B"`, `"Timer/Counter1"`, `"USART0"`, `"ADC"`, `"SPI"`,
+    /// `"TWI (I2C)"`, `"EEPROM"`, `"External interrupts"`, `"Watchdog"`, `"Analog comparator"`,
+    /// `"CPU"`, `"External memory"`.
+    pub peripheral: &'static str,
+}
+
+const PORT_GROUPS: [&str; 11] = [
+    "Port A", "Port B", "Port C", "Port D", "Port E", "Port F", "Port G", "Port H", "Port J",
+    "Port K", "Port L",
+];
+const TIMER_GROUPS: [&str; 6] = [
+    "Timer/Counter0",
+    "Timer/Counter1",
+    "Timer/Counter2",
+    "Timer/Counter3",
+    "Timer/Counter4",
+    "Timer/Counter5",
+];
+const USART_GROUPS: [&str; 4] = ["USART0", "USART1", "USART2", "USART3"];
+
+fn peripheral_of(a: u16, r: IoReg) -> &'static str {
+    match r {
+        IoReg::Pin(p) | IoReg::Ddr(p) | IoReg::Port(p) => PORT_GROUPS[p as usize % 11],
+        IoReg::Timer(n, _) => TIMER_GROUPS[n as usize % 6],
+        IoReg::Assr => "Timer/Counter2",
+        IoReg::Gtccr => "Timers",
+        IoReg::Usart(n, _) => USART_GROUPS[n as usize % 4],
+        IoReg::Adcl
+        | IoReg::Adch
+        | IoReg::Adcsra
+        | IoReg::Adcsrb
+        | IoReg::Admux
+        | IoReg::Didr(_) => "ADC",
+        IoReg::Acsr => "Analog comparator",
+        IoReg::Spcr | IoReg::Spsr | IoReg::Spdr => "SPI",
+        IoReg::Twbr | IoReg::Twsr | IoReg::Twar | IoReg::Twdr | IoReg::Twcr | IoReg::Twamr => {
+            "TWI (I2C)"
+        }
+        IoReg::Eecr | IoReg::Eedr | IoReg::Eearl | IoReg::Eearh => "EEPROM",
+        IoReg::Wdtcsr => "Watchdog",
+        IoReg::Eicra
+        | IoReg::Eicrb
+        | IoReg::Eimsk
+        | IoReg::Eifr
+        | IoReg::Pcicr
+        | IoReg::Pcifr
+        | IoReg::Pcmsk(_) => "External interrupts",
+        IoReg::Plain if a == 0x74 || a == 0x75 => "External memory",
+        IoReg::Plain
+        | IoReg::Unmapped
+        | IoReg::Sreg
+        | IoReg::Spl
+        | IoReg::Sph
+        | IoReg::Rampz
+        | IoReg::Eind
+        | IoReg::Mcusr
+        | IoReg::Mcucr
+        | IoReg::Smcr
+        | IoReg::Clkpr
+        | IoReg::Prr(_)
+        | IoReg::Spmcsr => "CPU",
+    }
+}
+
+/// Every named I/O register of `mcu` with its data-space address and peripheral, in address
+/// order (built once per part).
+pub fn io_registers(mcu: crate::Mcu) -> &'static [IoRegister] {
+    static M328: OnceLock<Vec<IoRegister>> = OnceLock::new();
+    static M2560: OnceLock<Vec<IoRegister>> = OnceLock::new();
+    let cell = match mcu {
+        crate::Mcu::Atmega328p => &M328,
+        crate::Mcu::Atmega2560 => &M2560,
+    };
+    cell.get_or_init(|| {
+        let v = mcu.variant();
+        let map = build_io_map(v);
+        io_register_names(v)
+            .into_iter()
+            .map(|(name, addr)| IoRegister {
+                name,
+                addr,
+                peripheral: peripheral_of(
+                    addr,
+                    map.get(addr as usize).copied().unwrap_or(IoReg::Unmapped),
+                ),
+            })
+            .collect()
+    })
+    .as_slice()
+}
+
 /// `(name, data address)` of every mapped I/O register, in address order.
 pub(crate) fn io_register_names(v: &'static Variant) -> Vec<(&'static str, u16)> {
     static M328: OnceLock<Vec<(&'static str, u16)>> = OnceLock::new();
@@ -480,5 +578,100 @@ impl Avr {
                 self.io_write(a, nv & !w1c);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{Mcu, io_registers};
+
+    fn find(mcu: Mcu, name: &str) -> (u16, &'static str) {
+        let r = io_registers(mcu)
+            .iter()
+            .find(|r| r.name == name)
+            .unwrap_or_else(|| panic!("{name} missing on {mcu:?}"));
+        (r.addr, r.peripheral)
+    }
+
+    #[test]
+    fn atmega328p_register_table() {
+        let m = Mcu::Atmega328p;
+        assert_eq!(find(m, "PINB"), (0x23, "Port B"));
+        assert_eq!(find(m, "DDRB"), (0x24, "Port B"));
+        assert_eq!(find(m, "PORTB"), (0x25, "Port B"));
+        assert_eq!(find(m, "PORTD"), (0x2B, "Port D"));
+        assert_eq!(find(m, "TCCR0A"), (0x44, "Timer/Counter0"));
+        assert_eq!(find(m, "TCNT0"), (0x46, "Timer/Counter0"));
+        assert_eq!(find(m, "TIMSK0"), (0x6E, "Timer/Counter0"));
+        assert_eq!(find(m, "TCCR1A"), (0x80, "Timer/Counter1"));
+        assert_eq!(find(m, "OCR1AL"), (0x88, "Timer/Counter1"));
+        assert_eq!(find(m, "UCSR0A"), (0xC0, "USART0"));
+        assert_eq!(find(m, "UDR0"), (0xC6, "USART0"));
+        assert_eq!(find(m, "ADMUX"), (0x7C, "ADC"));
+        assert_eq!(find(m, "SPCR"), (0x4C, "SPI"));
+        assert_eq!(find(m, "TWCR"), (0xBC, "TWI (I2C)"));
+        assert_eq!(find(m, "EECR"), (0x3F, "EEPROM"));
+        assert_eq!(find(m, "WDTCSR"), (0x60, "Watchdog"));
+        assert_eq!(find(m, "EIMSK"), (0x3D, "External interrupts"));
+        assert_eq!(find(m, "SPL"), (0x5D, "CPU"));
+        assert_eq!(find(m, "SREG"), (0x5F, "CPU"));
+        assert_eq!(find(m, "PRR"), (0x64, "CPU"));
+        // no Mega-only registers
+        let t = io_registers(m);
+        assert!(
+            !t.iter()
+                .any(|r| r.name == "PORTH" || r.name == "UDR1" || r.name == "EIND")
+        );
+        // address order, every register inside the I/O space, no duplicates
+        assert!(t.windows(2).all(|w| w[0].addr < w[1].addr));
+        assert!(t.iter().all(|r| (0x20..0x100).contains(&r.addr)));
+        assert!(t.len() > 70, "{} registers", t.len());
+    }
+
+    #[test]
+    fn atmega2560_register_table() {
+        let m = Mcu::Atmega2560;
+        assert_eq!(find(m, "PORTA"), (0x22, "Port A"));
+        assert_eq!(find(m, "PORTB"), (0x25, "Port B"));
+        assert_eq!(find(m, "PORTG"), (0x34, "Port G"));
+        assert_eq!(find(m, "PINH"), (0x100, "Port H"));
+        assert_eq!(find(m, "PORTH"), (0x102, "Port H"));
+        assert_eq!(find(m, "PORTL"), (0x10B, "Port L"));
+        assert_eq!(find(m, "TCCR4A"), (0xA0, "Timer/Counter4"));
+        assert_eq!(find(m, "TCCR5A"), (0x120, "Timer/Counter5"));
+        assert_eq!(find(m, "UDR1"), (0xCE, "USART1"));
+        assert_eq!(find(m, "UCSR3A"), (0x130, "USART3"));
+        assert_eq!(find(m, "EIND"), (0x5C, "CPU"));
+        assert_eq!(find(m, "RAMPZ"), (0x5B, "CPU"));
+        assert_eq!(find(m, "PRR1"), (0x65, "CPU"));
+        assert_eq!(find(m, "XMCRA"), (0x74, "External memory"));
+        let t = io_registers(m);
+        assert!(t.windows(2).all(|w| w[0].addr < w[1].addr));
+        assert!(t.iter().all(|r| (0x20..0x200).contains(&r.addr)));
+        assert!(t.len() > 150, "{} registers", t.len());
+    }
+
+    #[test]
+    fn table_matches_live_values() {
+        let mut avr = crate::Avr::with_mcu(Mcu::Atmega328p);
+        avr.poke(0x24, 0x20); // DDRB: PB5 output
+        avr.poke(0x25, 0x20); // PORTB: PB5 high
+        let live = avr.io_registers();
+        assert_eq!(live.len(), io_registers(Mcu::Atmega328p).len());
+        let portb = live.iter().find(|r| r.0 == "PORTB").unwrap();
+        assert_eq!((portb.1, portb.2), (0x25, 0x20));
+    }
+
+    #[test]
+    fn flash_generation_changes_with_program_memory() {
+        let mut a = crate::Avr::with_mcu(Mcu::Atmega328p);
+        let b = crate::Avr::with_mcu(Mcu::Atmega328p);
+        let g0 = a.flash_generation();
+        assert_ne!(g0, b.flash_generation(), "unique per instance");
+        a.load_program_words(&[0x0000, 0xCFFF]);
+        assert_ne!(a.flash_generation(), g0);
+        let g1 = a.flash_generation();
+        a.set_pc(0);
+        assert_eq!(a.flash_generation(), g1, "running code does not change it");
     }
 }

@@ -19,7 +19,7 @@ use bb_core::SimTime;
 use bb_radio::ble::{BtKind, PeripheralId, PhoneEvent};
 use bb_radio::bridge::{BridgeConfig, BridgeStatus};
 use bb_radio::espat::EspAtConfig;
-use bb_radio::geo::{Pos, Wall};
+use bb_radio::geo::{Link, Pos, Wall};
 use bb_radio::mqtt::Received;
 use bb_radio::net::{AccessPoint, NetConditions, NetConfig};
 use bb_radio::space::{Module, RadioSettings};
@@ -241,6 +241,13 @@ pub struct RadioTelemetry {
     /// `connecting`, `connected`, `disconnected: <why>`, `stopped`.
     pub lan_bridge_status: Option<String>,
     pub bench_pos: Pos,
+    /// Floor-plan walls (the Radios panel's placement map draws them).
+    #[serde(default)]
+    pub walls: Vec<Wall>,
+    /// Wi-Fi link budget from each access point (same order as `access_points`) to
+    /// `bench_pos`: distance, walls crossed, RSSI.
+    #[serde(default)]
+    pub bench_links: Vec<Link>,
 }
 
 /// Commands from the Radios panel / phone (`Command::Radio`).
@@ -921,7 +928,21 @@ impl RadioService {
                 BridgeStatus::Stopped => "stopped".to_string(),
             }),
             bench_pos: self.bench_pos,
+            walls: self.space.net.geometry.walls.clone(),
+            bench_links: self.bench_links(),
         }
+    }
+
+    /// Wi-Fi link budget from every access point to the bench position.
+    pub fn bench_links(&self) -> Vec<Link> {
+        let net = &self.space.net;
+        net.access_points()
+            .iter()
+            .map(|a| {
+                net.geometry
+                    .link(&net.path_loss, a.tx_dbm, a.pos, self.bench_pos)
+            })
+            .collect()
     }
 }
 
@@ -987,5 +1008,40 @@ impl Service for RadioService {
     }
     fn take_notes(&mut self) -> Vec<ServiceNote> {
         std::mem::take(&mut self.notes)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bench_position_moves_the_link_and_persists() {
+        let p = Project::new("radios", bb_circuit::project::Mode::Playground);
+        let mut svc = RadioService::for_project(&p);
+        let t = svc.telemetry();
+        assert_eq!(t.bench_pos, DEFAULT_BENCH_POS);
+        assert_eq!(t.walls.len(), 1, "the default interior wall");
+        let l = t.bench_links[0];
+        assert!((l.distance_m - 3.2).abs() < 1e-9 && l.walls == 1);
+        assert_eq!(l.rssi_dbm.round(), -54.0);
+        svc.command(
+            RadioCommand::SetBenchPos(Pos::new(8.0, 0.0)),
+            SimTime::from_ms(10),
+        )
+        .unwrap();
+        let t = svc.telemetry();
+        assert_eq!(t.bench_pos, Pos::new(8.0, 0.0));
+        let far = t.bench_links[0];
+        assert!((far.distance_m - 8.0).abs() < 1e-9);
+        assert!(far.rssi_dbm < l.rssi_dbm - 10.0, "{far:?}");
+        // the project's radio settings carry the new position
+        let mut p2 = p.clone();
+        svc.project_settings().store(&mut p2);
+        assert_eq!(
+            ProjectRadios::from_project(&p2).bench_pos,
+            Pos::new(8.0, 0.0)
+        );
+        assert_eq!(RadioService::for_project(&p2).telemetry().bench_pos.x, 8.0);
     }
 }
