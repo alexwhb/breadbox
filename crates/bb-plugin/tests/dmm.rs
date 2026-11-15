@@ -393,10 +393,7 @@ fn dmm_capacitance_mode_measures_and_autoranges() {
         let mut b = Bench::new(bb.finish(), lib, h.bench_options()).unwrap();
         b.run_until(SimTime::from_secs(6)).unwrap();
         let v = reading(&b, "dmm1", "value");
-        assert!(
-            (v / farads - 1.0).abs() < tol,
-            "{farads} F read as {v} F"
-        );
+        assert!((v / farads - 1.0).abs() < tol, "{farads} F read as {v} F");
         let (text, u, ann) = display(&mut b, "dmm1");
         assert_eq!(u, unit, "{text} {u}");
         let x: f64 = text.parse().unwrap();

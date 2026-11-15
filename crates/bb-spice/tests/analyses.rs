@@ -530,7 +530,10 @@ fn mil_suffix_dc_octave_and_step_dec_oct() {
     let r = run("t\nV1 a 0 0\nR1 a 0 1k\n.dc oct V1 1 8 2\n");
     let v = r.plot(PlotKind::Dc).unwrap().scale_values();
     assert_eq!(v.len(), 7, "{v:?}");
-    assert!((v[2] - 2.0).abs() < 1e-9 && (v[6] - 8.0).abs() < 1e-9, "{v:?}");
+    assert!(
+        (v[2] - 2.0).abs() < 1e-9 && (v[6] - 8.0).abs() < 1e-9,
+        "{v:?}"
+    );
     // .step dec / oct over a parameter
     let r = run("t\n.param rv=1k\nV1 a 0 1\nR1 a 0 {rv}\n.step dec param rv 1k 100k 1\n.op\n");
     let labels: Vec<String> = r.runs.iter().map(|x| x.label.clone()).collect();

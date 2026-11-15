@@ -238,7 +238,10 @@ void loop() {
         .find_map(|l| l.strip_prefix("dt_us="))
         .and_then(|v| v.trim().parse().ok())
         .unwrap_or_else(|| panic!("{out:?}"));
-    assert!((1500.0..1520.0).contains(&dt), "micros across 1500 µs: {dt}");
+    assert!(
+        (1500.0..1520.0).contains(&dt),
+        "micros across 1500 µs: {dt}"
+    );
     let tel = bench.telemetry();
     let duty = |id: &str| tel.probes.iter().find(|p| p.id == id).map(|p| p.value);
     let (d2, d4) = (duty("d2").unwrap(), duty("d4").unwrap());

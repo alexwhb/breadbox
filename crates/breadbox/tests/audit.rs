@@ -748,7 +748,10 @@ fn serial_monitor_radio_annotations_toggle() {
     open_example(&mut h, "garden-node");
     h.get_by_label("Run").click();
     assert!(
-        wait_for(&mut h, 90.0, |h| has_label_containing(h, "mqtt: PUB garden/pot1")),
+        wait_for(&mut h, 90.0, |h| has_label_containing(
+            h,
+            "mqtt: PUB garden/pot1"
+        )),
         "no mqtt annotation"
     );
     assert!(has_label_containing(&h, "soil_raw="));

@@ -380,7 +380,8 @@ fn mcu_pin_over_40ma_is_stressed_and_a_short_destroys_it() {
         "{ev:?}"
     );
     assert!(
-        !ev.iter().any(|e| matches!(e.event, DeviceEvent::Damage { .. })),
+        !ev.iter()
+            .any(|e| matches!(e.event, DeviceEvent::Damage { .. })),
         "{ev:?}"
     );
     // D13 straight to GND: the pin burns out
@@ -393,9 +394,11 @@ fn mcu_pin_over_40ma_is_stressed_and_a_short_destroys_it() {
         ev.iter().any(|e| matches!(&e.event, DeviceEvent::Damage { reason } if reason.contains("pin D13 destroyed"))),
         "{ev:?}"
     );
-    let warned = bench
-        .serial_mut(&u1)
-        .is_some_and(|s| s.take_new().iter().any(|l| l.text.contains("pin D13 destroyed")));
+    let warned = bench.serial_mut(&u1).is_some_and(|s| {
+        s.take_new()
+            .iter()
+            .any(|l| l.text.contains("pin D13 destroyed"))
+    });
     assert!(warned, "serial monitor warns");
 }
 
