@@ -54,9 +54,14 @@ struct PinUart {
     port: u8,
     rx: Option<usize>,
     tx: Option<usize>,
+    /// The port's default pins (`rx` / `tx` follow `begin(baud, config, rx, tx)`).
+    default_pins: (Option<usize>, Option<usize>),
     enc: UartEncoder,
     dec: UartDecoder,
+    /// The configured baud (`SerialN.begin`); the receiver switches to it between frames.
     baud: u32,
+    /// `begin()` seen: TX idles high and the receiver is enabled. Before that the RX line is
+    /// not decoded (a floating or low line is not a stream of start bits).
     used: bool,
 }
 
@@ -81,6 +86,8 @@ pub struct HostMcu {
     resets: u64,
     last_reset: String,
     uarts: Vec<PinUart>,
+    /// Last level seen on each input (UART receivers start from it at `begin()`).
+    levels: Vec<bool>,
     /// Scheduled level changes (UART bits) by bench time.
     edges: VecDeque<(SimTime, usize, bool)>,
     /// Bytes of ports ≥ 1 for `take_serial` (UI).
@@ -119,6 +126,7 @@ impl HostMcu {
                 port,
                 rx: idx(*rx),
                 tx: idx(*tx),
+                default_pins: (idx(*rx), idx(*tx)),
                 enc: UartEncoder::new(cfg),
                 dec: UartDecoder::new(cfg),
                 baud: 115_200,
@@ -145,6 +153,7 @@ impl HostMcu {
             resets: 0,
             last_reset: "power-on".into(),
             uarts,
+            levels: vec![true; n],
             edges: VecDeque::new(),
             serial_out: Vec::new(),
             sda,
@@ -159,23 +168,21 @@ impl HostMcu {
         let now = self.bench_now();
         for u in 0..self.uarts.len() {
             let port = self.uarts[u].port;
-            if !self.uarts[u].used
-                && self.board.serial_baud(port).is_some()
-                && let Some(tx) = self.uarts[u].tx
-            {
-                self.uarts[u].used = true;
-                self.set_drive(tx, LogicDrive::Output { high: true }, now);
-            }
             if let Some(b) = self.board.serial_baud(port)
                 && b != self.uarts[u].baud
                 && b > 0
             {
-                let cfg = UartConfig::new(b);
                 self.uarts[u].baud = b;
-                self.uarts[u].enc = UartEncoder::new(cfg);
-                if !self.uarts[u].dec.busy() {
-                    self.uarts[u].dec.set_config(cfg);
-                }
+                self.uarts[u].enc = UartEncoder::new(UartConfig::new(b));
+            }
+            if !self.uarts[u].used && self.board.serial_baud(port).is_some() {
+                self.enable_uart(u, now);
+            }
+            // the receiver follows the baud between frames (a frame in progress finishes at
+            // the old speed, like a real UART)
+            let want = self.uarts[u].baud;
+            if self.uarts[u].dec.config().baud != want && !self.uarts[u].dec.busy() {
+                self.uarts[u].dec.set_config(UartConfig::new(want));
             }
             let bytes = self.board.take_serial(port);
             if bytes.is_empty() {
@@ -189,8 +196,7 @@ impl HostMcu {
                 let mut ready = t.saturating_sub(frame);
                 if !self.uarts[u].used {
                     // first byte before we saw begin(): idle high for a frame first
-                    self.uarts[u].used = true;
-                    self.set_drive(tx, LogicDrive::Output { high: true }, ready);
+                    self.enable_uart(u, ready);
                     ready += frame;
                 }
                 for (et, level) in self.uarts[u].enc.encode(&[b], ready) {
@@ -199,6 +205,32 @@ impl HostMcu {
             }
         }
         self.edges.make_contiguous().sort_by_key(|e| e.0);
+    }
+
+    /// `SerialN.begin()`: TX idles high, the receiver starts listening at the line's current
+    /// level (a line held low is a break, received as a framing error and dropped).
+    fn enable_uart(&mut self, u: usize, at: SimTime) {
+        let cfg = UartConfig::new(self.uarts[u].baud);
+        // ESP32: `SerialN.begin(baud, config, rx, tx)` routes the UART to any GPIO
+        let (rx, tx) = self.board.serial_pins(self.uarts[u].port);
+        let (drx, dtx) = self.uarts[u].default_pins;
+        let pin = |g: Option<u8>, d: Option<usize>| match g {
+            Some(g) => self.by_gpio.get(&g).copied(),
+            None => d,
+        };
+        let (rx, tx) = (pin(rx, drx), pin(tx, dtx));
+        let line = rx.is_none_or(|r| self.levels[r]);
+        let p = &mut self.uarts[u];
+        p.rx = rx;
+        p.tx = tx;
+        p.used = true;
+        p.dec = UartDecoder::new(cfg);
+        if !line {
+            p.dec.edge(at, false);
+        }
+        if let Some(tx) = self.uarts[u].tx {
+            self.set_drive(tx, LogicDrive::Output { high: true }, at);
+        }
     }
 
     /// Delivers decoded Serial1/2 input to the sketch up to `now`.
@@ -226,10 +258,12 @@ impl HostMcu {
     }
 
     fn uart_rx_edge(&mut self, pin: usize, level: Option<bool>, at: SimTime) {
+        let Some(l) = level else { return };
+        if let Some(x) = self.levels.get_mut(pin) {
+            *x = l;
+        }
         for u in self.uarts.iter_mut() {
-            if u.rx == Some(pin)
-                && let Some(l) = level
-            {
+            if u.used && u.rx == Some(pin) {
                 u.dec.edge(at, l);
             }
         }
@@ -381,6 +415,12 @@ impl HostMcu {
         let now = self.now();
         self.offset = now.saturating_sub(self.board.time());
         self.release_pins(now);
+        // UARTs close: bits still queued for TX are dropped, `begin()` opens them again
+        self.pump_uarts();
+        self.edges.clear();
+        for u in self.uarts.iter_mut() {
+            u.used = false;
+        }
         self.board.reset(exe).map_err(|e| e.to_string())?;
         self.collect();
         self.dead = None;
@@ -550,6 +590,14 @@ impl McuCore for HostMcu {
     fn set_input(&mut self, pin: usize, level: Option<bool>) {
         let now = self.now();
         self.uart_rx_edge(pin, level, now);
+        if let Some(g) = self.gpio.get(pin) {
+            self.board.set_pin_input(*g, level);
+        }
+    }
+    fn late_input(&mut self, pin: usize, level: Option<bool>, at: SimTime) {
+        // the UART receivers decode by timing: keep the edge's real time (this board's own TX
+        // looped back to its RX arrives as a batch of edges that are all ≤ now)
+        self.uart_rx_edge(pin, level, at);
         if let Some(g) = self.gpio.get(pin) {
             self.board.set_pin_input(*g, level);
         }

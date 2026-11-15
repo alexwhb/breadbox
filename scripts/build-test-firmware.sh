@@ -5,7 +5,8 @@
 #   crates/<crate>/tests/firmware/<board>/<sketch>/<sketch>.ino
 #     → crates/<crate>/tests/fixtures/<sketch>.<board>.hex / .elf
 #
-# <board> is uno | nano | mega. An optional `build.flags` file in a sketch folder adds
+# <board> is uno | nano | mega (`host/` sketches are skipped: ESP32 / Pico tests compile them
+# at run time). An optional `build.flags` file in a sketch folder adds
 # arduino-cli compile flags; an optional `build.props` file adds one `--build-property` per line
 # (e.g. `compiler.cpp.extra_flags=-Og -fno-lto` for debugger fixtures).
 #
@@ -96,6 +97,7 @@ for crate in bb-avr bb-firmware bb-radio bb-sim; do
             uno) fqbn="arduino:avr:uno" ;;
             nano) fqbn="arduino:avr:nano:cpu=atmega328" ;;
             mega) fqbn="arduino:avr:mega:cpu=atmega2560" ;;
+            host) continue ;; # ESP32 / Pico sketches: host-compiled by the tests at run time
             *) echo "unknown board folder $board" >&2; exit 1 ;;
         esac
         flags=()

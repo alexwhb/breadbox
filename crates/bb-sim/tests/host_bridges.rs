@@ -210,3 +210,112 @@ fn esp32_weather_publishes_through_the_default_radio_service() {
         mon.lines
     );
 }
+
+/// A board with `sketch` compiled for `kind` and `wires` between two of its own pins.
+fn looped_board(
+    lib: &Library,
+    kind: HostKind,
+    part: &str,
+    wires: &[(&str, &str)],
+) -> Option<Bench> {
+    if bb_firmware::host::cxx().is_none() {
+        eprintln!("no C++ compiler; skipping");
+        return None;
+    }
+    let build = compile_host(&sketch_dir("serial_loopback"), kind, None).unwrap();
+    assert!(build.success, "{}", build.log);
+    let mut b = BenchBuilder::new(lib, "loopback", Mode::Playground);
+    let u1 = b.offboard(part, "U1", 0.0, 0.0, &[]);
+    for (a, z) in wires {
+        b.wire((&u1, a), (&u1, z), "yellow");
+    }
+    let mut project: Project = b.finish();
+    if let Some(p) = project.part_mut(&u1) {
+        p.firmware = Some(FirmwareRef {
+            sketch: "firmware/U1/serial_loopback".into(),
+            fqbn: None,
+            image: None,
+        });
+    }
+    let mut opts = BenchOptions::default();
+    opts.host_firmware.insert(u1, build.exe.unwrap());
+    Some(Bench::new(project, std::sync::Arc::new(lib.clone()), opts).unwrap())
+}
+
+/// Regression: a UART looped back to the *same* board (TX → RX) used to stay silent. The
+/// board leads the bench, so its own TX edges reached its RX after it had run past them and
+/// were stamped "now" — a whole frame collapsed into one instant; and the receiver decoded the
+/// floating RX line before `begin()`, was busy when `begin()` came, and never switched to the
+/// configured baud.
+#[test]
+fn esp32_serial1_and_serial2_loop_back_on_the_same_board() {
+    let lib = lib();
+    // Serial1 routed to D26 (RX) / D25 (TX) by begin(); Serial2 on its default RX2 / TX2
+    let Some(mut b) = looped_board(
+        &lib,
+        HostKind::Esp32DevKit,
+        "esp32_devkit",
+        &[("D25", "D26"), ("TX2", "RX2")],
+    ) else {
+        return;
+    };
+    b.run_until(SimTime::from_secs(1)).unwrap();
+    let l = lines(&b, "u1");
+    for k in 1..=4 {
+        assert!(l.contains(&format!("got1: one {k}")), "{l:#?}");
+        assert!(l.contains(&format!("got2: two {k}")), "{l:#?}");
+    }
+    // nothing but the echoes (no break / garbage byte from the line before begin())
+    assert!(
+        l.iter()
+            .all(|x| x.starts_with("got1: one ") || x.starts_with("got2: two ")),
+        "{l:#?}"
+    );
+}
+
+#[test]
+fn pico_serial1_and_serial2_loop_back_on_the_same_board() {
+    let lib = lib();
+    // Serial1 = UART0 (TX GP0 → RX GP1), Serial2 = UART1 (TX GP8 → RX GP9)
+    let Some(mut b) = looped_board(
+        &lib,
+        HostKind::Pico,
+        "pico",
+        &[("GP0", "GP1"), ("GP8", "GP9")],
+    ) else {
+        return;
+    };
+    b.run_until(SimTime::from_secs(1)).unwrap();
+    let l = lines(&b, "u1");
+    for k in 1..=4 {
+        assert!(l.contains(&format!("got1: one {k}")), "{l:#?}");
+        assert!(l.contains(&format!("got2: two {k}")), "{l:#?}");
+    }
+}
+
+#[test]
+fn an_unwired_uart_hears_nothing_and_a_reset_reopens_it() {
+    let lib = lib();
+    // only Serial2 looped: Serial1 (D25 → nothing, D26 floating) receives nothing
+    let Some(mut b) = looped_board(
+        &lib,
+        HostKind::Esp32DevKit,
+        "esp32_devkit",
+        &[("TX2", "RX2")],
+    ) else {
+        return;
+    };
+    b.run_until(SimTime::from_ms(500)).unwrap();
+    let l = lines(&b, "u1");
+    assert!(l.iter().any(|x| x == "got2: two 2"), "{l:#?}");
+    assert!(!l.iter().any(|x| x.starts_with("got1")), "{l:#?}");
+    // EN reset: the sketch restarts, begin() reopens Serial2 and the echo comes back from 1
+    b.mcu("u1").unwrap().reset();
+    b.run_until(SimTime::from_ms(1000)).unwrap();
+    let l = lines(&b, "u1");
+    let after: Vec<&String> = l.iter().skip_while(|x| *x != "got2: two 2").collect();
+    assert!(
+        after.iter().filter(|x| **x == "got2: two 1").count() >= 1,
+        "{l:#?}"
+    );
+}

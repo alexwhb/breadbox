@@ -435,3 +435,51 @@ fn reversed_electrolytic_pops() {
     bench.run_until(SimTime::from_ms(1000)).unwrap();
     assert!(bench.health(&c).is_damaged(), "stays damaged");
 }
+
+/// Hardware USART0 looped back on the bench (D1 TX → D0 RX): the sketch's own "ping N"
+/// comes back through the real TX waveform and the pin-level receiver, and is answered with
+/// "pong N" (parity with the API-level boards' loopback tests in `host_bridges.rs`).
+#[test]
+fn uno_usart_tx_looped_back_to_rx() {
+    let lib = lib();
+    let mut b = bb_circuit::builder::BenchBuilder::new(
+        &lib,
+        "uart-loopback",
+        bb_circuit::project::Mode::Playground,
+    );
+    let u1 = b.offboard("uno", "U1", 0.0, 4.0, &[]);
+    b.wire((&u1, "D1"), (&u1, "D0"), "yellow");
+    let mut bench = start(b.finish(), &[(&u1, "uart_loopback")]);
+    bench.run_until(ms(1000)).unwrap();
+    let l = lines(&bench, &u1);
+    for k in 1..=8 {
+        assert!(l.contains(&format!("pong {k}")), "{l:#?}");
+    }
+    assert!(!l.iter().any(|x| x.contains('\u{fffd}')), "garbled: {l:#?}");
+}
+
+/// Mega 2560 USART1 (TX1 D18 → RX1 D19) and USART2 (TX2 D16 → RX2 D17) looped back, two
+/// bauds at once.
+#[test]
+fn mega_usart1_and_usart2_loop_back() {
+    let lib = lib();
+    let mut b = bb_circuit::builder::BenchBuilder::new(
+        &lib,
+        "usart-loopback",
+        bb_circuit::project::Mode::Playground,
+    );
+    let u1 = b.offboard("mega", "U1", 0.0, 4.0, &[]);
+    b.wire((&u1, "D18"), (&u1, "D19"), "yellow");
+    b.wire((&u1, "D16"), (&u1, "D17"), "blue");
+    let mut opts = bb_sim::BenchOptions::default();
+    let hex = root().join("crates/bb-sim/tests/fixtures/usart_loopback.mega.hex");
+    opts.firmware
+        .insert(u1.clone(), bb_sim::firmware::load_image(&hex).unwrap());
+    let mut bench = bb_sim::Bench::new(b.finish(), lib.clone(), opts).unwrap();
+    bench.run_until(ms(1000)).unwrap();
+    let l = lines(&bench, &u1);
+    for k in 1..=8 {
+        assert!(l.contains(&format!("got1: one {k}")), "{l:#?}");
+        assert!(l.contains(&format!("got2: two {k}")), "{l:#?}");
+    }
+}

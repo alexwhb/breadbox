@@ -363,10 +363,10 @@ impl Bench {
                     let now = m.core.now();
                     if t > now {
                         m.core.schedule_input(pin, Some(rising), t);
+                    } else if t < now {
+                        self.stats.late_edges += 1;
+                        m.core.late_input(pin, Some(rising), t);
                     } else {
-                        if t < now {
-                            self.stats.late_edges += 1;
-                        }
                         m.core.set_input(pin, Some(rising));
                     }
                     if let Some(net) = m.pins.get(pin).and_then(|p| p.net) {

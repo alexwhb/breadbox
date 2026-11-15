@@ -7,9 +7,10 @@ HardwareSerial Serial(0);
 HardwareSerial Serial1(1);
 HardwareSerial Serial2(2);
 
-void HardwareSerial::begin(unsigned long baud, uint32_t, int8_t, int8_t, bool, unsigned long, uint8_t) {
+void HardwareSerial::begin(unsigned long baud, uint32_t, int8_t rxPin, int8_t txPin, bool, unsigned long, uint8_t) {
   baud_ = (uint32_t)baud;
-  bb::send(bb::MSG_SERIAL_BEGIN, bb::Buf().u8(port_).u32(baud_));
+  // rx / tx < 0 = the port's default pins (0xff on the wire); ESP32 routes any GPIO
+  bb::send(bb::MSG_SERIAL_BEGIN, bb::Buf().u8(port_).u32(baud_).u8((uint8_t)rxPin).u8((uint8_t)txPin));
 }
 
 void HardwareSerial::fill() {

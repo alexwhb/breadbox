@@ -135,6 +135,8 @@ pub struct HostConfig {
     /// often so callbacks run (≈ FreeRTOS task latency).
     pub poll_interval: SimTime,
     /// Return from `run` after each output change so bit-banged protocols (DHT) can be answered.
+    /// UART ports other than 0 count as outputs (`begin`, writes): their bytes become pin
+    /// waveforms that must start at the write time.
     pub stop_on_output: bool,
     /// Wall-clock limit for the child to send its next message.
     pub hang_timeout: Duration,
@@ -201,6 +203,8 @@ pub struct HostBoard {
     serial_tx: HashMap<u8, Vec<(SimTime, u8)>>,
     serial_rx: HashMap<u8, VecDeque<u8>>,
     serial_baud: HashMap<u8, u32>,
+    /// Pins given to `SerialN.begin(baud, config, rx, tx)` (ESP32 GPIO matrix), per port.
+    serial_pins: HashMap<u8, (Option<u8>, Option<u8>)>,
     serial_free: HashMap<u8, SimTime>,
     spin: u32,
     async_on: bool,
@@ -322,6 +326,7 @@ impl HostBoard {
             serial_tx: HashMap::new(),
             serial_rx: HashMap::new(),
             serial_baud: HashMap::new(),
+            serial_pins: HashMap::new(),
             serial_free: HashMap::new(),
             spin: 0,
             async_on: false,
@@ -354,6 +359,12 @@ impl HostBoard {
         self.async_on = false;
         self.async_next = SimTime::MAX;
         self.irqs.clear();
+        // a restarted sketch starts with closed UARTs (`begin` again); bytes still queued
+        // for the old process are gone
+        self.serial_baud.clear();
+        self.serial_pins.clear();
+        self.serial_rx.clear();
+        self.serial_free.clear();
         for (pin, p) in self.pins.iter_mut() {
             p.irq = None;
             if p.mode != MODE_INPUT {
@@ -416,6 +427,12 @@ impl HostBoard {
 
     pub fn serial_baud(&self, port: u8) -> Option<u32> {
         self.serial_baud.get(&port).copied()
+    }
+
+    /// RX / TX GPIOs the sketch passed to `SerialN.begin(baud, config, rx, tx)` (`None` = the
+    /// port's default pin).
+    pub fn serial_pins(&self, port: u8) -> (Option<u8>, Option<u8>) {
+        self.serial_pins.get(&port).copied().unwrap_or((None, None))
     }
 
     /// Current logical state of a pin.
@@ -764,6 +781,16 @@ impl HostBoard {
             MSG_SERIAL_BEGIN => {
                 let (port, baud) = (r.u8(), r.u32());
                 self.serial_baud.insert(port, baud.max(1));
+                // optional rx, tx (0xff = default pin)
+                let pins = match r.rest() {
+                    [rx, tx, ..] => {
+                        let pin = |p: u8| (p != 0xff).then_some(p);
+                        (pin(*rx), pin(*tx))
+                    }
+                    _ => (None, None),
+                };
+                self.serial_pins.insert(port, pins);
+                *output |= port != 0;
                 Ok(())
             }
             MSG_SERIAL_WRITE => {
@@ -778,6 +805,7 @@ impl HostBoard {
                     out.push((t, b));
                 }
                 self.serial_free.insert(port, t);
+                *output |= port != 0 && !data.is_empty();
                 Ok(())
             }
             MSG_SERIAL_READ => {

@@ -166,6 +166,15 @@ pub trait McuCore: Send {
     fn set_input(&mut self, pin: usize, level: Option<bool>);
     /// Same, at an exact future time (≥ now).
     fn schedule_input(&mut self, pin: usize, level: Option<bool>, at: SimTime);
+    /// An input change that happened at `at`, which this core already ran past (it leads the
+    /// bench: its own output looped back to one of its inputs, or another board's edge
+    /// delivered after this core's quantum). A cycle-accurate core sees it now (one
+    /// instruction late); a core that decodes inputs by their timing (the API-level boards'
+    /// UART receivers) keeps the real time, so a looped-back frame is not collapsed into one
+    /// instant.
+    fn late_input(&mut self, pin: usize, level: Option<bool>, _at: SimTime) {
+        self.set_input(pin, level);
+    }
     /// Analog comparator / fallback voltage.
     fn set_analog(&mut self, pin: usize, volts: f64);
     /// Answers [`McuStop::AdcSample`].
