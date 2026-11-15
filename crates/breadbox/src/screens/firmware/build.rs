@@ -352,7 +352,17 @@ mod tests {
             .unwrap();
         assert!(other.try_lock().is_err(), "a second build must wait");
         drop(held);
-        assert!(other.try_lock().is_ok());
+        // released on drop — eventually: a process another test thread forks at that moment
+        // (arduino-cli in the next test) shares the locked file description until its exec,
+        // which under load takes a few ms
+        let t0 = std::time::Instant::now();
+        while other.try_lock().is_err() {
+            assert!(
+                t0.elapsed() < std::time::Duration::from_secs(5),
+                "the lock was not released"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
     }
 
     /// Two builds of the same sketch at once (a debug build racing Verify, another window):
