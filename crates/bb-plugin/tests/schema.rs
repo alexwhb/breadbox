@@ -49,7 +49,12 @@ fn schema_enums_match_the_types() {
 #[test]
 fn every_bundled_manifest_validates_and_uses_only_declared_keys() {
     let s = schema();
-    let top: BTreeSet<&str> = s["properties"].as_object().unwrap().keys().map(|k| k.as_str()).collect();
+    let top: BTreeSet<&str> = s["properties"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(|k| k.as_str())
+        .collect();
     let prov: BTreeSet<&str> = s["properties"]["provides"]["properties"]
         .as_object()
         .unwrap()
@@ -62,10 +67,22 @@ fn every_bundled_manifest_validates_and_uses_only_declared_keys() {
         let text = std::fs::read_to_string(d.join("plugin.json")).unwrap();
         let v: serde_json::Value = serde_json::from_str(&text).unwrap();
         for k in v.as_object().unwrap().keys() {
-            assert!(top.contains(k.as_str()), "{}: `{k}` not in the schema", d.display());
+            assert!(
+                top.contains(k.as_str()),
+                "{}: `{k}` not in the schema",
+                d.display()
+            );
         }
-        for k in v["provides"].as_object().map(|o| o.keys().cloned().collect::<Vec<_>>()).unwrap_or_default() {
-            assert!(prov.contains(k.as_str()), "{}: provides.`{k}` not in the schema", d.display());
+        for k in v["provides"]
+            .as_object()
+            .map(|o| o.keys().cloned().collect::<Vec<_>>())
+            .unwrap_or_default()
+        {
+            assert!(
+                prov.contains(k.as_str()),
+                "{}: provides.`{k}` not in the schema",
+                d.display()
+            );
         }
         Manifest::load(&d).unwrap_or_else(|e| panic!("{}: {e}", d.display()));
     }
@@ -87,8 +104,14 @@ fn the_design_manifest_is_the_schema_example() {
     assert_eq!(dmm["provides"]["probes"], 2);
     assert_eq!(dmm["spice"]["load"], "R 10Meg ∥ C 100p");
     assert_eq!(dmm["specs"]["counts"], 6000);
-    assert_eq!(dmm["specs"]["dcv_ranges"], serde_json::json!(["600m", "6", "60", "600"]));
+    assert_eq!(
+        dmm["specs"]["dcv_ranges"],
+        serde_json::json!(["600m", "6", "60", "600"])
+    );
     assert_eq!(dmm["specs"]["dcv_accuracy"], "0.05% + 1");
     assert_eq!(dmm["specs"]["autorange_ms"], 350);
-    assert_eq!(dmm["permissions"], serde_json::json!(["read:nets", "inject:load"]));
+    assert_eq!(
+        dmm["permissions"],
+        serde_json::json!(["read:nets", "inject:load"])
+    );
 }
