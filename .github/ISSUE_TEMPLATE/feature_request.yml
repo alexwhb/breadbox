@@ -1,0 +1,24 @@
+name: Feature or part request
+description: A new part, instrument, board, lesson or feature.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like?
+      description: For parts and instruments, a datasheet link helps a lot.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: What would you use it for?
+  - type: dropdown
+    id: plugin
+    attributes:
+      label: Could this be a plugin?
+      description: Many additions can ship as a plugin — see docs/PLUGIN-SDK.md.
+      options:
+        - Not sure
+        - Yes, I might write it
+        - No, it needs a core change

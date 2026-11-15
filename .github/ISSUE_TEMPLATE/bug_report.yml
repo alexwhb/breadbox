@@ -1,0 +1,31 @@
+name: Bug report
+description: Something doesn't work or behaves differently from real hardware.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: Steps, or attach the project (Share → Export .breadbox.zip) / netlist / sketch.
+  - type: input
+    id: version
+    attributes:
+      label: Breadbox version or commit
+      placeholder: e.g. 0.1.0 or a1b2c3d
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version and Mac
+      placeholder: e.g. macOS 15.2, MacBook Air M2
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Run with RUST_LOG=breadbox=debug for more detail.

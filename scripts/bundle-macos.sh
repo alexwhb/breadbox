@@ -99,6 +99,7 @@ cp docs/guide/*.md "$res/docs/guide/"
 # third-party notices: every crate linked into the app (normal dependencies, this platform)
 mkdir -p "$res/licenses"
 cp assets/fonts/*-OFL.txt "$res/licenses/"
+cp LICENSE "$res/licenses/LICENSE-Breadbox.txt"
 cargo metadata --locked --format-version 1 --filter-platform "$(rustc -vV | sed -n 's/^host: //p')" \
   | python3 -c '
 import json, sys

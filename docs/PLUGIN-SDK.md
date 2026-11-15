@@ -14,11 +14,39 @@ language that compiles to core WebAssembly (Rust, C, Zig, AssemblyScript, TinyGo
 
 ## 1. Quick start (Rust)
 
-```sh
-cp -r plugins/examples/template my-plugin       # edit plugin.json: id, name
-cd my-plugin && cargo build --release --target wasm32-unknown-unknown
-cp target/wasm32-unknown-unknown/release/*.wasm blinker.wasm
+A plugin crate lives anywhere — it doesn't need to be inside this repository. `Cargo.toml`:
+
+```toml
+[package]
+name = "my-plugin"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+bb-plugin-sdk = { git = "https://github.com/alexwhb/breadbox" }   # or { path = "…/crates/bb-plugin-sdk" }
+
+[profile.release]
+opt-level = "s"
+lto = true
+panic = "abort"
+strip = true
+
+[workspace]   # standalone: don't join a parent workspace
 ```
+
+Copy `plugin.json`, `parts.json` and `src/lib.rs` from `plugins/examples/template` (set `id`
+and `name` in `plugin.json`), then:
+
+```sh
+cargo build --release --target wasm32-unknown-unknown
+cp target/wasm32-unknown-unknown/release/my_plugin.wasm blinker.wasm   # the name provides.model gives
+```
+
+Plugins inside this repository (`plugins/` and `plugins/examples/`) are members of the plugins
+workspace instead and are built with `scripts/build-plugins.sh`.
 
 In Breadbox: **Plugins → Load local plugin…** and pick the folder. Local plugins hot-reload
 when any file in the folder changes. To share it, zip the folder (`plugin.json` at the root or
@@ -43,9 +71,8 @@ impl Part for Blinker {
 export_part!(Blinker);
 ```
 
-`Cargo.toml`: `crate-type = ["cdylib"]`, dependency `bb-plugin-sdk`. Build with
-`--target wasm32-unknown-unknown` (release; `opt-level = "s"`, `lto = true`,
-`panic = "abort"` keep modules around 100–200 KB). The SDK is `#![no_std]` + `alloc`; `no_std`
+The release profile above (`opt-level = "s"`, `lto = true`, `panic = "abort"`) keeps modules
+around 100–200 KB. The SDK is `#![no_std]` + `alloc`; `no_std`
 plugins enable its `global-allocator` feature.
 
 ## 2. The manifest (`plugin.json`)
