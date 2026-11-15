@@ -440,13 +440,16 @@ and run as a **child process in lock-step with simulated time**.
   hang_timeout })`; `run(until, &mut dyn HostIo) -> HostStop::{ReachedTime, Output, Panic,
   Exited { code, stderr }, Hung}` never lets the board clock pass `until` while the child waits
   (it may overshoot by one message cost while the child computes). `stop_on_output` returns after
-  each pin/PWM change so a device (DHT22) can schedule its answer before the sketch samples.
+  each pin/PWM change so a device (DHT22) can schedule its answer before the sketch samples, and
+  after `begin` / writes on UART ports ≠ 0 (their TX waveform starts at the write time).
   Inputs pushed: `set_pin_input(gpio, Some(level)|None)`, `schedule_pin_input(gpio, level, at)`,
   `set_pin_voltage(gpio, v)`, `serial_inject(port, bytes)`. Outputs: `take_events() ->
   [HostEvent::{Pin { time, pin, state: HostPinState::{Input{pull}, Output{high}, OpenDrain{low}}
   }, Pwm { time, pin, duty, freq_hz }, Log, Restarted}]`, `take_serial(port) -> [(t, byte)]`
-  (paced at the configured baud), `pin_state`, `stderr`. `reset(Some(new_exe))` = re-flash
-  (NVS kept). `ESP.restart()` respawns the process.
+  (paced at the configured baud), `serial_baud(port)`, `serial_pins(port) -> (rx, tx)` (GPIOs
+  given to ESP32 `SerialN.begin(baud, config, rx, tx)`, `None` = default; the message carries
+  them as two optional bytes, 0xff = default), `pin_state`, `stderr`. `reset(Some(new_exe))` =
+  re-flash (NVS kept; the UARTs close — `begin` again). `ESP.restart()` respawns the process.
 - `HostIo` (pulled, at the exact board time): `analog_read(pin, t) -> Option<volts>`,
   `i2c_write/i2c_read(bus, addr, …)`, `spi_transfer(bus, bytes)`, and
   **`service(channel, request, t) -> reply`** — opaque Wi-Fi/socket (channel 1) and BLE (channel
@@ -496,7 +499,10 @@ step(limit):                         // MCUs lead, the analog circuit lags
   instead of ~200 k). API-level boards always get inline answers.
 - **Exactness.** Edges are delivered at the solver's interpolated crossing time; an MCU sees an
   input change at most one instruction late (it already ran past it when the circuit lags by a
-  quantum — counted in `BenchStats::late_edges`). Multi-MCU benches sync every 1 µs.
+  quantum — counted in `BenchStats::late_edges`). Multi-MCU benches sync every 1 µs. Late edges
+  go through `McuCore::late_input(pin, level, at)` (default: `set_input`): a core that decodes
+  inputs by timing (the API-level boards' UART receivers) keeps the edge's real time — a board's
+  own TX looped back to its RX arrives as a batch of edges that are all in its past.
 - **Damage & supply.** Ratings are first-order filtered (τ per rating); destruction rebuilds
   the bench with the damaged cards. MCU pins track current through their ports (> 80 mA →
   pin damaged → high-Z). USB supply has a polyfuse I²t model (hold 0.5 A, trip → 50 Ω, resets
@@ -508,7 +514,7 @@ step(limit):                         // MCUs lead, the analog circuit lags
   `Device::set_param` or `Session::set_param` / `set_ext` without a rebuild.
 - **MCU trait.** `McuCore`: `label`, `engine`, `now`, `pin_names`, `pin_index`, `run_until(t,
   &mut dyn McuIo)`, `take_pin_events`, `pin_drive`, `set_input`, `schedule_input`,
-  `set_analog`, `supply_adc`, `set_vcc` (brown-out), `set_aref`, `set_reset_line` (RESET / EN /
+  `late_input`, `set_analog`, `supply_adc`, `set_vcc` (brown-out), `set_aref`, `set_reset_line` (RESET / EN /
   RUN nets), `reset`, `reset_count`, `last_reset`, `in_reset`, `set_temperature`, `flash`
   (AVR image), `flash_exe` (host build), `take_serial`, `take_log`, `serial_inject`,
   `serial_tx_pin`, `set_serial_waveform`, `serial_baud`, `as_avr` / `avr_debug` (debugger).
@@ -546,9 +552,13 @@ step(limit):                         // MCUs lead, the analog circuit lags
   circuit with one ext variable changed (instrument loading callouts).
 - API-level boards run with the whole bench at hand: `analogRead` from the solution, Wire →
   devices on the SDA net (`i2c_transfer`), SPI → devices on the SCK net (`spi_transfer`),
-  Serial1/2 → real UART waveforms on their pins (TX idles high from `begin()`, RX decoded and
-  injected at the stop-bit time; ESP32 `Serial1/2` = UART1 (9/10) / UART2 (16/17), Pico
-  `Serial1/2` = UART0 (GP0/1) / UART1 (GP8/9); pin remapping in `begin()` is ignored).
+  Serial1/2 → real UART waveforms on their pins (TX idles high from `begin()`; the receiver
+  opens at `begin()` from the line's current level — a floating or low line before it is not
+  decoded — follows the configured baud between frames, and injects bytes at the stop-bit time;
+  a board's own TX wired to its RX echoes; a reset closes both until `begin()` again; ESP32
+  `Serial1/2` = UART1 (9/10) / UART2 (16/17), routed to any GPIO by `begin(baud, config, rx,
+  tx)` — GPIO 9/10 are not on the DevKit header —, Pico `Serial1/2` = UART0 (GP0/1) / UART1
+  (GP8/9)).
 
 ## 6b. Radios (`bb-radio`)
 
@@ -833,7 +843,9 @@ docs in a window). `platform::MENUS` is the one table of items (id, title, short
 menu (muda) is built from; `command_for(id)` maps each to a `Command`. Items with key
 equivalents consume the keys, so egui shortcut handling only runs without the menu (tests, other
 OSes). Undo / Redo / Select All for a focused text field are re-injected as key events at the
-start of the next frame; Cut / Copy / Paste send `ViewportCommand::RequestCut/Copy/Paste`, which
+start of the next frame (`AppCtx::text_has_focus` = egui's `text_edit_focused`: a focused
+slider, button or floor-plan marker is not a text field, so ⌘Z there is the project's undo —
+the Workbench, Pro Schematic and Firmware screens step `CircuitDoc` undo / redo); Cut / Copy / Paste send `ViewportCommand::RequestCut/Copy/Paste`, which
 egui-winit answers with `Event::Cut/Copy/Paste` (text fields; the bench copies / cuts / pastes
 the selected parts on those events). About uses the standard macOS About panel.
 
@@ -1020,16 +1032,26 @@ address" (`0x08f0`, `SP`, `Z`) + "Go"; I/O registers = groups per peripheral in 
 columns, rows `PORTB 0x25 0x20 0010 0000` (changed bits amber), "Filter registers". The
 selected target is watched (`watch_memory`) while either view is open; ESP32 / Pico get a
 "needs the cycle-accurate AVR core" empty state. The right column is the Radios panel
-(`radio_panel::radio_panel → RadioPanelOutput { commands, export, bench_pos }`): cards, a
+(`radio_panel::radio_panel → RadioPanelOutput { commands, export, edits }`): cards, a
 "Placement" section ("Floor plan" canvas: APs, walls, draggable "Bench position x m, y m" marker, arrows nudge 0.5 m;
-readout `SIM-AP · 3.2 m · 1 wall · -54 dBm`; the drop position is stored in
-`project.radios.bench_pos` via `radio_panel::store_bench_pos`, not an undo step), Packet log with "Export
+readout `SIM-AP · 3.2 m · 1 wall · -54 dBm`; "Walls (n)" rows: "Add wall" — 4 m interior across
+the AP → bench line —, a per-wall "Wall n: interior / concrete" toggle (−15 / −25 dB) and
+"Remove wall n"), Packet log with "Export
 pcap-ng…" / "Export CSV…" (`SimBench::export_packet_log`, save dialog or
 `BREADBOX_EXPORT_DIR`, toast with the path), Network conditions (Latency, Jitter 0–200 ms,
 Packet loss, "Drop the AP at t =" + "Drop the AP at (s)" field, LAN bridge) and the Bluetooth
 LE card, whose "Add BLE hat" runs `radio_panel::add_ble_hat` (HM-10 right of the first board,
 VCC→5V / 3V3 on host boards, GND, TXD→D10 / RXD→D11 — ESP32 RX2/TX2, Pico GP1/GP0 — one
 undoable "Add BLE hat" transaction) and starts the bench so the phone scans `HMSoft`.
+**Radio settings are the project's** (`project.radios` = `bb_sim::radio::ProjectRadios`): the
+panel shows them (`RadioPanelState::sync_from_project`, on open and after undo / redo; no saved
+settings = what the bench runs, 3 ms ± 1, no loss); a dropped bench, a released slider (live
+`SetConditions` while dragging), the drop-AP field / checkbox, the LAN bridge and the walls
+become `RadioEdit::{BenchPos, Conditions, LanBridge, Walls}` → `radio_panel::apply_radio_edit`
+→ one undoable `Editor::set_radios(label, value)` (`Op::Radios { before, after }`, not
+electrical: "Move the bench", "Network conditions", "LAN bridge", "Walls");
+`SimBench::update_project` pushes what changed to the running bench (`SetConditions`,
+`SetLanBridge`, `SetBenchPos`, `ApplySettings` for walls / APs).
 
 **Pro → Analysis** (design screen 3): for a project with a circuit the netlist is **synced
 from the schematic** (`screens/pro/sync.rs`: bb-circuit's Pro netlist with world values as
@@ -1039,7 +1061,22 @@ edits from the sidebar or the editor (`.tran …`, `*off .mc …`) round-trip in
 `project.spice.directives` (`Editor::set_directives`, undoable), anything else detaches it
 (`project.spice.detached`, Re-sync button); the `.op` table's bench-probe column reads `SimBench`'s probe keys.
 A project with an empty circuit edits its own file netlist `analyses/<name>.cir`
-(`project::starter_netlist`, created with new Pro projects) instead of the built-in demo. All
+(`project::starter_netlist`, created with new Pro projects) instead of the built-in demo, and
+that netlist **builds the circuit** while the circuit is netlist-only
+(`spice_io::is_netlist_circuit`: resistors, capacitors, inductors, V / I sources, generic SPICE
+cards, ground symbols, no bench wiring; label "autosaved · builds the schematic"): each edit that
+parses becomes, after a 700 ms pause, `spice_io::netlist_to_circuit(text, project, lib)` (the
+`.cir` import machinery on top of the project: parts, net labels / GND symbols at the pin
+anchors, directives; parts still there keep their id + schematic placement; the round trip is
+checked — every typed element in the circuit's Pro netlist with the same nodes) committed as
+one `Editor::replace_circuit("Netlist", …)` transaction (diffs parts, wires, schematic wires +
+labels, probes, directives). Half-typed text waits; `SpiceIoError::Unrepresentable` (e.g. a
+subcircuit instance with more than the generic card's 16 pins) marks the netlist "detached
+from the schematic" until the next edit or Re-sync (which rewrites it from the circuit); circuit
+edits made elsewhere (Schematic tab, Inspector, undo there) rewrite the text; a board joining
+the circuit ends it. `.cir` import maps V / I sources to library `vsource` / `isource` (value
+text kept) and R / C / L to library parts only in the plain `R1 a b 1k` form (anything with
+`tc1=` / `IC=` / `m=` stays a SPICE card). All
 seven analysis cards are in the (scrollable) sidebar; `.meas` and `.tf` results fill a
 measurements table (`model::MeasRow`), and the Bode card reads / marks the −3 dB corner
 (`model::corner_frequency`). The

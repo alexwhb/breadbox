@@ -854,14 +854,9 @@ Deliberately left / open:
 - `PLAT-1`: OS-specific toolchain code lives in `bb-firmware::toolchain` (the library cannot use
   the app's `platform` module). `WORLD-6`: the toggle switches sensor noise; AVR ADC readings are
   always 10-bit integers, so "quantization off" needs a product decision.
-- Serial2 looped back to the *same* ESP32's RX2 does not echo (external Serial2 ↔ HC-05 works) —
-  worth a look in `bb_sim::HostMcu` (UART decoder fed by the board's own TX edges).
-- Radio placement is not undoable (no `Op` for `project.radios`); network conditions are not
-  saved with the project. Typing a netlist into an empty Pro project does not build a schematic
-  (Import .cir does).
-- Test depth still thin (listed per row in SPEC-AUDIT): scope pulse trigger / coupling, logic
-  analyzer I²C / SPI / 1-Wire decoders, function-generator waveforms, WiFiServer, LCD 8-bit, a
-  plugin part with a `.subckt`.
+- ~~Serial2 loopback on the same ESP32; radio placement / conditions not saved or undoable;
+  a typed netlist not building a schematic; thin test depth (scope, logic analyzer, function
+  generator, WiFiServer, LCD 8-bit, plugin `.subckt` part)~~ — closed by `closeout-b` (below).
 - Changes outside "my" files were all for the audited behaviour: `bb-radio` (BLE timing),
   `bb-world` (objects, scripts check, watering), `bb-circuit` (`Op::Settings`),
   `plugins/dmm-handheld` (+ rebuilt wasm), docs.
@@ -1050,3 +1045,105 @@ Close-out (2026-11-14): toolchain hang (`MCU-4`), `PLAT-1`, `WORLD-6`, bundle po
   machine path leaked; not investigated further). Never share a target dir between the
   checkout and a worktree: cargo's package-relative dep-info then reuses test binaries with
   the worktree's `CARGO_MANIFEST_DIR` baked in.
+
+### closeout-b
+Close-out (2026-11-14): the audit's remaining open items — ESP32 Serial2 loopback (`MCU-6`),
+radio settings in the project (`RF-1`, `RF-3`), a typed netlist building the schematic
+(`PRO-2`) — and the thin test depth listed in `docs/SPEC-AUDIT.md`, fixing what the new tests
+found. Contracts: ARCHITECTURE §5b, §6, §8.
+
+- **Serial2 loopback** (`1707d22`). Root cause, two bugs: (1) an API-level board leads the
+  bench, so its own TX edges reach its own RX after it has already run past them;
+  `HostMcu::set_input` stamped such late edges with the core's *current* time, collapsing a
+  whole UART frame into one instant; (2) the receiver decoded RX before `Serial2.begin()` — the
+  unconnected TX made the looped line float low, i.e. a "start bit" — so it was busy when
+  `begin(19200)` arrived, skipped the baud change and stayed at 115200 forever (garbage `0xE0`).
+  External devices (HC-05) never hit either: their answers are scheduled in the board's future
+  and they drive the line idle-high. Fix: `McuCore::late_input(pin, level, at)` (the scheduler
+  hands late edges over with their real time; `HostMcu` decodes them at it, AVR keeps
+  `set_input`); the UART receiver opens at `begin()` from the line's current level and follows
+  the baud between frames; `HostBoard` treats Serial1/2 `begin` / writes as outputs
+  (`stop_on_output`: TX starts at the write time) and closes the UARTs on reset; ESP32
+  `SerialN.begin(baud, cfg, rx, tx)` now routes the UART to any GPIO (Serial1's default GPIO
+  9/10 are flash pins, not on the DevKit header). Tests (`bb-sim/tests/host_bridges.rs`): ESP32
+  Serial1 (D25 → D26, remapped) + Serial2 (TX2 → RX2), Pico Serial1 + Serial2, an unwired UART
+  hears nothing + EN reset reopens; AVR parity in `scenarios.rs`: UNO USART0 D1 → D0
+  (`ping` / `pong`), Mega USART1 + USART2. `scripts/build-test-firmware.sh` skips `host/`
+  sketch folders (it exited on them).
+- **Radio settings are the project's** (`23bb639`, walls `e013128`): `bb_circuit::edit::Op::Radios`
+  + `Editor::set_radios`; the Radios panel loads `project.radios` (`sync_from_project`, also
+  after undo / redo), and a dropped bench, a released slider, the drop-AP field / checkbox, the
+  LAN bridge and the new **Walls** rows (Add wall, interior ↔ concrete, remove) each commit one
+  undoable edit; `SimBench::update_project` pushes what changed to the running bench. The panel
+  used to show (and push, once opened) its own 40 ms ± 10 / 2 % defaults while the bench ran
+  3 ms ± 1 / 0 %; now no saved settings = what the bench runs. Found on the way:
+  `AppCtx::text_has_focus` was true for *any* focused widget (egui's
+  `egui_wants_keyboard_input`), so ⌘Z after touching a slider or button never reached the
+  project undo — now `text_edit_focused`; the Firmware screen handles the project's ⌘Z / ⌘⇧Z.
+  Tests: `radio_panel.rs::radio_settings_are_saved_with_the_project_and_undoable` (latency, loss,
+  drop-AP, LAN bridge to a local dummy listener, bench drag → undo / redo in the project, on the
+  floor plan and in the running engine → save → reopen restores),
+  `floor_plan_walls_are_editable_undoable_and_saved`, `radio_panel::tests`, bb-circuit
+  `radio_settings_are_one_undo_step_and_survive_save_load`.
+- **Typed netlist → circuit + schematic** (`ecaaa13`): `spice_io::netlist_to_circuit` maps a
+  netlist onto the project with the `.cir` import machinery (placements of parts still there are
+  kept; the round trip is checked node by node) and `Editor::replace_circuit` commits it as one
+  "Netlist" step; the Pro screen's own `analyses/<name>.cir` drives a netlist-only circuit
+  ("autosaved · builds the schematic"), circuit edits made elsewhere rewrite the text, and only
+  unrepresentable content (e.g. a 17-node subcircuit instance — the generic card has 16 pins)
+  detaches it until Re-sync. Import fixes: V / I sources become source symbols (were 16-pin
+  boxes); `R1 a b 1k tc1=…`, `C … IC=…` no longer lose their parameters. Test:
+  `session.rs::session_2b_*` (type RC + `.ac` → R1 / C1 / V1 + auto-placed schematic → Run
+  analyses → 1.00 kHz corner → the Schematic tab draws them → R1 2k → 500 Hz with R1's
+  placement kept → C1 changed in the circuit → text rewritten → 17-pin X → detached → Re-sync →
+  saved + reloaded); bb-circuit `spice_io::tests` (mapping, placements, unrepresentable,
+  `replace_circuit` undo / redo).
+- **Test depth, and what it found** (`09a5dd5`, `c39116a`, `4e6e180`, `53470e6`):
+  - Logic analyzer on real AVR traffic (new sketches `la_i2c`, `la_spi`): I²C to a BME280
+    (addresses, R/W, ACK/NACK, repeated START, chip id `0x60`, an absent address), hardware SPI
+    mode 0 into a 74HC595 with Q7' on MISO (MOSI + MISO per byte, CS framing), 1-Wire
+    DallasTemperature ↔ DS18B20. **Bug**: the 1-Wire decoder packed the ~11 000 status-poll
+    read slots after Convert T into `0x00` "bytes", flooding the readout; it now follows each
+    transaction (named ROM / function commands, `busy ×N → done`, `search · N slots`) —
+    `la.wasm` rebuilt.
+  - Function generator, every waveform into 50 Ω: amplitude, offset, frequency, RMS by shape,
+    pulse duty, noise σ / bounds, arbitrary peak phase + an edited point, the 50 Ω source.
+    **Bug**: Output off left the DC offset on the output (template gates it all now).
+  - 4-channel scope on the generator: DC / AC / GND coupling, 10× compensation (over / under,
+    1× unaffected), pulse-width trigger picking the wide or the narrow pulse. **Bugs**: Normal /
+    Single mode with nothing to trigger kept "Trig'd" + `triggered = 1` (now "Wait"); the
+    counter timed edges on the sample grid (interpolates the mid crossing now) — `scope.wasm`
+    rebuilt.
+  - ESP32 `WiFiServer` answers a virtual client station on SIM-AP (`host_bridges.rs`).
+  - HD44780 on the 8-bit bus (`scenarios::lcd_on_the_8_bit_bus`; the parallel LCD reports
+    `eight_bit`). Not a bug but worth knowing: LiquidCrystal's `createChar` leaves the address
+    counter in CGRAM, exactly like the chip — the next `print` goes there unless you
+    `setCursor` first.
+  - `plugins/examples/lm317`: an example part plugin whose analog model is a `.subckt` in its
+    `parts.json` (+ a wasm behaviour reading it), built by `scripts/build-plugins.sh`
+    (`--check` green); `packs::plugin_part_with_a_subckt_model_regulates_on_the_bench_and_in_pro`
+    (5.036 V on the bench = Pro `.op` to 1 mV, in the `.cir` export, dropout warning).
+    PLUGIN-SDK §7.1 documents parts with their own SPICE models.
+- Verification (`CARGO_TARGET_DIR=target/closeout-b`): `cargo fmt --all --check` (+ plugins),
+  `cargo clippy --workspace --all-targets -D warnings`, plugin wasm clippy + `build-plugins.sh
+  --check` green; `cargo test --workspace` totals below.
+
+Changes outside "my" areas (all for the items above): `bb-firmware/src/host/board.rs` +
+`hostcore/HardwareSerial.cpp` (UART stop / pins / reset), `bb-circuit` (`Op::Radios`,
+`replace_circuit`, `spice_io`), `bb-sim` (`late_input`, host UARTs, LCD reading), plugins
+(scope, logic analyzer, function-generator template, new `examples/lm317`), `breadbox`
+(`app.rs` focus, Firmware / Pro screens, radio panel, bench sync, starter netlist), tests in
+`breadbox/tests/{radio_panel,session,workbench}.rs` (`workbench.rs`: the virtual-phone test
+scrolls the Connect button into view — the Walls rows moved it below the panel's fold),
+`scripts/build-test-firmware.sh`, docs, refreshed screenshots.
+
+Open / notes:
+- Behavioural sources have no solver breakpoints: sharp generator edges / vertices land within
+  the 10 µs analog step (a triangle's peaks read ~2 % low, a square's frequency ~0.7 % off on a
+  2-period screen). Tests use resolution-aware tolerances; breakpoints for `B` sources driven
+  by `time` would be the real fix (bb-spice).
+- The DS18B20 model converts in exactly 750 ms, so DallasTemperature's 750 ms poll times out
+  before the "done" slot (`busy ×N` then the read) — reads are still correct; a real chip
+  usually finishes sooner.
+- Scope cursors are only covered through the panel state; Mega Timer4, vibration motor and
+  servo slew remain untested (SPEC-AUDIT notes).
