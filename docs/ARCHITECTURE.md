@@ -718,14 +718,44 @@ The file format is specified in `docs/LESSON-FORMAT.md` (kept in sync by
   to `Command::UpdateProject`.
 - **Checks** (`check.rs`): `prepare(checks, &mut bench)` adds frequency/duty probes;
   `evaluate_step(step, project, lib, Option<&mut Bench>, state) → Vec<CheckResult { label, ok,
-  detail }>` covers connectivity / parts / props / ERC (bb-circuit), readings, voltages,
+  detail, check }>` (friendly labels from `goal_label` unless the step's `labels` override
+  them; `check` = the step's check index) covers connectivity / parts / props / ERC (bb-circuit), readings, voltages,
   element currents, LED state, damage, serial output, probes, world, MQTT and the phone
   (bb-sim, incl. plugin instruments' `readings`), and SPICE (`spice_value`: the project's Pro
   netlist with the check's analysis card), plus the goals a quiz, code step or table imply.
 - **Runner** (`runner.rs`): a lesson on a headless `Bench` built with `PluginHost::
-  bench_options()` (`None` for Pro lessons): `apply(&Action)` (circuit edits through the
-  editor, then `update_project` / `set_part_param`), `meter()`, `evaluate()`, `solve_step()`,
-  `solve()` (the scripted solver; `transcript`), `next_step()`.
+  bench_options()` (`None` for Pro lessons): `apply(&Action)`, `meter()`, `evaluate()`,
+  `diagnose()`, `solve_step()`, `solve()` (the scripted solver; `transcript`), `next_step()`.
+- **Applying actions** (`apply.rs`): `apply(&mut impl Target, &Action)` — the one code path
+  for worked solutions. Circuit edits go through the session's `Editor`, then
+  `Target::circuit_changed(live)`; everything else through `Target` (`edit`, `meter`, `run`,
+  `input`, `set_world`, `flash`, `repair`, `phone_connect`, `radio`). `Runner` implements it
+  on a headless bench, the app's `LessonRun` on its live `SimBench` ("Do it for me").
+  `is_circuit(&Action)`, `solution_image(&Session)`.
+- **Names** (`names.rs`): `Namer::new(project, lib, conn)` → `part` (`D1 (red LED)`, `R1
+  (220 Ω)`, `the USB supply`), `pin` (`USB +5 V`, `R1's lead in column 5`, `D1's long leg
+  (+)`, `UNO pin D13`, `the meter's mA jack`, `the top + rail`), `place` / `strip_range`
+  (`column 5`, `a5–e5`), `wire` (`the red jumper from column 10 to the top − rail`),
+  `socket`, `strip_holes`, `occupants`, `free_holes`; `current` / `voltage` / `hz` / `value`
+  format with a floor (no `0 aA`).
+- **Diagnosis** (`diagnose.rs`, "Test circuit"): `diagnose(step, project, lib, Option<&mut
+  Bench>, state, &Options { running, compile_errors }) → Diagnosis { goals: [GoalReport {
+  label, ok, detail, finding, same_as }], extra, passed, payoff }`; `Finding { kind: Mistake,
+  what, fix, marks: [Mark { spot: Pin | Part | Wire | Control, tone: Ok | Target | Wrong |
+  Remove | Focus, note }], action: Repair | Run }`. A bench scan finds loose / dead-end
+  jumpers, parts not in holes, shorted / bypassed parts, reversed LEDs and shorted supplies;
+  per goal, connectivity (what each side reaches, the nearest dead end, wrong pins) and live
+  state (loop search from the LED to a source and to GND, LED current and health, the
+  meter's dial / jacks / series-vs-parallel, probe frequency, serial output). `payoff(step,
+  namer, goals)` = the step's `success` + live values. Pure: the app runs it on the engine
+  thread (`with_bench`).
+- **Show me** (`guide.rs`): `show_me(step, project, lib) → ShowMe { moves: [Move { text,
+  marks, ghost: Ghost { a, b, color, label }, circuit, wait }], why }`, a move for every
+  `Action`; `first_move` is a diagnosis's fallback next action; `control::*` names the step
+  panel controls marks point at (`choice:3`, `compile`, `world:<key>`, `prop:<part>.<prop>`,
+  `add:<ref>`, `publish:<topic>`, `phone:*`).
+- **Audit** (`lib.rs`): `audit(&Lesson)` — hands-on steps need ≥ 2 hints, a solution and a
+  `why` (built-in lessons; lesson packs only need `validate`).
 - **Code steps** (`code.rs`): `fqbn_for(project, lib, mcu)`, `compile(source, fqbn) → Build {
   success, image, diagnostics, log }` (a temp sketch folder through `bb_firmware::Toolchain`);
   `Runner::upload(mcu, &image)`.
@@ -803,8 +833,9 @@ screens/mod.rs       default_registry() — the ONE place screens are registered
 screens/home.rs      Home (APP-2)
 screens/placeholder.rs  generic "coming later" slot (unused by the default registry)
 screens/plugins/     mod.rs (Plugins screen, PLUG-4), place.rs ("Place on bench")
-screens/lessons/     mod.rs (Lessons screen + track nav + embedded bench), run.rs (LessonRun:
-                     Session + CircuitDoc + own SimBench + goals + meter + progress), step.rs
+screens/lessons/     mod.rs (Lessons screen + track nav + embedded bench + lesson-complete card
+                     + chime), run.rs (LessonRun: Session + CircuitDoc + own SimBench + goals +
+                     meter + progress + Test circuit / Show me / Do it for me player), step.rs
                      (step panel), editor.rs ("Make your own lesson", LES-6)
 screens/firmware/    mod.rs (screen), build.rs (staging + compile), debug_panel.rs,
                      radio_panel.rs (RF-7 panel, reusable), libraries.rs (library manager, installer)
@@ -1129,6 +1160,21 @@ break-it card + Repair (`RepairAll` + default choice); code steps compile on a j
 (`code::compile`) and `Flash`; "Open in free play" writes the bench as a Playground project
 under `default_projects_dir()` and opens it. The lesson editor saves a lesson-pack plugin into
 the user plugin folder (it is active at once) and opens its first lesson.
+
+Feedback (`run.rs`, `step.rs`, `canvas/lesson_overlay.rs`): **Test circuit** runs
+`bb_lessons::diagnose` on the engine thread and keeps the `Diagnosis` until the circuit's
+generation changes; the step panel shows each open goal's finding under it. Hints escalate
+(`hints_shown`) to **Show me** (`guide::show_me`) and **Do it for me**: a `Player` replays the
+solution through `bb_lessons::apply` (`LessonRun: Target`), waiting on sim time for `run`,
+committing consecutive circuit edits with `Editor::replace_circuit("Do it for me")` (one undo
+step; the screen handles ⌘Z / ⇧⌘Z on the lesson doc). `LessonRun::overlay()` →
+`BenchCanvas::overlay` (marks, ghost jumpers, the success pulse, net hints while dragging a
+wire); `Spot::Control` marks ring step-panel widgets. A **Controls** card gives the solution's
+non-canvas actions a widget (world sliders, property fields, Add part, phone, MQTT publish)
+and Serial / MQTT / Phone boxes show what the step's goals listen to. `track_success` ticks
+goals, computes the payoff, pulses the parts and queues the chime (`AudioMsg::Chime` through
+a lazily opened `AudioOut`, `LessonsState::sound`); Next becomes the solid primary and tells
+what's left when disabled; finishing a lesson shows its completion card with "Next lesson".
 
 **Radio tools** (`widgets/radio_tools.rs`, `RF-6`/`RF-7`): the virtual phone (scan + RSSI,
 connect, GATT read / notify / write, BLE serial terminal, log) and the MQTT explorer (wildcard

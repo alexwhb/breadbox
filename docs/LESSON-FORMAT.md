@@ -78,10 +78,12 @@ Every step has a `kind`, a `title` and optional content:
 | `body` | Markdown shown in the step panel |
 | `formula` | one line in the formula box (`I = (5.0 V − 2.0 V) ÷ R`) |
 | `callouts` | `[[steps.callouts]] part, title, text`: canvas callouts pointing at a part |
-| `checks` | goals; all must pass to finish the step ([Checks](#checks)) |
+| `checks` | goals; all must pass to finish the step ([Checks](#checks)); each may carry a `label` |
 | `run` | bench seconds to run after the worked solution, before checking |
-| `hints` | hints shown on request (strings) |
-| `solution` | the worked solution ([Actions](#actions)) |
+| `hints` | hints shown on request, in order: hint 1, hint 2, … then Show me ([Feedback](#feedback)) |
+| `solution` | the worked solution ([Actions](#actions)) — what Show me draws and Do it for me does |
+| `why` | one line on *why* the solution works, shown with Show me and after Do it for me |
+| `success` | the payoff when the goals pass (`Loop closed`); the live values follow it (`Loop closed — D1 is lit at 13.6 mA`) |
 | `vars` | numbers for expressions and templates (`R1 = 1000.0`) |
 | `damage_title`, `damage_text`, `repair_label` | the "a part died" card (`Pop. That LED is gone.`) |
 | `next_label` | Next button label (default `Next: <next step's title in lower case>`, `Finish lesson` at the end) |
@@ -227,6 +229,19 @@ expression (`{3/R*1000:s}`), and unknown names stay as written. Specs:
 
 `checks = [{ type = "…", … }]`. Pins are `part.pin` (`r1.1`, `u1.D13`, `bb1.a5`).
 
+Goal labels are generated from the parts library and the breadboard, in words a beginner
+reads: `USB +5 V reaches R1's lead in column 5`, `D1 (red LED) lights up`, `The meter reads
+11–14.5 mA`, `UNO pin D13 switches at 0.5 Hz` (`bb_lessons::names` names supplies, part
+leads by the column they sit in, LEDs' long / short legs, board pins, meter jacks and rails).
+Values have a floor, so numerical dust reads `0 mA` / `off`, never `0 aA`. Override a label
+when the generated one is awkward (SPICE vectors, mostly):
+
+```toml
+checks = [
+    { type = "spice", analysis = ".op", vector = "i(v1)", min = -0.00026, max = -0.00024, label = "The supply's current reads −0.25 mA" },
+]
+```
+
 | type | fields | passes when |
 |---|---|---|
 | `connected` | `a`, `b` | the two pins share a net |
@@ -259,8 +274,9 @@ settle (the Handheld DMM autoranges in ~350 ms; run ≥ 1 s).
 ## Actions
 
 A worked solution is a list of actions, `solution = [{ do = "…", … }]`, replayed in order;
-then the bench runs for the step's `run` seconds and the checks are evaluated. The UI can
-replay them for "Show me how"; the solver test replays all of them.
+then the bench runs for the step's `run` seconds and the checks are evaluated. The solver test
+replays all of them; **Show me** draws them on the bench and **Do it for me** applies them on
+the live bench through the same code path (`bb_lessons::apply`).
 
 | do | fields | |
 |---|---|---|
@@ -285,6 +301,43 @@ replay them for "Show me how"; the solver test replays all of them.
 | `phone_terminal` | | open the phone's Bluetooth terminal |
 | `phone_send` | `text` | send from the terminal |
 | `publish` | `topic`, `payload` | publish to the bench's MQTT broker |
+
+## Feedback
+
+Every step the student works on (`build`, `measure`, `experiment`, `code`, `break`) gets the
+same help, driven by its checks and its worked solution:
+
+- **Test circuit** evaluates the goals now and explains each open one
+  (`bb_lessons::diagnose::diagnose`): *what's wrong* in plain words, *where* on the bench
+  (marks: a green glow on what the goal's source already reaches, pulsing amber rings on the
+  holes to use, a red marker on a wrong wire end) and the *next action*. For the user who
+  wired USB +5 V → the + rail → hole d11 while R1 sits in column 5: *"Your red jumper reaches
+  column 11, but R1's lead is in column 5. → Move it to any hole a5–e5."* The engine knows the
+  common mistakes in general — jumpers ending in an empty strip (wrong column, one column off,
+  the other half of the board, only as far as a rail), a wire to the wrong pin or jack, parts
+  not in holes, both leads in one strip, a part bypassed by a jumper, an LED in backwards, a
+  shorted supply, an open loop (and where), too little current to see, a burnt-out part, a
+  meter on the wrong dial setting / jack or in parallel where it must be in series, values out
+  of range, sketches that aren't loaded, don't compile or blink at the wrong rate — so a new
+  lesson needs no diagnosis of its own. When nothing specific is wrong, the next action is the
+  solution's next move (`Next: set the room light to 5 lux.`).
+- **Hints** escalate: hint 1 → hint 2 → … → **Show me** → **Do it for me**.
+- **Show me** lists the solution's moves (`Add a red jumper from USB +5 V to hole a5 (column
+  5)`), draws them on the bench (a ghost jumper growing from source to destination with a
+  label, the wire to remove crossed out, the control to use ringed) and shows the step's `why`.
+- **Do it for me** applies the solution over time on the live bench (`run` waits for it); the
+  circuit edits are one undo step. The success card then shows the `why`.
+- **Controls**: actions the canvas can't do get a control in the step panel — `world` a
+  slider, `set_prop` a value field, `add_part` an **Add R3** button, `phone_connect` /
+  `phone_terminal` / `phone_send` phone buttons and a message field, `publish` a payload
+  field, `repair` a button. Steps that check `serial_contains`, `mqtt` or `phone` show what
+  arrived (Serial / MQTT / Phone boxes). Write bodies against these, not the Workbench's panels.
+- **Success**: the goals tick, the step header turns green with the `success` payoff and the
+  live values, the part involved glows once, a chime plays (unless muted), and Next becomes the
+  primary button. A disabled Next says what's left on hover.
+
+Built-in lessons must pass `bb_lessons::audit`: every hands-on step has at least two hints, a
+worked solution and a `why` (`cargo test -p bb-lessons --test lessons`).
 
 ## Validation
 

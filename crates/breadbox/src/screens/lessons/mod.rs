@@ -780,6 +780,50 @@ impl Screen for LessonsScreen {
         Some(self)
     }
 
+    /// ⌘Z / ⇧⌘Z on the lesson bench (a student's wiring, "Do it for me" as one step).
+    fn command(&mut self, cmd: &crate::router::Command, app: &mut AppCtx) -> bool {
+        use crate::router::Command;
+        match cmd {
+            Command::Undo | Command::Redo if !app.text_has_focus() => {
+                let Some(run) = self.run.as_mut() else {
+                    return false;
+                };
+                let ok = if *cmd == Command::Undo {
+                    run.doc.undo()
+                } else {
+                    run.doc.redo()
+                };
+                if !ok {
+                    app.toasts.info(if *cmd == Command::Undo {
+                        "Nothing to undo"
+                    } else {
+                        "Nothing to redo"
+                    });
+                }
+                let ids: std::collections::HashSet<String> = run
+                    .doc
+                    .project()
+                    .wires
+                    .iter()
+                    .map(|w| w.id.clone())
+                    .collect();
+                run.canvas.selection.wires.retain(|w| ids.contains(w));
+                let parts: std::collections::HashSet<String> = run
+                    .doc
+                    .project()
+                    .parts
+                    .iter()
+                    .map(|p| p.id.clone())
+                    .collect();
+                run.canvas.selection.parts.retain(|p| parts.contains(p));
+                run.sync();
+                run.evaluate(true);
+                true
+            }
+            _ => false,
+        }
+    }
+
     fn ui(&mut self, ui: &mut Ui, app: &mut AppCtx) {
         self.ensure_catalog(app);
         if self.run.is_none()

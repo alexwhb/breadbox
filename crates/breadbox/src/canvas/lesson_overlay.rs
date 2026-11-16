@@ -321,12 +321,25 @@ pub fn net_hint(
 ) -> String {
     let n = bb_lessons::names::Namer::new(project, lib, conn);
     let place = n.where_is(part, pin);
+    // parts on a strip by their reference (`R1`, `D1 (+)`); supplies, boards and meters by pin
     let who: Vec<String> = n
         .net_pins(part, pin)
         .iter()
         .filter(|t| !(t.part == part && t.pin == pin))
-        .take(2)
-        .map(|t| n.pin(&t.part, &t.pin))
+        .take(3)
+        .map(|t| {
+            let full = n.pin(&t.part, &t.pin);
+            let r = n.reference(&t.part);
+            if full.starts_with(&format!("{r}'s long leg")) {
+                format!("{r} (+)")
+            } else if full.starts_with(&format!("{r}'s short leg")) {
+                format!("{r} (−)")
+            } else if full.starts_with(&format!("{r}'s")) {
+                r
+            } else {
+                full
+            }
+        })
         .collect();
     if who.is_empty() {
         let empty = conn

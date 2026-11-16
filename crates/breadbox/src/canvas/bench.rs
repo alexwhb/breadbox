@@ -375,8 +375,8 @@ impl BenchCanvas {
         if self.overlay.net_hints
             && let Drag::Wire { to, .. } = &self.drag
             && let Some(pin) = scene.pin_at(to.0, to.1, 0.45)
-            && let Some(at) = pointer
         {
+            let at = self.view.to_screen(pin.x, pin.y);
             let part = &scene.parts[pin.part];
             let text =
                 super::lesson_overlay::net_hint(doc.project(), &doc.lib, &conn, &part.id, &pin.pin);

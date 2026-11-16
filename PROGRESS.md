@@ -1255,3 +1255,44 @@ sandbox footer) are unchanged.
   (`tests/radio_tools.rs`), `pro-*.png`, `pcb`, `plugins`, `lessons*.png`; `home*`,
   `workbench*`, `widgets`, `session-*` are left to text-a / the lead (regenerate `session-*`
   after the merge).
+
+### lesson-feedback
+The learner's feedback on lesson 1 ("I feel stuck… I thought I solved it, but nothing
+happened… very anticlimactic"): they wired USB +5 V → the top + rail → hole d11 while R1 sits
+in column 5, and got `PS1.VBUS connected to R1.1 · not connected`, `D1 is lit · 0 aA` and a
+disabled Next. Now every hands-on step can be tested, explained, shown and done.
+
+- **Diagnosis engine** (`bb_lessons::diagnose`, pure, 17 tests on real lesson benches): per
+  goal *what's wrong*, *where* (marks) and the *next action*; for the user's attempt *"Your red
+  jumper reaches column 11, but R1's lead is in column 5. → Move it to any hole a5–e5."* with
+  d11 marked red, a5/b5/d5/e5 pulsing, the supply's net glowing. Mistakes covered generally:
+  not wired, wrong column, one column off, other half of the board, only as far as a rail,
+  wrong place / wrong pin or jack, loose and dead-end jumpers, leads over the centre gap,
+  both leads in one strip, bypassed parts, reversed LEDs, shorted supplies, open loops (and
+  where), too little current, burnt-out parts, a paused bench, a jumper that must go, meter
+  dial / jack / parallel-vs-series / settling, values out of range, missing parts, sketches
+  not loaded / not compiling / wrong rate / never switching; state goals (serial, MQTT, phone,
+  world, SPICE) say what's there and fall back to the solution's next move.
+- **Friendly names** (`bb_lessons::names`): goals read `USB +5 V reaches R1's lead in column
+  5`, `D1 (red LED) lights up · off`; values have a floor (no `0 aA`); TOML `label` overrides.
+- **One apply path** (`bb_lessons::apply`): the scripted solver and "Do it for me" share it.
+- **Lessons screen**: Test circuit; Hint → Next hint → Show me (ghost jumper, wire to remove,
+  control to use, why) → Do it for me (one undo step; ⌘Z / ⇧⌘Z now work on the lesson bench);
+  bench overlays; drag-a-wire net hints; Controls card (world sliders, part values, Add R3,
+  phone, MQTT) and Serial / MQTT / Phone boxes — lesson bodies used to point at panels the
+  Lessons screen doesn't have; success state (ticks animate, green header with the live
+  payoff, the part pulses, chime with a header mute toggle, Next solid primary, disabled Next
+  says what's left); lesson-complete card with "Next lesson".
+- **Content** (all 24 lessons): every build / measure / experiment / code / break step has two
+  hints, a worked solution, a `why` and a payoff phrase (`bb_lessons::audit` + test); bodies
+  name the lesson controls instead of the World panel / Serial Monitor / inspector / phone /
+  MQTT explorer; SPICE goals have readable labels. Lesson 3's design text is unchanged.
+- **Tests**: `bb-lessons/tests/diagnose.rs` (the user's attempt + each mistake, every failing
+  goal of every lesson gets a next action, Show me covers every action),
+  `lessons.rs::every_hands_on_step_has_hints_a_solution_and_a_why`, solver (all 24 lessons
+  through the shared apply path); GUI `breadbox/tests/lesson_feedback.rs` (lesson 1 end to end
+  from the user's attempt, lesson 3 meter in parallel, 1280×800, Controls card, drag hint).
+- **Screenshots**: `docs/screenshots/lessons-{diagnosis,diagnosis-1280,show-me,success,complete,meter-parallel,controls,drag-hint}.png`.
+- **Open**: no auto-zoom to a diagnosis' marks (the lesson bench fits once); Pro lessons'
+  schematic canvas gets no overlay (their diagnoses are values, not places).
+

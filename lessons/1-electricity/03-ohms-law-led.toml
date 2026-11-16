@@ -31,7 +31,7 @@ hints = [
     "Expect about 13 mA: 3.0 V across 220 Ω.",
 ]
 why = "In a series loop the same current flows through R1, D1 and the meter, so the meter shows the LED's current."
-success = "Read"
+success = "Measured"
 body = "With R1 = 220 Ω the LED is lit. Read the meter: that's the current through R1, D1 and the meter. It's the same everywhere in a series loop."
 checks = [
     { type = "reading", part = "dmm1", key = "value", min = 0.011, max = 0.0145 },

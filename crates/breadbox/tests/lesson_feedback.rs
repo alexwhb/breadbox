@@ -236,6 +236,23 @@ fn lesson_1_users_attempt_test_show_do_it_success_and_completion() {
         screen(&mut h).run.as_ref().unwrap().doc.editor.undo_label(),
         Some("Do it for me")
     );
+    // ⌘Z takes the whole "Do it for me" back in one step, ⇧⌘Z redoes it
+    let wires = |h: &mut H| screen(h).run.as_ref().unwrap().doc.project().wires.len();
+    let before = wires(&mut h);
+    h.state_mut().ctx.command(breadbox::router::Command::Undo);
+    h.run_steps(4);
+    assert_eq!(
+        wires(&mut h),
+        before - 1,
+        "undo removes the solution's jumper"
+    );
+    h.state_mut().ctx.command(breadbox::router::Command::Redo);
+    h.run_steps(4);
+    assert_eq!(wires(&mut h), before);
+    assert!(
+        wait_for(&mut h, 60.0, |h| enabled(h, "Next: break the loop")),
+        "redo passes the step again"
+    );
     // the success state: green header with the live payoff, why, Next as the primary action
     assert!(
         wait_for(&mut h, 10.0, |h| has_label_containing(
@@ -368,4 +385,138 @@ fn diagnosis_reads_at_the_minimum_window_size() {
     h.state_mut().ctx.toasts.clear();
     h.run_steps(2);
     screenshot(&mut h, "lessons-diagnosis-1280");
+    // and the success state at the minimum size
+    h.get_by_label("Do it for me").click();
+    assert!(wait_for(&mut h, 60.0, |h| enabled(
+        h,
+        "Next: break the loop"
+    )));
+    assert!(wait_for(&mut h, 10.0, |h| has_label_containing(
+        h,
+        "Done: Loop closed"
+    )));
+    std::thread::sleep(std::time::Duration::from_millis(400));
+    h.run_steps(6);
+    shot(&mut h, "lessons-success-1280");
+}
+
+#[test]
+fn controls_card_world_slider_part_value_and_add_part() {
+    let mut h = harness();
+    go(&mut h, Route::Lessons);
+    // night light: the room light is a control in the step panel
+    h.get_by_label("Sensors & the real world").click();
+    h.run_steps(4);
+    h.get_by_label("Lesson 3: A night light that thinks")
+        .click();
+    h.run_steps(4);
+    next(&mut h, "Next: daylight");
+    next(&mut h, "Next: night falls");
+    assert!(has_label(&h, "Night falls"));
+    assert!(
+        wait_for(&mut h, 20.0, |h| has_label(h, "Room light (lux)")),
+        "the room light slider"
+    );
+    assert!(has_label_containing(&h, "Serial: light="), "the serial box");
+    h.get_by_label("Show me").click();
+    h.run_steps(4);
+    assert!(has_label(&h, "Show me: Set the room light to 5 lux"));
+    h.run_steps(4);
+    shot(&mut h, "lessons-controls");
+    h.get_by_label("Do it for me").click();
+    next(&mut h, "Next: where it switches");
+
+    // voltage dividers: Do it for me through a table of predictions, then a part value + Add R3
+    go(&mut h, Route::Lessons);
+    h.get_by_label("Electricity you can see").click();
+    h.run_steps(4);
+    h.get_by_label("Lesson 5: Voltage dividers").click();
+    h.run_steps(4);
+    next(&mut h, "Next: change r2, predict the middle");
+    h.get_by_label("Do it for me").click();
+    h.run_steps(4);
+    next(&mut h, "Next: load it down");
+    assert!(has_label(&h, "R2 resistance"));
+    assert!(has_label(&h, "Add R3"));
+    // type the value and Set
+    h.get_by_label("R2 resistance").click();
+    h.run_steps(1);
+    for _ in 0..8 {
+        h.key_press(egui::Key::Backspace);
+    }
+    h.get_by_label("R2 resistance").type_text("10k");
+    h.run_steps(1);
+    h.get_by_label("Set R2 resistance").click();
+    h.run_steps(4);
+    let r2 = {
+        let run = screen(&mut h).run.as_ref().unwrap();
+        let p = run.doc.project().part("r2").unwrap();
+        let d = run.doc.lib.get(&p.part).unwrap();
+        bb_circuit::Project::prop_f64(d, p, "resistance").unwrap()
+    };
+    assert!((r2 - 10_000.0).abs() < 1.0, "R2 = {r2}");
+    h.get_by_label("Add R3").click();
+    h.run_steps(4);
+    assert!(
+        screen(&mut h)
+            .run
+            .as_ref()
+            .unwrap()
+            .doc
+            .project()
+            .part("r3")
+            .is_some(),
+        "R3 added"
+    );
+    h.get_by_label("Test circuit").click();
+    h.run_steps(4);
+    assert!(
+        wait_for(&mut h, 20.0, |h| has_label_containing(
+            h,
+            "Problem: Nothing connects R3's lead in column"
+        ) || has_label_containing(
+            h,
+            "Problem: Nothing connects R3"
+        )),
+        "{:?}",
+        text_of(&h, "Problem:")
+    );
+}
+
+#[test]
+fn dragging_a_wire_in_a_lesson_says_which_net_a_hole_joins() {
+    let mut h = harness();
+    go(&mut h, Route::Lessons);
+    h.get_by_label("Lesson 1: What is a circuit?").click();
+    h.run_steps(4);
+    next(&mut h, "Next: close the loop");
+    h.run_steps(5);
+    let a = pin_screen(&mut h, "ps1", "VBUS");
+    let b = pin_screen(&mut h, "bb1", "b5");
+    h.hover_at(a);
+    h.run_steps(1);
+    h.event(egui::Event::PointerButton {
+        pos: a,
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.run_steps(1);
+    for i in 1..=10 {
+        h.hover_at(a + (b - a) * (i as f32 / 10.0));
+        h.run_steps(1);
+    }
+    h.run_steps(2);
+    shot(&mut h, "lessons-drag-hint");
+    h.event(egui::Event::PointerButton {
+        pos: b,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.run_steps(4);
+    assert!(
+        wait_for(&mut h, 30.0, |h| enabled(h, "Next: break the loop")),
+        "a jumper into b5 closes the loop"
+    );
 }

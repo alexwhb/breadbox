@@ -933,15 +933,17 @@ fn controls_section(
                         let title = bb_lessons::check::sentence(&name);
                         label(ui, &title, font::ui(12.5), p.text_dim);
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            let v = format!("{} {unit}", bb_lessons::text::smart(cur));
+                            let v = format!("{} {unit}", bb_lessons::text::smart(cur))
+                                .replace(".0 ", " ");
                             label(ui, v.trim(), font::mono(12.0), p.text);
                         });
                     });
                     let mut v = cur.clamp(lo, hi);
+                    ui.spacing_mut().slider_width = ui.available_width();
                     let sl = egui::Slider::new(&mut v, lo..=hi)
                         .logarithmic(log)
                         .show_value(false);
-                    let r = ui.add_sized(vec2(ui.available_width(), 18.0), sl);
+                    let r = ui.add(sl);
                     let an = format!("{} ({unit})", bb_lessons::check::sentence(&name));
                     r.widget_info(|| egui::WidgetInfo::slider(true, v, &an));
                     if run.is_marked(&id) {
@@ -1267,18 +1269,14 @@ fn finding_view(ui: &mut Ui, f: &Finding, cmd: &mut Option<Action>) {
             let a = format!("Next: {}", f.fix);
             r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, &a));
         }
-        match f.action {
-            Some(Fix::Repair) => {
-                if Btn::mini("Repair").icon(Icon::Wrench).show(ui).clicked() {
-                    *cmd = Some(Action::Fix(Fix::Repair));
-                }
+        if let Some(fix) = f.action {
+            let (text, icon) = match fix {
+                Fix::Repair => ("Repair", Icon::Wrench),
+                Fix::Run => ("Run", Icon::Play),
+            };
+            if Btn::mini(text).icon(icon).show(ui).clicked() {
+                *cmd = Some(Action::Fix(fix));
             }
-            Some(Fix::Run) => {
-                if Btn::mini("Run").icon(Icon::Play).show(ui).clicked() {
-                    *cmd = Some(Action::Fix(Fix::Run));
-                }
-            }
-            None => {}
         }
     });
 }
@@ -1422,7 +1420,19 @@ fn help_section(
 ) {
     let p = pal(ui);
     let passed = run.passed_at.is_some();
-    let hands_on = step.is_hands_on();
+    // build / measure / experiment / code / break steps, and any step with circuit or bench
+    // goals (a prediction that needs the meter set up); a measurements table's checkpoint
+    // already says what's left
+    let hands_on = step.table.is_none() && step.is_hands_on()
+        || step.table.is_none()
+            && step.checks.iter().any(|c| {
+                !matches!(
+                    c,
+                    bb_lessons::format::Check::Prediction
+                        | bb_lessons::format::Check::Quiz
+                        | bb_lessons::format::Check::Measurements { .. }
+                )
+            });
     let has_solution = !step.solution.is_empty();
     ui.vertical(|ui| {
         ui.spacing_mut().item_spacing.y = 8.0;

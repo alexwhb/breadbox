@@ -537,7 +537,7 @@ fn a_sketch_on_the_wrong_pin_never_changes_it() {
     // digital-outputs wants D8 at 5 Hz; the blink image toggles D13
     let mut r = at_step("digital-outputs", 1);
     let img =
-        bb_sim::firmware::load_image(&root().join("lessons/1-electricity/firmware/blink.uno.hex"))
+        bb_sim::firmware::load_image(root().join("lessons/1-electricity/firmware/blink.uno.hex"))
             .unwrap();
     r.upload("u1", &img).unwrap();
     r.run(2.0).unwrap();
