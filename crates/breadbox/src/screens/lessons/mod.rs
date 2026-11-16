@@ -32,11 +32,23 @@ pub enum LessonsView {
 }
 
 /// Persisted state.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct LessonsState {
     pub track: Option<String>,
     pub lesson: Option<String>,
+    /// The success chime.
+    pub sound: bool,
+}
+
+impl Default for LessonsState {
+    fn default() -> Self {
+        LessonsState {
+            track: None,
+            lesson: None,
+            sound: true,
+        }
+    }
 }
 
 pub struct LessonsScreen {
@@ -50,6 +62,14 @@ pub struct LessonsScreen {
     saved_lesson: Option<String>,
     generation: u64,
     pub error: Option<String>,
+    /// The success chime is on (the header's speaker button).
+    pub sound: bool,
+    audio: Option<crate::bench::audio::AudioOut>,
+    /// Chimes played (tests read this; the app may have no audio device).
+    pub chimes: u32,
+    /// The lesson just finished: the step panel shows its celebration.
+    pub completed: Option<String>,
+    pub(super) completed_at: Option<std::time::Instant>,
 }
 
 impl Default for LessonsScreen {
@@ -65,6 +85,11 @@ impl Default for LessonsScreen {
             saved_lesson: None,
             generation: 1000,
             error: None,
+            sound: true,
+            audio: None,
+            chimes: 0,
+            completed: None,
+            completed_at: None,
         }
     }
 }
@@ -121,9 +146,21 @@ impl LessonsScreen {
         self.open_at(app, &l, resume);
     }
 
+    /// Plays the success chime (when sounds are on and the app has audio).
+    fn chime(&mut self, app: &AppCtx) {
+        self.chimes += 1;
+        if !self.sound || !app.bench.audio {
+            return;
+        }
+        self.audio
+            .get_or_insert_with(crate::bench::audio::AudioOut::new)
+            .send(crate::bench::audio::AudioMsg::Chime);
+    }
+
     /// Opens a lesson at a step.
     pub fn open_at(&mut self, app: &mut AppCtx, l: &LoadedLesson, step: usize) {
         self.run = None; // stops the previous bench
+        self.completed = None;
         let bp = app.plugins.bench_plugins();
         self.generation += 1;
         match LessonRun::open(
@@ -221,6 +258,151 @@ impl LessonsScreen {
             Err(e) => {
                 app.toasts.error(e);
                 None
+            }
+        }
+    }
+
+    /// The next lesson of the open lesson's track.
+    fn next_lesson(&self) -> Option<LoadedLesson> {
+        let run = self.run.as_ref()?;
+        let lessons = self.track_lessons(&run.session.lesson.track);
+        let i = lessons
+            .iter()
+            .position(|l| l.lesson.id == run.session.lesson.id)?;
+        lessons.get(i + 1).cloned()
+    }
+
+    /// The lesson is done: a small celebration and "Next lesson".
+    fn completion_panel(&mut self, ui: &mut Ui, app: &mut AppCtx, rect: Rect) {
+        let p = pal(ui);
+        let Some(run) = self.run.as_ref() else { return };
+        let title = run.session.lesson.title.clone();
+        let n = run.session.lesson.steps.len();
+        let next = self.next_lesson();
+        let t = self
+            .completed_at
+            .map(|t| t.elapsed().as_secs_f32())
+            .unwrap_or(9.0);
+        if t < 2.0 {
+            ui.ctx()
+                .request_repaint_after(std::time::Duration::from_millis(16));
+        }
+        let inner = rect.shrink(20.0);
+        let mut c = widgets::child_ui(ui, inner);
+        let mut go_next = false;
+        let mut review = false;
+        c.vertical(|ui| {
+            ui.spacing_mut().item_spacing.y = 14.0;
+            // every step's segment green
+            let w = ui.available_width();
+            let (r, _) = ui.allocate_exact_size(vec2(w, 4.0), Sense::hover());
+            let gap = 4.0;
+            let seg = (w - gap * (n as f32 - 1.0)) / n.max(1) as f32;
+            for i in 0..n {
+                let k = ((t - i as f32 * 0.08) / 0.25).clamp(0.0, 1.0);
+                ui.painter().rect_filled(
+                    Rect::from_min_size(
+                        pos2(r.left() + i as f32 * (seg + gap), r.top()),
+                        vec2(seg * k, 4.0),
+                    ),
+                    CornerRadius::same(2),
+                    p.ok,
+                );
+            }
+            ui.add_space(16.0);
+            // the badge: a green disc that swells in with a check, and one ring going out
+            let (br, _) = ui.allocate_exact_size(vec2(w, 96.0), Sense::hover());
+            let k = {
+                let x = (t / 0.45).clamp(0.0, 1.0);
+                let c1 = 1.70158;
+                1.0 + (c1 + 1.0) * (x - 1.0).powi(3) + c1 * (x - 1.0).powi(2)
+            };
+            let c = br.center();
+            if t < 1.6 {
+                let b = (t / 1.6).clamp(0.0, 1.0);
+                ui.painter().circle_stroke(
+                    c,
+                    40.0 + 40.0 * b,
+                    Stroke::new(
+                        3.0 * (1.0 - b),
+                        Color32::from_rgb(0x6F, 0xD4, 0x8F).gamma_multiply(1.0 - b),
+                    ),
+                );
+            }
+            ui.painter()
+                .circle_filled(c, 40.0 * k, Color32::from_rgb(0x1C, 0x2A, 0x1F));
+            ui.painter().circle_stroke(
+                c,
+                40.0 * k,
+                Stroke::new(2.0, Color32::from_rgb(0x2F, 0x5A, 0x3A)),
+            );
+            widgets::Icon::Check.paint(
+                ui.painter(),
+                Rect::from_center_size(c, vec2(36.0, 36.0) * k),
+                Color32::from_rgb(0x6F, 0xD4, 0x8F),
+            );
+            ui.vertical_centered(|ui| {
+                ui.spacing_mut().item_spacing.y = 6.0;
+                let h = ui.add(egui::Label::new(
+                    egui::RichText::new("Lesson complete")
+                        .font(font::heading(24.0))
+                        .color(Color32::from_rgb(0x6F, 0xD4, 0x8F)),
+                ));
+                h.widget_info(|| {
+                    egui::WidgetInfo::labeled(egui::Role::Heading, true, "Lesson complete")
+                });
+                ui.label(
+                    egui::RichText::new(&title)
+                        .font(font::medium(15.0))
+                        .color(p.text),
+                );
+                let steps = if n == 1 {
+                    "1 step".to_string()
+                } else {
+                    format!("{n} steps")
+                };
+                ui.label(
+                    egui::RichText::new(steps)
+                        .font(font::ui(12.5))
+                        .color(p.text_muted),
+                );
+            });
+            ui.add_space(10.0);
+            match &next {
+                Some(l) => {
+                    let text = format!("Next lesson: {}", l.lesson.title);
+                    if Btn::amber(&text)
+                        .full_width()
+                        .height(40.0)
+                        .show(ui)
+                        .clicked()
+                    {
+                        go_next = true;
+                    }
+                }
+                None => {
+                    ui.vertical_centered(|ui| {
+                        ui.label(
+                            egui::RichText::new("Track complete")
+                                .font(font::medium(13.0))
+                                .color(Color32::from_rgb(0x6F, 0xD4, 0x8F)),
+                        );
+                    });
+                }
+            }
+            if Btn::ghost("Review steps").full_width().show(ui).clicked() {
+                review = true;
+            }
+        });
+        if go_next && let Some(l) = next {
+            self.open_lesson(app, &l.lesson.id);
+        } else if review {
+            self.completed = None;
+            let id = self.run.as_ref().map(|r| r.session.lesson.id.clone());
+            if let Some(id) = id
+                && let Some(l) = self.lesson(&id)
+            {
+                self.open_at(app, &l, 0);
             }
         }
     }
@@ -330,6 +512,7 @@ impl LessonsScreen {
         };
         crate::canvas::plugin_parts::set_masked(masked);
         let gen_ = run.generation;
+        run.canvas.overlay = run.overlay();
         if run.bench.is_some() {
             let out = run
                 .canvas
@@ -545,6 +728,19 @@ impl Screen for LessonsScreen {
             if self.run.is_some() && Btn::ghost("Open in free play").show(ui).clicked() {
                 self.free_play(app);
             }
+            let (icon, name) = if self.sound {
+                (widgets::Icon::Speaker, "Lesson sounds on")
+            } else {
+                (widgets::Icon::SpeakerOff, "Lesson sounds off")
+            };
+            if Btn::ghost(name)
+                .icon_only(icon)
+                .tooltip("Plays a chime when a step's goals are met")
+                .show(ui)
+                .clicked()
+            {
+                self.sound = !self.sound;
+            }
             if let Some((n, of)) = self.position() {
                 let (r, _) = ui.allocate_exact_size(vec2(140.0, 6.0), Sense::hover());
                 ui.painter().rect_filled(r, CornerRadius::same(3), p.border);
@@ -643,7 +839,17 @@ impl Screen for LessonsScreen {
             Stroke::new(1.0, p.border),
         );
         if self.run.is_some() {
-            self.step_panel(ui, app, right);
+            if self.completed.is_some() {
+                self.completion_panel(ui, app, right);
+            } else {
+                self.step_panel(ui, app, right);
+            }
+            if let Some(run) = self.run.as_mut()
+                && run.chime_due
+            {
+                run.chime_due = false;
+                self.chime(app);
+            }
         }
         let _ = StrokeKind::Inside;
     }
@@ -656,6 +862,7 @@ impl Screen for LessonsScreen {
                 .as_ref()
                 .map(|r| r.session.lesson.id.clone())
                 .or_else(|| self.saved_lesson.clone()),
+            sound: self.sound,
         })
         .ok()
     }
@@ -664,6 +871,7 @@ impl Screen for LessonsScreen {
         if let Ok(s) = serde_json::from_value::<LessonsState>(state.clone()) {
             self.track = s.track;
             self.saved_lesson = s.lesson;
+            self.sound = s.sound;
         }
     }
 }

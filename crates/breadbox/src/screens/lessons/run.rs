@@ -13,12 +13,28 @@ use crate::jobs::Job;
 use crate::widgets::{CodeDoc, EditorView};
 use bb_circuit::{Library, PropValue};
 use bb_lessons::check::CheckResult;
+use bb_lessons::diagnose::{Diagnosis, Mark, Spot};
+use bb_lessons::format::Action;
+use bb_lessons::guide::ShowMe;
 use bb_lessons::session::{Edit, Session};
-use bb_lessons::{LoadedLesson, Progress};
+use bb_lessons::{LessonError, LoadedLesson, Progress};
 use bb_sim::{Command, Telemetry};
+use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+
+/// "Do it for me" in progress: the step's worked solution, replayed over time on the live bench
+/// (circuit edits as one undoable transaction, `run` = wait for the bench).
+#[derive(Debug, Clone)]
+pub struct Player {
+    queue: VecDeque<Action>,
+    /// Waiting until the bench reaches this sim time.
+    wait_until: Option<f64>,
+    /// A failing action is retried for a few seconds (the phone still scanning …).
+    retry_since: Option<Instant>,
+    pub started: Instant,
+}
 
 /// Result of compiling a code step's sketch.
 pub type BuildResult = Result<bb_lessons::code::Build, String>;
@@ -59,6 +75,35 @@ pub struct LessonRun {
     pub zoomed: bool,
     /// The bench folder (firmware paths of the lesson circuit are relative to it).
     pub dir: PathBuf,
+    /// "Test circuit": the diagnosis of the current circuit (cleared when it changes).
+    pub diagnosis: Option<Diagnosis>,
+    /// Hints shown so far (they escalate: hint 1, hint 2 …, then Show me, then Do it for me).
+    pub hints_shown: usize,
+    /// "Show me" is open.
+    pub show_me: Option<ShowMe>,
+    /// Show me was opened on this step (Do it for me is the next suggestion).
+    pub show_me_used: bool,
+    show_me_at: Option<Instant>,
+    /// "Do it for me" in progress.
+    pub player: Option<Player>,
+    /// Do it for me finished on this step (the success card says why it works).
+    pub did_it: bool,
+    /// Do it for me failed (what went wrong).
+    pub player_error: Option<String>,
+    /// When the goals first all passed on this step (success animation).
+    pub passed_at: Option<Instant>,
+    /// `Loop closed — D1 is lit at 13.6 mA`.
+    pub payoff: String,
+    /// Per goal: when it turned green (tick animation).
+    pub goal_ok_at: Vec<Option<Instant>>,
+    /// The success chime is due (the screen plays it when sounds are on).
+    pub chime_due: bool,
+    /// Text of the panel's controls (property fields, phone message, MQTT payload).
+    pub fields: HashMap<String, String>,
+    /// Circuit edits made through [`bb_lessons::apply`] wait for one commit.
+    circuit_dirty: bool,
+    /// The last lines the step's MCU printed (for steps that check serial output).
+    pub serial_tail: Vec<String>,
 }
 
 /// Where a lesson's circuit files live (bench file folder or the example).
@@ -148,6 +193,21 @@ impl LessonRun {
             show_hint: false,
             zoomed: false,
             dir,
+            diagnosis: None,
+            hints_shown: 0,
+            show_me: None,
+            show_me_used: false,
+            show_me_at: None,
+            player: None,
+            did_it: false,
+            player_error: None,
+            passed_at: None,
+            payoff: String::new(),
+            goal_ok_at: Vec::new(),
+            chime_due: false,
+            fields: HashMap::new(),
+            circuit_dirty: false,
+            serial_tail: Vec::new(),
         };
         run.set_running(true);
         run.enter_step();
@@ -181,6 +241,19 @@ impl LessonRun {
         self.pending = None;
         self.recorded = None;
         self.show_hint = false;
+        self.diagnosis = None;
+        self.hints_shown = 0;
+        self.show_me = None;
+        self.show_me_used = false;
+        self.player = None;
+        self.did_it = false;
+        self.player_error = None;
+        self.passed_at = None;
+        self.payoff.clear();
+        self.goal_ok_at.clear();
+        self.chime_due = false;
+        self.fields.clear();
+        self.serial_tail.clear();
         self.code = self.session.current().code.as_ref().map(|c| {
             let mut d = CodeDoc::new("sketch.ino", c.starter.clone());
             d.read_only = false;
@@ -195,6 +268,8 @@ impl LessonRun {
         let g = self.doc.generation();
         if g != self.bench_gen {
             self.bench_gen = g;
+            // a diagnosis describes the circuit it was made for
+            self.diagnosis = None;
             self.session.editor.project = self.doc.project().clone();
             if let Some(b) = self.bench.as_mut() {
                 b.update_project(self.doc.project().clone());
@@ -400,6 +475,30 @@ impl LessonRun {
             let passed = self.step_passed();
             self.session.mark(passed);
         }
+        // what the MCU printed, for steps that check it
+        let mcu = self.session.current().checks.iter().find_map(|c| match c {
+            bb_lessons::format::Check::SerialContains { mcu, .. } => Some(mcu.clone()),
+            _ => None,
+        });
+        if let (Some(mcu), Some(b)) = (mcu, &self.bench)
+            && let Some(lines) = b.with_bench(move |bench| {
+                bench
+                    .serial(&mcu)
+                    .map(|s| {
+                        let mut v: Vec<String> = s
+                            .data_lines()
+                            .map(|l| l.text.trim_end().to_string())
+                            .filter(|l| !l.is_empty())
+                            .collect();
+                        let n = v.len().saturating_sub(4);
+                        v.drain(..n);
+                        v
+                    })
+                    .unwrap_or_default()
+            })
+        {
+            self.serial_tail = lines;
+        }
     }
 
     /// Every goal of the step holds.
@@ -589,6 +688,342 @@ impl LessonRun {
         }
     }
 
+    // ------------------------------------------------------------------ feedback
+
+    /// "Test circuit": diagnoses the step now (on the engine thread, like the goals).
+    pub fn test_circuit(&mut self) {
+        let step = self.session.current().clone();
+        let project = self.doc.project().clone();
+        let lib = self.lib.clone();
+        let state = self.session.state().clone();
+        let opts = bb_lessons::diagnose::Options {
+            running: self.bench.is_none() || self.is_running(),
+            compile_errors: self.compile_errors(),
+        };
+        let d = match &self.bench {
+            Some(b) => b.with_bench(move |bench| {
+                bb_lessons::diagnose::diagnose(&step, &project, &lib, Some(bench), &state, &opts)
+            }),
+            None => Some(bb_lessons::diagnose::diagnose(
+                &step, &project, &lib, None, &state, &opts,
+            )),
+        };
+        if let Some(d) = d {
+            self.diagnosis = Some(d);
+        }
+        self.evaluate(true);
+    }
+
+    /// Errors of the last compile of the student's sketch (`line 5: expected ';'`).
+    pub fn compile_errors(&self) -> Vec<String> {
+        self.code
+            .as_ref()
+            .map(|c| {
+                c.diagnostics
+                    .iter()
+                    .filter(|d| d.severity == crate::widgets::DiagSeverity::Error)
+                    .map(|d| format!("line {}: {}", d.line, d.message))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// The next hint (hint 1, hint 2 …).
+    pub fn next_hint(&mut self) {
+        let n = self.session.current().hints.len();
+        self.hints_shown = (self.hints_shown + 1).min(n);
+    }
+
+    /// Opens / closes "Show me".
+    pub fn toggle_show_me(&mut self) {
+        if self.show_me.is_some() {
+            self.show_me = None;
+        } else {
+            self.show_me = Some(bb_lessons::guide::show_me(
+                self.session.current(),
+                self.doc.project(),
+                &self.lib,
+            ));
+            self.show_me_used = true;
+            self.show_me_at = Some(Instant::now());
+        }
+    }
+
+    /// "Do it for me": replays the step's worked solution on the live bench.
+    pub fn do_it(&mut self) {
+        let queue: VecDeque<Action> = self.session.current().solution.iter().cloned().collect();
+        self.show_me = None;
+        self.player_error = None;
+        self.diagnosis = None;
+        self.player = Some(Player {
+            queue,
+            wait_until: None,
+            retry_since: None,
+            started: Instant::now(),
+        });
+        self.tick_player();
+    }
+
+    fn sim_time(&self) -> f64 {
+        self.telemetry()
+            .map(|t| t.time.as_secs_f64())
+            .unwrap_or(0.0)
+    }
+
+    /// Advances "Do it for me" (call every frame).
+    pub fn tick_player(&mut self) {
+        let Some(mut pl) = self.player.take() else {
+            return;
+        };
+        let now = self.sim_time();
+        loop {
+            if let Some(until) = pl.wait_until {
+                if self.bench.is_some()
+                    && now < until
+                    && pl.started.elapsed() < Duration::from_secs(30)
+                {
+                    self.player = Some(pl);
+                    return;
+                }
+                pl.wait_until = None;
+            }
+            let Some(a) = pl.queue.pop_front() else {
+                break;
+            };
+            if let Action::Run { seconds } = a {
+                pl.wait_until = Some(now + seconds.max(0.0));
+                continue;
+            }
+            self.session.editor.project = self.doc.project().clone();
+            if bb_lessons::apply::is_circuit(&a) {
+                // consecutive circuit edits become one undoable step
+                let mut group = vec![a];
+                while pl.queue.front().is_some_and(bb_lessons::apply::is_circuit) {
+                    group.extend(pl.queue.pop_front());
+                }
+                let mut err = None;
+                for g in &group {
+                    if let Err(e) = bb_lessons::apply::apply(self, g) {
+                        err = Some(e);
+                        break;
+                    }
+                }
+                self.commit_circuit();
+                if let Some(e) = err {
+                    self.player_error = Some(e.to_string());
+                    break;
+                }
+                continue;
+            }
+            match bb_lessons::apply::apply(self, &a) {
+                Ok(()) => pl.retry_since = None,
+                Err(e) => {
+                    // the bench may not have caught up yet (the phone's scan, a meter settling)
+                    let since = *pl.retry_since.get_or_insert_with(Instant::now);
+                    if since.elapsed() < Duration::from_secs(6) {
+                        pl.queue.push_front(a);
+                        pl.wait_until = Some(now + 0.05);
+                        self.player = Some(pl);
+                        return;
+                    }
+                    self.player_error = Some(e.to_string());
+                    break;
+                }
+            }
+        }
+        self.did_it = self.player_error.is_none();
+        self.evaluate(true);
+    }
+
+    /// The circuit edits the player made reach the document as one undo step.
+    fn commit_circuit(&mut self) {
+        if !self.circuit_dirty {
+            return;
+        }
+        self.circuit_dirty = false;
+        let next = self.session.editor.project.clone();
+        if self.doc.editor.replace_circuit("Do it for me", &next) {
+            self.doc.touched();
+        }
+        self.sync();
+    }
+
+    /// Success tracking (call every frame after `evaluate`): goal ticks, the payoff, the chime.
+    pub fn track_success(&mut self) {
+        if self.goal_ok_at.len() != self.goals.len() {
+            self.goal_ok_at = vec![None; self.goals.len()];
+        }
+        for (i, g) in self.goals.iter().enumerate() {
+            if !g.ok {
+                self.goal_ok_at[i] = None;
+            } else if self.goal_ok_at[i].is_none() {
+                self.goal_ok_at[i] = Some(Instant::now());
+            }
+        }
+        let passed = self.step_passed() && !self.goals.is_empty();
+        if passed && self.passed_at.is_none() {
+            self.passed_at = Some(Instant::now());
+            let conn = self.doc.connectivity();
+            let n = bb_lessons::names::Namer::new(self.doc.project(), &self.lib, &conn);
+            self.payoff = bb_lessons::diagnose::payoff(self.session.current(), &n, &self.goals);
+            self.chime_due = self.session.current().is_hands_on()
+                || self.session.current().quiz.is_some()
+                || self.session.current().predict.is_some();
+            self.show_me = None;
+            self.diagnosis = None;
+        } else if !passed
+            && self
+                .passed_at
+                .is_some_and(|t| t.elapsed() > Duration::from_secs(1))
+        {
+            // the circuit changed back: the success state goes (it plays again next time)
+            self.passed_at = None;
+        }
+    }
+
+    /// Parts the step is about (they glow once when the goals pass).
+    pub fn celebrated_parts(&self) -> Vec<String> {
+        use bb_lessons::format::Check;
+        let mut out = Vec::new();
+        for c in &self.session.current().checks {
+            let p = match c {
+                Check::LedLit { part, .. } | Check::LedOff { part } | Check::Damaged { part } => {
+                    part.clone()
+                }
+                Check::Reading { part, .. } => part.clone(),
+                Check::PinFrequency { mcu, .. } | Check::SerialContains { mcu, .. } => mcu.clone(),
+                Check::Voltage { a, .. } => bb_lessons::names::split(a).0.to_string(),
+                _ => continue,
+            };
+            if !out.contains(&p) {
+                out.push(p);
+            }
+        }
+        out
+    }
+
+    /// What the bench canvas draws for the lesson.
+    pub fn overlay(&self) -> crate::canvas::lesson_overlay::Overlay {
+        let mut o = crate::canvas::lesson_overlay::Overlay {
+            net_hints: true,
+            ..Default::default()
+        };
+        if let Some(d) = &self.diagnosis {
+            o.marks.extend(d.marks());
+        }
+        if let Some(s) = &self.show_me {
+            o.marks.extend(s.marks().cloned());
+            o.ghosts = s.moves.iter().filter_map(|m| m.ghost.clone()).collect();
+            o.ghost_age = self
+                .show_me_at
+                .map(|t| t.elapsed().as_secs_f64())
+                .unwrap_or(9.0);
+        }
+        if let Some(t) = self.passed_at {
+            o.celebrate = self.celebrated_parts();
+            o.celebrate_age = t.elapsed().as_secs_f64();
+        }
+        o.dedup();
+        o
+    }
+
+    /// Marks pointing at a step-panel control (`choice:3`, `compile`, `world:…`).
+    pub fn control_marks(&self) -> Vec<Mark> {
+        let mut v: Vec<Mark> = Vec::new();
+        if let Some(d) = &self.diagnosis {
+            v.extend(d.marks());
+        }
+        if let Some(s) = &self.show_me {
+            v.extend(s.marks().cloned());
+        }
+        v.retain(|m| matches!(m.spot, Spot::Control(_)));
+        v
+    }
+
+    /// A step-panel control is pointed at.
+    pub fn is_marked(&self, id: &str) -> bool {
+        self.control_marks()
+            .iter()
+            .any(|m| m.spot == Spot::Control(id.to_string()))
+    }
+
+    /// Sets a world variable on the bench (the panel's controls).
+    pub fn set_world(&mut self, key: &str, value: f64) {
+        if let Some(b) = &self.bench {
+            b.send(Command::SetWorld {
+                key: key.to_string(),
+                value,
+            });
+        }
+    }
+
+    /// A world variable from telemetry (the known ones; else the start value).
+    pub fn world_value(&self, tel: Option<&Telemetry>, key: &str) -> Option<f64> {
+        let w = &tel?.world;
+        let k = key.to_ascii_lowercase();
+        if k.ends_with("ambient_lux") {
+            Some(w.ambient_lux)
+        } else if k.ends_with("temp_c") {
+            Some(w.temp_c)
+        } else if k.ends_with(".rh") {
+            Some(w.rh)
+        } else if let Some(pot) = k.strip_suffix(".vwc") {
+            w.pots.iter().find(|p| p.id == pot).map(|p| p.vwc)
+        } else {
+            None
+        }
+    }
+
+    /// Sets a part property from the panel (an undoable edit; live on the bench).
+    pub fn set_prop_text(&mut self, part: &str, prop: &str, text: &str) -> Result<(), String> {
+        let v = bb_core::si::parse(text).map_err(|e| e.to_string())?;
+        let lib = self.lib.clone();
+        self.doc
+            .editor
+            .set_prop(&lib, part, prop, bb_circuit::PropValue::Num(v))
+            .map_err(|e| e.to_string())?;
+        self.doc.touched();
+        if let Some(b) = self.bench.as_mut() {
+            b.send(Command::SetPartParam {
+                part: part.into(),
+                key: prop.into(),
+                value: v,
+            });
+        }
+        Ok(())
+    }
+
+    /// Adds a part the step's worked solution adds ("Add R3"), where the solution puts it.
+    pub fn add_solution_part(&mut self, reference: &str) {
+        let Some(a) = self
+            .session
+            .current()
+            .solution
+            .iter()
+            .find(|a| matches!(a, Action::AddPart { reference: r, .. } if r.eq_ignore_ascii_case(reference)))
+            .cloned()
+        else {
+            return;
+        };
+        self.session.editor.project = self.doc.project().clone();
+        if bb_lessons::apply::apply(self, &a).is_ok() {
+            self.circuit_dirty = true;
+            self.commit_circuit();
+        }
+    }
+
+    /// Sends a radio command (the panel's phone / MQTT controls).
+    pub fn radio(&mut self, cmd: bb_sim::radio::RadioCommand) {
+        if let Some(b) = &self.bench {
+            b.send(Command::Radio(cmd));
+        }
+    }
+
+    /// Connects the virtual phone to the device advertising `name`.
+    pub fn phone_connect(&mut self, name: &str) -> Result<(), String> {
+        bb_lessons::apply::Target::phone_connect(self, name).map_err(|e| e.to_string())
+    }
+
     /// "Open in free play" (LES-5): the lesson bench as a Playground project folder.
     pub fn free_play(&mut self, parent: &std::path::Path) -> Result<PathBuf, String> {
         self.session.editor.project = self.doc.project().clone();
@@ -654,6 +1089,86 @@ fn copy_tree(from: &std::path::Path, to: &std::path::Path) -> std::io::Result<()
         }
     }
     Ok(())
+}
+
+impl bb_lessons::apply::Target for LessonRun {
+    fn session(&mut self) -> &mut Session {
+        &mut self.session
+    }
+
+    fn circuit_changed(&mut self, _live: Option<(&str, &str, f64)>) -> Result<(), LessonError> {
+        // committed to the document (one undo step) once the group of edits is done
+        self.circuit_dirty = true;
+        Ok(())
+    }
+
+    fn edit(&mut self, e: Edit) -> Result<(), LessonError> {
+        self.apply_edit(e);
+        Ok(())
+    }
+
+    fn meter(&self) -> Option<f64> {
+        let tel = self.telemetry();
+        self.settled_meter()
+            .or_else(|| LessonRun::meter(self, tel.as_deref()))
+    }
+
+    fn run(&mut self, _seconds: f64) -> Result<(), LessonError> {
+        // the live bench runs by itself; the player waits for `run`
+        Ok(())
+    }
+
+    fn input(&mut self, part: &str, input: bb_core::UserInput) -> Result<(), LessonError> {
+        match &self.bench {
+            Some(b) => {
+                b.send(Command::Input {
+                    part: part.into(),
+                    input,
+                });
+                Ok(())
+            }
+            None => Err(LessonError::Bench(
+                "this lesson has no running bench".into(),
+            )),
+        }
+    }
+
+    fn set_world(&mut self, key: &str, value: f64) -> Result<(), LessonError> {
+        LessonRun::set_world(self, key, value);
+        Ok(())
+    }
+
+    fn flash(&mut self, mcu: &str, image: bb_avr::FirmwareImage) -> Result<(), LessonError> {
+        LessonRun::flash(self, mcu, image);
+        Ok(())
+    }
+
+    fn repair(&mut self) -> Result<(), LessonError> {
+        if let Some(b) = &self.bench {
+            b.send(Command::RepairAll);
+        }
+        Ok(())
+    }
+
+    fn phone_connect(&mut self, name: &str) -> Result<(), LessonError> {
+        let id = self
+            .telemetry()
+            .and_then(|t| {
+                t.radio
+                    .as_ref()
+                    .and_then(|r| r.phone.scan.iter().find(|s| s.name == *name).map(|s| s.id))
+            })
+            .ok_or_else(|| LessonError::Bench(format!("the phone does not see `{name}`")))?;
+        self.radio(bb_sim::radio::RadioCommand::Phone(
+            bb_sim::radio::PhoneCommand::Connect { id, pin: None },
+        ));
+        Ok(())
+    }
+
+    fn radio(&mut self, cmd: bb_sim::radio::RadioCommand) -> Result<(), LessonError> {
+        LessonRun::radio(self, cmd);
+        Ok(())
+    }
 }
 
 /// `13.6`, `13,6`, `13.6 mA`, `.5` → number.

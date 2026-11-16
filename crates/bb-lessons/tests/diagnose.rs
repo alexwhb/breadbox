@@ -413,11 +413,13 @@ fn a_meter_in_parallel_where_it_must_be_in_series() {
     assert_eq!(meter.kind, Mistake::MeterParallel, "{meter:?}");
     assert_eq!(
         meter.what,
-        "The meter is wired across D1 (red LED), in parallel, so the current goes around the meter instead of through it."
+        "The meter is across D1 (red LED), in parallel: on mA it's nearly a short, so the current skips D1 and the reading is wrong."
     );
-    assert!(meter.fix.starts_with("Current is measured in series"));
+    assert!(meter.fix.starts_with("Wire it in series instead"));
     let led = d.goals[1].finding.as_ref().unwrap();
     assert_eq!(led.kind, Mistake::MeterParallel, "{led:?}");
+    // one cause, explained once
+    assert_eq!(d.goals[1].same_as, Some(0));
 }
 
 #[test]

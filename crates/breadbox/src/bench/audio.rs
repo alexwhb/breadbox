@@ -23,6 +23,8 @@ pub enum AudioMsg {
         freq_hz: f64,
         secs: f64,
     },
+    /// The lessons' success chime (two soft rising notes).
+    Chime,
     /// Drop everything queued (bench paused / reset).
     Flush,
     Quit,
@@ -99,6 +101,30 @@ pub fn pop_samples() -> Vec<f32> {
         .collect()
 }
 
+/// The lessons' success chime: two soft bell notes a fourth apart (E5 → A5), each with a
+/// quick attack and an exponential decay, plus a little second harmonic for warmth.
+pub fn chime_samples() -> Vec<f32> {
+    let note = |f: f64, start: f64, len: f64, out: &mut Vec<f32>| {
+        let s0 = (RATE as f64 * start) as usize;
+        let n = (RATE as f64 * len) as usize;
+        if out.len() < s0 + n {
+            out.resize(s0 + n, 0.0);
+        }
+        for i in 0..n {
+            let t = i as f64 / RATE as f64;
+            let attack = (t / 0.006).min(1.0);
+            let env = attack * (-t / (len * 0.32)).exp();
+            let w = (2.0 * std::f64::consts::PI * f * t).sin()
+                + 0.18 * (4.0 * std::f64::consts::PI * f * t).sin();
+            out[s0 + i] += (0.22 * env * w) as f32;
+        }
+    };
+    let mut out = Vec::new();
+    note(659.25, 0.0, 0.32, &mut out);
+    note(880.0, 0.11, 0.55, &mut out);
+    out
+}
+
 /// A sine beep with soft edges.
 pub fn beep_samples(freq_hz: f64, secs: f64) -> Vec<f32> {
     let n = (RATE as f64 * secs.clamp(0.0, 2.0)) as usize;
@@ -157,6 +183,7 @@ fn run(rx: Receiver<AudioMsg>) {
             AudioMsg::Click => (RATE, click_samples()),
             AudioMsg::Pop => (RATE, pop_samples()),
             AudioMsg::Beep { freq_hz, secs } => (RATE, beep_samples(freq_hz, secs)),
+            AudioMsg::Chime => (RATE, chime_samples()),
             AudioMsg::Flush | AudioMsg::Quit => continue,
         };
         // keep latency bounded: a sink that fell far behind is reset
@@ -176,7 +203,12 @@ mod tests {
 
     #[test]
     fn synthesised_sounds_are_bounded() {
-        for s in [click_samples(), pop_samples(), beep_samples(2000.0, 0.1)] {
+        for s in [
+            click_samples(),
+            pop_samples(),
+            beep_samples(2000.0, 0.1),
+            chime_samples(),
+        ] {
             assert!(!s.is_empty());
             assert!(s.iter().all(|x| x.abs() <= 1.0));
         }

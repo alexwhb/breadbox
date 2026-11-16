@@ -5,6 +5,7 @@
 pub mod art;
 pub mod bench;
 pub mod instruments;
+pub mod lesson_overlay;
 pub mod pen;
 pub mod plugin_parts;
 pub mod scene;

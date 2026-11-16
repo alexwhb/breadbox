@@ -160,6 +160,8 @@ pub struct BenchCanvas {
     t0: std::time::Instant,
     /// Plugin instruments: probe-lead tip being dragged (`canvas::plugin_parts`).
     pub lead_drag: super::plugin_parts::LeadDrag,
+    /// What a lesson points at (diagnosis marks, "Show me" ghosts, the success pulse).
+    pub overlay: super::lesson_overlay::Overlay,
 }
 
 impl Default for BenchCanvas {
@@ -182,6 +184,7 @@ impl Default for BenchCanvas {
             refit: false,
             t0: std::time::Instant::now(),
             lead_drag: Default::default(),
+            overlay: Default::default(),
         }
     }
 }
@@ -354,7 +357,43 @@ impl BenchCanvas {
         let scene = self.scene(doc);
         let painter = ui.painter_at(rect);
         self.draw(ui, &painter, rect, doc, &scene, &conn, tel);
-        self.tooltip(ui, &resp, doc, &scene, &conn, tel);
+        // lesson overlays on top, then their tooltip or the usual one
+        let pointer = resp.hover_pos();
+        let note = if self.overlay.is_empty() {
+            None
+        } else {
+            super::lesson_overlay::draw(
+                &self.overlay,
+                &painter,
+                &self.view,
+                &scene,
+                doc.project(),
+                self.time(),
+                pointer,
+            )
+        };
+        if self.overlay.net_hints
+            && let Drag::Wire { to, .. } = &self.drag
+            && let Some(pin) = scene.pin_at(to.0, to.1, 0.45)
+            && let Some(at) = pointer
+        {
+            let part = &scene.parts[pin.part];
+            let text =
+                super::lesson_overlay::net_hint(doc.project(), &doc.lib, &conn, &part.id, &pin.pin);
+            super::lesson_overlay::draw_net_hint(&painter, at, &text);
+        }
+        match note {
+            Some(n) if !n.is_empty() && matches!(self.drag, Drag::None) => {
+                resp.clone().on_hover_ui_at_pointer(|ui| {
+                    ui.label(egui::RichText::new(n).font(font::ui(12.0)));
+                });
+            }
+            _ => self.tooltip(ui, &resp, doc, &scene, &conn, tel),
+        }
+        if self.overlay.animating() {
+            ui.ctx()
+                .request_repaint_after(std::time::Duration::from_millis(33));
+        }
         if self.needs_animation(tel) {
             ui.ctx()
                 .request_repaint_after(std::time::Duration::from_millis(33));

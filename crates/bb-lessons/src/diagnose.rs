@@ -227,6 +227,9 @@ pub struct GoalReport {
     pub ok: bool,
     pub detail: String,
     pub finding: Option<Finding>,
+    /// The finding is the same as an earlier goal's (index): shown once.
+    #[serde(default)]
+    pub same_as: Option<usize>,
 }
 
 /// The result of "Test circuit".
@@ -419,11 +422,17 @@ pub fn diagnose_with(
             }
             Some(f)
         };
+        let same_as = finding.as_ref().and_then(|f| {
+            goals
+                .iter()
+                .position(|g: &GoalReport| g.finding.as_ref().is_some_and(|x| x.what == f.what))
+        });
         goals.push(GoalReport {
             label: r.label.clone(),
             ok: r.ok,
             detail: r.detail.clone(),
             finding,
+            same_as,
         });
     }
     let extra = scan
@@ -2005,12 +2014,8 @@ impl<'a> Doctor<'a> {
                 return Some(
                     Finding::new(
                         Mistake::MeterParallel,
-                        format!(
-                            "The meter is wired across {}, in parallel. On mA it's almost a short, so the current goes through the meter instead of {}.",
-                            self.n.part(part),
-                            self.n.reference(part)
-                        ),
-                        "Put the meter in series: break the loop at one spot and let the meter close it (mA jack on one side, COM on the other).",
+                        parallel_what(&self.n.part(part), &self.n.reference(part)),
+                        SERIES_FIX,
                     )
                     .marks(vec![
                         Mark::part(&m.id, Tone::Wrong, "in parallel"),
@@ -2213,22 +2218,14 @@ impl<'a> Doctor<'a> {
                 let supply = d.bench.off_board;
                 let what = if supply {
                     format!(
-                        "The meter is wired straight across {}: on {jack_name} that's a short circuit.",
+                        "The meter is straight across {}: on {jack_name} that's a short circuit.",
                         self.n.part(&p.id)
                     )
                 } else {
-                    format!(
-                        "The meter is wired across {}, in parallel, so the current goes around the meter instead of through it.",
-                        self.n.part(&p.id)
-                    )
+                    parallel_what(&self.n.part(&p.id), &self.n.reference(&p.id))
                 };
                 return Some(
-                    Finding::new(
-                        Mistake::MeterParallel,
-                        what,
-                        "Current is measured in series: break the loop at one spot and let the meter close it (mA jack on one side, COM on the other).",
-                    )
-                    .marks(vec![
+                    Finding::new(Mistake::MeterParallel, what, SERIES_FIX).marks(vec![
                         Mark::part(part, Tone::Wrong, "in parallel"),
                         Mark::part(&p.id, Tone::Focus, "in parallel with the meter"),
                     ]),
@@ -2238,6 +2235,15 @@ impl<'a> Doctor<'a> {
         None
     }
 }
+
+/// A current meter across a part.
+fn parallel_what(part: &str, reference: &str) -> String {
+    format!(
+        "The meter is across {part}, in parallel: on mA it's nearly a short, so the current skips {reference} and the reading is wrong."
+    )
+}
+
+const SERIES_FIX: &str = "Wire it in series instead: open the loop at one spot and let the meter close it (mA jack on one side, COM on the other).";
 
 fn shorten(s: &str, n: usize) -> String {
     if s.chars().count() <= n {
