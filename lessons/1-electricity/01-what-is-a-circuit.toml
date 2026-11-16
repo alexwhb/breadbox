@@ -29,6 +29,8 @@ hints = [
     "Every hole in a breadboard column (a–e) is connected. R1's top lead is in column 5.",
     "Drag from the supply's VBUS pin to hole a5.",
 ]
+why = "The five holes a5–e5 are joined inside the board, so a jumper into any of them touches R1's lead: + reaches R1, D1 and the GND rail, and the loop is closed."
+success = "Loop closed"
 checks = [
     { type = "connected", a = "ps1.VBUS", b = "r1.1" },
     { type = "led_lit", part = "d1" },

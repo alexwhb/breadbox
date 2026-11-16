@@ -17,10 +17,14 @@
 //! * [`editor::Draft`] is the "Make your own lesson" model: capture the bench, add steps and
 //!   checkers by picking parts/nets/instruments, save a lesson pack plugin.
 
+pub mod apply;
 pub mod check;
 pub mod code;
+pub mod diagnose;
 pub mod editor;
 pub mod format;
+pub mod guide;
+pub mod names;
 pub mod progress;
 pub mod runner;
 pub mod session;

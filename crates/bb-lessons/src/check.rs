@@ -3,7 +3,8 @@
 //! instrument readings — the DMM plugin's `value` —, LED state, damage, serial output, pin
 //! frequency/duty via probes, MQTT traffic, world variables) or a SPICE analysis.
 
-use crate::format::Check;
+use crate::format::{Check, Step};
+use crate::names::{self, Namer};
 use crate::session::StepState;
 use bb_circuit::connectivity::Connectivity;
 use bb_circuit::project::Quantity;
@@ -15,11 +16,14 @@ use serde::{Deserialize, Serialize};
 /// One evaluated goal.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CheckResult {
-    /// What the goal is, for people (`D1.a connected to R1.2`).
+    /// What the goal is, for people (`USB +5 V reaches R1's lead in column 5`).
     pub label: String,
     pub ok: bool,
-    /// What was found (`12.9 mA`, `not connected`).
+    /// What was found (`13.6 mA`, `not yet`).
     pub detail: String,
+    /// Index of the step's check (`None` for the goals a quiz, code step or table imply).
+    #[serde(default)]
+    pub check: Option<usize>,
 }
 
 /// Everything a check may look at.
@@ -28,11 +32,11 @@ pub struct Ctx<'a> {
     pub lib: &'a Library,
     pub bench: Option<&'a mut Bench>,
     pub state: &'a StepState,
+    /// The step the check belongs to (reading units, labels).
+    pub step: Option<&'a Step>,
 }
 
-fn split(pin: &str) -> (&str, &str) {
-    pin.split_once('.').unwrap_or((pin, ""))
-}
+use crate::names::split;
 
 fn range_ok(v: f64, min: f64, max: f64) -> bool {
     v.is_finite() && v >= min && v <= max
@@ -88,29 +92,252 @@ fn needs_bench(c: &Check) -> bool {
     )
 }
 
+/// `(scale, unit)` the step shows a part's reading in (`dmm1` in mA: 1000, `mA`).
+pub fn reading_unit(step: Option<&Step>, part: &str) -> Option<(f64, String)> {
+    let step = step?;
+    if let Some(m) = &step.measure
+        && m.part.eq_ignore_ascii_case(part)
+        && !m.unit.is_empty()
+    {
+        return Some((m.scale, m.unit.clone()));
+    }
+    let p = step.predict.as_ref()?;
+    (p.meter.as_deref()? == part)
+        .then(|| (if p.unit == "mA" { 1000.0 } else { 1.0 }, p.unit.clone()))
+}
+
+/// `11–14.5 mA`, `4.85–5.05 V`.
+pub fn range(min: f64, max: f64, unit: &str) -> String {
+    let f = |v: f64| bb_core::si::format_sig(v, unit, 3);
+    let (a, b) = (f(min), f(max));
+    // `11 mA–14.5 mA` → `11–14.5 mA`
+    let ua = a.split_once(' ').map(|x| x.1).unwrap_or("");
+    let ub = b.split_once(' ').map(|x| x.1).unwrap_or("");
+    if !ua.is_empty() && ua == ub {
+        format!("{}–{b}", a.split(' ').next().unwrap_or(&a))
+    } else {
+        format!("{a}–{b}")
+    }
+}
+
+fn in_unit(v: f64, scale: f64, unit: &str) -> String {
+    let x = v * scale;
+    if !x.is_finite() {
+        return "—".into();
+    }
+    if x.abs() < 1e-9 {
+        return format!("0 {unit}");
+    }
+    format!("{} {unit}", crate::text::smart(x))
+}
+
+/// Upper-cases the first letter (`the meter reads …` → `The meter reads …`).
+pub fn sentence(s: &str) -> String {
+    let mut c = s.chars();
+    match c.next() {
+        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+        None => String::new(),
+    }
+}
+
+/// The unit of a numeric property (`Ω` for a resistance).
+fn prop_unit(n: &Namer, part: &str, prop: &str) -> String {
+    n.def(part)
+        .and_then(|d| d.prop(prop).map(|p| p.unit.clone()))
+        .unwrap_or_default()
+}
+
+/// A world variable in words (`light.ambient_lux` → `room light`).
+pub fn world_name(key: &str) -> (String, String) {
+    let k = key.to_ascii_lowercase();
+    if k.ends_with("ambient_lux") || k.ends_with("lux") {
+        ("room light".into(), "lux".into())
+    } else if k.ends_with("temp_c") {
+        ("air temperature".into(), "°C".into())
+    } else if k.ends_with(".vwc") {
+        (
+            format!(
+                "soil moisture in {}",
+                k.split('.').next().unwrap_or("the pot")
+            ),
+            "%".into(),
+        )
+    } else if k.ends_with(".rh") || k.ends_with("humidity") {
+        ("humidity".into(), "%".into())
+    } else {
+        (key.to_string(), String::new())
+    }
+}
+
+/// The friendly label of a goal (the lesson's own `label` wins, see [`Step::label_of`]).
+pub fn goal_label(c: &Check, n: &Namer, step: Option<&Step>) -> String {
+    let s = match c {
+        Check::Connected { a, b } => format!("{} reaches {}", n.pin_str(a), n.pin_str(b)),
+        Check::NotConnected { a, b } => {
+            format!("{} no longer reaches {}", n.pin_str(a), n.pin_str(b))
+        }
+        Check::Part { def, id, props, .. } => {
+            let name = n
+                .lib
+                .get(def)
+                .map(|d| d.name.to_lowercase())
+                .unwrap_or(def.clone());
+            let vals: Vec<String> = props
+                .iter()
+                .map(|(k, v)| {
+                    let unit = n
+                        .lib
+                        .get(def)
+                        .and_then(|d| d.prop(k).map(|p| p.unit.clone()))
+                        .unwrap_or_default();
+                    bb_core::si::format(*v, &unit)
+                })
+                .collect();
+            let what = if vals.is_empty() {
+                format!("a {name}")
+            } else {
+                format!("a {} {name}", vals.join(" "))
+            };
+            match id {
+                Some(id) => format!("{}: {what} on the bench", id.to_uppercase()),
+                None => format!("{what} on the bench"),
+            }
+        }
+        Check::Prop {
+            part,
+            prop,
+            min,
+            max,
+        } => {
+            let unit = prop_unit(n, part, prop);
+            format!(
+                "{} {prop} set to {}",
+                n.reference(part),
+                range(*min, *max, &unit)
+            )
+        }
+        Check::Voltage { a, b, min, max } => match b {
+            Some(b) => format!(
+                "{} to {} at {}",
+                n.pin_str(a),
+                n.pin_str(b),
+                range(*min, *max, "V")
+            ),
+            None => format!("{} at {}", n.pin_str(a), range(*min, *max, "V")),
+        },
+        Check::Current { part, min, max, .. } => {
+            format!("{} carries {}", n.part(part), range(*min, *max, "A"))
+        }
+        Check::Reading {
+            part,
+            key,
+            min,
+            max,
+        } => {
+            let who = n.part(part);
+            match reading_unit(step, part) {
+                Some((scale, unit)) if key == "value" => format!(
+                    "{who} reads {}",
+                    range(*min * scale, *max * scale, &unit)
+                        .replace(&format!(" k{unit}"), &format!("k {unit}"))
+                ),
+                _ if key == "frequency" => format!("{who} shows {}", range(*min, *max, "Hz")),
+                _ => format!("{who} {key} in {}", range(*min, *max, "")),
+            }
+        }
+        Check::LedLit { part, .. } => format!("{} lights up", n.part(part)),
+        Check::LedOff { part } => format!("{} is dark", n.part(part)),
+        Check::Damaged { part } => format!("{} burns out", n.part(part)),
+        Check::Healthy { part } => format!("{} still works", n.part(part)),
+        Check::SerialContains { mcu, text } => {
+            format!("{} prints “{}”", n.part_short(mcu), text.trim())
+        }
+        Check::PinFrequency { mcu, pin, hz, .. } => {
+            format!("{} switches at {}", n.pin(mcu, pin), names::hz(*hz))
+        }
+        Check::PinDuty { mcu, pin, min, max } => format!(
+            "{} high {:.0}–{:.0} % of the time",
+            n.pin(mcu, pin),
+            min * 100.0,
+            max * 100.0
+        ),
+        Check::Firmware { mcu } => format!("Your sketch runs on {}", n.part_short(mcu)),
+        Check::World { key, min, max } => {
+            let (name, unit) = world_name(key);
+            format!("{name} at {}", range(*min, *max, &unit))
+        }
+        Check::Mqtt { topic, contains } => match contains {
+            Some(c) => format!("A message on {topic} with “{c}”"),
+            None => format!("A message on {topic}"),
+        },
+        Check::Phone { contains } => format!("The phone shows “{}”", contains.trim()),
+        Check::Prediction => "Your prediction is right".into(),
+        Check::Measurements { min } => format!("{min} measurements"),
+        Check::Quiz => "The right answer".into(),
+        Check::ErcClean { .. } => "No wiring errors".into(),
+        Check::Spice {
+            analysis,
+            vector,
+            at,
+            stat,
+            min,
+            max,
+        } => {
+            let v = vector.to_uppercase();
+            let unit = if vector.to_ascii_lowercase().starts_with("i(") {
+                "A"
+            } else if stat == "mag_db" {
+                "dB"
+            } else if stat == "phase_deg" {
+                "°"
+            } else {
+                "V"
+            };
+            let r = if unit == "dB" || unit == "°" {
+                format!("{min}–{max} {unit}")
+            } else {
+                range(*min, *max, unit)
+            };
+            let when = match analysis.split_whitespace().next().unwrap_or("") {
+                ".tran" if stat == "max" => " (peak)".to_string(),
+                ".tran" => format!(" at {}", bb_core::si::format(*at, "s")),
+                ".ac" => format!(" at {}", bb_core::si::format(*at, "Hz")),
+                _ => String::new(),
+            };
+            format!("{v}{when} in {r}")
+        }
+    };
+    sentence(&s)
+}
+
 /// Evaluates one check.
 pub fn evaluate(c: &Check, ctx: &mut Ctx, conn: &Connectivity) -> CheckResult {
-    let r = |label: String, ok: bool, detail: String| CheckResult { label, ok, detail };
+    let n = Namer::new(ctx.project, ctx.lib, conn);
+    let label = goal_label(c, &n, ctx.step);
+    let r = |ok: bool, detail: String| CheckResult {
+        label: label.clone(),
+        ok,
+        detail,
+        check: None,
+    };
     if needs_bench(c) && ctx.bench.is_none() {
-        return r(format!("{c:?}"), false, "the bench is not running".into());
+        return r(false, "the bench is not running".into());
     }
     match c {
         Check::Connected { a, b } => {
             let ok = conn.connected(split(a), split(b));
             r(
-                format!("{} connected to {}", a.to_uppercase(), b.to_uppercase()),
                 ok,
                 if ok {
                     "connected".into()
                 } else {
-                    "not connected".into()
+                    "not yet".into()
                 },
             )
         }
         Check::NotConnected { a, b } => {
             let ok = !conn.connected(split(a), split(b));
             r(
-                format!("{} not connected to {}", a.to_uppercase(), b.to_uppercase()),
                 ok,
                 if ok {
                     "separate".into()
@@ -125,7 +352,7 @@ pub fn evaluate(c: &Check, ctx: &mut Ctx, conn: &Connectivity) -> CheckResult {
             props,
             count,
         } => {
-            let n = ctx
+            let found = ctx
                 .project
                 .parts
                 .iter()
@@ -140,7 +367,14 @@ pub fn evaluate(c: &Check, ctx: &mut Ctx, conn: &Connectivity) -> CheckResult {
                     })
                 })
                 .count();
-            r(format!("{count}× {def}"), n >= *count, format!("{n} found"))
+            r(
+                found >= *count,
+                if found >= *count {
+                    "on the bench".into()
+                } else {
+                    "not yet".into()
+                },
+            )
         }
         Check::Prop {
             part,
@@ -152,15 +386,14 @@ pub fn evaluate(c: &Check, ctx: &mut Ctx, conn: &Connectivity) -> CheckResult {
                 .project
                 .part(part)
                 .and_then(|p| Project::prop_f64(ctx.lib.get(&p.part)?, p, prop));
+            let unit = prop_unit(&n, part, prop);
             r(
-                format!("{}.{prop} in {min}…{max}", part.to_uppercase()),
                 v.is_some_and(|v| range_ok(v, *min, *max)),
-                v.map(|v| bb_core::si::format(v, ""))
+                v.map(|v| bb_core::si::format(v, &unit))
                     .unwrap_or_else(|| "missing".into()),
             )
         }
         Check::Prediction => r(
-            "your prediction is right".into(),
             ctx.state.verdict == Some(true),
             match ctx.state.verdict {
                 Some(true) => "right".into(),
@@ -169,12 +402,10 @@ pub fn evaluate(c: &Check, ctx: &mut Ctx, conn: &Connectivity) -> CheckResult {
             },
         ),
         Check::Measurements { min } => r(
-            format!("{min} measurements"),
             ctx.state.rows.len() >= *min,
             format!("{} recorded", ctx.state.rows.len()),
         ),
         Check::Quiz => r(
-            "the right answer".into(),
             false, // decided by the session (needs the quiz); see `evaluate_step`
             String::new(),
         ),
@@ -185,7 +416,6 @@ pub fn evaluate(c: &Check, ctx: &mut Ctx, conn: &Connectivity) -> CheckResult {
                 .filter(|i| *strict || i.severity == bb_circuit::erc::ErcSeverity::Error)
                 .collect();
             r(
-                "electrical rules".into(),
                 bad.is_empty(),
                 bad.first()
                     .map(|i| i.message.clone())
@@ -203,23 +433,39 @@ pub fn evaluate(c: &Check, ctx: &mut Ctx, conn: &Connectivity) -> CheckResult {
         } => {
             let v = spice_value(ctx.project, ctx.lib, analysis, vector, *at, stat);
             match v {
-                Ok(v) => r(
-                    format!("{stat} of {vector} ({analysis})"),
-                    range_ok(v, *min, *max),
-                    bb_core::si::format(v, ""),
-                ),
-                Err(e) => r(format!("{stat} of {vector}"), false, e),
+                Ok(v) => {
+                    let unit = if vector.to_ascii_lowercase().starts_with("i(") {
+                        "A"
+                    } else {
+                        "V"
+                    };
+                    let detail = match stat.as_str() {
+                        "mag_db" => format!("{v:.1} dB"),
+                        "phase_deg" => format!("{v:.1}°"),
+                        _ => names::value(v, unit),
+                    };
+                    r(range_ok(v, *min, *max), detail)
+                }
+                Err(e) => r(false, e),
             }
         }
         _ => {
+            let step = ctx.step;
             let b = ctx.bench.as_deref_mut().expect("checked above");
-            bench_check(c, b)
+            let mut res = bench_check(c, b, step);
+            res.label = label;
+            res
         }
     }
 }
 
-fn bench_check(c: &Check, b: &mut Bench) -> CheckResult {
-    let r = |label: String, ok: bool, detail: String| CheckResult { label, ok, detail };
+fn bench_check(c: &Check, b: &mut Bench, step: Option<&Step>) -> CheckResult {
+    let r = |ok: bool, detail: String| CheckResult {
+        label: String::new(),
+        ok,
+        detail,
+        check: None,
+    };
     match c {
         Check::Voltage {
             a,
@@ -238,14 +484,8 @@ fn bench_check(c: &Check, b: &mut Bench) -> CheckResult {
             };
             let v = va.zip(vb).map(|(x, y)| x - y);
             r(
-                format!(
-                    "V({}) in {}…{}",
-                    a.to_uppercase(),
-                    bb_core::si::format(*min, "V"),
-                    bb_core::si::format(*max, "V")
-                ),
                 v.is_some_and(|v| range_ok(v, *min, *max)),
-                v.map(|v| bb_core::si::format(v, "V"))
+                v.map(names::voltage)
                     .unwrap_or_else(|| "no such pin".into()),
             )
         }
@@ -257,10 +497,8 @@ fn bench_check(c: &Check, b: &mut Bench) -> CheckResult {
         } => {
             let i = b.element_current(part, element);
             r(
-                format!("current through {}", part.to_uppercase()),
                 i.is_some_and(|i| range_ok(i.abs(), *min, *max)),
-                i.map(|i| bb_core::si::format(i.abs(), "A"))
-                    .unwrap_or_else(|| "—".into()),
+                i.map(names::current).unwrap_or_else(|| "—".into()),
             )
         }
         Check::Reading {
@@ -270,33 +508,42 @@ fn bench_check(c: &Check, b: &mut Bench) -> CheckResult {
             max,
         } => {
             let v = reading(b, part, key);
-            r(
-                format!("{} {key}", part.to_uppercase()),
-                v.is_some_and(|v| range_ok(v, *min, *max)),
-                v.map(|v| format!("{v:.4}"))
-                    .unwrap_or_else(|| "no reading".into()),
-            )
+            let shown = match (v, reading_unit(step, part)) {
+                (Some(v), Some((scale, unit))) if key == "value" => in_unit(v, scale, &unit),
+                (Some(v), _) if key == "frequency" => names::hz(v),
+                (Some(v), _) => format!("{v:.4}"),
+                (None, _) => "no reading".into(),
+            };
+            r(v.is_some_and(|v| range_ok(v, *min, *max)), shown)
         }
         Check::LedLit { part, min_ma } => {
-            let i = b.element_current(part, "D").unwrap_or(0.0);
+            let i = b.element_current(part, "D").unwrap_or(0.0).abs();
+            let burnt = b.health(part).is_damaged();
             r(
-                format!("{} is lit", part.to_uppercase()),
-                i * 1e3 >= *min_ma && !b.health(part).is_damaged(),
-                bb_core::si::format(i, "A"),
+                i * 1e3 >= *min_ma && !burnt,
+                if burnt {
+                    "burnt out".into()
+                } else if i < 1e-4 {
+                    "off".into()
+                } else {
+                    names::current(i)
+                },
             )
         }
         Check::LedOff { part } => {
-            let i = b.element_current(part, "D").unwrap_or(0.0);
+            let i = b.element_current(part, "D").unwrap_or(0.0).abs();
             r(
-                format!("{} is off", part.to_uppercase()),
                 i < 1e-4,
-                bb_core::si::format(i, "A"),
+                if i < 1e-4 {
+                    "off".into()
+                } else {
+                    format!("lit, {}", names::current(i))
+                },
             )
         }
         Check::Damaged { part } => {
             let h = b.health(part);
             r(
-                format!("{} destroyed", part.to_uppercase()),
                 h.is_damaged(),
                 match h {
                     Health::Damaged { reason } => reason,
@@ -308,9 +555,12 @@ fn bench_check(c: &Check, b: &mut Bench) -> CheckResult {
         Check::Healthy { part } => {
             let h = b.health(part);
             r(
-                format!("{} works", part.to_uppercase()),
                 !h.is_damaged(),
-                format!("{h:?}"),
+                match h {
+                    Health::Damaged { .. } => "burnt out".into(),
+                    Health::Stressed { .. } => "stressed".into(),
+                    Health::Ok => "fine".into(),
+                },
             )
         }
         Check::SerialContains { mcu, text } => {
@@ -319,7 +569,6 @@ fn bench_check(c: &Check, b: &mut Bench) -> CheckResult {
                     || s.pending().contains(text.as_str())
             });
             r(
-                format!("{} prints “{text}”", mcu.to_uppercase()),
                 found,
                 if found {
                     "seen".into()
@@ -342,15 +591,15 @@ fn bench_check(c: &Check, b: &mut Bench) -> CheckResult {
                 .find(|p| p.id == id)
                 .map(|p| p.value);
             r(
-                format!(
-                    "{}.{pin} at {} ± {:.0} %",
-                    mcu.to_uppercase(),
-                    bb_core::si::format(*hz, "Hz"),
-                    tolerance * 100.0
-                ),
                 f.is_some_and(|f| (f - hz).abs() <= hz * tolerance),
-                f.map(|f| bb_core::si::format(f, "Hz"))
-                    .unwrap_or_else(|| "no probe".into()),
+                f.map(|f| {
+                    if f.abs() < 1e-6 {
+                        "steady".into()
+                    } else {
+                        names::hz(f)
+                    }
+                })
+                .unwrap_or_else(|| "no probe".into()),
             )
         }
         Check::PinDuty { mcu, pin, min, max } => {
@@ -362,7 +611,6 @@ fn bench_check(c: &Check, b: &mut Bench) -> CheckResult {
                 .find(|p| p.id == id)
                 .map(|p| p.value / 100.0);
             r(
-                format!("{}.{pin} duty", mcu.to_uppercase()),
                 d.is_some_and(|d| range_ok(d, *min, *max)),
                 d.map(|d| format!("{:.1} %", d * 100.0))
                     .unwrap_or_else(|| "no probe".into()),
@@ -372,18 +620,25 @@ fn bench_check(c: &Check, b: &mut Bench) -> CheckResult {
             let has = b.mcu(mcu).is_some();
             let lines = b.serial(mcu).map(|s| s.data_lines().count()).unwrap_or(0);
             r(
-                format!("{} runs your sketch", mcu.to_uppercase()),
                 has,
-                format!("{lines} lines printed"),
+                if lines == 1 {
+                    "1 line printed".into()
+                } else {
+                    format!("{lines} lines printed")
+                },
             )
         }
         Check::World { key, min, max } => {
             let v = bb_core::WorldView::var(b.world(), key);
+            let (_, unit) = world_name(key);
             r(
-                format!("{key} in {min}…{max}"),
                 v.is_some_and(|v| range_ok(v, *min, *max)),
-                v.map(|v| format!("{v:.2}"))
-                    .unwrap_or_else(|| "unknown".into()),
+                v.map(|v| {
+                    format!("{} {unit}", crate::text::smart(v))
+                        .trim()
+                        .to_string()
+                })
+                .unwrap_or_else(|| "unknown".into()),
             )
         }
         Check::Mqtt { topic, contains } => {
@@ -397,7 +652,6 @@ fn bench_check(c: &Check, b: &mut Bench) -> CheckResult {
                 })
             });
             r(
-                format!("MQTT {topic}"),
                 found,
                 if found {
                     "received".into()
@@ -416,7 +670,6 @@ fn bench_check(c: &Check, b: &mut Bench) -> CheckResult {
                         .any(|l| l.text.contains(contains.as_str()))
             });
             r(
-                format!("the phone shows “{contains}”"),
                 found,
                 if found {
                     "received".into()
@@ -425,7 +678,7 @@ fn bench_check(c: &Check, b: &mut Bench) -> CheckResult {
                 },
             )
         }
-        _ => r(format!("{c:?}"), false, "not a bench check".into()),
+        _ => r(false, "not a bench check".into()),
     }
 }
 
@@ -510,36 +763,56 @@ pub fn spice_value(
     })
 }
 
-/// Evaluates every check of a step.
+/// Evaluates every check of a step: one result per check (labels: the lesson's own, else the
+/// generated friendly ones), then the goals a quiz, code step or measurements table imply.
 pub fn evaluate_step(
+    step: &crate::format::Step,
+    project: &Project,
+    lib: &Library,
+    bench: Option<&mut Bench>,
+    state: &StepState,
+) -> Vec<CheckResult> {
+    let conn = Connectivity::compute(project, lib);
+    evaluate_step_with(step, project, lib, bench, state, &conn)
+}
+
+/// [`evaluate_step`] with the circuit's connectivity already computed.
+pub fn evaluate_step_with(
     step: &crate::format::Step,
     project: &Project,
     lib: &Library,
     mut bench: Option<&mut Bench>,
     state: &StepState,
+    conn: &Connectivity,
 ) -> Vec<CheckResult> {
-    let conn = Connectivity::compute(project, lib);
     let mut out = Vec::new();
-    for c in &step.checks {
-        if let Check::Quiz = c {
+    for (i, c) in step.checks.iter().enumerate() {
+        let mut res = if let Check::Quiz = c {
             let ok = step
                 .quiz
                 .as_ref()
                 .is_some_and(|q| state.quiz == Some(q.answer));
-            out.push(CheckResult {
-                label: "the right answer".into(),
+            CheckResult {
+                label: "The right answer".into(),
                 ok,
                 detail: if ok { "right".into() } else { "not yet".into() },
-            });
-            continue;
-        }
-        let mut ctx = Ctx {
-            project,
-            lib,
-            bench: bench.as_deref_mut(),
-            state,
+                check: None,
+            }
+        } else {
+            let mut ctx = Ctx {
+                project,
+                lib,
+                bench: bench.as_deref_mut(),
+                state,
+                step: Some(step),
+            };
+            evaluate(c, &mut ctx, conn)
         };
-        out.push(evaluate(c, &mut ctx, &conn));
+        res.check = Some(i);
+        if let Some(l) = step.label_of(i) {
+            res.label = l.to_string();
+        }
+        out.push(res);
     }
     // implied goals of the step kinds
     if let Some(q) = &step.quiz
@@ -547,20 +820,22 @@ pub fn evaluate_step(
     {
         let ok = state.quiz == Some(q.answer);
         out.push(CheckResult {
-            label: "the right answer".into(),
+            label: "The right answer".into(),
             ok,
             detail: if ok { "right".into() } else { "not yet".into() },
+            check: None,
         });
     }
     if step.code.is_some() {
         out.push(CheckResult {
-            label: "your sketch is loaded".into(),
+            label: "Your sketch is loaded".into(),
             ok: state.firmware,
             detail: if state.firmware {
                 "running".into()
             } else {
-                "upload your sketch".into()
+                "not yet".into()
             },
+            check: None,
         });
     }
     if let Some(t) = &step.table
@@ -574,6 +849,7 @@ pub fn evaluate_step(
             label: format!("{} measurements", t.min_rows),
             ok: state.rows.len() >= t.min_rows,
             detail: format!("{} recorded", state.rows.len()),
+            check: None,
         });
     }
     out

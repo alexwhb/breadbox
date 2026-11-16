@@ -478,6 +478,9 @@ impl LessonEditor {
                 }
                 if let Some(i) = remove {
                     step.checks.remove(i);
+                    if i < step.labels.len() {
+                        step.labels.remove(i);
+                    }
                 }
                 if step.checks.is_empty() {
                     ui.label(

@@ -103,24 +103,7 @@ impl Draft {
         self.lesson.steps.push(Step {
             kind: kind.into(),
             title: title.into(),
-            body: String::new(),
-            formula: None,
-            callouts: Vec::new(),
-            choice: None,
-            predict: None,
-            measure: None,
-            table: None,
-            quiz: None,
-            code: None,
-            checks: Vec::new(),
-            run: 0.0,
-            hints: Vec::new(),
-            damage_title: String::new(),
-            damage_text: String::new(),
-            repair_label: String::new(),
-            next_label: String::new(),
-            solution: Vec::new(),
-            vars: BTreeMap::new(),
+            ..Step::default()
         });
         self.lesson.steps.len() - 1
     }

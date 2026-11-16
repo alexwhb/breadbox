@@ -8,27 +8,81 @@ use crate::check::{self, CheckResult};
 use crate::format::{Action, Check};
 use crate::session::{Edit, Session};
 use crate::{LessonError, LoadedLesson};
-use bb_circuit::PropValue;
-use bb_circuit::edit::{Op, Transaction};
-use bb_circuit::project::{Endpoint, PartInstance};
 use bb_core::{SimTime, UserInput};
 use bb_plugin::PluginHost;
 use bb_sim::radio::{PhoneCommand, RadioCommand};
 use bb_sim::{Bench, BenchOptions};
 
-fn prop_value(v: &toml::Value) -> PropValue {
-    match v {
-        toml::Value::Integer(i) => PropValue::Num(*i as f64),
-        toml::Value::Float(f) => PropValue::Num(*f),
-        toml::Value::Boolean(b) => PropValue::Bool(*b),
-        toml::Value::String(s) => PropValue::Text(s.clone()),
-        other => PropValue::Text(other.to_string()),
+impl crate::apply::Target for Runner {
+    fn session(&mut self) -> &mut Session {
+        &mut self.session
     }
-}
 
-fn pin(s: &str) -> Endpoint {
-    let (p, n) = s.split_once('.').unwrap_or((s, ""));
-    Endpoint::pin(p, n)
+    fn circuit_changed(&mut self, live: Option<(&str, &str, f64)>) -> Result<(), LessonError> {
+        match (live, &mut self.bench) {
+            (Some((part, prop, v)), Some(b)) => b
+                .set_part_param(part, prop, v)
+                .map_err(|e| LessonError::Bench(e.to_string())),
+            _ => self.sync_project(),
+        }
+    }
+
+    fn edit(&mut self, e: Edit) -> Result<(), LessonError> {
+        self.apply_edit(e)
+    }
+
+    fn meter(&self) -> Option<f64> {
+        Runner::meter(self)
+    }
+
+    fn run(&mut self, seconds: f64) -> Result<(), LessonError> {
+        Runner::run(self, seconds)
+    }
+
+    fn input(&mut self, part: &str, input: UserInput) -> Result<(), LessonError> {
+        self.bench()?
+            .input(part, &input)
+            .map_err(|e| LessonError::Bench(e.to_string()))
+    }
+
+    fn set_world(&mut self, key: &str, value: f64) -> Result<(), LessonError> {
+        self.bench()?.set_world(key, value);
+        Ok(())
+    }
+
+    fn flash(&mut self, mcu: &str, image: bb_avr::FirmwareImage) -> Result<(), LessonError> {
+        self.bench()?
+            .mcu(mcu)
+            .ok_or_else(|| LessonError::Bench(format!("no MCU `{mcu}`")))?
+            .flash(&image)
+            .map_err(LessonError::Bench)?;
+        self.opts.firmware.insert(mcu.to_string(), image);
+        Ok(())
+    }
+
+    fn repair(&mut self) -> Result<(), LessonError> {
+        self.bench()?
+            .repair_all()
+            .map_err(|e| LessonError::Bench(e.to_string()))
+    }
+
+    fn phone_connect(&mut self, name: &str) -> Result<(), LessonError> {
+        let b = self.bench()?;
+        let tel = b.telemetry();
+        let id = tel
+            .radio
+            .as_ref()
+            .and_then(|r| r.phone.scan.iter().find(|s| s.name == *name).map(|s| s.id))
+            .ok_or_else(|| LessonError::Bench(format!("the phone does not see `{name}`")))?;
+        b.radio_command(RadioCommand::Phone(PhoneCommand::Connect { id, pin: None }))
+            .map_err(|e| LessonError::Bench(e.to_string()))
+    }
+
+    fn radio(&mut self, cmd: RadioCommand) -> Result<(), LessonError> {
+        self.bench()?
+            .radio_command(cmd)
+            .map_err(|e| LessonError::Bench(e.to_string()))
+    }
 }
 
 /// A lesson running headless.
@@ -149,194 +203,26 @@ impl Runner {
         }
     }
 
-    /// Applies one action.
+    /// Applies one action ([`crate::apply::apply`], the code path "Do it for me" uses too).
     pub fn apply(&mut self, a: &Action) -> Result<(), LessonError> {
         self.log.push(format!("{a:?}"));
+        crate::apply::apply(self, a)
+    }
+
+    /// The step's diagnosis ("Test circuit") on the headless bench.
+    pub fn diagnose(&mut self) -> crate::diagnose::Diagnosis {
+        let step = self.session.current().clone();
+        let project = self.session.project().clone();
         let lib = self.session.library().clone();
-        let bench_err = |e: bb_sim::SimError| LessonError::Bench(e.to_string());
-        match a {
-            Action::AddPart {
-                def,
-                reference,
-                props,
-                at,
-            } => {
-                let d = lib
-                    .get(def)
-                    .ok_or_else(|| LessonError::Bench(format!("no part `{def}`")))?;
-                let id = reference.to_ascii_lowercase();
-                let mut inst = PartInstance::new(&id, reference, def);
-                if !d.bench.hidden {
-                    inst = inst.at(at[0], at[1]);
-                }
-                let mut tx = Transaction::new(&format!("Add {}", d.name));
-                tx.ops.push(Op::Part {
-                    before: None,
-                    after: Some(inst),
-                    index: None,
-                });
-                self.session.editor.commit(tx);
-                for (k, v) in props {
-                    self.session
-                        .editor
-                        .set_prop(&lib, &id, k, prop_value(v))
-                        .map_err(|e| LessonError::Bench(e.to_string()))?;
-                }
-                self.sync_project()
-            }
-            Action::RemovePart { part } => {
-                self.session.editor.delete(std::slice::from_ref(part), &[]);
-                self.sync_project()
-            }
-            Action::Wire { a, b, color } => {
-                let id = self.session.editor.add_wire(&lib, pin(a), pin(b));
-                if let Some(c) = color
-                    && let Some(mut w) = self.session.editor.project.wire(&id).cloned()
-                {
-                    w.color = c.clone();
-                    let _ = self.session.editor.update_wire(w);
-                }
-                self.sync_project()
-            }
-            Action::Unwire { a, b } => {
-                let (ea, eb) = (pin(a), pin(b));
-                let ids: Vec<String> = self
-                    .session
-                    .project()
-                    .wires
-                    .iter()
-                    .filter(|w| (w.a == ea && w.b == eb) || (w.a == eb && w.b == ea))
-                    .map(|w| w.id.clone())
-                    .collect();
-                if ids.is_empty() {
-                    return Err(LessonError::Bench(format!("no wire between {a} and {b}")));
-                }
-                self.session.editor.delete(&[], &ids);
-                self.sync_project()
-            }
-            Action::SetProp { part, prop, value } => {
-                let v = prop_value(value);
-                self.session
-                    .editor
-                    .set_prop(&lib, part, prop, v.clone())
-                    .map_err(|e| LessonError::Bench(e.to_string()))?;
-                match (v.as_f64(), &mut self.bench) {
-                    (Some(x), Some(b)) if !matches!(v, PropValue::Text(_)) => {
-                        b.set_part_param(part, prop, x).map_err(bench_err)
-                    }
-                    _ => self.sync_project(),
-                }
-            }
-            Action::Choose { index } => {
-                let e = self.session.choose(*index)?;
-                self.apply_edit(e)
-            }
-            Action::MathMode { on } => {
-                self.session.set_math(*on);
-                Ok(())
-            }
-            Action::Predict { value } => {
-                let meter = self.meter();
-                let v = match value {
-                    Some(v) => *v,
-                    None => self
-                        .session
-                        .vars(meter)
-                        .get("answer")
-                        .ok_or_else(|| LessonError::Bench("no answer to predict".into()))?,
-                };
-                self.session.predict(v, meter);
-                Ok(())
-            }
-            Action::Record => {
-                let m = self
-                    .meter()
-                    .ok_or_else(|| LessonError::Bench("no meter reading to record".into()))?;
-                self.session.record(m);
-                Ok(())
-            }
-            Action::Quiz { answer } => {
-                self.session.answer_quiz(*answer);
-                Ok(())
-            }
-            Action::Run { seconds } => self.run(*seconds),
-            Action::Press { part, on } => self
-                .bench()?
-                .input(part, &UserInput::Press(*on))
-                .map_err(bench_err),
-            Action::Position { part, value } => self
-                .bench()?
-                .input(part, &UserInput::Position(*value))
-                .map_err(bench_err),
-            Action::Control { part, key, value } => self
-                .bench()?
-                .input(
-                    part,
-                    &UserInput::Value {
-                        key: key.clone(),
-                        value: *value,
-                    },
-                )
-                .map_err(bench_err),
-            Action::World { key, value } => {
-                self.bench()?.set_world(key, *value);
-                Ok(())
-            }
-            Action::Firmware { mcu } => {
-                let step = self.session.current().clone();
-                let code = step
-                    .code
-                    .as_ref()
-                    .ok_or_else(|| LessonError::Bench("not a code step".into()))?;
-                let img = code.image.as_ref().ok_or_else(|| {
-                    LessonError::Bench("the code step has no prebuilt image".into())
-                })?;
-                let path = self.session.loaded.resolve(img);
-                let image = bb_sim::firmware::load_image(&path)
-                    .map_err(|e| LessonError::Bench(format!("{}: {e}", path.display())))?;
-                self.bench()?
-                    .mcu(mcu)
-                    .ok_or_else(|| LessonError::Bench(format!("no MCU `{mcu}`")))?
-                    .flash(&image)
-                    .map_err(LessonError::Bench)?;
-                self.opts.firmware.insert(mcu.clone(), image);
-                self.session.set_firmware_loaded(true);
-                Ok(())
-            }
-            Action::Repair => self.bench()?.repair_all().map_err(bench_err),
-            Action::PhoneConnect { name } => {
-                let b = self.bench()?;
-                let tel = b.telemetry();
-                let id = tel
-                    .radio
-                    .as_ref()
-                    .and_then(|r| r.phone.scan.iter().find(|s| s.name == *name).map(|s| s.id))
-                    .ok_or_else(|| {
-                        LessonError::Bench(format!("the phone does not see `{name}`"))
-                    })?;
-                b.radio_command(RadioCommand::Phone(PhoneCommand::Connect { id, pin: None }))
-                    .map_err(bench_err)
-            }
-            Action::PhoneTerminal => self
-                .bench()?
-                .radio_command(RadioCommand::Phone(PhoneCommand::TerminalOpen))
-                .map_err(bench_err),
-            Action::PhoneSend { text } => self
-                .bench()?
-                .radio_command(RadioCommand::Phone(PhoneCommand::TerminalSend(
-                    text.as_bytes().to_vec(),
-                )))
-                .map_err(bench_err),
-            Action::Publish { topic, payload } => self
-                .bench()?
-                .radio_command(RadioCommand::ExplorerPublish {
-                    topic: topic.clone(),
-                    payload: payload.as_bytes().to_vec(),
-                    qos: 0,
-                    retain: false,
-                })
-                .map_err(bench_err),
-        }
+        let state = self.session.state().clone();
+        crate::diagnose::diagnose(
+            &step,
+            &project,
+            &lib,
+            self.bench.as_mut(),
+            &state,
+            &crate::diagnose::Options::running(),
+        )
     }
 
     /// Uploads a compiled image to the code step's MCU (what the UI does after a successful

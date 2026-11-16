@@ -435,54 +435,197 @@ pub enum Action {
 }
 
 /// A step (LES-3).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+///
+/// In TOML every goal may carry its own `label` (`{ type = "led_lit", part = "d1", label =
+/// "D1 glows" }`); it lands in [`Step::labels`] (same order as `checks`, empty = the generated
+/// friendly label).
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(from = "StepRepr", into = "StepRepr")]
 pub struct Step {
     /// `explain`, `build`, `predict`, `measure`, `experiment`, `break`, `quiz`, `code`.
     pub kind: String,
     pub title: String,
-    #[serde(default)]
     pub body: String,
-    #[serde(default)]
     pub formula: Option<String>,
-    #[serde(default)]
     pub callouts: Vec<Callout>,
-    #[serde(default)]
     pub choice: Option<Choice>,
-    #[serde(default)]
     pub predict: Option<Predict>,
-    #[serde(default)]
     pub measure: Option<Measure>,
-    #[serde(default)]
     pub table: Option<Table>,
-    #[serde(default)]
     pub quiz: Option<Quiz>,
-    #[serde(default)]
     pub code: Option<Code>,
     /// Goals (all must pass to finish the step).
-    #[serde(default)]
     pub checks: Vec<Check>,
+    /// Goal labels written in the lesson (index = `checks` index; empty or missing = generated).
+    pub labels: Vec<String>,
     /// Bench seconds to run before evaluating bench checks.
-    #[serde(default)]
     pub run: f64,
-    /// Hints shown on request.
-    #[serde(default)]
+    /// Hints shown on request, in order (they escalate: hint 1, hint 2, …, then "Show me").
     pub hints: Vec<String>,
+    /// One line on *why* the worked solution works (shown with "Show me" / "Do it for me").
+    pub why: String,
+    /// The payoff when the goals pass (`Loop closed`); the live values follow
+    /// (`Loop closed — D1 is lit at 13.6 mA`). A template over the step's variables and the
+    /// live values (`{d1.ma}`, `{dmm1}`, …).
+    pub success: String,
     /// Shown when a part is destroyed during the step (`Pop. That LED is gone.` …).
-    #[serde(default)]
     pub damage_title: String,
-    #[serde(default)]
     pub damage_text: String,
-    #[serde(default)]
     pub repair_label: String,
     /// Label of the Next button (`Next: break it on purpose`).
-    #[serde(default)]
     pub next_label: String,
     /// The worked solution.
-    #[serde(default)]
     pub solution: Vec<Action>,
     /// Variables for expressions / templates (`Vled = 2.0`).
-    #[serde(default)]
     pub vars: BTreeMap<String, f64>,
+}
+
+impl Step {
+    /// The lesson's own label for goal `i`, if it has one.
+    pub fn label_of(&self, i: usize) -> Option<&str> {
+        self.labels
+            .get(i)
+            .map(String::as_str)
+            .filter(|l| !l.trim().is_empty())
+    }
+
+    /// Steps that ask the student to change or operate the bench (they get "Test circuit").
+    pub fn is_hands_on(&self) -> bool {
+        matches!(
+            self.kind.as_str(),
+            "build" | "measure" | "experiment" | "code" | "break"
+        )
+    }
+}
+
+/// A goal as written in TOML: the check plus an optional `label`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+struct GoalRepr {
+    #[serde(flatten)]
+    check: Check,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    label: String,
+}
+
+/// [`Step`] as written in TOML.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+struct StepRepr {
+    kind: String,
+    title: String,
+    #[serde(default)]
+    body: String,
+    #[serde(default)]
+    formula: Option<String>,
+    #[serde(default)]
+    callouts: Vec<Callout>,
+    #[serde(default)]
+    choice: Option<Choice>,
+    #[serde(default)]
+    predict: Option<Predict>,
+    #[serde(default)]
+    measure: Option<Measure>,
+    #[serde(default)]
+    table: Option<Table>,
+    #[serde(default)]
+    quiz: Option<Quiz>,
+    #[serde(default)]
+    code: Option<Code>,
+    #[serde(default)]
+    checks: Vec<GoalRepr>,
+    #[serde(default)]
+    run: f64,
+    #[serde(default)]
+    hints: Vec<String>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    why: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    success: String,
+    #[serde(default)]
+    damage_title: String,
+    #[serde(default)]
+    damage_text: String,
+    #[serde(default)]
+    repair_label: String,
+    #[serde(default)]
+    next_label: String,
+    #[serde(default)]
+    solution: Vec<Action>,
+    #[serde(default)]
+    vars: BTreeMap<String, f64>,
+}
+
+impl From<StepRepr> for Step {
+    fn from(r: StepRepr) -> Step {
+        let labels: Vec<String> = r.checks.iter().map(|g| g.label.clone()).collect();
+        let labels = if labels.iter().all(String::is_empty) {
+            Vec::new()
+        } else {
+            labels
+        };
+        Step {
+            kind: r.kind,
+            title: r.title,
+            body: r.body,
+            formula: r.formula,
+            callouts: r.callouts,
+            choice: r.choice,
+            predict: r.predict,
+            measure: r.measure,
+            table: r.table,
+            quiz: r.quiz,
+            code: r.code,
+            checks: r.checks.into_iter().map(|g| g.check).collect(),
+            labels,
+            run: r.run,
+            hints: r.hints,
+            why: r.why,
+            success: r.success,
+            damage_title: r.damage_title,
+            damage_text: r.damage_text,
+            repair_label: r.repair_label,
+            next_label: r.next_label,
+            solution: r.solution,
+            vars: r.vars,
+        }
+    }
+}
+
+impl From<Step> for StepRepr {
+    fn from(s: Step) -> StepRepr {
+        let checks = s
+            .checks
+            .into_iter()
+            .enumerate()
+            .map(|(i, check)| GoalRepr {
+                check,
+                label: s.labels.get(i).cloned().unwrap_or_default(),
+            })
+            .collect();
+        StepRepr {
+            kind: s.kind,
+            title: s.title,
+            body: s.body,
+            formula: s.formula,
+            callouts: s.callouts,
+            choice: s.choice,
+            predict: s.predict,
+            measure: s.measure,
+            table: s.table,
+            quiz: s.quiz,
+            code: s.code,
+            checks,
+            run: s.run,
+            hints: s.hints,
+            why: s.why,
+            success: s.success,
+            damage_title: s.damage_title,
+            damage_text: s.damage_text,
+            repair_label: s.repair_label,
+            next_label: s.next_label,
+            solution: s.solution,
+            vars: s.vars,
+        }
+    }
 }
 
 /// A lesson.
