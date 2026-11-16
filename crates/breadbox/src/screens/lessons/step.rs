@@ -659,7 +659,7 @@ impl LessonsScreen {
                 }
                 // ---- the step's bench controls + what the MCU prints
                 controls_section(ui, run, &step, tel.as_deref(), &mut cmd);
-                serial_section(ui, run);
+                serial_section(ui, run, tel.as_deref());
                 // ---- goals, ticking live; "Test circuit" explains the open ones
                 if step.table.is_none() {
                     goals_section(ui, run, &mut cmd);
@@ -1131,49 +1131,107 @@ fn controls_section(
     });
 }
 
-/// The last lines the step's MCU printed (steps that check serial output).
-fn serial_section(ui: &mut Ui, run: &LessonRun) {
-    let Some(mcu) = run.session.current().checks.iter().find_map(|c| match c {
-        bb_lessons::format::Check::SerialContains { mcu, .. } => Some(mcu.clone()),
+/// What the step's goals listen to: the MCU's serial output, MQTT messages, the phone.
+fn serial_section(ui: &mut Ui, run: &LessonRun, tel: Option<&bb_sim::Telemetry>) {
+    use bb_lessons::format::Check;
+    let step = run.session.current();
+    let mcu = step.checks.iter().find_map(|c| match c {
+        Check::SerialContains { mcu, .. } => Some(mcu.clone()),
         _ => None,
-    }) else {
-        return;
-    };
-    let p = pal(ui);
-    let reference = run
-        .doc
-        .project()
-        .part(&mcu)
-        .map(|x| x.reference.clone())
-        .unwrap_or_else(|| mcu.to_uppercase());
-    ui.vertical(|ui| {
-        ui.spacing_mut().item_spacing.y = 6.0;
-        section_title(ui, &format!("Serial · {reference}"));
-        egui::Frame::new()
-            .fill(p.bg_canvas)
-            .stroke(Stroke::new(1.0, p.border))
-            .corner_radius(CornerRadius::same(8))
-            .inner_margin(egui::Margin::symmetric(10, 8))
-            .show(ui, |ui| {
-                ui.set_width(ui.available_width());
-                ui.spacing_mut().item_spacing.y = 2.0;
-                if run.serial_tail.is_empty() {
-                    label(ui, "Nothing yet", font::mono(11.5), p.text_faint);
-                }
-                for l in &run.serial_tail {
-                    let r = ui.add(
-                        egui::Label::new(
-                            egui::RichText::new(l)
-                                .font(font::mono(11.5))
-                                .color(p.text_dim),
-                        )
-                        .truncate(),
-                    );
-                    let t = format!("Serial: {l}");
-                    r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, &t));
-                }
-            });
     });
+    let topics: Vec<String> = step
+        .checks
+        .iter()
+        .filter_map(|c| match c {
+            Check::Mqtt { topic, .. } => Some(topic.clone()),
+            _ => None,
+        })
+        .collect();
+    let phone = step.checks.iter().any(|c| matches!(c, Check::Phone { .. }))
+        || step
+            .solution
+            .iter()
+            .any(|a| matches!(a, SolAction::PhoneTerminal | SolAction::PhoneSend { .. }));
+    let p = pal(ui);
+    let boxed = |ui: &mut Ui, title: &str, lines: &[String], prefix: &str| {
+        ui.vertical(|ui| {
+            ui.spacing_mut().item_spacing.y = 6.0;
+            section_title(ui, title);
+            egui::Frame::new()
+                .fill(p.bg_canvas)
+                .stroke(Stroke::new(1.0, p.border))
+                .corner_radius(CornerRadius::same(8))
+                .inner_margin(egui::Margin::symmetric(10, 8))
+                .show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    ui.spacing_mut().item_spacing.y = 2.0;
+                    if lines.is_empty() {
+                        label(ui, "Nothing yet", font::mono(11.5), p.text_faint);
+                    }
+                    for l in lines {
+                        let r = ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(l)
+                                    .font(font::mono(11.5))
+                                    .color(p.text_dim),
+                            )
+                            .truncate(),
+                        );
+                        let t = format!("{prefix}: {l}");
+                        r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, &t));
+                    }
+                });
+        });
+    };
+    if let Some(mcu) = mcu {
+        let reference = run
+            .doc
+            .project()
+            .part(&mcu)
+            .map(|x| x.reference.clone())
+            .unwrap_or_else(|| mcu.to_uppercase());
+        boxed(
+            ui,
+            &format!("Serial · {reference}"),
+            &run.serial_tail,
+            "Serial",
+        );
+    }
+    let radio = tel.and_then(|t| t.radio.as_ref());
+    if !topics.is_empty() {
+        let mut rows: Vec<String> = radio
+            .map(|r| {
+                r.mqtt
+                    .iter()
+                    .filter(|m| {
+                        topics
+                            .iter()
+                            .any(|t| bb_lessons::check::topic_matches(t, &m.topic))
+                    })
+                    .map(|m| format!("{}  {}", m.topic, m.payload))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let n = rows.len().saturating_sub(3);
+        rows.drain(..n);
+        boxed(ui, "MQTT", &rows, "MQTT");
+    }
+    if phone {
+        let mut rows: Vec<String> = radio
+            .map(|r| {
+                r.phone
+                    .terminal
+                    .lines()
+                    .map(str::trim_end)
+                    .filter(|l| !l.is_empty())
+                    .map(String::from)
+                    .collect()
+            })
+            .unwrap_or_default();
+        let n = rows.len().saturating_sub(3);
+        rows.drain(..n);
+        boxed(ui, "Phone", &rows, "Phone");
+    }
 }
 
 /// What's wrong and the next action, under a goal (or for the bench as a whole).

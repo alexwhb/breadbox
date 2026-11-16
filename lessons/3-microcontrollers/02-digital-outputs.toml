@@ -19,6 +19,12 @@ A blink is just HIGH, wait, LOW, wait, forever. The waits set the rhythm."""
 [[steps]]
 kind = "code"
 title = "Blink five times a second"
+hints = [
+    "One blink is 200 ms: 100 ms on plus 100 ms off.",
+    "Use delay(100) after each digitalWrite, then Compile & upload.",
+]
+why = "100 ms + 100 ms = 200 ms per blink, so five blinks fit in a second: 5 Hz."
+success = "5 Hz"
 body = "On for 100 ms, off for 100 ms: 200 ms per blink, five blinks per second. Fill in the delays and upload."
 run = 2.0
 checks = [
@@ -62,6 +68,12 @@ void loop() {
 [[steps]]
 kind = "measure"
 title = "Half on, half off"
+hints = [
+    "Nothing to change: the sketch from the last step is running.",
+    "Equal delays mean the pin is HIGH half of the time.",
+]
+why = "With equal on and off times the pin spends 50 % of each period HIGH: a 50 % duty cycle."
+success = "50 %"
 body = "Equal on and off times mean the pin is HIGH half of the time: a 50 % *duty cycle*."
 checks = [{ type = "pin_duty", mcu = "u1", pin = "D8", min = 0.45, max = 0.55 }]
 solution = [{ do = "run", seconds = 1.0 }]

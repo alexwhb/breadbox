@@ -24,14 +24,26 @@ text = "Wi-Fi over AT commands on D2/D3"
 [[steps]]
 kind = "measure"
 title = "Online"
-body = "Run the bench and open the Radios panel. After the join and the TCP handshake, a message arrives on **garden/pot1** every second."
+hints = [
+    "Nothing to do: joining Wi-Fi and the broker takes a few seconds.",
+    "Watch the MQTT box for garden/pot1.",
+]
+why = "The ESP-01 joins the access point, opens a TCP connection to the broker and publishes a reading every second."
+success = "Online"
+body = "Run the bench. After the join and the TCP handshake, a message arrives on **garden/pot1** every second."
 checks = [{ type = "mqtt", topic = "garden/pot1", contains = "\"m\":" }]
 solution = [{ do = "run", seconds = 8.0 }]
 
 [[steps]]
 kind = "experiment"
 title = "Dry soil"
-body = "Dry the pot out in the World panel (moisture 10 %). The probe's voltage rises, the moisture % drops below 30, and the red *water me* LED comes on."
+hints = [
+    "Drag the Soil moisture slider down to 10 %.",
+    "The LED reacts with the next reading.",
+]
+why = "Dry soil changes the probe's voltage; below 30 % moisture the sketch turns the water-me LED on."
+success = "Water me"
+body = "Dry the pot out with the **Soil moisture** control (10 %). The probe's voltage rises, the moisture % drops below 30, and the red *water me* LED comes on."
 checks = [{ type = "led_lit", part = "d2" }]
 solution = [
     { do = "world", key = "pot1.vwc", value = 10 },
@@ -41,7 +53,13 @@ solution = [
 [[steps]]
 kind = "experiment"
 title = "Water it"
-body = "Water the pot back up to 45 %. The LED goes out with the next reading."
+hints = [
+    "Drag the Soil moisture slider up to 45 %.",
+    "Wait for the next reading.",
+]
+why = "Above 30 % moisture the sketch turns the LED off again."
+success = "Watered"
+body = "Water the pot back up to 45 % with the **Soil moisture** control. The LED goes out with the next reading."
 checks = [{ type = "led_off", part = "d2" }]
 solution = [
     { do = "world", key = "pot1.vwc", value = 45 },

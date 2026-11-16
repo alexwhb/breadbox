@@ -56,7 +56,13 @@ text = "Don't forget the 0.5 V offset at 0 °C."
 [[steps]]
 kind = "measure"
 title = "Warm it up"
-body = "Turn the room up to 40 °C in the World panel and give the sensor a few seconds to catch up."
+hints = [
+    "Drag the Air temperature slider to 40 °C.",
+    "The sensor takes a few seconds to warm up; watch the meter climb.",
+]
+why = "The TMP36 gives 10 mV per °C on top of 0.5 V: at 40 °C that's 0.5 + 0.40 = 0.90 V."
+success = "Warm"
+body = "Turn the room up to 40 °C with the **Air temperature** control and give the sensor a few seconds to catch up."
 checks = [{ type = "reading", part = "dmm1", key = "value", min = 0.88, max = 0.92 }]
 solution = [
     { do = "world", key = "air.temp_c", value = 40 },

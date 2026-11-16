@@ -187,8 +187,17 @@ pub fn describe(a: &Action, step: &Step, n: &Namer) -> Move {
                     }
                 }
             }
+            let article = if color.starts_with(['a', 'e', 'i', 'o', 'u']) {
+                "an"
+            } else {
+                "a"
+            };
             Move {
-                text: format!("Add a {color} jumper from {} to {}", name(&ta), name(&tb)),
+                text: format!(
+                    "Add {article} {color} jumper from {} to {}",
+                    name(&ta),
+                    name(&tb)
+                ),
                 marks,
                 ghost: Some(Ghost {
                     label: format!("{} → {}", short_end(n, &ta), short_end(n, &tb)),

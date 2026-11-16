@@ -24,6 +24,12 @@ text = "holds the node at 5 V until the button pulls it to GND"
 [[steps]]
 kind = "measure"
 title = "Released: pulled up"
+hints = [
+    "Don't press anything: just read the meter.",
+    "Little current flows through R1, so nearly all 5 V reaches the node.",
+]
+why = "With the button open the pull-up carries almost no current, so it drops almost no voltage and the node sits at 5 V."
+success = "Pulled up"
 body = "With nothing pressed, almost no current flows through R1, so there is almost no voltage across it. The node sits at the full 5 V."
 checks = [{ type = "reading", part = "dmm1", key = "value", min = 4.9, max = 5.05 }]
 solution = [{ do = "run", seconds = 0.5 }]
@@ -35,6 +41,12 @@ unit = "V"
 [[steps]]
 kind = "measure"
 title = "Pressed: pulled down"
+hints = [
+    "Click SW1 on the bench and hold the mouse button down.",
+    "Keep holding until the meter reads about 0 V.",
+]
+why = "The pressed button joins the node straight to GND; R1 now carries a small current and takes all 5 V."
+success = "Pulled down"
 body = "Hold the button down. The node is now wired to GND; R1 has all 5 V across it."
 checks = [{ type = "reading", part = "dmm1", key = "value", min = -0.05, max = 0.1 }]
 solution = [

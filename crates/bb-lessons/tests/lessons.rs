@@ -98,6 +98,23 @@ fn every_lesson_loads_and_validates() {
     assert_eq!(all.len(), n);
 }
 
+/// Every hands-on step of every built-in lesson can be helped: two hints that escalate, a
+/// worked solution for Show me / Do it for me, and a line on why it works.
+#[test]
+fn every_hands_on_step_has_hints_a_solution_and_a_why() {
+    let cat = Catalog::builtin();
+    let mut problems = Vec::new();
+    let mut steps = 0;
+    for l in cat.all() {
+        for issue in bb_lessons::audit(&l.lesson) {
+            problems.push(format!("{}: {issue}", l.lesson.id));
+        }
+        steps += l.lesson.steps.iter().filter(|s| s.is_hands_on()).count();
+    }
+    assert!(problems.is_empty(), "{problems:#?}");
+    assert!(steps >= 45, "{steps} hands-on steps");
+}
+
 #[test]
 fn track_one_is_the_designs_eight_lessons() {
     let cat = Catalog::builtin();

@@ -314,6 +314,30 @@ pub fn validate(l: &LoadedLesson, lib: &bb_circuit::Library) -> Vec<String> {
     validate_lesson(&l.lesson, l.start_project(), lib)
 }
 
+/// The feedback audit for the built-in lessons (stricter than [`validate`], which lesson packs
+/// made with the editor must pass): every hands-on step (build, measure, experiment, code,
+/// break) has at least two hints, a worked solution (for "Show me" / "Do it for me") and a
+/// one-line `why`.
+pub fn audit(lesson: &Lesson) -> Vec<String> {
+    let mut issues = Vec::new();
+    for (i, s) in lesson.steps.iter().enumerate() {
+        if !s.is_hands_on() {
+            continue;
+        }
+        let at = format!("step {} ({})", i + 1, s.title);
+        if s.hints.len() < 2 {
+            issues.push(format!("{at}: {} hint(s), needs 2", s.hints.len()));
+        }
+        if s.solution.is_empty() {
+            issues.push(format!("{at}: no worked solution"));
+        }
+        if s.why.trim().is_empty() {
+            issues.push(format!("{at}: no `why`"));
+        }
+    }
+    issues
+}
+
 /// [`validate`] for a lesson and its (loaded) start circuit.
 pub fn validate_lesson(
     lesson: &Lesson,

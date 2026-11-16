@@ -24,6 +24,12 @@ text = "LoRa 868/915 MHz, AT commands on Serial2"
 [[steps]]
 kind = "measure"
 title = "Uplink"
+hints = [
+    "Nothing to do: give it a few seconds.",
+    "Watch the MQTT box for lora/0/7/up.",
+]
+why = "The node sends a LoRa packet; the gateway receives it and republishes it on MQTT."
+success = "Uplink"
 body = "Run the bench. Each packet appears on **lora/0/7/up** (network 0, address 7) with its signal strength, and decoded on **lora/0/7/decoded**."
 checks = [
     { type = "serial_contains", mcu = "u1", text = "lora node ready" },
@@ -35,7 +41,13 @@ solution = [{ do = "run", seconds = 5.0 }]
 [[steps]]
 kind = "experiment"
 title = "Downlink"
-body = "Publish `led on` to **lora/0/7/down**. The gateway queues it and sends it to the node, which prints what it receives."
+hints = [
+    "Type led on into the lora/0/7/down field.",
+    "Press Publish, then wait for the node's next receive window.",
+]
+why = "The gateway queues downlinks and sends them right after the node's next uplink."
+success = "Downlink"
+body = "Publish `led on` to **lora/0/7/down** with the field below. The gateway queues it and sends it to the node, which prints what it receives."
 checks = [{ type = "serial_contains", mcu = "u1", text = "led on" }]
 solution = [
     { do = "publish", topic = "lora/0/7/down", payload = "led on" },

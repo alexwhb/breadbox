@@ -48,6 +48,12 @@ text = "Careful with the µ: 100 µF is 0.0001 F, not 100 F."
 [[steps]]
 kind = "build"
 title = "Charge it"
+hints = [
+    "The + rail is the top red line; the supply already feeds it.",
+    "Drag from hole a5 to any hole on the top + rail.",
+]
+why = "Through R1 the capacitor fills gradually: after one time constant (R × C) it reaches 63 % of the supply."
+success = "Charging"
 body = "Wire the top of R1 (column 5) to the **+** rail. The meter starts climbing at once. One second later it should be near 63 % of 5 V."
 checks = [
     { type = "connected", a = "r1.1", b = "ps1.VBUS" },
@@ -65,6 +71,12 @@ unit = "V"
 [[steps]]
 kind = "measure"
 title = "Five τ later"
+hints = [
+    "Nothing to wire: just let the bench run.",
+    "After five time constants a capacitor is within 1 % of full.",
+]
+why = "Each time constant closes 63 % of the remaining gap, so after five it's 99 % charged."
+success = "Full"
 body = "Let it run for another four seconds: five time constants in total."
 checks = [
     { type = "voltage", a = "c1.plus", min = 4.9, max = 5.05 },

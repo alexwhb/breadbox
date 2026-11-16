@@ -46,19 +46,30 @@ working = ["V(OUT) = 5 V × 4700 ÷ 14 700", "V(OUT) ≈ 1.60 V"]
 [[steps]]
 kind = "build"
 title = "Change R2 and re-run"
-body = "Set R2 to 10 kΩ in the inspector. Equal resistors split the 5 V in half."
+hints = [
+    "Type 10k into the R2 resistance field and press Set.",
+    "Equal resistors split the voltage in half.",
+]
+why = "With R1 = R2 the divider gives exactly half of 5 V: 2.5 V."
+success = "Half"
+body = "Set R2 to 10 kΩ with the **R2 resistance** field. Equal resistors split the 5 V in half."
 checks = [
-    { type = "prop", part = "r2", prop = "resistance", min = 9900, max = 10100 },
-    { type = "spice", analysis = ".op", vector = "v(out)", min = 2.45, max = 2.55 },
+    { type = "prop", part = "r2", prop = "resistance", min = 9900, max = 10100, label = "R2 is 10 kΩ" },
+    { type = "spice", analysis = ".op", vector = "v(out)", min = 2.45, max = 2.55, label = "V(OUT) is about 2.5 V" },
 ]
 solution = [{ do = "set_prop", part = "r2", prop = "resistance", value = 10000 }]
 
 [[steps]]
 kind = "measure"
 title = "The current, too"
+hints = [
+    "Nothing to change: read the goal.",
+    "SPICE counts current into the + terminal as positive.",
+]
+why = "V1 delivers 5 V ÷ 20 kΩ = 0.25 mA; current it delivers shows as negative."
+solution = [{ do = "run", seconds = 0.0 }]
 body = "`.op` also reports the current through every voltage source. SPICE counts current flowing *into* the + terminal as positive, so a source delivering power shows a negative current."
-checks = [{ type = "spice", analysis = ".op", vector = "i(v1)", min = -0.00026, max = -0.00024 }]
-solution = []
+checks = [{ type = "spice", analysis = ".op", vector = "i(v1)", min = -0.00026, max = -0.00024, label = "The supply's current reads −0.25 mA" }]
 
 [[steps]]
 kind = "quiz"

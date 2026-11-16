@@ -291,7 +291,11 @@ impl<'a> Namer<'a> {
     pub fn pin(&self, part: &str, pin: &str) -> String {
         let r = self.reference(part);
         let Some(d) = self.def(part) else {
-            return format!("{r} {pin}");
+            return if pin.chars().all(|c| c.is_ascii_digit()) {
+                format!("{r}'s lead {pin}")
+            } else {
+                format!("{r}'s {pin} pin")
+            };
         };
         if d.is_breadboard() {
             return match breadboard::parse_hole(pin) {
@@ -347,11 +351,7 @@ impl<'a> Namer<'a> {
                 Some(at) => format!("{r}'s lead{at}"),
                 None => format!("{r}'s lead {label}"),
             },
-            _ => match pin {
-                "plus" => format!("{r}'s + leg"),
-                "minus" => format!("{r}'s − leg"),
-                _ => format!("{r} {label}"),
-            },
+            _ => format!("{r}'s {label} pin"),
         }
     }
 

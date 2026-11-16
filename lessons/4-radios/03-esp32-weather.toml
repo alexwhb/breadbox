@@ -24,7 +24,13 @@ text = "temperature + humidity on one data pin (GPIO4)"
 [[steps]]
 kind = "measure"
 title = "First readings"
-body = "Run the bench: the Serial Monitor shows the join and the broker connection, then a reading every two seconds."
+hints = [
+    "Nothing to do: give it a few seconds.",
+    "Wi-Fi first, then the broker, then readings.",
+]
+why = "The ESP32 joins Wi-Fi, connects to the broker, announces itself on weather/status and publishes readings."
+success = "Publishing"
+body = "Run the bench: the **Serial** box shows the join and the broker connection, then a reading every two seconds."
 checks = [
     { type = "serial_contains", mcu = "u1", text = "MQTT: connected" },
     { type = "mqtt", topic = "weather/esp32", contains = "\"t\":" },
@@ -35,7 +41,13 @@ solution = [{ do = "run", seconds = 6.0 }]
 [[steps]]
 kind = "experiment"
 title = "A heat wave"
-body = "Set the air to 31 °C in the World panel. The next message carries the new temperature."
+hints = [
+    "Drag the Air temperature slider to 31 °C.",
+    "The next message carries the new value.",
+]
+why = "The sketch reads its sensor every two seconds and publishes what it measures."
+success = "31 °C"
+body = "Set the air to 31 °C with the **Air temperature** control. The next message carries the new temperature."
 checks = [{ type = "mqtt", topic = "weather/esp32", contains = "\"t\":31" }]
 solution = [
     { do = "world", key = "air.temp_c", value = 31 },
@@ -45,7 +57,13 @@ solution = [
 [[steps]]
 kind = "experiment"
 title = "Send a command"
-body = "In the MQTT explorer, publish `led on` to **weather/cmd**. The ESP32 receives it and prints it."
+hints = [
+    "Type led on into the weather/cmd field.",
+    "Press Publish.",
+]
+why = "The ESP32 subscribed to weather/cmd, so the broker forwards your message to it."
+success = "Received"
+body = "Publish `led on` to **weather/cmd** with the field below. The ESP32 receives it and prints it."
 checks = [{ type = "serial_contains", mcu = "u1", text = "MQTT: weather/cmd = led on" }]
 solution = [
     { do = "publish", topic = "weather/cmd", payload = "led on" },

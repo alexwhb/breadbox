@@ -24,6 +24,12 @@ text = "the pin the blink sketch switches"
 [[steps]]
 kind = "build"
 title = "Wire D13 to the resistor"
+hints = [
+    "R1's top lead is in column 5; any hole a5–e5 works.",
+    "Drag from the UNO's D13 header pin to hole a5.",
+]
+why = "D13 now drives R1 and the LED: when the sketch switches it HIGH, current flows through the LED to GND."
+success = "Wired"
 body = "Add a jumper from the UNO's **D13** to the top of R1 (column 5)."
 checks = [{ type = "connected", a = "u1.D13", b = "r1.1" }]
 solution = [{ do = "wire", a = "u1.D13", b = "bb1.a5", color = "orange" }]
@@ -31,6 +37,12 @@ solution = [{ do = "wire", a = "u1.D13", b = "bb1.a5", color = "orange" }]
 [[steps]]
 kind = "code"
 title = "Upload blink"
+hints = [
+    "delay() takes milliseconds: one second is delay(1000).",
+    "Put delay(1000) after each digitalWrite, then press Compile & upload.",
+]
+why = "One second HIGH plus one second LOW is a two-second period: half a blink per second, 0.5 Hz."
+success = "Blinking"
 body = """
 `setup()` runs once and makes D13 an output. `loop()` runs forever: HIGH, wait a second, LOW, wait a second.
 

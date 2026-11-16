@@ -22,6 +22,12 @@ formula = "V = I × R"
 [[steps]]
 kind = "measure"
 title = "Measure the voltage"
+hints = [
+    "Click the meter's dial: each click turns it one position.",
+    "Stop at DC volts (the V with a straight line) and give the display a second to settle.",
+]
+why = "On DC volts the meter compares its red lead (R1's top, on +5 V) with its black lead (GND): the supply's whole push, about 5 V."
+success = "About 5 V"
 body = "Turn the meter's dial to **V⎓** (DC volts). Its red lead is on the top of R1 and its black lead is on GND, so it shows the supply's push across R1."
 checks = [{ type = "reading", part = "dmm1", key = "value", min = 4.85, max = 5.05 }]
 solution = [
@@ -36,13 +42,18 @@ unit = "V"
 [[steps]]
 kind = "build"
 title = "Put the meter in the current's path"
+hints = [
+    "The current now flows R1 → mA jack → through the meter → COM → GND.",
+    "In order: delete the black jumper in column 9, drag from hole b9 to the meter's mA jack, then click the dial to mA.",
+]
+why = "With the GND jumper gone the only way back is through the meter, in at mA and out at COM, so all the current passes through it: that's series."
+success = "In series"
 body = """
 Current is measured *through* a part, so the meter has to become part of the loop:
 
 1. Remove the black jumper from R1's bottom (column 9) to the GND rail.
 2. Wire column 9 to the meter's **mA** jack. The meter's COM is already on GND.
 3. Turn the dial to **mA**."""
-hints = ["The current now flows R1 → mA jack → through the meter → COM → GND."]
 checks = [
     { type = "connected", a = "r1.2", b = "dmm1.MA" },
     { type = "not_connected", a = "r1.2", b = "ps1.GND" },

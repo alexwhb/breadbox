@@ -45,19 +45,30 @@ text = "That's 1 ÷ RC in radians per second. Divide by 2π for hertz."
 [[steps]]
 kind = "measure"
 title = "A decade later"
+hints = [
+    "Nothing to change: read the goals.",
+    "Ten times the corner frequency is 20 dB down.",
+]
+why = "A first-order filter falls 20 dB per decade above its corner, and its phase is −45° right at the corner."
+solution = [{ do = "run", seconds = 0.0 }]
 body = "Ten times the corner frequency, a first-order filter is 20 dB down (a tenth of the input). Read V(OUT) at 15.9 kHz."
 checks = [
-    { type = "spice", analysis = ".ac dec 50 10 100k", vector = "v(out)", at = 15915.0, stat = "mag_db", min = -21.0, max = -19.0 },
-    { type = "spice", analysis = ".ac dec 50 10 100k", vector = "v(out)", at = 1591.5, stat = "phase_deg", min = -47.0, max = -43.0 },
+    { type = "spice", analysis = ".ac dec 50 10 100k", vector = "v(out)", at = 15915.0, stat = "mag_db", min = -21.0, max = -19.0, label = "Gain at 15.9 kHz is about −20 dB" },
+    { type = "spice", analysis = ".ac dec 50 10 100k", vector = "v(out)", at = 1591.5, stat = "phase_deg", min = -47.0, max = -43.0, label = "Phase at 1.59 kHz is about −45°" },
 ]
-solution = []
 
 [[steps]]
 kind = "experiment"
 title = "Move the corner"
+hints = [
+    "Type 10n into the C1 capacitance field and press Set.",
+    "f = 1 ÷ (2π R C): ten times smaller C, ten times higher corner.",
+]
+why = "The corner frequency is 1 ÷ (2πRC), so a ten times smaller C moves it up a decade, to 15.9 kHz."
+success = "Corner moved"
 body = "Make C1 ten times smaller, 10 nF. The corner moves up a decade, to about 15.9 kHz."
 checks = [
-    { type = "spice", analysis = ".ac dec 50 10 100k", vector = "v(out)", at = 15915.0, stat = "mag_db", min = -3.4, max = -2.6 },
+    { type = "spice", analysis = ".ac dec 50 10 100k", vector = "v(out)", at = 15915.0, stat = "mag_db", min = -3.4, max = -2.6, label = "Gain at 15.9 kHz is about −3 dB" },
 ]
 solution = [{ do = "set_prop", part = "c1", prop = "capacitance", value = 1e-8 }]
 

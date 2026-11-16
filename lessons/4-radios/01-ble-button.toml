@@ -24,7 +24,13 @@ text = "BLE: advertises as “bb-button”"
 [[steps]]
 kind = "measure"
 title = "Power up"
-body = "Run the bench. In the Serial Monitor the sketch sends its AT commands and reports **ble-button ready**."
+hints = [
+    "Nothing to do: give the UNO a couple of seconds.",
+    "The sketch sets up the HM-10 with AT commands first.",
+]
+why = "At start-up the sketch names the module with AT commands, and the module answers OK."
+success = "Ready"
+body = "Run the bench. In the **Serial** box the sketch sends its AT commands and reports **ble-button ready**."
 checks = [
     { type = "serial_contains", mcu = "u1", text = "AT+NAMEbb-button -> OK" },
     { type = "serial_contains", mcu = "u1", text = "ble-button ready" },
@@ -34,7 +40,13 @@ solution = [{ do = "run", seconds = 2.0 }]
 [[steps]]
 kind = "experiment"
 title = "Connect the phone"
-body = "Open the virtual phone, scan, and tap **bb-button**. The module tells the UNO `OK+CONN`. Then open the phone's **Terminal** to see what the UNO sends."
+hints = [
+    "Press Connect phone in the controls.",
+    "Then press Open terminal.",
+]
+why = "Once connected, the HM-10 passes serial data over Bluetooth both ways: a serial cable without the cable."
+success = "Connected"
+body = "Press **Connect phone**: the virtual phone scans and connects to **bb-button**, and the module tells the UNO `OK+CONN`. Then press **Open terminal** to see what the UNO sends."
 checks = [{ type = "serial_contains", mcu = "u1", text = "phone connected" }]
 solution = [
     { do = "phone_connect", name = "bb-button" },
@@ -46,6 +58,12 @@ solution = [
 [[steps]]
 kind = "experiment"
 title = "Press the button"
+hints = [
+    "Click and hold SW1 on the breadboard, then let go.",
+    "Watch the Serial box: “pressed #1”.",
+]
+why = "The sketch counts the press and, since a phone is connected, writes it to the HM-10, which sends it over the air."
+success = "Sent"
 body = "Press SW1. The sketch counts the press and, because a phone is connected, sends it over the air."
 checks = [
     { type = "serial_contains", mcu = "u1", text = "pressed #1" },
@@ -61,7 +79,13 @@ solution = [
 [[steps]]
 kind = "experiment"
 title = "Talk back"
-body = "In the phone's Bluetooth terminal, send `?`. The sketch answers with its press count."
+hints = [
+    "Type ? into the phone message field.",
+    "Press Send; the answer shows up in the phone's terminal.",
+]
+why = "The HM-10 hands the phone's ? to the UNO's serial port, and the sketch answers with its press count."
+success = "Talked back"
+body = "Type `?` into the **Phone message** field and press **Send**. The sketch answers with its press count."
 checks = [{ type = "phone", contains = "presses=1" }]
 solution = [
     { do = "phone_send", text = "?\n" },

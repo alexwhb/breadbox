@@ -43,6 +43,12 @@ solution = [
 [[steps]]
 kind = "build"
 title = "Break the loop"
+hints = [
+    "The black jumper from column 10 to the − rail is D1's only way back to GND.",
+    "Click that jumper to select it, then press Delete.",
+]
+why = "Without that jumper D1's short leg has no path back to GND. A loop with a gap carries no current anywhere, so D1 goes dark even though the supply is on."
+success = "Loop open"
 body = "Now remove the black jumper from column 10 to the GND rail. The loop is open again: the current has nowhere to return to, and D1 goes dark, even though the supply is still on."
 checks = [
     { type = "not_connected", a = "d1.k", b = "ps1.GND" },

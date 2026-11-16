@@ -20,6 +20,12 @@ formula = "duty = value ÷ 255"
 [[steps]]
 kind = "code"
 title = "A quarter brightness"
+hints = [
+    "analogWrite takes 0–255: 64 is a quarter.",
+    "Write analogWrite(9, 64) in setup(), then Compile & upload.",
+]
+why = "64 out of 255 keeps the pin HIGH about 25 % of each 2 ms PWM period, so the LED looks about a quarter as bright."
+success = "Dimmed"
 body = "Upload the sketch: `analogWrite(9, 64)` once in `setup()`. The hardware keeps the PWM running on its own."
 run = 1.0
 checks = [

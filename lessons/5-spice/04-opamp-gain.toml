@@ -45,19 +45,30 @@ text = "That's the inverting amplifier's gain. The non-inverting one adds 1."
 [[steps]]
 kind = "measure"
 title = "See it in time"
+hints = [
+    "Nothing to change: read the goal.",
+    "Gain 11 × 0.5 V = 5.5 V.",
+]
+why = "The gain is 1 + R2 ÷ R1 = 11, so the 0.5 V peaks come out at 5.5 V."
+solution = [{ do = "run", seconds = 0.0 }]
 body = "Run `.tran 10u 5m`: the 0.5 V sine comes out 11 times bigger, peaking near 5.5 V."
 checks = [
-    { type = "spice", analysis = ".tran 10u 5m", vector = "v(out)", stat = "max", min = 5.2, max = 5.8 },
+    { type = "spice", analysis = ".tran 10u 5m", vector = "v(out)", stat = "max", min = 5.2, max = 5.8, label = "V(OUT) peaks near 5.5 V" },
 ]
-solution = []
 
 [[steps]]
 kind = "experiment"
 title = "Too much gain"
+hints = [
+    "Type 47k into the R2 resistance field and press Set.",
+    "1 + 47 ÷ 1 = 48: more than the supplies allow.",
+]
+why = "A gain of 48 would need ±24 V; the op-amp can't swing past its ±12 V supplies, so the peaks flatten: clipping."
+success = "Clipping"
 body = "Make R2 47 kΩ. The gain becomes 48, which would need ±24 V; the output can't swing past its ±12 V supplies and the peaks flatten. That's **clipping**."
 checks = [
-    { type = "spice", analysis = ".tran 10u 5m", vector = "v(out)", stat = "max", min = 9.0, max = 12.0 },
-    { type = "spice", analysis = ".ac dec 10 100 10k", vector = "v(out)", at = 1000.0, stat = "mag_db", min = 33.0, max = 34.0 },
+    { type = "spice", analysis = ".tran 10u 5m", vector = "v(out)", stat = "max", min = 9.0, max = 12.0, label = "V(OUT) peaks at 9–12 V (clipped)" },
+    { type = "spice", analysis = ".ac dec 10 100 10k", vector = "v(out)", at = 1000.0, stat = "mag_db", min = 33.0, max = 34.0, label = "Small-signal gain is about 33.6 dB" },
 ]
 solution = [{ do = "set_prop", part = "r2", prop = "resistance", value = 47000 }]
 

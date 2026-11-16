@@ -26,6 +26,12 @@ text = "current must flow through it to be measured"
 [[steps]]
 kind = "measure"
 title = "Read the current"
+hints = [
+    "The meter is already in the loop and set to mA: read it once the display settles.",
+    "Expect about 13 mA: 3.0 V across 220 Ω.",
+]
+why = "In a series loop the same current flows through R1, D1 and the meter, so the meter shows the LED's current."
+success = "Read"
 body = "With R1 = 220 Ω the LED is lit. Read the meter: that's the current through R1, D1 and the meter. It's the same everywhere in a series loop."
 checks = [
     { type = "reading", part = "dmm1", key = "value", min = 0.011, max = 0.0145 },
@@ -42,6 +48,12 @@ unit = "mA"
 [[steps]]
 kind = "experiment"
 title = "Change the resistor, watch the current"
+hints = [
+    "Pick a resistor. With Do the math myself on, type your prediction in mA and press Check.",
+    "Every right prediction adds a row; three different resistors pass the checkpoint.",
+]
+why = "About 3.0 V is left for the resistor once the LED takes its 2.0 V, and I = V ÷ R: a bigger R means less current."
+success = "Checkpoint passed"
 body = "A red LED uses up about 2.0 V. Whatever is left of the 5 V lands on the resistor, and the resistor decides how much current flows."
 formula = "I = (5.0 V − 2.0 V) ÷ R"
 damage_title = "Pop. That LED is gone."
@@ -124,6 +136,12 @@ remaining = "Try {n} more value{s}"
 [[steps]]
 kind = "break"
 title = "Break it on purpose"
+hints = [
+    "The last option takes R1 out of the loop.",
+    "Pick None and watch D1.",
+]
+why = "With R1 gone only the LED's own ~6 Ω limits the current: about 500 mA, 25 times its rating."
+success = "Pop"
 body = "Pick **None**: R1 is replaced by a plain wire, so nothing but the LED itself limits the current. Before you click, guess what happens."
 damage_title = "Pop. That LED is gone."
 damage_text = "With no resistor, only the LED's own ~6 Ω limits the current: about 3.0 V ÷ 6 Ω ≈ 500 mA, 25× its 20 mA rating. This is exactly why every LED gets a resistor. Good thing it's a sim."

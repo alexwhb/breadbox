@@ -1310,15 +1310,32 @@ impl<'a> Doctor<'a> {
             }
             Check::Part { id, def, .. } => {
                 let reference = id.clone().unwrap_or_else(|| def.clone()).to_uppercase();
-                Finding::new(
-                    Mistake::MissingPart,
-                    format!(
-                        "{} isn't on the bench yet.",
-                        lower_first(&r.label).replace(" on the bench", "")
-                    ),
-                    format!("Press Add {reference} below, then wire it."),
-                )
-                .marks(vec![Mark::control(control::add(&reference), "")])
+                let what = r
+                    .label
+                    .split_once(": ")
+                    .map(|x| x.1)
+                    .unwrap_or(&r.label)
+                    .replace(" on the bench", "");
+                let present = id.as_ref().is_some_and(|i| self.project.part(i).is_some());
+                if present {
+                    Finding::new(
+                        Mistake::WrongValue,
+                        format!("{reference} is on the bench, but it isn't {what}."),
+                        "",
+                    )
+                    .marks(vec![Mark::part(
+                        &reference.to_ascii_lowercase(),
+                        Tone::Focus,
+                        "",
+                    )])
+                } else {
+                    Finding::new(
+                        Mistake::MissingPart,
+                        format!("{reference} ({what}) isn't on the bench yet."),
+                        format!("Press Add {reference} below, then wire it."),
+                    )
+                    .marks(vec![Mark::control(control::add(&reference), "")])
+                }
             }
             Check::Damaged { part } => {
                 let bypass = self.step.choice.as_ref().and_then(|ch| {
@@ -1394,11 +1411,20 @@ impl<'a> Doctor<'a> {
                         min * 100.0,
                         max * 100.0
                     ),
-                    format!(
-                        "With analogWrite, {:.0} % is about {:.0} out of 255.",
-                        (min + max) * 50.0,
-                        (min + max) / 2.0 * 255.0
-                    ),
+                    if self
+                        .step
+                        .code
+                        .as_ref()
+                        .is_some_and(|c| c.solution.contains("analogWrite"))
+                    {
+                        format!(
+                            "With analogWrite, {:.0} % is about {:.0} out of 255.",
+                            (min + max) * 50.0,
+                            (min + max) / 2.0 * 255.0
+                        )
+                    } else {
+                        String::new()
+                    },
                 )
                 .marks(vec![Mark::part(mcu, Tone::Focus, "")])
             }
@@ -1608,11 +1634,24 @@ impl<'a> Doctor<'a> {
     ) -> Finding {
         for t in [a, b] {
             if !self.exists(t) {
-                return Finding::new(
-                    Mistake::MissingPart,
-                    format!("{} isn't on the bench.", self.n.reference(&t.part)),
-                    "",
-                );
+                let reference = self.n.reference(&t.part);
+                let adds = self.step.solution.iter().any(|x| {
+                    matches!(x, Action::AddPart { reference: r, .. } if r.eq_ignore_ascii_case(&t.part))
+                });
+                return if adds {
+                    Finding::new(
+                        Mistake::MissingPart,
+                        format!("{reference} isn't on the bench yet."),
+                        format!("Press Add {reference} below, then wire it."),
+                    )
+                    .marks(vec![Mark::control(control::add(&t.part), "")])
+                } else {
+                    Finding::new(
+                        Mistake::MissingPart,
+                        format!("{reference} isn't on the bench."),
+                        "",
+                    )
+                };
             }
         }
         let (na, nb) = (self.net(a), self.net(b));
@@ -1674,12 +1713,62 @@ impl<'a> Doctor<'a> {
         }
         let wires_a = na.map(|n| self.wires_on(n)).unwrap_or_default();
         let wires_b = nb.map(|n| self.wires_on(n)).unwrap_or_default();
+        // a jumper from A's own spot goes to the wrong pin of B's part (the meter's VΩ jack
+        // instead of mA, UNO 5 V instead of 3.3 V)
+        let a_spot: Vec<TermRef> = {
+            let hole = if self.n.is_breadboard(&a.part) {
+                Some(a.clone())
+            } else {
+                self.n.socket(&a.part, &a.pin).cloned()
+            };
+            let mut v = vec![a.clone()];
+            if let Some(h) = hole {
+                v.extend(self.n.strip_holes(&h));
+            }
+            v
+        };
+        for (w, near, other) in &wires_a {
+            if let Endpoint::Pin { part, pin } = other
+                && a_spot.contains(near)
+                && *part == b.part
+                && *pin != b.pin
+                && !self.n.is_breadboard(part)
+            {
+                let wrong = TermRef::new(part, pin);
+                let wn = self.n.pin(part, pin);
+                let bn = self.n.pin(&b.part, &b.pin);
+                marks.push(Mark::pin(&wrong, Tone::Wrong, format!("not {bn}")));
+                marks.push(Mark::pin(b, Tone::Target, "move it here"));
+                return Finding::new(
+                    Mistake::WrongPlace,
+                    format!(
+                        "Your {} goes to {wn}, but the goal is {bn}.",
+                        self.n.wire_short(w).trim_start_matches("the ")
+                    ),
+                    format!("Move that end to {bn}."),
+                )
+                .marks(marks);
+            }
+        }
         // A's side reaches other parts, not B's: the jumper end nearest to B
+        let own_strip = {
+            let h = if self.n.is_breadboard(&a.part) {
+                Some(a.clone())
+            } else {
+                self.n.socket(&a.part, &a.pin).cloned()
+            };
+            h.and_then(|h| self.n.strip_of(&h))
+                .map(|(bb, k, _)| (bb, k))
+        };
         let mut best: Option<(String, TermRef, u64)> = None;
         for (w, _, other) in &wires_a {
             if let Endpoint::Pin { part, pin } = other {
                 let h = TermRef::new(part, pin);
-                if let (Some((_, _, hh)), Some((_, tc, _))) = (self.n.strip_of(&h), &target.column)
+                let strip = self.n.strip_of(&h);
+                if strip.as_ref().map(|(bb, k, _)| (bb.clone(), k.clone())) == own_strip {
+                    continue;
+                }
+                if let (Some((_, _, hh)), Some((_, tc, _))) = (strip, &target.column)
                     && let Some((c, _)) = strip_column(&hh)
                 {
                     let d = (c as i64 - *tc as i64).unsigned_abs();
@@ -1716,8 +1805,8 @@ impl<'a> Doctor<'a> {
             )
             .marks(marks);
         }
-        // A's side already reaches a rail (the supply powers it): carry on from the rail
-        let a_rail = na.and_then(|n| {
+        // A (a supply) already reaches a rail: carry on from the rail
+        let a_rail = na.filter(|_| self.is_supply_pin(a)).and_then(|n| {
             self.conn
                 .net(n)
                 .holes
@@ -1744,7 +1833,8 @@ impl<'a> Doctor<'a> {
         } else {
             target
         };
-        marks.push(Mark::pin(a, Tone::Target, "start here"));
+        let from = self.target(a);
+        marks.extend(self.target_marks(&from, "start here"));
         marks.extend(self.target_marks(&aim, "and end here"));
         Finding::new(
             Mistake::NotWired,
@@ -1752,7 +1842,7 @@ impl<'a> Doctor<'a> {
                 "Nothing connects {an} to {} yet.",
                 self.n.pin(&b.part, &b.pin)
             ),
-            format!("Add a jumper from {an} to {}.", aim.to),
+            format!("Add a jumper from {} to {}.", from.to, aim.to),
         )
         .marks(marks)
     }
@@ -1976,12 +2066,14 @@ impl<'a> Doctor<'a> {
             )
             .marks(vec![Mark::part(part, Tone::Focus, "too dim")]);
         }
-        Finding::new(
-            Mistake::NotYet,
-            format!("{name} gets no current yet."),
-            "Give the bench a moment, then follow the loop from + through the LED back to GND.",
-        )
-        .marks(vec![Mark::part(part, Tone::Focus, "")])
+        // the loop is there: what's missing is in the step (the room getting dark, a sketch …)
+        let fix = if guide::first_move(self.step, &self.n).is_some() {
+            ""
+        } else {
+            "Give the bench a moment, then follow the loop from + through the LED back to GND."
+        };
+        Finding::new(Mistake::NotYet, format!("{name} gets no current yet."), fix)
+            .marks(vec![Mark::part(part, Tone::Focus, "")])
     }
 
     /// A meter in current mode wired across a part (in parallel): it carries the current

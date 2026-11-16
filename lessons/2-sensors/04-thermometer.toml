@@ -29,7 +29,13 @@ text = "RS on D12, E on D11, data on D5–D2"
 [[steps]]
 kind = "measure"
 title = "It's talking"
-body = "Run the bench and watch the Serial Monitor: one line per second, ending in \" C\"."
+hints = [
+    "Nothing to change: give it a couple of seconds.",
+    "Each line is the temperature in °C, worked out from A0.",
+]
+why = "The sketch reads the TMP36 on A0 once a second and prints the converted temperature."
+success = "Talking"
+body = "Run the bench and watch the **Serial** box: one line per second, ending in \" C\"."
 checks = [
     { type = "serial_contains", mcu = "u1", text = " C" },
     { type = "voltage", a = "u2.VOUT", min = 0.73, max = 0.77 },
@@ -57,7 +63,13 @@ working = ["V = 154 × 5 V ÷ 1024 ≈ 0.752 V", "T = (0.752 − 0.5) × 100 ≈
 [[steps]]
 kind = "experiment"
 title = "A hot day"
-body = "Raise the room to 35 °C. The sensor follows within a few seconds, and so do the Serial Monitor and the LCD."
+hints = [
+    "Drag the Air temperature slider to 35 °C.",
+    "The sensor needs a few seconds to follow; watch the Serial box.",
+]
+why = "35 °C gives 0.5 + 0.35 = 0.85 V at VOUT, and the sketch turns that back into degrees."
+success = "Hot"
+body = "Raise the room to 35 °C with the **Air temperature** control. The sensor follows within a few seconds, and so do the Serial box and the LCD."
 checks = [
     { type = "voltage", a = "u2.VOUT", min = 0.83, max = 0.87 },
     { type = "serial_contains", mcu = "u1", text = "34." },

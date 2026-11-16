@@ -24,6 +24,12 @@ text = "the wiper goes to A0"
 [[steps]]
 kind = "code"
 title = "Upload and listen"
+hints = [
+    "The sketch is ready: press Compile & upload.",
+    "Its lines appear in the Serial box.",
+]
+why = "Serial.print sends text over the USB serial link; the bench shows each line as it arrives."
+success = "Listening"
 body = "The sketch reads A0 five times a second and prints `A0 = <reading>`."
 run = 1.0
 checks = [
@@ -62,6 +68,12 @@ void loop() {
 [[steps]]
 kind = "experiment"
 title = "All the way up"
+hints = [
+    "Drag the knob on POT1 to turn it fully clockwise.",
+    "Watch the Serial box until it says A0 = 1023.",
+]
+why = "Fully clockwise, the wiper sits at 5 V and analogRead returns the top of its scale: 1023."
+success = "1023"
 body = "Turn the knob fully clockwise: the wiper reaches 5 V and A0 reads the top of the scale."
 checks = [{ type = "serial_contains", mcu = "u1", text = "A0 = 1023" }]
 solution = [

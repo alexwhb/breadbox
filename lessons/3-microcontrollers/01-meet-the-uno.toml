@@ -26,6 +26,12 @@ text = "5V, 3V3 and GND power whatever you build"
 [[steps]]
 kind = "measure"
 title = "The 5 V pin"
+hints = [
+    "Click the meter's dial until it points at DC volts.",
+    "The red lead is already on the UNO's 5V pin, the black one on GND.",
+]
+why = "On DC volts the meter shows the difference between its red lead (5V) and its black lead (GND)."
+success = "5 V"
 body = "Turn the dial to **V⎓**."
 checks = [{ type = "reading", part = "dmm1", key = "value", min = 4.75, max = 5.1 }]
 solution = [
@@ -40,6 +46,12 @@ unit = "V"
 [[steps]]
 kind = "build"
 title = "The 3.3 V pin"
+hints = [
+    "Delete the red meter lead that goes to 5V.",
+    "Drag from the meter's VΩ jack to the UNO's 3V3 pin.",
+]
+why = "The 3V3 pin comes from the UNO's small regulator, so the meter now reads about 3.3 V."
+success = "3.3 V"
 body = "Move the red lead from **5V** to **3V3**. Many sensors and radio modules want 3.3 V; the UNO has a small regulator for them."
 checks = [
     { type = "connected", a = "dmm1.VO", b = "u1.3V3" },

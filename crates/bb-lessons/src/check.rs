@@ -108,8 +108,11 @@ pub fn reading_unit(step: Option<&Step>, part: &str) -> Option<(f64, String)> {
 
 /// `11–14.5 mA`, `4.85–5.05 V`.
 pub fn range(min: f64, max: f64, unit: &str) -> String {
-    let f = |v: f64| bb_core::si::format_sig(v, unit, 3);
+    let f = |v: f64| bb_core::si::format_sig(v, unit, 3).replace('-', "−");
     let (a, b) = (f(min), f(max));
+    if min < 0.0 {
+        return format!("{a} to {b}");
+    }
     // `11 mA–14.5 mA` → `11–14.5 mA`
     let ua = a.split_once(' ').map(|x| x.1).unwrap_or("");
     let ub = b.split_once(' ').map(|x| x.1).unwrap_or("");
@@ -128,7 +131,30 @@ fn in_unit(v: f64, scale: f64, unit: &str) -> String {
     if x.abs() < 1e-9 {
         return format!("0 {unit}");
     }
-    format!("{} {unit}", crate::text::smart(x))
+    match unit {
+        "mA" | "mV" | "" => format!("{} {unit}", crate::text::smart(x))
+            .trim()
+            .to_string(),
+        "Hz" => names::hz(x),
+        _ => names::value(x, unit),
+    }
+}
+
+/// The base unit a DMM dial position reads (`mode` reading): V, Ω, A, Hz, F.
+fn dial_unit(mode: f64) -> Option<&'static str> {
+    Some(match mode.round() as i64 {
+        1..=3 => "V",
+        4 => "Ω",
+        6 => "F",
+        7 | 8 => "A",
+        9 => "Hz",
+        _ => return None,
+    })
+}
+
+/// The base unit of a display unit (`mA` → `A`, `kΩ` → `Ω`).
+fn base_unit(unit: &str) -> &str {
+    unit.trim_start_matches(['m', 'k', 'µ', 'u', 'M'])
 }
 
 /// Upper-cases the first letter (`the meter reads …` → `The meter reads …`).
@@ -440,8 +466,9 @@ pub fn evaluate(c: &Check, ctx: &mut Ctx, conn: &Connectivity) -> CheckResult {
                         "V"
                     };
                     let detail = match stat.as_str() {
-                        "mag_db" => format!("{v:.1} dB"),
-                        "phase_deg" => format!("{v:.1}°"),
+                        "mag_db" => format!("{v:.1} dB").replace('-', "−"),
+                        "phase_deg" => format!("{v:.1}°").replace('-', "−"),
+                        _ if v < 0.0 => format!("−{}", names::value(-v, unit)),
                         _ => names::value(v, unit),
                     };
                     r(range_ok(v, *min, *max), detail)
@@ -508,7 +535,14 @@ fn bench_check(c: &Check, b: &mut Bench, step: Option<&Step>) -> CheckResult {
             max,
         } => {
             let v = reading(b, part, key);
+            // a meter on another dial setting shows its own unit (`4.99 V`, not `4999 mA`)
+            let dial = reading(b, part, "mode").and_then(dial_unit);
             let shown = match (v, reading_unit(step, part)) {
+                (Some(v), Some((_, unit)))
+                    if key == "value" && dial.is_some_and(|d| d != base_unit(&unit)) =>
+                {
+                    names::value(v, dial.unwrap_or(""))
+                }
                 (Some(v), Some((scale, unit))) if key == "value" => in_unit(v, scale, &unit),
                 (Some(v), _) if key == "frequency" => names::hz(v),
                 (Some(v), _) => format!("{v:.4}"),

@@ -38,19 +38,30 @@ working = ["τ = 1000 Ω × 1e-7 F = 1e-4 s", "τ = 100 µs"]
 [[steps]]
 kind = "measure"
 title = "Read the curve"
-body = "Run `.tran 1u 1m` and put the cursor on V(OUT) at t = τ and t = 5τ."
-checks = [
-    { type = "spice", analysis = ".tran 1u 1m", vector = "v(out)", at = 101e-6, min = 3.0, max = 3.3 },
-    { type = "spice", analysis = ".tran 1u 1m", vector = "v(out)", at = 501e-6, min = 4.9, max = 5.0 },
+hints = [
+    "Nothing to change: read the two goals.",
+    "At τ a capacitor is at 63 %, at 5τ at 99 %.",
 ]
-solution = []
+why = "Each time constant closes 63 % of the remaining gap: about 3.16 V after τ and 4.97 V after 5τ."
+solution = [{ do = "run", seconds = 0.0 }]
+body = "The goals read V(OUT) from `.tran 1u 1m` at t = τ and t = 5τ."
+checks = [
+    { type = "spice", analysis = ".tran 1u 1m", vector = "v(out)", at = 101e-6, min = 3.0, max = 3.3, label = "V(OUT) at τ (100 µs) is 3.0–3.3 V" },
+    { type = "spice", analysis = ".tran 1u 1m", vector = "v(out)", at = 501e-6, min = 4.9, max = 5.0, label = "V(OUT) at 5τ (500 µs) is 4.9–5.0 V" },
+]
 
 [[steps]]
 kind = "experiment"
 title = "Double R"
+hints = [
+    "Type 2k into the R1 resistance field and press Set.",
+    "τ = R × C doubles with R.",
+]
+why = "τ doubles to 200 µs, so at 100 µs the capacitor has had only half a time constant: about 39 % of 5 V."
+success = "Slower"
 body = "Make R1 2 kΩ. τ doubles to 200 µs, so at 100 µs the capacitor has only reached 1 − e^(−0.5) ≈ 39 % of 5 V."
 checks = [
-    { type = "spice", analysis = ".tran 1u 1m", vector = "v(out)", at = 101e-6, min = 1.85, max = 2.1 },
+    { type = "spice", analysis = ".tran 1u 1m", vector = "v(out)", at = 101e-6, min = 1.85, max = 2.1, label = "V(OUT) at 100 µs is 1.85–2.1 V" },
 ]
 solution = [{ do = "set_prop", part = "r1", prop = "resistance", value = 2000 }]
 

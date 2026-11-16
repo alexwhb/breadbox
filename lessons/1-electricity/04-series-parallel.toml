@@ -57,6 +57,12 @@ text = "Right number in kΩ. The box wants ohms: × 1000."
 [[steps]]
 kind = "build"
 title = "Make it parallel"
+hints = [
+    "Columns 5 and 13 joined + meter across 5 and 9 = R1 and R2 side by side.",
+    "Delete the meter's black lead in column 13 and drag from the COM jack to a9, then add a jumper from b13 to b5.",
+]
+why = "With columns 5 and 13 joined, R1 and R2 both run between the same two points: the current has two paths, so the total is less than either resistor."
+success = "In parallel"
 body = """
 Rewire so both resistors sit between the same two points:
 
@@ -64,7 +70,6 @@ Rewire so both resistors sit between the same two points:
 2. Add a jumper from column 13 back to column 5.
 
 Now R1 runs from column 5 to 9, and R2 runs from column 9 to 13, which is now joined to column 5. Both bridge the same two points."""
-hints = ["Columns 5 and 13 joined + meter across 5 and 9 = R1 and R2 side by side."]
 checks = [
     { type = "connected", a = "r2.2", b = "r1.1" },
     { type = "connected", a = "dmm1.COM", b = "r1.2" },

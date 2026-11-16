@@ -28,6 +28,12 @@ text = "a small base current from D9 switches the LED's larger current"
 [[steps]]
 kind = "measure"
 title = "Daylight"
+hints = [
+    "Nothing to change: the room is already bright.",
+    "Watch the Serial box: “led=0” means the sketch keeps the LED off.",
+]
+why = "Bright light keeps A0 high, above the sketch's threshold, so it writes 0 to the LED."
+success = "Off in daylight"
 body = "At 1000 lux the LDR is only a few kΩ and A0 reads around 800. Well above the threshold, so the LED stays off."
 checks = [
     { type = "led_off", part = "d1" },
@@ -38,7 +44,13 @@ solution = [{ do = "run", seconds = 1.0 }]
 [[steps]]
 kind = "experiment"
 title = "Night falls"
-body = "Dim the room to 5 lux. A0 drops below 100 and the sketch drives D9 at full power."
+hints = [
+    "Drag the Room light slider all the way down, to about 5 lux.",
+    "Wait a moment: the sketch reads A0 a few times a second.",
+]
+why = "In the dark the LDR's resistance soars, A0 drops below the threshold and the sketch drives D9 (and the LED through Q1) at full power."
+success = "Night light on"
+body = "Dim the room to 5 lux with the **Room light** control. A0 drops below 100 and the sketch drives D9 at full power."
 checks = [
     { type = "led_lit", part = "d1" },
     { type = "serial_contains", mcu = "u1", text = "led=255" },

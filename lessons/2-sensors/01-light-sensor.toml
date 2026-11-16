@@ -25,7 +25,13 @@ text = "the bottom half of the divider"
 [[steps]]
 kind = "measure"
 title = "A bright room"
-body = "Set the room to 500 lux (a well-lit desk) in the World panel. The LDR is only a few kΩ, so the middle sits low."
+hints = [
+    "Drag the Room light slider to about 500 lux.",
+    "Give the meter a second to settle.",
+]
+why = "Bright light lowers the LDR's resistance, so it takes a smaller share of the 5 V and the middle reads low."
+success = "Bright"
+body = "Set the room to 500 lux (a well-lit desk) with the **Room light** control. The LDR is only a few kΩ, so the middle sits low."
 checks = [{ type = "reading", part = "dmm1", key = "value", min = 1.0, max = 2.2 }]
 solution = [
     { do = "world", key = "light.ambient_lux", value = 500 },
